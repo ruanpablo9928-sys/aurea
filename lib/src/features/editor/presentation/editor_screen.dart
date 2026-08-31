@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -227,6 +229,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 // camadas separadas — repintar um nao repinta os outros.
                 Expanded(
                   child: RepaintBoundary(
+                    key: previewStageKey,
                     child:
                         PreviewStage(playback: _playback, videos: _videos),
                   ),
@@ -247,9 +250,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     activeTimesUs: activeTimesUs,
                   ),
                 ),
+                // Altura ADAPTATIVA (jamais cobrir/espremer o preview):
+                // o painel nunca passa de 40% da tela — em iPhone e
+                // telas baixas ele encolhe (todos tem scroll interno) e
+                // o palco continua visivel.
                 if (panel != null)
                   SizedBox(
-                      height: _mode == _Mode.animators ? 500 : 372,
+                      height: math.min(
+                          _mode == _Mode.animators ? 500.0 : 372.0,
+                          MediaQuery.sizeOf(context).height * 0.40),
                       child: RepaintBoundary(child: panel)),
               ],
             ),

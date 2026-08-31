@@ -399,7 +399,9 @@ Future<void> showTrackCurveSheet(
           final ease = seg == null ? null : track.easeAt(seg.$1);
 
           return SafeArea(
-            child: Padding(
+            // Scroll: em tela baixa o sheet e capado para nao cobrir o
+            // preview — o conteudo rola em vez de estourar.
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

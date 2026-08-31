@@ -86,6 +86,31 @@ final GlobalKey<ScaffoldState> paramSheetHostKey =
 /// tomou o lugar (e entao NAO deve reabrir nada por cima).
 int paramSheetGeneration = 0;
 
+/// Caixa do PALCO de preview no editor: os sheets medem o fundo dela
+/// para JAMAIS cobrir o preview, em qualquer aparelho/aspecto.
+final GlobalKey previewStageKey = GlobalKey();
+
+/// Altura maxima de um sheet SEM invadir o preview: espaco entre o fundo
+/// do palco e a base da tela. Fallback: fracao pedida.
+double _sheetMaxHeight(BuildContext context, double heightFactor) {
+  final size = MediaQuery.of(context).size;
+  var maxH = size.height * heightFactor;
+  final ctx = previewStageKey.currentContext;
+  final box = ctx?.findRenderObject();
+  if (box is RenderBox && box.hasSize && box.attached) {
+    final bottom = box.localToGlobal(Offset.zero).dy + box.size.height;
+    final available = size.height - bottom - 4;
+    // Nunca cobre o palco; em telas minusculas o sheet fica compacto e
+    // o conteudo rola (todos os sheets tem scroll).
+    if (available > 140) {
+      maxH = maxH < available ? maxH : available;
+    } else {
+      maxH = 180;
+    }
+  }
+  return maxH;
+}
+
 /// Sheet de PARAMETROS que nunca cobre o preview e NAO bloqueia o app:
 /// e um bottom sheet PERSISTENTE (sem barreira modal) — da para tocar
 /// play, dar scrub e mexer no resto do editor com ele aberto. E o que
@@ -97,7 +122,7 @@ Future<void> showParamSheet(
 }) async {
   final host =
       paramSheetHostKey.currentState ?? Scaffold.maybeOf(context);
-  final maxHeight = MediaQuery.of(context).size.height * heightFactor;
+  final maxHeight = _sheetMaxHeight(context, heightFactor);
   paramSheetGeneration++;
   if (host == null) {
     // Sem Scaffold hospedeiro: cai para modal transparente.

@@ -21,6 +21,14 @@ class VideoLayerManager {
   /// trocar o placeholder pelo video).
   final ValueNotifier<int> revision = ValueNotifier(0);
 
+  /// Ultimo estado visto pelo [sync]: quando um controller termina de
+  /// inicializar, o sync roda DE NOVO com ele — sem isso, um clip
+  /// CORTADO (sourceOffset != 0) nascia mostrando o frame 0 do arquivo
+  /// ate alguem mexer no clock ("nao decupa nada").
+  List<Layer> _lastLayers = const [];
+  Duration _lastT = Duration.zero;
+  bool _lastPlaying = false;
+
   VideoPlayerController? controllerFor(String layerId) =>
       _controllers[layerId];
 
@@ -33,7 +41,10 @@ class VideoLayerManager {
       _controllers[id] = controller;
       _initializing.remove(id);
       controller.setVolume(volume);
+      _appliedVolume[id] = volume;
       revision.value++;
+      // Seek inicial no instante atual do clock (decupagem correta).
+      sync(_lastLayers, _lastT, _lastPlaying);
     }).catchError((_) {
       _initializing.remove(id);
       controller.dispose();
@@ -43,6 +54,9 @@ class VideoLayerManager {
   /// Chamado a cada mudanca relevante do clock. Camadas de AUDIO usam o
   /// mesmo pipeline (ExoPlayer/AVPlayer tocam audio puro sem textura).
   void sync(List<Layer> layers, Duration t, bool isPlaying) {
+    _lastLayers = layers;
+    _lastT = t;
+    _lastPlaying = isPlaying;
     final mediaLayers = <
         ({String id, String path, double volume, Duration offset, Layer layer})>[
       for (final l in layers)
