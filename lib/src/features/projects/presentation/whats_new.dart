@@ -16,6 +16,17 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.film,
+    'Exportar video (MP4) — agora existe de verdade',
+    'Antes o app so exportava Lottie e SVG, e o "exportar video" nao '
+        'compunha nada. Agora a composicao inteira e desenhada quadro a '
+        'quadro na resolucao do projeto e codificada em MP4 (H.264) com '
+        'o audio mixado. Como e a MESMA arvore do preview, sai exatamente '
+        'o que voce ve: texto animado, formas, Cena 3D, efeitos e '
+        'inclusive efeito aplicado em cima de video. Tem barra de '
+        'progresso, cancelar e escolha de qualidade.',
+  ),
+  NewsItem(
     CupertinoIcons.exclamationmark_triangle,
     'Versao beta para testes',
     'Esta versao serve para testar e achar problema. Pode travar, dar '
@@ -244,8 +255,8 @@ class WhatsNewCard extends StatelessWidget {
                           color: AmColors.text)),
                   SizedBox(height: 2),
                   Text(
-                    'Catalogo de efeitos, presets, alinhar e distribuir, '
-                    'receitas de texto, Lottie e mais.',
+                    'Exportar MP4, animacao de texto refeita, Cena 3D, 12 '
+                    'efeitos novos e seletor de qualquer cor.',
                     style:
                         TextStyle(fontSize: 12, color: AmColors.muted),
                   ),

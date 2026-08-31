@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../application/editor_controller.dart';
+import '../../../export/presentation/export_video_screen.dart';
 import '../../domain/lottie_export.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
@@ -19,6 +20,7 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
   final controller = ref.read(editorControllerProvider.notifier);
   String? status;
   var busy = false;
+  var quality = 'media';
 
   await showParamSheet(
     context,
@@ -63,6 +65,82 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                 const Text('Exportar',
                     style: TextStyle(
                         fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text)),
+                const SizedBox(height: 10),
+
+                // VIDEO: a composicao inteira, renderizada quadro a
+                // quadro na resolucao do projeto e codificada em MP4.
+                SizedBox(
+                  width: double.infinity,
+                  child: CupertinoButton(
+                    color: AmColors.accent,
+                    borderRadius: BorderRadius.circular(12),
+                    onPressed: busy
+                        ? null
+                        : () {
+                            Navigator.of(sheetContext).maybePop();
+                            Future.microtask(() {
+                              if (!context.mounted) return;
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  fullscreenDialog: true,
+                                  builder: (_) => ExportVideoScreen(
+                                      quality: quality),
+                                ),
+                              );
+                            });
+                          },
+                    child: const Text('Exportar video (MP4)',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0B0E12))),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text('Qualidade',
+                        style: TextStyle(
+                            fontSize: 12, color: AmColors.muted)),
+                    const SizedBox(width: 10),
+                    for (final q in const ['baixa', 'media', 'alta'])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: GestureDetector(
+                          onTap: () => setSheetState(() => quality = q),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 11, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: q == quality
+                                  ? AmColors.accentDim
+                                  : AmColors.chip,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(q,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: q == quality
+                                        ? AmColors.accent
+                                        : AmColors.muted)),
+                          ),
+                        ),
+                      ),
+                    const Spacer(),
+                    Text(
+                      '${project.outputWidth}x${project.outputHeight} '
+                      '${project.fps}fps',
+                      style: const TextStyle(
+                          fontSize: 11, color: AmColors.muted),
+                    ),
+                  ],
+                ),
+                const Divider(color: AmColors.hairline, height: 22),
+                const Text('Para produto (Lottie / SVG)',
+                    style: TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: AmColors.text)),
                 const SizedBox(height: 4),

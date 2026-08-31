@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -189,8 +190,8 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          _CompositionView(
-                            playback: widget.playback,
+                          CompositionView(
+                            time: widget.playback.time,
                             videos: widget.videos,
                             selectedId: selectedId,
                           ),
@@ -442,24 +443,46 @@ class _CompositionGate {
 final _gate = _CompositionGate();
 
 /// Reconstroi por tick do clock; midia isolada em RepaintBoundary.
-class _CompositionView extends ConsumerWidget {
-  const _CompositionView({
-    required this.playback,
+/// A COMPOSICAO em si — as camadas empilhadas no tempo [time]. E a
+/// mesma arvore usada no preview e na EXPORTACAO: exportar renderiza
+/// exatamente o que se ve, porque e o mesmo codigo.
+class CompositionView extends ConsumerWidget {
+  const CompositionView({
+    super.key,
+    required this.time,
     required this.videos,
     required this.selectedId,
+    this.exportFrames,
+    this.exporting = false,
   });
 
-  final PlaybackController playback;
+  final ValueListenable<Duration> time;
   final VideoLayerManager videos;
   final String? selectedId;
+
+  /// Na exportacao, o quadro ja decodificado de cada camada de video —
+  /// textura de plataforma nao entra em `toImage`, entao o video chega
+  /// aqui como imagem.
+  final Map<String, ui.Image>? exportFrames;
+
+  /// Exportando: nunca reusa arvore em cache, porque cada quadro e
+  /// diferente mesmo quando a "assinatura" da cena nao muda.
+  final bool exporting;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(editorControllerProvider);
 
     return ValueListenableBuilder<Duration>(
-      valueListenable: playback.time,
+      valueListenable: time,
       builder: (context, t, _) {
+        if (exporting) {
+          return Stack(
+            clipBehavior: Clip.none,
+            children: _buildLayers(project, project.layers, t,
+                resolveLinks: true),
+          );
+        }
         // ARQUITETURA DE MARCHAS (PR-G1 + portao): o classificador roda
         // quando a CENA muda (identidade do projeto), nunca por frame; e
         // uma cena SEM nada evoluindo no tempo reusa a arvore composta
@@ -863,6 +886,7 @@ class _CompositionView extends ConsumerWidget {
     Widget content = _LayerContent(
       layer: layer,
       project: project,
+      exportFrames: exportFrames,
       compWidth: project.outputWidth.toDouble(),
       videos: videos,
       localTime: contentLocal,
@@ -2155,6 +2179,7 @@ class _CompositionView extends ConsumerWidget {
 
 class _LayerContent extends StatelessWidget {
   const _LayerContent({
+    this.exportFrames,
     required this.layer,
     required this.project,
     required this.compWidth,
@@ -2174,6 +2199,9 @@ class _LayerContent extends StatelessWidget {
   /// Rotacao 3D do sistema de particulas (graus), ja com o delta do pai.
   final double particlesRotX;
   final double particlesRotY;
+
+  /// Quadro ja decodificado por camada de video (so na exportacao).
+  final Map<String, ui.Image>? exportFrames;
 
   /// Recursao do precomp: constroi as camadas filhas no tempo local.
   final List<Widget> Function(List<Layer> layers, Duration t) buildChildren;
@@ -2223,6 +2251,20 @@ class _LayerContent extends StatelessWidget {
             width: compWidth,
             fit: BoxFit.contain,
             errorBuilder: (_, _, _) => _brokenMedia(),
+          ),
+        ),
+      // EXPORTANDO: o quadro vem decodificado do disco. A textura do
+      // player nunca entra num `toImage`, entao o video sairia preto.
+      VideoLayer l when exportFrames != null && exportFrames![l.id] != null =>
+        SizedBox(
+          width: compWidth,
+          height: compWidth *
+              exportFrames![l.id]!.height /
+              exportFrames![l.id]!.width,
+          child: RawImage(
+            image: exportFrames![l.id],
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
           ),
         ),
       VideoLayer l => RepaintBoundary(
