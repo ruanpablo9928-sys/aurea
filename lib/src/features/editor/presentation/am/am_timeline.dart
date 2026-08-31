@@ -322,6 +322,7 @@ class _AmLayerPill extends StatelessWidget {
         ParticlesLayer l => l.color,
         Element3DLayer l => l.color,
         AdjustmentLayer _ => const Color(0xFF56D1C4),
+        Scene3DLayer _ => const Color(0xFF35C4E7),
       };
 
   @override

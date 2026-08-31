@@ -145,6 +145,10 @@ List<LottieIssue> validateForLottie(
               'O modulo Grade e procedural: exporte precompondo o '
               'resultado.');
         }
+      case Scene3DLayer _:
+        check(l, 'element3d',
+            'Cena 3D e renderizada em tempo real; Lottie nao tem '
+            'equivalente — rasterize.');
       case ShapeLayer _:
       case CaptionLayer _:
         break;

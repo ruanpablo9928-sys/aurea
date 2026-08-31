@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/editor_controller.dart';
 import '../../domain/layout_ops.dart';
 import 'am_colors.dart';
+import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
 
 /// ALINHAR E DISTRIBUIR (spec motion-graphics-pro, PR-X1). Motion
@@ -25,12 +26,8 @@ Future<void> showAlignSheet(BuildContext context, WidgetRef ref,
             padding: const EdgeInsets.all(10),
             onPressed: enabled
                 ? onTap
-                : () => ScaffoldMessenger.maybeOf(context)
-                    ?.showSnackBar(SnackBar(
-                    content: Text(tip),
-                    duration: const Duration(milliseconds: 1400),
-                    behavior: SnackBarBehavior.floating,
-                  )),
+                : () => AureaSnack.show(context, tip,
+                    duration: const Duration(milliseconds: 1400)),
             child: Opacity(
               opacity: enabled ? 1 : 0.32,
               child: Icon(icon, size: 22, color: AmColors.accent),
@@ -142,13 +139,10 @@ Future<void> showAlignSheet(BuildContext context, WidgetRef ref,
                       GestureDetector(
                         onTap: () {
                           if (!canDistribute) {
-                            ScaffoldMessenger.maybeOf(context)
-                                ?.showSnackBar(const SnackBar(
-                              content: Text(
-                                  'Distribuir precisa de 3 ou mais camadas'),
-                              duration: Duration(milliseconds: 1600),
-                              behavior: SnackBarBehavior.floating,
-                            ));
+                            AureaSnack.show(context,
+                                'Distribuir precisa de 3 ou mais camadas',
+                                duration:
+                                    const Duration(milliseconds: 1600));
                             return;
                           }
                           controller.distributeSelection(

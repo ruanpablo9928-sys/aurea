@@ -21,9 +21,13 @@ class ExportService {
     final outputPath =
         '${outputDir.path}${Platform.pathSeparator}aurea_export_${DateTime.now().millisecondsSinceEpoch}.mp4';
 
-    final session = await FFmpegKit.execute(
-      '-y -i "${clip.sourcePath}" -c copy "$outputPath"',
-    );
+    // Lista de argumentos: caminho com aspas nao vira comando.
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i', clip.sourcePath,
+      '-c', 'copy',
+      outputPath,
+    ]);
     final returnCode = await session.getReturnCode();
     return ReturnCode.isSuccess(returnCode) ? outputPath : null;
   }

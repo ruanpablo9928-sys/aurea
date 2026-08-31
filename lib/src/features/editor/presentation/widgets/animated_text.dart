@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -80,7 +82,7 @@ class _AnimatedTextPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final t = localTime;
     final animators = [
-      for (final a in layer.animators)
+      for (final a in layer.effectiveAnimators(units.length))
         if (a.enabled && a.properties.isNotEmpty) a,
     ];
 
@@ -92,7 +94,10 @@ class _AnimatedTextPainter extends CustomPainter {
 
       // Acumula o transform desta unidade pelos animadores em pilha.
       var dx = 0.0, dy = 0.0, rotation = 0.0, tracking = 0.0;
+      var blur = 0.0, skew = 0.0, hue = 0.0;
       var scaleP = 100.0, opacityP = 100.0;
+      var scaleXP = 100.0, scaleYP = 100.0;
+      var satP = 100.0, brightP = 100.0;
       for (final a in animators) {
         final c = units.coverageFor(a.selectors, i, t,
             allowOvershoot: a.allowOvershoot);
@@ -110,6 +115,20 @@ class _AnimatedTextPainter extends CustomPainter {
               scaleP = p.apply(scaleP, t, c);
             case TextAnimProp.opacity:
               opacityP = p.apply(opacityP, t, c);
+            case TextAnimProp.scaleX:
+              scaleXP = p.apply(scaleXP, t, c);
+            case TextAnimProp.scaleY:
+              scaleYP = p.apply(scaleYP, t, c);
+            case TextAnimProp.blur:
+              blur = p.apply(blur, t, c);
+            case TextAnimProp.skew:
+              skew = p.apply(skew, t, c);
+            case TextAnimProp.hue:
+              hue = p.apply(hue, t, c);
+            case TextAnimProp.saturation:
+              satP = p.apply(satP, t, c);
+            case TextAnimProp.brightness:
+              brightP = p.apply(brightP, t, c);
           }
         }
       }
@@ -133,33 +152,65 @@ class _AnimatedTextPainter extends CustomPainter {
 
       final opacity = (opacityP / 100).clamp(0.0, 1.0);
       if (opacity <= 0.001) continue;
-      final scale = math.max(0.0, scaleP / 100);
-      if (scale <= 0.001) continue;
+      final sx = math.max(0.0, (scaleP / 100) * (scaleXP / 100));
+      final sy = math.max(0.0, (scaleP / 100) * (scaleYP / 100));
+      if (sx <= 0.001 || sy <= 0.001) continue;
+
+      final unitColor = _shiftColor(style.color!, hue, satP, brightP)
+          .withValues(alpha: style.color!.a * opacity);
 
       final unitPainter = TextPainter(
-        text: TextSpan(
-          text: cluster,
-          style: style.copyWith(
-            color: style.color!
-                .withValues(alpha: style.color!.a * opacity),
-          ),
-        ),
+        text: TextSpan(text: cluster, style: style.copyWith(color: unitColor)),
         textDirection: TextDirection.ltr,
       )..layout();
 
       final center = rect.center;
       canvas.save();
+      // DESFOQUE POR UNIDADE: e o que faz "aparecer em desfoque" existir.
+      // Sem isto so da para borrar a camada inteira, que e outra coisa.
+      final blurring = blur > 0.05;
+      if (blurring) {
+        final pad = blur * 3 + rect.longestSide;
+        canvas.saveLayer(
+          Rect.fromCenter(center: center, width: pad * 2, height: pad * 2),
+          Paint()
+            ..imageFilter =
+                ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        );
+      }
       canvas.translate(center.dx + dx + trackingShift, center.dy + dy);
       if (rotation != 0) canvas.rotate(rotation * math.pi / 180);
-      if (scale != 1) canvas.scale(scale, scale);
+      if (skew != 0) {
+        canvas.transform(Float64List.fromList(<double>[
+          1, 0, 0, 0, //
+          math.tan(-skew * math.pi / 180), 1, 0, 0, //
+          0, 0, 1, 0, //
+          0, 0, 0, 1,
+        ]));
+      }
+      if (sx != 1 || sy != 1) canvas.scale(sx, sy);
       unitPainter.paint(
         canvas,
         Offset(-unitPainter.width / 2, -unitPainter.height / 2),
       );
       canvas.restore();
+      if (blurring) canvas.restore();
     }
   }
 
   @override
   bool shouldRepaint(_AnimatedTextPainter old) => true;
+}
+
+/// Deslocamento de MATIZ, SATURACAO e BRILHO por unidade — e o que
+/// permite varrer cor letra a letra sem trocar a cor da camada.
+Color _shiftColor(Color base, double hueDeg, double satPct, double brightPct) {
+  if (hueDeg == 0 && satPct == 100 && brightPct == 100) return base;
+  final hsl = HSLColor.fromColor(base);
+  final h = (hsl.hue + hueDeg) % 360;
+  return hsl
+      .withHue(h < 0 ? h + 360 : h)
+      .withSaturation((hsl.saturation * satPct / 100).clamp(0.0, 1.0))
+      .withLightness((hsl.lightness * brightPct / 100).clamp(0.0, 1.0))
+      .toColor();
 }

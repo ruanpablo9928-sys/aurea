@@ -16,6 +16,82 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.exclamationmark_triangle,
+    'Versao beta para testes',
+    'Esta versao serve para testar e achar problema. Pode travar, dar '
+        'erro ou perder alteracao nao salva — salve o projeto sempre que '
+        'terminar algo importante. Achou um bug ou quer sugerir uma '
+        'ferramenta ou efeito? Tem um botao de Reportar em Sobre, e o '
+        'relato chega direto no criador.',
+  ),
+  NewsItem(
+    CupertinoIcons.textformat,
+    'Animacao de texto refeita',
+    'O animador antigo saiu. No lugar entrou o modelo do Alight '
+        'Motion: escolha ENTRADA, ENFASE ou SAIDA e toque numa animacao '
+        'de uma grade que mostra cada uma se mexendo. Sao 34 animacoes, '
+        'entre elas quicar por letra e por palavra, aparecer em '
+        'desfoque, maquina de escrever, onda, tremilique, glitch, '
+        'piscar e ambientacao viral. Seis controles: unidade (letra, '
+        'palavra, linha ou tudo), inicio, duracao, atraso, ordem (do '
+        'inicio, do fim, do centro, das bordas ou aleatoria) e curva.',
+  ),
+  NewsItem(
+    CupertinoIcons.bolt_horizontal,
+    'Mola de verdade, com overshoot',
+    'A curva "Mola" usa a mesma conta da extensao MultiTools do After '
+        'Effects — amplitude, frequencia e decaimento — entao a letra '
+        'passa do alvo e volta, em vez de so chegar. O modelo do AE '
+        '(animador cru com seletor na mao) continua ali, em Avancado: '
+        'as animacoes do catalogo sao compiladas para ele.',
+  ),
+  NewsItem(
+    CupertinoIcons.paintbrush,
+    'Qualquer cor, em qualquer objeto',
+    'Entrou um seletor de cor completo: espectro de matiz, area de '
+        'saturacao e brilho, transparencia e campo HEX. Vale para '
+        'texto, formas, elementos 3D, materiais e luzes da Cena 3D e '
+        'para a cor dos efeitos. As paletas rapidas continuam para o '
+        'caso comum.',
+  ),
+  NewsItem(
+    CupertinoIcons.wand_stars,
+    '12 efeitos novos',
+    'Ordenar pixels, Deslocar turbulento, Entortar, CC Semear, CC '
+        'Split, Mosaico de movimento, Mascara de nitidez, VHS, Filme '
+        'danificado, Glitchify, Rastreador de blobs e Remapear tempo. '
+        'Os que redistribuem pixel (turbulento, entortar, ordenar, '
+        'semear) rodam sobre a camada rasterizada e deformada em malha, '
+        'entao sao deformacao de verdade, nao filtro de cor.',
+  ),
+  NewsItem(
+    CupertinoIcons.time,
+    'Remapear tempo, igual ao do AE',
+    'Em vez de mexer na velocidade, voce anima QUAL instante da camada '
+        'aparece agora. Congelar um quadro, voltar de tras para frente '
+        'ou fazer rampa de velocidade vira keyframe de tempo. Os '
+        'keyframes de transformacao continuam lendo o tempo da '
+        'composicao, como no After Effects.',
+  ),
+  NewsItem(
+    CupertinoIcons.cube_box,
+    'Cena 3D e camera',
+    'Uma camada Cena 3D com renderizador proprio: dois cubos que se '
+        'cruzam mostram a intersecao certa, coisa que camada 3D nao '
+        'faz. Camera de um ou dois nos, lentes de 15 a 200 mm com '
+        'focal, angulo e zoom ligados, profundidade de campo com '
+        'formato de iris e ganho de realce (bokeh de verdade), estudio '
+        'com orbita, mini-vista, eixos tocaveis e rigs de camera em um '
+        'toque.',
+  ),
+  NewsItem(
+    CupertinoIcons.checkmark_seal,
+    'Aviso de exclusao que sai da tela',
+    'O aviso "Camada excluida / Desfazer" ficava preso quando o preview '
+        'reconstruia a tela no meio da animacao dele. Agora o '
+        'fechamento tem relogio proprio e nao depende disso.',
+  ),
+  NewsItem(
     CupertinoIcons.wand_stars,
     'Catalogo de efeitos com busca',
     'Agora sao 26 efeitos organizados por categoria, com busca que '

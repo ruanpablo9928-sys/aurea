@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,59 +8,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
-import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
+import '../../domain/text_anim.dart';
 import '../../domain/text_animator.dart';
-import '../../domain/text_presets.dart';
-import '../../domain/text_recipe.dart';
 import 'am_colors.dart';
-import 'am_widgets.dart';
 
-/// Visualizador de ESCALONAMENTO (spec autoria-de-texto §8): uma barra
-/// por unidade, comecando em i*intervalo e durando "duracao". Mexer no
-/// intervalo move as barras — a pessoa VE o escalonamento em vez de
-/// imaginar.
-class _StaggerPainter extends CustomPainter {
-  const _StaggerPainter({required this.recipe});
-
-  final TextRecipe recipe;
-
-  /// Amostra de unidades na miniatura (o texto real pode ter dezenas).
-  static const int units = 5;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final n = recipe.unit == RecipeUnit.all ? 1 : units;
-    final total = recipe.totalFor(n).inMicroseconds.toDouble();
-    if (total <= 0) return;
-    final s = recipe.stagger.inMicroseconds.toDouble();
-    final d = recipe.duration.inMicroseconds.toDouble();
-    final rowH = size.height / n;
-    final paint = Paint()..color = AmColors.accent;
-    for (var i = 0; i < n; i++) {
-      final x0 = (i * s) / total * size.width;
-      // Duracao zero (maquina de escrever) ainda precisa ser visivel.
-      final w = math.max(2.0, d / total * size.width);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(x0, i * rowH + rowH * 0.18,
-              math.min(w, size.width - x0), rowH * 0.64),
-          const Radius.circular(2),
-        ),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_StaggerPainter old) =>
-      old.recipe.stagger != recipe.stagger ||
-      old.recipe.duration != recipe.duration ||
-      old.recipe.unit != recipe.unit;
-}
-
-/// Painel "Animadores" de camadas de texto: presets, pilha de animadores
-/// (chips de propriedade + seletores) e a barra de cobertura visual.
+/// ANIMACAO DE TEXTO — painel no modelo do Alight Motion.
+///
+/// Escolhe-se a animacao numa grade que MOSTRA cada uma se mexendo, e
+/// depois mexe-se em seis controles. O modelo do After Effects (animador
+/// + seletor na mao) continua acessivel em "Avancado".
 class TextAnimatorsPanel extends ConsumerStatefulWidget {
   const TextAnimatorsPanel({
     super.key,
@@ -75,700 +34,803 @@ class TextAnimatorsPanel extends ConsumerStatefulWidget {
 }
 
 class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
-  /// Nivel 1 (PRONTO): grade de receitas. Cada tile mostra o
-  /// ESCALONAMENTO — uma barra por unidade, na posicao em que ela comeca
-  /// — que e o que torna "40 ms entre palavras" tangivel.
-  Future<void> _showPresets(BuildContext context, String layerId) async {
-    final controller = ref.read(editorControllerProvider.notifier);
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      isScrollControlled: true,
-      constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.55),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          children: [
-            const Text('Animar o texto',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
-            const SizedBox(height: 2),
-            const Text(
-              'Toque para aplicar. Cada barra e uma unidade, na hora '
-              'em que ela entra.',
-              style: TextStyle(fontSize: 11, color: AmColors.muted),
-            ),
-            const SizedBox(height: 12),
-            for (final recipe in RecipeLibrary.entrada)
-              GestureDetector(
-                onTap: () {
-                  controller.applyTextRecipe(layerId, recipe);
-                  Navigator.of(sheetContext).pop();
-                  widget.playback.seek(Duration.zero);
-                  widget.playback.play();
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  decoration: BoxDecoration(
-                    color: AmColors.chip,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(recipe.name,
-                                style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AmColors.accent)),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${_unitLabel(recipe.unit)} · '
-                              '${recipe.stagger.inMilliseconds} ms entre · '
-                              '${recipe.duration.inMilliseconds} ms cada',
-                              style: const TextStyle(
-                                  fontSize: 10, color: AmColors.muted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      SizedBox(
-                        width: 110,
-                        height: 34,
-                        child: CustomPaint(
-                          painter: _StaggerPainter(recipe: recipe),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 6),
-            const Text('Presets classicos',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final preset in textPresets)
-                  GestureDetector(
-                    onTap: () {
-                      controller.applyTextPreset(layerId, preset);
-                      Navigator.of(sheetContext).pop();
-                      widget.playback.seek(Duration.zero);
-                      widget.playback.play();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 11),
-                      decoration: BoxDecoration(
-                        color: AmColors.chip,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(preset.name,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AmColors.accent)),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _unitLabel(RecipeUnit u) => switch (u) {
-        RecipeUnit.character => 'Caractere',
-        RecipeUnit.word => 'Palavra',
-        RecipeUnit.line => 'Linha',
-        RecipeUnit.all => 'Tudo junto',
-      };
+  TextAnimSlot _slot = TextAnimSlot.entrada;
+  bool _advanced = false;
 
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
-    final id = ref.watch(selectedLayerProvider);
-    final layer = id == null ? null : project.layerById(id);
-    if (layer is! TextLayer || id == null) {
-      return const ColoredBox(color: AmColors.panel);
-    }
     final controller = ref.read(editorControllerProvider.notifier);
+    final selectedId = ref.watch(selectedLayerProvider);
+    final layer =
+        selectedId == null ? null : project.layerById(selectedId);
 
-    return ColoredBox(
-      color: AmColors.panel,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
+    if (layer is! TextLayer) {
+      return _shell(const Center(
+        child: Text('Selecione uma camada de texto',
+            style: TextStyle(color: AmColors.muted, fontSize: 13)),
+      ));
+    }
+
+    final current =
+        layer.anims.where((a) => a.slot == _slot).firstOrNull;
+
+    return _shell(Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _slotTabs(layer),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
             children: [
-              AmRailButton(
-                onTap: widget.onBack,
-                child: const Icon(CupertinoIcons.chevron_back,
-                    size: 24, color: AmColors.text),
-              ),
+              _catalogGrid(layer, controller, current),
+              if (current != null) ...[
+                const SizedBox(height: 14),
+                _controls(layer, controller, current),
+              ],
+              const SizedBox(height: 16),
+              _advancedSection(layer, controller),
             ],
           ),
-          Expanded(
-            child: ValueListenableBuilder<Duration>(
-              valueListenable: widget.playback.time,
-              builder: (context, t, _) {
-                final local = layer.localTime(t);
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(4, 8, 16, 16),
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _PillButton(
-                            icon: CupertinoIcons.sparkles,
-                            label: 'Presets',
-                            onTap: () => _showPresets(context, id),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _PillButton(
-                            icon: CupertinoIcons.plus,
-                            label: 'Animador',
-                            onTap: () => controller.addTextAnimator(id),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    for (final animator in layer.animators)
-                      _AnimatorCard(
-                        layerId: id,
-                        layer: layer,
-                        animator: animator,
-                        local: local,
-                        globalTime: t,
-                      ),
-                    if (layer.animators.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: Text(
-                            'Aplique um preset ou adicione um animador.',
-                            style: TextStyle(
-                                fontSize: 12, color: AmColors.muted),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillButton extends StatelessWidget {
-  const _PillButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AmColors.chip,
-          borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: AmColors.accent),
-            const SizedBox(width: 8),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AmColors.accent)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatorCard extends ConsumerStatefulWidget {
-  const _AnimatorCard({
-    required this.layerId,
-    required this.layer,
-    required this.animator,
-    required this.local,
-    required this.globalTime,
-  });
-
-  final String layerId;
-  final TextLayer layer;
-  final TextAnimator animator;
-  final Duration local;
-  final Duration globalTime;
-
-  @override
-  ConsumerState<_AnimatorCard> createState() => _AnimatorCardState();
-}
-
-class _AnimatorCardState extends ConsumerState<_AnimatorCard> {
-  /// Seletores ficam atras de "Avancado": o fluxo simples eso
-  /// preset -> propriedades.
-  bool _advanced = false;
-
-  String get layerId => widget.layerId;
-  TextLayer get layer => widget.layer;
-  TextAnimator get animator => widget.animator;
-  Duration get local => widget.local;
-  Duration get globalTime => widget.globalTime;
-
-  static const _propChips = <(TextAnimProp, String)>[
-    (TextAnimProp.positionX, 'X'),
-    (TextAnimProp.positionY, 'Y'),
-    (TextAnimProp.scale, 'Escala'),
-    (TextAnimProp.rotation, 'Rotacao'),
-    (TextAnimProp.opacity, 'Opacidade'),
-    (TextAnimProp.tracking, 'Tracking'),
-  ];
-
-  (double, double) _rangeOf(TextAnimProp type) => switch (type) {
-        TextAnimProp.positionX ||
-        TextAnimProp.positionY =>
-          (-800.0, 800.0),
-        TextAnimProp.scale => (0.0, 400.0),
-        TextAnimProp.rotation => (-360.0, 360.0),
-        TextAnimProp.opacity => (0.0, 100.0),
-        TextAnimProp.tracking => (-200.0, 200.0),
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = ref.read(editorControllerProvider.notifier);
-    final units = TextUnits.of(layer.text);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
-      decoration: BoxDecoration(
-        color: AmColors.panelHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Opacity(
-        opacity: animator.enabled ? 1 : 0.45,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(animator.name,
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
-                ),
-                GestureDetector(
-                  onTap: () =>
-                      controller.toggleTextAnimator(layerId, animator.id),
-                  child: Icon(
-                      animator.enabled
-                          ? CupertinoIcons.eye
-                          : CupertinoIcons.eye_slash,
-                      size: 18,
-                      color: AmColors.text),
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: () =>
-                      controller.removeTextAnimator(layerId, animator.id),
-                  child: const Icon(CupertinoIcons.trash,
-                      size: 18, color: AmColors.text),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // BARRA DE COBERTURA VISUAL: uma barrinha por unidade, altura
-            // igual a cobertura c (spec §12).
-            SizedBox(
-              height: 42,
-              child: CustomPaint(
-                size: const Size(double.infinity, 42),
-                painter: _CoveragePainter(
-                  units: units,
-                  animator: animator,
-                  local: local,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Chips de propriedade.
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final (type, label) in _propChips)
-                  GestureDetector(
-                    onTap: () => controller.toggleAnimatorPropType(
-                        layerId, animator.id, type),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: animator.properties
-                                .any((p) => p.type == type)
-                            ? AmColors.accentDim
-                            : AmColors.chip,
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                      child: Text(label,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: animator.properties
-                                      .any((p) => p.type == type)
-                                  ? AmColors.accent
-                                  : AmColors.text)),
-                    ),
-                  ),
-              ],
-            ),
-            // Linhas das propriedades ativas.
-            for (final p in animator.properties)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 86,
-                      child: Text(
-                        _propChips
-                            .firstWhere((c) => c.$1 == p.type)
-                            .$2,
-                        style: const TextStyle(
-                            fontSize: 14, color: AmColors.muted),
-                      ),
-                    ),
-                    Expanded(
-                      child: AmTickRuler(
-                        value: p.value.valueAt(local),
-                        min: _rangeOf(p.type).$1,
-                        max: _rangeOf(p.type).$2,
-                        unitsPerPixel:
-                            (_rangeOf(p.type).$2 - _rangeOf(p.type).$1) /
-                                500,
-                        height: 52,
-                        onChanged: (v) => controller.editAnimatorPropValue(
-                            layerId, animator.id, p.id, globalTime, v),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 54,
-                      child: Text(
-                        amNumber(p.value.valueAt(local), 0),
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                            fontSize: 14, color: AmColors.text),
-                      ),
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.only(left: 10),
-                      onPressed: () =>
-                          controller.toggleAnimatorPropKeyframe(
-                              layerId, animator.id, p.id, globalTime),
-                      child: Icon(
-                        p.value.hasKeyframeAt(local)
-                            ? CupertinoIcons.rhombus_fill
-                            : CupertinoIcons.rhombus,
-                        size: 22,
-                        color: p.value.isAnimated
-                            ? AmColors.accent
-                            : AmColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 8),
-            // Seletores so no modo avancado — o basico fica limpo.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _advanced = !_advanced),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(
-                      _advanced
-                          ? CupertinoIcons.chevron_down
-                          : CupertinoIcons.chevron_right,
-                      size: 15,
-                      color: AmColors.muted,
-                    ),
-                    const SizedBox(width: 6),
-                    const Text('Avancado (seletores)',
-                        style: TextStyle(
-                            fontSize: 13, color: AmColors.muted)),
-                  ],
-                ),
-              ),
-            ),
-            if (_advanced) ...[
-              for (final s in animator.selectors)
-                _SelectorCard(
-                  layerId: layerId,
-                  animatorId: animator.id,
-                  selector: s,
-                  local: local,
-                  globalTime: globalTime,
-                ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: CupertinoButton(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 6),
-                  onPressed: () => controller
-                      .addTextSelector(layerId, animator.id, wiggly: true),
-                  child: const Text('+ Seletor wiggly',
-                      style: TextStyle(
-                          fontSize: 13, color: AmColors.accent)),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Barra de cobertura: desenha as unidades do texto com altura = c.
-class _CoveragePainter extends CustomPainter {
-  const _CoveragePainter({
-    required this.units,
-    required this.animator,
-    required this.local,
-  });
-
-  final TextUnits units;
-  final TextAnimator animator;
-  final Duration local;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(6)),
-      Paint()..color = AmColors.bg,
-    );
-    final n = units.length;
-    if (n == 0) return;
-    final barW = size.width / n;
-    final paint = Paint()..color = AmColors.accent;
-    final dim = Paint()..color = AmColors.accent.withValues(alpha: 0.25);
-    for (var i = 0; i < n; i++) {
-      final c = animator.enabled
-          ? units
-              .coverageFor(animator.selectors, i, local,
-                  allowOvershoot: animator.allowOvershoot)
-              .clamp(0.0, 1.0)
-          : 0.0;
-      final h = c * (size.height - 4);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-              i * barW + 1, size.height - 2 - h, barW - 2, h),
-          const Radius.circular(2),
-        ),
-        units.isWhitespace[i] ? dim : paint,
-      );
-    }
+      ],
+    ));
   }
 
-  @override
-  bool shouldRepaint(_CoveragePainter old) => true;
-}
-
-class _SelectorCard extends ConsumerWidget {
-  const _SelectorCard({
-    required this.layerId,
-    required this.animatorId,
-    required this.selector,
-    required this.local,
-    required this.globalTime,
-  });
-
-  final String layerId;
-  final String animatorId;
-  final TextSelector selector;
-  final Duration local;
-  final Duration globalTime;
-
-  static String _modeLabel(SelectorMode m) => switch (m) {
-        SelectorMode.add => 'Add',
-        SelectorMode.subtract => 'Sub',
-        SelectorMode.intersect => 'Inter',
-        SelectorMode.min => 'Min',
-        SelectorMode.max => 'Max',
-        SelectorMode.difference => 'Dif',
-      };
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.read(editorControllerProvider.notifier);
-    final s = selector;
-
-    Widget row(String label, AnimatedDouble track, String param, double min,
-        double max, double scale) {
-      return Row(
-        children: [
-          SizedBox(
-            width: 70,
-            child: Text(label,
-                style:
-                    const TextStyle(fontSize: 13, color: AmColors.muted)),
-          ),
-          Expanded(
-            child: AmTickRuler(
-              value: track.valueAt(local) * scale,
-              min: min,
-              max: max,
-              unitsPerPixel: (max - min) / 500,
-              height: 44,
-              onChanged: (v) => controller.editSelectorParam(
-                  layerId, animatorId, s.id, param, globalTime, v / scale),
-            ),
-          ),
-          SizedBox(
-            width: 48,
-            child: Text(
-              amNumber(track.valueAt(local) * scale, 0),
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13, color: AmColors.text),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      decoration: BoxDecoration(
-        color: AmColors.bg.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
+  Widget _shell(Widget child) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  s is WigglySelector ? 'Seletor Wiggly' : 'Seletor Intervalo',
-                  style: const TextStyle(
-                      fontSize: 12,
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed: widget.onBack,
+                child: const Icon(CupertinoIcons.chevron_left,
+                    size: 20, color: AmColors.text),
+              ),
+              const Text('Animacao de texto',
+                  style: TextStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: AmColors.text),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => controller.cycleSelectorMode(
-                    layerId, animatorId, s.id),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 11, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AmColors.chip,
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: Text(_modeLabel(s.mode),
-                      style: const TextStyle(
-                          fontSize: 12, color: AmColors.accent)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => controller.removeTextSelector(
-                    layerId, animatorId, s.id),
-                child: const Icon(CupertinoIcons.xmark,
-                    size: 14, color: AmColors.muted),
-              ),
+                      color: AmColors.text)),
             ],
           ),
-          const SizedBox(height: 4),
-          if (s is RangeSelector) ...[
-            // Formas.
-            Wrap(
-              spacing: 5,
-              children: [
-                for (final shape in SelectorShape.values)
-                  GestureDetector(
-                    onTap: () => controller.setRangeSelectorShape(
-                        layerId, animatorId, s.id, shape),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: s.shape == shape
-                            ? AmColors.accentDim
-                            : AmColors.chip,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        shape.name,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: s.shape == shape
-                                ? AmColors.accent
-                                : AmColors.muted),
-                      ),
-                    ),
+          Expanded(child: child),
+        ],
+      );
+
+  Widget _slotTabs(TextLayer layer) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      child: Row(
+        children: [
+          for (final s in TextAnimSlot.values)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _slot = s),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color:
+                        s == _slot ? AmColors.accentDim : AmColors.chip,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-              ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        textAnimSlotLabel(s),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: s == _slot
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color:
+                              s == _slot ? AmColors.accent : AmColors.muted,
+                        ),
+                      ),
+                      // Ponto verde na posicao que ja tem animacao.
+                      if (layer.anims.any((a) => a.slot == s)) ...[
+                        const SizedBox(width: 5),
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: AmColors.accent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 4),
-            row('Inicio', s.start, 'start', 0, 100, 100),
-            row('Fim', s.end, 'end', 0, 100, 100),
-            row('Offset', s.offset, 'offset', -100, 100, 100),
-            row('Amount', s.amount, 'amount', -100, 100, 1),
-          ] else if (s is WigglySelector) ...[
-            row('Freq', s.wigglesPerSecond, 'freq', 0, 16, 1),
-            row('Correl.', s.correlation, 'correlation', 0, 100, 1),
-            row('Min', s.minAmount, 'min', -100, 100, 1),
-            row('Max', s.maxAmount, 'max', -100, 100, 1),
-          ],
         ],
       ),
     );
   }
+
+  Widget _catalogGrid(
+      TextLayer layer, EditorController controller, TextAnim? current) {
+    final specs = textAnimsForSlot(_slot);
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 0.92,
+      children: [
+        _tile(
+          label: 'Nenhuma',
+          selected: current == null,
+          preview: const Center(
+            child: Icon(CupertinoIcons.nosign,
+                size: 22, color: AmColors.muted),
+          ),
+          onTap: () => controller.setTextAnim(layer.id, _slot, null),
+        ),
+        for (final spec in specs)
+          _tile(
+            label: spec.label,
+            selected: current?.specId == spec.id,
+            preview: _AnimPreview(
+              anim: current?.specId == spec.id
+                  ? current!
+                  : TextAnim(specId: spec.id, slot: _slot),
+            ),
+            onTap: () =>
+                controller.setTextAnim(layer.id, _slot, spec.id),
+          ),
+      ],
+    );
+  }
+
+  Widget _tile({
+    required String label,
+    required bool selected,
+    required Widget preview,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? AmColors.accentDim : AmColors.chip,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Expanded(child: ClipRect(child: preview)),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7, left: 4, right: 4),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: selected ? AmColors.accent : AmColors.muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _controls(
+      TextLayer layer, EditorController controller, TextAnim anim) {
+    final spec = anim.spec;
+    final n = controller.textAnimUnitCount(layer.id, anim.unit);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(anim.label,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text)),
+            const Spacer(),
+            Text(
+              'total ${_ms(anim.totalFor(n))}',
+              style: const TextStyle(fontSize: 11, color: AmColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        // O ESCALONAMENTO VISIVEL: uma barra por unidade. Mexer no atraso
+        // move as barras, entao da para ver o efeito em vez de imaginar.
+        Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: AmColors.panelHigh,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.all(6),
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: _StaggerPainter(anim: anim, units: math.min(n, 6)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _chips(
+          label: 'Unidade',
+          options: [
+            for (final u in TextAnimUnit.values) textAnimUnitLabel(u)
+          ],
+          index: anim.unit.index,
+          onChanged: (i) => controller.updateTextAnim(layer.id, anim.id,
+              (a) => a.copyWith(unit: TextAnimUnit.values[i])),
+        ),
+        _chips(
+          label: 'Ordem',
+          options: [
+            for (final o in TextAnimOrder.values) textAnimOrderLabel(o)
+          ],
+          index: anim.order.index,
+          onChanged: (i) => controller.updateTextAnim(layer.id, anim.id,
+              (a) => a.copyWith(order: TextAnimOrder.values[i])),
+        ),
+        _chips(
+          label: 'Curva',
+          options: [
+            for (final e in TextAnimEase.values) textAnimEaseLabel(e)
+          ],
+          index: anim.ease.index,
+          onChanged: (i) => controller.updateTextAnim(layer.id, anim.id,
+              (a) => a.copyWith(ease: TextAnimEase.values[i])),
+        ),
+        _slider(
+          label: 'Duracao',
+          value: anim.duration.inMilliseconds.toDouble(),
+          min: 0,
+          max: 3000,
+          suffix: 'ms',
+          onChanged: (v) => controller.updateTextAnim(
+              layer.id,
+              anim.id,
+              (a) => a.copyWith(
+                  duration: Duration(milliseconds: v.round()))),
+        ),
+        if (anim.unit != TextAnimUnit.all)
+          _slider(
+            label: 'Atraso',
+            value: anim.stagger.inMilliseconds.toDouble(),
+            min: 0,
+            max: 500,
+            suffix: 'ms',
+            onChanged: (v) => controller.updateTextAnim(
+                layer.id,
+                anim.id,
+                (a) => a.copyWith(
+                    stagger: Duration(milliseconds: v.round()))),
+          ),
+        _slider(
+          label: 'Inicio',
+          value: anim.start.inMilliseconds.toDouble(),
+          min: 0,
+          max: 4000,
+          suffix: 'ms',
+          onChanged: (v) => controller.updateTextAnim(layer.id, anim.id,
+              (a) => a.copyWith(start: Duration(milliseconds: v.round()))),
+        ),
+        if (anim.order == TextAnimOrder.random)
+          _slider(
+            label: 'Semente',
+            value: anim.seed.toDouble(),
+            min: 1,
+            max: 999,
+            onChanged: (v) => controller.updateTextAnim(
+                layer.id, anim.id, (a) => a.copyWith(seed: v.round())),
+          ),
+        // Parametros proprios da animacao escolhida.
+        for (final p in spec?.params ?? const <TextAnimParam>[])
+          _slider(
+            label: p.label,
+            value: anim.params[p.key] ?? p.initial,
+            min: p.min,
+            max: p.max,
+            suffix: p.suffix,
+            onChanged: (v) => controller.setTextAnimParam(
+                layer.id, anim.id, p.key, v),
+          ),
+        // A MOLA da extensao MultiTools: amplitude, frequencia e
+        // decaimento, os mesmos tres numeros.
+        if (anim.ease == TextAnimEase.mola) ...[
+          const SizedBox(height: 4),
+          const Text('Mola',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text)),
+          _slider(
+            label: 'Amplitude',
+            value: anim.amplitude,
+            min: 0,
+            max: 3,
+            decimals: 2,
+            onChanged: (v) => controller.updateTextAnim(
+                layer.id, anim.id, (a) => a.copyWith(amplitude: v)),
+          ),
+          _slider(
+            label: 'Frequencia',
+            value: anim.frequency,
+            min: 0.2,
+            max: 8,
+            decimals: 2,
+            onChanged: (v) => controller.updateTextAnim(
+                layer.id, anim.id, (a) => a.copyWith(frequency: v)),
+          ),
+          _slider(
+            label: 'Decaimento',
+            value: anim.decay,
+            min: 0.5,
+            max: 20,
+            decimals: 2,
+            onChanged: (v) => controller.updateTextAnim(
+                layer.id, anim.id, (a) => a.copyWith(decay: v)),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// MODO AVANCADO: o modelo do After Effects, para quem quer montar
+  /// seletor e propriedade na mao. Fica fora do caminho de quem so quer
+  /// escolher uma animacao.
+  Widget _advancedSection(TextLayer layer, EditorController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _advanced = !_advanced),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color: AmColors.chip,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                    _advanced
+                        ? CupertinoIcons.chevron_down
+                        : CupertinoIcons.chevron_right,
+                    size: 13,
+                    color: AmColors.muted),
+                const SizedBox(width: 8),
+                const Text('Avancado (animadores do AE)',
+                    style:
+                        TextStyle(fontSize: 12, color: AmColors.text)),
+                const Spacer(),
+                if (layer.animators.isNotEmpty)
+                  Text('${layer.animators.length}',
+                      style: const TextStyle(
+                          fontSize: 11, color: AmColors.accent)),
+              ],
+            ),
+          ),
+        ),
+        if (_advanced) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Cada animador combina seletores e propriedades na mao — o '
+            'modelo do After Effects. As animacoes acima sao compiladas '
+            'para estes mesmos animadores.',
+            style: TextStyle(
+                fontSize: 11, height: 1.35, color: AmColors.muted),
+          ),
+          const SizedBox(height: 8),
+          for (final a in layer.animators)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AmColors.panelHigh,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () =>
+                        controller.toggleTextAnimator(layer.id, a.id),
+                    child: Icon(
+                      a.enabled
+                          ? CupertinoIcons.eye
+                          : CupertinoIcons.eye_slash,
+                      size: 16,
+                      color: a.enabled ? AmColors.text : AmColors.muted,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(a.name,
+                            style: const TextStyle(
+                                fontSize: 12, color: AmColors.text)),
+                        Text(
+                          a.properties.isEmpty
+                              ? 'sem propriedades'
+                              : a.properties
+                                  .map((p) => textAnimPropLabel(p.type))
+                                  .join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 10, color: AmColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () =>
+                        controller.removeTextAnimator(layer.id, a.id),
+                    child: const Icon(CupertinoIcons.trash,
+                        size: 15, color: AmColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          GestureDetector(
+            onTap: () => controller.addTextAnimator(layer.id),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              decoration: BoxDecoration(
+                color: AmColors.chip,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.plus,
+                      size: 13, color: AmColors.accent),
+                  SizedBox(width: 6),
+                  Text('Animador cru',
+                      style: TextStyle(
+                          fontSize: 12, color: AmColors.accent)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ------------------------------------------------------ controles
+
+  Widget _chips({
+    required String label,
+    required List<String> options,
+    required int index,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 11, color: AmColors.muted)),
+          const SizedBox(height: 5),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (var i = 0; i < options.length; i++)
+                GestureDetector(
+                  onTap: () => onChanged(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: i == index ? AmColors.accentDim : AmColors.chip,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(options[i],
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: i == index
+                                ? AmColors.accent
+                                : AmColors.muted)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _slider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+    String suffix = '',
+    int decimals = 0,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 78,
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    const TextStyle(fontSize: 11, color: AmColors.muted)),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                activeTrackColor: AmColors.accent,
+                inactiveTrackColor: AmColors.chip,
+                thumbColor: AmColors.accent,
+                overlayShape: SliderComponentShape.noOverlay,
+                thumbShape:
+                    const RoundSliderThumbShape(enabledThumbRadius: 7),
+              ),
+              child: Slider(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 58,
+            child: Text(
+              '${value.toStringAsFixed(decimals)}$suffix',
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 11, color: AmColors.text),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _ms(Duration d) =>
+      '${(d.inMilliseconds / 1000).toStringAsFixed(2)}s';
+}
+
+/// PREVIA VIVA de uma animacao do catalogo: tres letras rodando o efeito
+/// em loop. E o que faz escolher olhando, em vez de ler nome.
+class _AnimPreview extends StatefulWidget {
+  const _AnimPreview({required this.anim});
+
+  final TextAnim anim;
+
+  @override
+  State<_AnimPreview> createState() => _AnimPreviewState();
+}
+
+class _AnimPreviewState extends State<_AnimPreview>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  static const _units = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final anim = widget.anim;
+    // Um ciclo: a animacao inteira mais um respiro para dar para ver o
+    // resultado antes de recomecar.
+    final total = anim.totalFor(_units);
+    final cycle = (anim.spec?.loop ?? false)
+        ? const Duration(milliseconds: 1600)
+        : total + const Duration(milliseconds: 700);
+    final compiled = compileTextAnim(anim,
+        layerDuration: cycle, unitCount: _units);
+
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) {
+        final t = Duration(
+            microseconds: (_c.value * cycle.inMicroseconds).round());
+        return CustomPaint(
+          size: Size.infinite,
+          painter: _PreviewPainter(animator: compiled, time: t),
+        );
+      },
+    );
+  }
+}
+
+class _PreviewPainter extends CustomPainter {
+  _PreviewPainter({required this.animator, required this.time});
+
+  final TextAnimator animator;
+  final Duration time;
+
+  static const _glyphs = ['A', 'b', 'c'];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const n = 3;
+    const fontSize = 19.0;
+    const advance = 15.0;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    for (var i = 0; i < n; i++) {
+      final c = animator.coverageAt(i, n, time);
+
+      var dx = 0.0, dy = 0.0, rot = 0.0, blur = 0.0, skew = 0.0, hue = 0.0;
+      var sc = 100.0, op = 100.0, scx = 100.0, scy = 100.0;
+      var sat = 100.0, bri = 100.0, track = 0.0;
+      for (final p in animator.properties) {
+        switch (p.type) {
+          case TextAnimProp.positionX:
+            dx = p.apply(dx, time, c);
+          case TextAnimProp.positionY:
+            dy = p.apply(dy, time, c);
+          case TextAnimProp.rotation:
+            rot = p.apply(rot, time, c);
+          case TextAnimProp.tracking:
+            track = p.apply(track, time, c);
+          case TextAnimProp.scale:
+            sc = p.apply(sc, time, c);
+          case TextAnimProp.opacity:
+            op = p.apply(op, time, c);
+          case TextAnimProp.scaleX:
+            scx = p.apply(scx, time, c);
+          case TextAnimProp.scaleY:
+            scy = p.apply(scy, time, c);
+          case TextAnimProp.blur:
+            blur = p.apply(blur, time, c);
+          case TextAnimProp.skew:
+            skew = p.apply(skew, time, c);
+          case TextAnimProp.hue:
+            hue = p.apply(hue, time, c);
+          case TextAnimProp.saturation:
+            sat = p.apply(sat, time, c);
+          case TextAnimProp.brightness:
+            bri = p.apply(bri, time, c);
+        }
+      }
+
+      final opacity = (op / 100).clamp(0.0, 1.0);
+      if (opacity <= 0.01) continue;
+      final sx = math.max(0.0, sc / 100 * scx / 100);
+      final sy = math.max(0.0, sc / 100 * scy / 100);
+      if (sx <= 0.01 || sy <= 0.01) continue;
+
+      var color = const Color(0xFFE9EDF2);
+      if (hue != 0 || sat != 100 || bri != 100) {
+        final hsl = HSLColor.fromColor(color);
+        final h = (hsl.hue + hue) % 360;
+        color = hsl
+            .withHue(h < 0 ? h + 360 : h)
+            .withSaturation(
+                (hsl.saturation * sat / 100).clamp(0.0, 1.0))
+            .withLightness(
+                (hsl.lightness * bri / 100).clamp(0.0, 1.0))
+            .toColor();
+      }
+
+      final tp = TextPainter(
+        text: TextSpan(
+          text: _glyphs[i],
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: color.withValues(alpha: opacity),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      // A previa e pequena: o deslocamento entra reduzido, senao a letra
+      // sai da miniatura e a pessoa nao ve nada.
+      const k = 0.16;
+      final x = cx + (i - 1) * (advance + track * k) + dx * k;
+      final y = cy + dy * k;
+
+      canvas.save();
+      final blurring = blur > 0.4;
+      if (blurring) {
+        canvas.saveLayer(
+          Rect.fromCenter(
+              center: Offset(x, y), width: size.width, height: size.height),
+          Paint()
+            ..imageFilter = ImageFilter.blur(
+                sigmaX: blur * 0.22, sigmaY: blur * 0.22),
+        );
+      }
+      canvas.translate(x, y);
+      if (rot != 0) canvas.rotate(rot * math.pi / 180);
+      if (skew != 0) {
+        canvas.transform(Float64List.fromList(<double>[
+          1, 0, 0, 0, //
+          math.tan(-skew * math.pi / 180), 1, 0, 0, //
+          0, 0, 1, 0, //
+          0, 0, 0, 1,
+        ]));
+      }
+      canvas.scale(sx, sy);
+      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+      canvas.restore();
+      if (blurring) canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PreviewPainter old) => true;
+}
+
+/// ESCALONAMENTO VISIVEL: uma barra por unidade, comecando em
+/// i*atraso e durando "duracao".
+class _StaggerPainter extends CustomPainter {
+  const _StaggerPainter({required this.anim, required this.units});
+
+  final TextAnim anim;
+  final int units;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = math.max(1, units);
+    final total = anim.totalFor(n).inMicroseconds.toDouble();
+    if (total <= 0) return;
+    final s = anim.stagger.inMicroseconds.toDouble();
+    final d = anim.duration.inMicroseconds.toDouble();
+    final rowH = size.height / n;
+    final paint = Paint()..color = AmColors.accent;
+    for (var i = 0; i < n; i++) {
+      final idx = orderMapIndex(
+          selectorOrderFor(anim.order), i, n, anim.seed);
+      final x0 = (idx * s) / total * size.width;
+      // Duracao zero (maquina de escrever) ainda precisa ser visivel.
+      final w = math.max(2.0, d / total * size.width);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x0, i * rowH + rowH * 0.18,
+              math.min(w, size.width - x0), rowH * 0.64),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StaggerPainter old) =>
+      old.anim.stagger != anim.stagger ||
+      old.anim.duration != anim.duration ||
+      old.anim.order != anim.order ||
+      old.units != units;
 }

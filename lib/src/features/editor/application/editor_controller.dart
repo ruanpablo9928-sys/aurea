@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +6,8 @@ import 'package:video_player/video_player.dart';
 
 import '../../media/application/media_import_service.dart';
 import '../domain/caption.dart';
+import '../domain/camera3d.dart';
+import '../domain/scene3d.dart';
 import '../domain/effect.dart';
 import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
@@ -18,9 +20,9 @@ import '../domain/layout_ops.dart';
 import '../domain/measure.dart';
 import '../domain/mask.dart';
 import '../domain/shape.dart';
+import '../domain/text_anim.dart';
 import '../domain/text_animator.dart';
 import '../domain/text_presets.dart';
-import '../domain/text_recipe.dart';
 import '../domain/video_project.dart';
 
 export '../domain/video_project.dart' show LayerProp, PropertyLink;
@@ -257,6 +259,7 @@ class EditorController extends Notifier<VideoProject> {
       ParticlesLayer _ => 'particulas',
       AdjustmentLayer _ => 'ajuste',
       Element3DLayer _ => '3d',
+      Scene3DLayer _ => 'cena 3d',
     };
     if (type.contains(q)) return true;
     if (q == 'keyframe' || q == 'animado') return l.hasAnimation;
@@ -825,6 +828,255 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(id);
     if (layer is! Element3DLayer) return;
     _replace(fn(layer));
+  }
+
+  /// CONTEINER CENA 3D: uma camada para o compositor, um renderizador
+  /// por dentro.
+  void addScene3DLayer(Duration at) {
+    final n = state.layers.whereType<Scene3DLayer>().length + 1;
+    _push(Scene3DLayer(
+      name: 'Cena 3D $n',
+      startTime: at,
+      duration: const Duration(seconds: 5),
+      scene: Scene3D.demo,
+      position: AnimatedOffset(_center),
+    ));
+  }
+
+  void updateScene3D(String id, Scene3D Function(Scene3D) fn) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.withScene(fn(layer.scene)));
+  }
+
+  void updateScene3DCamera(
+      String id, Camera3D Function(Camera3D) fn) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.withCamera(fn(layer.camera)));
+  }
+
+  void setScene3DHelpers(String id, bool show) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.copyScene(showHelpers: show));
+  }
+
+  void setScene3DView(String id, SceneView view) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.copyScene(view: view));
+  }
+
+  /// Adiciona um objeto ao grafo da cena.
+  void addSceneNode(String layerId, Element3DKind kind) {
+    updateScene3D(layerId, (s) {
+      final n = s.nodes.length + 1;
+      return s.copyWith(nodes: [
+        ...s.nodes,
+        SceneNode(
+          name: '${element3DLabel(kind)} $n',
+          kind: kind,
+          x: AnimatedDouble((n.isEven ? 1 : -1) * 60.0 * (n ~/ 2 + 1)),
+        ),
+      ]);
+    });
+  }
+
+  void updateSceneNode(
+      String layerId, String nodeId, SceneNode Function(SceneNode) fn) {
+    updateScene3D(layerId, (s) => s.copyWith(nodes: [
+          for (final n in s.nodes) n.id == nodeId ? fn(n) : n,
+        ]));
+  }
+
+  void removeSceneNode(String layerId, String nodeId) {
+    updateScene3D(
+        layerId,
+        (s) => s.copyWith(nodes: [
+              for (final n in s.nodes)
+                if (n.id != nodeId) n,
+            ]));
+  }
+
+  /// RIG DE CAMERA em um toque — gera keyframes REAIS, editaveis.
+  void applyRigToScene(String layerId, CameraRig rig) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final bounds = sceneBounds(layer.scene, Duration.zero);
+    _replace(layer.withCamera(applyCameraRig(
+      layer.camera,
+      rig,
+      duration: layer.duration,
+      target: bounds.center,
+      radius: bounds.radius <= 0 ? 600 : bounds.radius * 2.2,
+    )));
+  }
+
+  /// Enquadrar tudo / alinhar camera a vista.
+  void frameSceneAll(String layerId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.withCamera(frameBounds(
+        layer.camera, sceneBounds(layer.scene, Duration.zero),
+        Duration.zero)));
+  }
+
+  void addSceneLight(String layerId, Light3DKind kind) {
+    updateScene3D(
+        layerId,
+        (s) => s.copyWith(lights: [
+              ...s.lights,
+              Light3D(
+                kind: kind,
+                castsShadow: s.lights.isEmpty,
+              ),
+            ]));
+  }
+
+  void updateSceneLight(
+      String layerId, String lightId, Light3D Function(Light3D) fn) {
+    updateScene3D(layerId, (s) => s.copyWith(lights: [
+          for (final l in s.lights) l.id == lightId ? fn(l) : l,
+        ]));
+  }
+
+  void removeSceneLight(String layerId, String lightId) {
+    updateScene3D(
+        layerId,
+        (s) => s.copyWith(lights: [
+              for (final l in s.lights)
+                if (l.id != lightId) l,
+            ]));
+  }
+
+  /// DUPLICAR EM ARRAY — o modulo Grade direto em 3D: 200 objetos numa
+  /// grade e um slider, e tudo entra em UMA chamada de desenho porque
+  /// vira instancia da mesma malha.
+  void arrayNodeInstances(
+    String layerId,
+    String nodeId, {
+    required int countX,
+    required int countY,
+    required int countZ,
+    required double spacing,
+  }) {
+    final cx = countX.clamp(1, 40);
+    final cy = countY.clamp(1, 40);
+    final cz = countZ.clamp(1, 40);
+    updateSceneNode(layerId, nodeId, (n) {
+      if (cx * cy * cz <= 1) return n.copyWith(instances: const []);
+      final out = <Vec3>[];
+      for (var ix = 0; ix < cx; ix++) {
+        for (var iy = 0; iy < cy; iy++) {
+          for (var iz = 0; iz < cz; iz++) {
+            out.add(Vec3(
+              (ix - (cx - 1) / 2) * spacing,
+              (iy - (cy - 1) / 2) * spacing,
+              (iz - (cz - 1) / 2) * spacing,
+            ));
+          }
+        }
+      }
+      return n.copyWith(instances: out);
+    });
+  }
+
+  /// MODO DE ISOLAMENTO: esconde tudo menos o selecionado. Chamar de
+  /// novo com o mesmo no mostra todos outra vez.
+  void isolateSceneNode(String layerId, String nodeId) {
+    updateScene3D(layerId, (s) {
+      final isolated = s.nodes.every((n) => n.id == nodeId || !n.visible) &&
+          s.nodes.any((n) => n.id == nodeId && n.visible);
+      return s.copyWith(nodes: [
+        for (final n in s.nodes)
+          n.copyWith(visible: isolated || n.id == nodeId),
+      ]);
+    });
+  }
+
+  /// FOCAR NO SELECIONADO: a distancia de foco vem do objeto, nao de um
+  /// numero chutado.
+  void focusCameraOnNode(String layerId, String nodeId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final node =
+        layer.scene.nodes.where((n) => n.id == nodeId).firstOrNull;
+    if (node == null) return;
+    final d = (node.positionAt(Duration.zero) -
+            layer.camera.positionAt(Duration.zero))
+        .length;
+    _replace(layer.withCamera(layer.camera.copyWith(
+      dof: layer.camera.dof.copyWith(
+        enabled: true,
+        focusDistance: layer.camera.dof.focusDistance.withBase(d),
+      ),
+    )));
+  }
+
+  /// ENQUADRAR SELECIONADO.
+  void frameSceneNode(String layerId, String nodeId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final node =
+        layer.scene.nodes.where((n) => n.id == nodeId).firstOrNull;
+    if (node == null) return;
+    final r = node.size * node.scale.valueAt(Duration.zero) * 1.8;
+    _replace(layer.withCamera(frameBounds(
+      layer.camera,
+      Bounds3D(node.positionAt(Duration.zero), r),
+      Duration.zero,
+    )));
+  }
+
+  /// SALVAR VISTA: guarda o enquadramento atual com nome.
+  void saveSceneView(String layerId, String name, RenderCamera cam) {
+    updateScene3D(
+        layerId,
+        (s) => s.copyWith(savedViews: [
+              ...s.savedViews,
+              SavedView(
+                  name: name, position: cam.position, target: cam.target),
+            ]));
+  }
+
+  void removeSceneView(String layerId, int index) {
+    updateScene3D(layerId, (s) {
+      if (index < 0 || index >= s.savedViews.length) return s;
+      return s.copyWith(savedViews: [
+        for (var i = 0; i < s.savedViews.length; i++)
+          if (i != index) s.savedViews[i],
+      ]);
+    });
+  }
+
+  /// Coloca a camera exatamente num enquadramento salvo.
+  void applySavedView(String layerId, SavedView view) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.withCamera(alignToView(
+      layer.camera,
+      RenderCamera(position: view.position, target: view.target),
+    )));
+  }
+
+  /// ALINHAR CAMERA A VISTA a partir de uma camera de render arbitraria
+  /// (a vista livre navegada no estudio). E o comando mais usado: navega
+  /// livre ate achar o plano, e so entao a camera assume ele.
+  void alignCameraToRender(String layerId, RenderCamera cam) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer
+        .withCamera(alignToView(layer.camera, cam))
+        .copyScene(view: SceneView.camera));
+  }
+
+  void alignCameraToCurrentView(String layerId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer || layer.view == SceneView.camera) return;
+    _replace(layer
+        .withCamera(alignToView(layer.camera, orthoViewCamera(layer.view)))
+        .copyScene(view: SceneView.camera));
   }
 
   Future<void> importImageFromGallery(Duration at) async {
@@ -1599,27 +1851,48 @@ class EditorController extends Notifier<VideoProject> {
         id, (l) => l.copyLayer(animators: preset.build()));
   }
 
-  /// Quantas unidades o texto tem na base da receita — e o N que o
-  /// compilador precisa para acertar a janela do seletor.
-  int textUnitCount(String id, RecipeUnit unit) {
+  // ------------------------------- animacoes de texto (catalogo AM)
+
+  /// Quantas unidades o texto tem na base desta animacao.
+  int textAnimUnitCount(String id, TextAnimUnit unit) {
     final layer = _layer(id);
     if (layer is! TextLayer) return 1;
     final u = TextUnits.of(layer.text);
     return switch (unit) {
-      RecipeUnit.character => u.charCount,
-      RecipeUnit.word => u.wordCount,
-      RecipeUnit.line => u.lineCount,
-      RecipeUnit.all => 1,
+      TextAnimUnit.character => u.charCount,
+      TextAnimUnit.charactersNoSpaces => u.charNoSpaceCount,
+      TextAnimUnit.word => u.wordCount,
+      TextAnimUnit.line => u.lineCount,
+      TextAnimUnit.all => 1,
     };
   }
 
-  /// AUTORIA (spec autoria-de-texto): a receita COMPILA para o motor de
-  /// animadores — nao existe segundo caminho de avaliacao. Aplicar uma
-  /// receita substitui a pilha pelo rig que ela gera.
-  void applyTextRecipe(String id, TextRecipe recipe) {
-    final n = textUnitCount(id, recipe.unit);
-    _updateTextLayer(
-        id, (l) => l.copyLayer(animators: [compileRecipe(recipe, n)]));
+  /// Poe uma animacao do catalogo numa posicao. Cada posicao —
+  /// entrada, enfase, saida — aceita UMA animacao, como no Alight
+  /// Motion: escolher outra troca, nao empilha.
+  void setTextAnim(String id, TextAnimSlot slot, String? specId) {
+    _updateTextLayer(id, (l) {
+      final rest = [
+        for (final a in l.anims)
+          if (a.slot != slot) a,
+      ];
+      if (specId == null) return l.copyLayer(anims: rest);
+      return l.copyLayer(
+          anims: [...rest, TextAnim(specId: specId, slot: slot)]);
+    });
+  }
+
+  void updateTextAnim(
+      String id, String animId, TextAnim Function(TextAnim) fn) {
+    _updateTextLayer(id, (l) => l.copyLayer(anims: [
+          for (final a in l.anims) a.id == animId ? fn(a) : a,
+        ]));
+  }
+
+  void setTextAnimParam(
+      String id, String animId, String key, double value) {
+    updateTextAnim(id, animId,
+        (a) => a.copyWith(params: {...a.params, key: value}));
   }
 
   void addTextAnimator(String id) {
@@ -1732,6 +2005,9 @@ class EditorController extends Notifier<VideoProject> {
       return switch (s) {
         RangeSelector r => r.copyWith(mode: next),
         WigglySelector w => w.copyWith(mode: next),
+        // O seletor escalonado vem compilado do catalogo: seu modo nao
+        // e editado a mao.
+        StaggerSelector _ => s,
       };
     });
   }

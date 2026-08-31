@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'camera3d.dart';
 import 'caption.dart';
 import 'effect.dart';
 import 'element3d.dart';
@@ -8,7 +9,9 @@ import 'keyframe.dart';
 import 'layer.dart';
 import 'layer_meta.dart';
 import 'mask.dart';
+import 'scene3d.dart';
 import 'shape.dart';
+import 'text_anim.dart';
 import 'text_animator.dart';
 import 'video_project.dart';
 
@@ -496,6 +499,26 @@ Map<String, dynamic> _selector(TextSelector s) => switch (s) {
           'lock': w.lockDimensions,
           'seed': w.randomSeed,
         },
+      // Seletor escalonado nao e serializado aqui: ele nasce da
+      // compilacao da animacao do catalogo, que ja e salva em 'anims'.
+      StaggerSelector g => {
+          'kind': 'stagger',
+          'id': g.id,
+          'mode': g.mode.index,
+          'basedOn': g.basedOn.index,
+          'start': g.start.inMicroseconds,
+          'dur': g.duration.inMicroseconds,
+          'stag': g.stagger.inMicroseconds,
+          'order': g.order.index,
+          'seed': g.seed,
+          'ease': g.ease.index,
+          'amp': g.amplitude,
+          'freq': g.frequency,
+          'decay': g.decay,
+          'cov': g.startCovered,
+          'loop': g.loop,
+          'shape': g.loopShape.index,
+        },
     };
 
 TextSelector _asSelector(Map<String, dynamic> m) => switch (m['kind']) {
@@ -532,8 +555,67 @@ TextSelector _asSelector(Map<String, dynamic> m) => switch (m['kind']) {
           lockDimensions: m['lock'] as bool,
           randomSeed: (m['seed'] as num).toInt(),
         ),
+      'stagger' => StaggerSelector(
+          id: m['id'] as String,
+          mode: SelectorMode.values[(m['mode'] as num).toInt()],
+          basedOn: SelectorBasedOn.values[(m['basedOn'] as num).toInt()],
+          start: Duration(microseconds: (m['start'] as num).toInt()),
+          duration: Duration(microseconds: (m['dur'] as num).toInt()),
+          stagger: Duration(microseconds: (m['stag'] as num).toInt()),
+          order: TextAnimOrder.values[(m['order'] as num).toInt()],
+          seed: (m['seed'] as num).toInt(),
+          ease: TextAnimEase.values[(m['ease'] as num).toInt()],
+          amplitude: (m['amp'] as num).toDouble(),
+          frequency: (m['freq'] as num).toDouble(),
+          decay: (m['decay'] as num).toDouble(),
+          startCovered: m['cov'] as bool? ?? true,
+          loop: m['loop'] as bool? ?? false,
+          loopShape: LoopShape.values[(m['shape'] as num).toInt()],
+        ),
       _ => throw FormatException('Seletor desconhecido: ${m['kind']}'),
     };
+
+/// ANIMACAO DO CATALOGO (modelo AM). Guarda o id da animacao e os seis
+/// controles — o animador em si e recompilado na leitura, entao melhorar
+/// uma animacao do catalogo melhora os projetos ja salvos.
+Map<String, dynamic> _textAnim(TextAnim a) => {
+      'id': a.id,
+      'spec': a.specId,
+      'slot': a.slot.index,
+      'unit': a.unit.index,
+      'start': a.start.inMicroseconds,
+      'dur': a.duration.inMicroseconds,
+      'stag': a.stagger.inMicroseconds,
+      'order': a.order.index,
+      'ease': a.ease.index,
+      'seed': a.seed,
+      'on': a.enabled,
+      'amp': a.amplitude,
+      'freq': a.frequency,
+      'decay': a.decay,
+      'params': a.params,
+    };
+
+TextAnim _asTextAnim(Map<String, dynamic> m) => TextAnim(
+      id: m['id'] as String?,
+      specId: m['spec'] as String,
+      slot: TextAnimSlot.values[(m['slot'] as num).toInt()],
+      unit: TextAnimUnit.values[(m['unit'] as num).toInt()],
+      start: Duration(microseconds: (m['start'] as num).toInt()),
+      duration: Duration(microseconds: (m['dur'] as num).toInt()),
+      stagger: Duration(microseconds: (m['stag'] as num).toInt()),
+      order: TextAnimOrder.values[(m['order'] as num).toInt()],
+      ease: TextAnimEase.values[(m['ease'] as num).toInt()],
+      seed: (m['seed'] as num?)?.toInt() ?? 1,
+      enabled: m['on'] as bool? ?? true,
+      amplitude: (m['amp'] as num?)?.toDouble() ?? 1,
+      frequency: (m['freq'] as num?)?.toDouble() ?? 1.8,
+      decay: (m['decay'] as num?)?.toDouble() ?? 5,
+      params: {
+        for (final e in (m['params'] as Map? ?? const {}).entries)
+          e.key as String: (e.value as num).toDouble(),
+      },
+    );
 
 Map<String, dynamic> _animator(TextAnimator a) => {
       'id': a.id,
@@ -642,6 +724,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['color'] = _col(t.color);
       base['bold'] = t.bold;
       base['animators'] = [for (final a in t.animators) _animator(a)];
+      if (t.anims.isNotEmpty) {
+        base['anims'] = [for (final a in t.anims) _textAnim(a)];
+      }
     case ShapeLayer s:
       base['kind'] = 'shape';
       base['contents'] = [for (final i in s.contents) _shapeItem(i)];
@@ -683,8 +768,220 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['size'] = e.size;
       base['color'] = _col(e.color);
       base['edges'] = e.edges;
+    case Scene3DLayer s:
+      base['kind'] = 'scene3d';
+      base['scene'] = _scene(s.scene);
+      base['cam'] = _camera(s.camera);
+      base['view'] = s.view.index;
+      base['helpers'] = s.showHelpers;
   }
   return base;
+}
+
+// ------------------------------------------------------- cena 3D
+
+Map<String, dynamic> _vec(Vec3 v) => {'x': v.x, 'y': v.y, 'z': v.z};
+
+Vec3 _asVec(dynamic v) {
+  final m = v as Map<String, dynamic>;
+  return Vec3((m['x'] as num).toDouble(), (m['y'] as num).toDouble(),
+      (m['z'] as num).toDouble());
+}
+
+Map<String, dynamic> _material(Material3D mat) => {
+      'n': mat.name,
+      'c': _col(mat.baseColor),
+      'met': mat.metallic,
+      'rough': mat.roughness,
+      'emi': mat.emissive,
+      'op': mat.opacity,
+      'kind': mat.kind.index,
+      if (mat.textureLayerId != null) 'tex': mat.textureLayerId,
+    };
+
+Material3D _asMaterial(Map<String, dynamic> m) => Material3D(
+      name: m['n'] as String? ?? 'Material',
+      baseColor: _asCol(m['c']),
+      metallic: (m['met'] as num).toDouble(),
+      roughness: (m['rough'] as num).toDouble(),
+      emissive: (m['emi'] as num).toDouble(),
+      opacity: (m['op'] as num).toDouble(),
+      kind: MaterialKind.values[(m['kind'] as num).toInt()],
+      textureLayerId: m['tex'] as String?,
+    );
+
+Map<String, dynamic> _scene(Scene3D s) => {
+      'ambient': s.ambient,
+      if (s.background != null) 'bg': _col(s.background!),
+      'grid': s.showFloorGrid,
+      'msaa': s.msaa,
+      'draft': s.draftMode,
+      'nodes': [
+        for (final n in s.nodes)
+          {
+            'id': n.id,
+            'n': n.name,
+            'k': n.kind.index,
+            'mat': _material(n.material),
+            'x': _ad(n.x),
+            'y': _ad(n.y),
+            'z': _ad(n.z),
+            'rx': _ad(n.rotX),
+            'ry': _ad(n.rotY),
+            'rz': _ad(n.rotZ),
+            's': _ad(n.scale),
+            'size': n.size,
+            'vis': n.visible,
+            if (n.instances.isNotEmpty)
+              'inst': [for (final i in n.instances) _vec(i)],
+          },
+      ],
+      'lights': [
+        for (final l in s.lights)
+          {
+            'id': l.id,
+            'k': l.kind.index,
+            'c': _col(l.color),
+            'i': _ad(l.intensity),
+            'dir': _vec(l.direction),
+            'pos': _vec(l.position),
+            'range': l.range,
+            'shadow': l.castsShadow,
+          },
+      ],
+      if (s.savedViews.isNotEmpty)
+        'views': [
+          for (final v in s.savedViews)
+            {'n': v.name, 'p': _vec(v.position), 't': _vec(v.target)},
+        ],
+    };
+
+Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
+      ambient: (m['ambient'] as num?)?.toDouble() ?? 0.28,
+      background: m['bg'] == null ? null : _asCol(m['bg']),
+      showFloorGrid: m['grid'] as bool? ?? true,
+      msaa: m['msaa'] as bool? ?? true,
+      draftMode: m['draft'] as bool? ?? false,
+      nodes: [
+        for (final n in (m['nodes'] as List? ?? const []))
+          SceneNode(
+            id: n['id'] as String,
+            name: n['n'] as String,
+            kind: Element3DKind.values[(n['k'] as num).toInt()],
+            material: _asMaterial(n['mat'] as Map<String, dynamic>),
+            x: _asAd(n['x']),
+            y: _asAd(n['y']),
+            z: _asAd(n['z']),
+            rotX: _asAd(n['rx']),
+            rotY: _asAd(n['ry']),
+            rotZ: _asAd(n['rz']),
+            scale: _asAd(n['s']),
+            size: (n['size'] as num).toDouble(),
+            visible: n['vis'] as bool? ?? true,
+            instances: [
+              for (final i in (n['inst'] as List? ?? const []))
+                _asVec(i),
+            ],
+          ),
+      ],
+      lights: [
+        for (final l in (m['lights'] as List? ?? const []))
+          Light3D(
+            id: l['id'] as String,
+            kind: Light3DKind.values[(l['k'] as num).toInt()],
+            color: _asCol(l['c']),
+            intensity: _asAd(l['i']),
+            direction: _asVec(l['dir']),
+            position: _asVec(l['pos']),
+            range: (l['range'] as num).toDouble(),
+            castsShadow: l['shadow'] as bool? ?? false,
+          ),
+      ],
+      savedViews: [
+        for (final v in (m['views'] as List? ?? const []))
+          SavedView(
+            name: v['n'] as String? ?? 'Vista',
+            position: _asVec(v['p']),
+            target: _asVec(v['t']),
+          ),
+      ],
+    );
+
+Map<String, dynamic> _camera(Camera3D c) => {
+      'id': c.id,
+      'n': c.name,
+      'kind': c.kind.index,
+      'px': _ad(c.posX),
+      'py': _ad(c.posY),
+      'pz': _ad(c.posZ),
+      'ax': _ad(c.poiX),
+      'ay': _ad(c.poiY),
+      'az': _ad(c.poiZ),
+      'ox': _ad(c.orientX),
+      'oy': _ad(c.orientY),
+      'oz': _ad(c.orientZ),
+      'rx': _ad(c.rotX),
+      'ry': _ad(c.rotY),
+      'rz': _ad(c.rotZ),
+      'focal': _ad(c.focalLength),
+      'film': c.filmWidth,
+      'ortho': c.orthographic,
+      'auto': c.autoOrient.index,
+      'dof': {
+        'on': c.dof.enabled,
+        'focus': _ad(c.dof.focusDistance),
+        'ap': _ad(c.dof.aperture),
+        'blur': _ad(c.dof.blurLevel),
+        'lock': c.dof.lockToZoom,
+        'iris': c.dof.irisShape.index,
+        'irot': _ad(c.dof.irisRotation),
+        'iround': _ad(c.dof.irisRoundness),
+        'iasp': _ad(c.dof.irisAspect),
+        'fringe': _ad(c.dof.diffractionFringe),
+        'gain': _ad(c.dof.highlightGain),
+        'thr': _ad(c.dof.highlightThreshold),
+        'sat': _ad(c.dof.highlightSaturation),
+      },
+    };
+
+Camera3D _asCamera(Map<String, dynamic> m) {
+  final d = m['dof'] as Map<String, dynamic>;
+  return Camera3D(
+    id: m['id'] as String,
+    name: m['n'] as String? ?? 'Camera',
+    kind: CameraKind.values[(m['kind'] as num).toInt()],
+    posX: _asAd(m['px']),
+    posY: _asAd(m['py']),
+    posZ: _asAd(m['pz']),
+    poiX: _asAd(m['ax']),
+    poiY: _asAd(m['ay']),
+    poiZ: _asAd(m['az']),
+    orientX: _asAd(m['ox']),
+    orientY: _asAd(m['oy']),
+    orientZ: _asAd(m['oz']),
+    rotX: _asAd(m['rx']),
+    rotY: _asAd(m['ry']),
+    rotZ: _asAd(m['rz']),
+    focalLength: _asAd(m['focal']),
+    filmWidth: (m['film'] as num).toDouble(),
+    orthographic: m['ortho'] as bool? ?? false,
+    autoOrient: AutoOrient.values[(m['auto'] as num?)?.toInt() ?? 0],
+    dof: DepthOfField(
+      enabled: d['on'] as bool? ?? false,
+      focusDistance: _asAd(d['focus']),
+      aperture: _asAd(d['ap']),
+      blurLevel: _asAd(d['blur']),
+      lockToZoom: d['lock'] as bool? ?? false,
+      irisShape: IrisShape.values[(d['iris'] as num).toInt()],
+      irisRotation: _asAd(d['irot']),
+      irisRoundness: _asAd(d['iround']),
+      irisAspect: _asAd(d['iasp']),
+      diffractionFringe: _asAd(d['fringe']),
+      highlightGain: _asAd(d['gain']),
+      highlightThreshold: _asAd(d['thr']),
+      highlightSaturation: _asAd(d['sat']),
+    ),
+  );
 }
 
 Layer layerFromJson(Map<String, dynamic> m) {
@@ -751,6 +1048,10 @@ Layer layerFromJson(Map<String, dynamic> m) {
         animators: [
           for (final a in (m['animators'] as List))
             _asAnimator(a as Map<String, dynamic>),
+        ],
+        anims: [
+          for (final a in (m['anims'] as List? ?? const []))
+            _asTextAnim(a as Map<String, dynamic>),
         ],
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
@@ -847,6 +1148,19 @@ Layer layerFromJson(Map<String, dynamic> m) {
         twinkle: m['twinkle'] as bool? ?? false,
         color: _asCol(m['color']),
         star: m['star'] as bool,
+        position: pos, scaleX: sx, scaleY: sy, rotation: rot,
+        rotationX: rotX, rotationY: rotY, opacity: op,
+        skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        is3D: is3D, positionZ: z, effects: effects,
+        masks: masks, matteMode: matte, matteSourceId: matteSrc,
+      );
+    case 'scene3d':
+      return Scene3DLayer(
+        id: id, name: name, startTime: start, duration: dur,
+        scene: _asScene(m['scene'] as Map<String, dynamic>),
+        camera: _asCamera(m['cam'] as Map<String, dynamic>),
+        view: SceneView.values[(m['view'] as num).toInt()],
+        showHelpers: m['helpers'] as bool? ?? true,
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,

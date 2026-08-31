@@ -43,6 +43,7 @@ dependencies:
   file_picker: ^10.3.3
   shared_preferences: ^2.5.5
   characters: ^1.4.1
+  url_launcher: ^6.3.2
   whisper_flutter_new: ^1.0.1
 
 # Copia local do whisper_flutter_new com patch de seguranca no codigo

@@ -25,7 +25,9 @@ import 'animated_text.dart';
 import 'blend_mask.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
+import 'fx_lote2.dart';
 import 'particles_painter.dart';
+import 'scene3d_painter.dart';
 
 /// Palco: composicao renderizada em coordenadas logicas, escalada para
 /// caber. Gestos editam a camada selecionada.
@@ -710,6 +712,12 @@ class _CompositionView extends ConsumerWidget {
       Map<String, (NullLayer, GridRig, int, int)>? rig}) {
     final local = layer.localTime(t);
 
+    // REMAPEAR TEMPO (igual ao AE): muda QUAL instante da camada aparece
+    // agora, sem tocar nos keyframes de transformacao — que continuam
+    // lendo o tempo da composicao. E o que permite congelar, voltar e
+    // fazer rampa de velocidade com keyframes de tempo.
+    final contentLocal = _remappedTime(layer, local);
+
     // ---- propriedades efetivas (com pickwhip quando ha vinculo) ----
     var pos = layer.position.valueAt(local);
     var rotationDeg = layer.rotation.valueAt(local);
@@ -857,7 +865,7 @@ class _CompositionView extends ConsumerWidget {
       project: project,
       compWidth: project.outputWidth.toDouble(),
       videos: videos,
-      localTime: local,
+      localTime: contentLocal,
       particlesRotX:
           isParticles ? layer.rotationX.valueAt(local) + extraRotX : 0,
       particlesRotY:
@@ -1139,6 +1147,17 @@ class _CompositionView extends ConsumerWidget {
         colorFilter: ColorFilter.mode(color, BlendMode.srcOut),
         child: child,
       );
+
+  /// Tempo de CONTEUDO da camada depois do remapeamento (se houver).
+  static Duration _remappedTime(Layer layer, Duration local) {
+    for (final e in layer.effects) {
+      if (!e.enabled || e.type != EffectType.timeRemap) continue;
+      final secs = e.paramAt('tempo', local);
+      final us = (secs * 1000000).round();
+      return Duration(microseconds: us < 0 ? 0 : us);
+    }
+    return local;
+  }
 
   Widget _applyEffects(
       List<EffectInstance> effects, Widget child, Duration local) {
@@ -1800,6 +1819,273 @@ class _CompositionView extends ConsumerWidget {
               out = Stack(clipBehavior: Clip.none, children: layers);
             }
           }
+
+        // O remapeamento de tempo nao pinta nada: ele ja mudou QUAL
+        // instante da camada foi montado, la em cima.
+        case EffectType.timeRemap:
+          break;
+
+        case EffectType.turbulentDisplace:
+          final amt = effect.paramAt('quantidade', local);
+          if (amt.abs() > 0.5) {
+            out = FxSnapshot(
+              painter: TurbulentDisplacePainter(
+                amount: amt,
+                scale: effect.paramAt('tamanho', local),
+                complexity: effect.paramAt('complexidade', local),
+                evolution: effect.paramAt('evolucao', local),
+                seed: effect.paramAt('semente', local).round(),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.bend:
+          final amt = effect.paramAt('quantidade', local);
+          if (amt.abs() > 0.5) {
+            out = FxSnapshot(
+              painter: BendPainter(
+                amount: amt,
+                vertical: effect.paramAt('eixo', local).round() == 1,
+                curvature: effect.paramAt('curvatura', local),
+                anchor: effect.paramAt('ancora', local).clamp(0.0, 1.0),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.pixelSort:
+          final len = effect.paramAt('comprimento', local);
+          if (len > 1) {
+            out = FxSnapshot(
+              painter: PixelSortPainter(
+                threshold: effect.paramAt('limiar', local),
+                length: len,
+                direction:
+                    effect.paramAt('direcao', local).round().clamp(0, 3),
+                density: effect.paramAt('densidade', local),
+                seed: effect.paramAt('semente', local).round(),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.ccScatterize:
+          final sp = effect.paramAt('dispersao', local);
+          if (sp > 0.5) {
+            out = FxSnapshot(
+              painter: ScatterizePainter(
+                spread: sp,
+                grain: effect.paramAt('grao', local),
+                rotation: effect.paramAt('rotacao', local),
+                transfer:
+                    effect.paramAt('transferencia', local).clamp(0.0, 1.0),
+                gravity: effect.paramAt('gravidade', local),
+                seed: effect.paramAt('semente', local).round(),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.motionTile:
+          out = FxSnapshot(
+            painter: MotionTilePainter(
+              tileW: effect.paramAt('largura', local),
+              tileH: effect.paramAt('altura', local),
+              outW: effect.paramAt('saidaLargura', local),
+              outH: effect.paramAt('saidaAltura', local),
+              offsetX: effect.paramAt('deslocX', local),
+              offsetY: effect.paramAt('deslocY', local),
+              mirror: effect.paramAt('espelhar', local) >= 0.5,
+              fade: effect.paramAt('desvanecer', local).clamp(0.0, 1.0),
+            ),
+            child: out,
+          );
+
+        case EffectType.ccSplit:
+          final sp = effect.paramAt('divisao', local);
+          if (sp.abs() > 0.5) {
+            out = FxSnapshot(
+              painter: SplitPainter(
+                split: sp,
+                angleDeg: effect.paramAt('angulo', local),
+                center: effect.paramAt('centro', local).clamp(0.0, 1.0),
+                softness:
+                    effect.paramAt('suavidade', local).clamp(0.0, 1.0),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.unsharpMask:
+          final amt = effect.paramAt('quantidade', local);
+          if (amt > 0.01) {
+            out = FxSnapshot(
+              painter: UnsharpMaskPainter(
+                amount: amt,
+                radius: effect.paramAt('raio', local).clamp(0.5, 40.0),
+                threshold:
+                    effect.paramAt('limiar', local).clamp(0.0, 0.95),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.glitchify:
+          final amt = effect.paramAt('intensidade', local);
+          if (amt > 0.01) {
+            out = FxSnapshot(
+              painter: GlitchifyPainter(
+                intensity: amt,
+                blocks: effect.paramAt('blocos', local),
+                shift: effect.paramAt('deslocamento', local),
+                colorSplit: effect.paramAt('cor', local),
+                lineNoise: effect.paramAt('ruidoLinha', local),
+                speed: effect.paramAt('velocidade', local),
+                time: local,
+                seed: effect.paramAt('semente', local).round(),
+              ),
+              child: out,
+            );
+          }
+
+        case EffectType.vhs:
+          final amt = effect.paramAt('intensidade', local).clamp(0.0, 1.0);
+          if (amt > 0.01) {
+            final bleed = effect.paramAt('sangramento', local);
+            final jitter = effect.paramAt('tremor', local);
+            // Tremor horizontal por linha: e o que denuncia a fita.
+            final shake = jitter <= 0.01
+                ? 0.0
+                : (fxNoise(
+                            (local.inMilliseconds / 40).floorToDouble(),
+                            0,
+                            effect.paramAt('semente', local).round()) -
+                        0.5) *
+                    2 *
+                    jitter *
+                    14;
+            var body = out;
+            if (bleed > 0.02) {
+              body = Stack(clipBehavior: Clip.none, children: [
+                Transform.translate(
+                  offset: Offset(-bleed * 6, 0),
+                  child: _channelIso(body, 0),
+                ),
+                Transform.translate(
+                  offset: Offset(bleed * 6, 0),
+                  child: _channelIso(body, 2),
+                ),
+                body,
+              ]);
+            }
+            final fade = effect.paramAt('desbotar', local).clamp(0.0, 1.0);
+            if (fade > 0.02) {
+              body = ColorFiltered(
+                colorFilter: ColorFilter.matrix(
+                    _saturationMatrix(1 - fade * 0.55)),
+                child: body,
+              );
+            }
+            out = Stack(clipBehavior: Clip.none, children: [
+              Transform.translate(
+                  offset: Offset(shake, 0), child: body),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: VhsPainter(
+                      intensity: amt,
+                      lines: effect.paramAt('linhas', local),
+                      noise: effect.paramAt('ruido', local),
+                      time: local,
+                      seed: effect.paramAt('semente', local).round(),
+                    ),
+                  ),
+                ),
+              ),
+            ]);
+          }
+
+        case EffectType.filmDamage:
+          final flick =
+              effect.paramAt('cintilacao', local).clamp(0.0, 1.0);
+          final jump = effect.paramAt('salto', local).clamp(0.0, 1.0);
+          final seed = effect.paramAt('semente', local).round();
+          final frame = (local.inMilliseconds / 1000.0 * 16).floor();
+          // Cintilacao e salto de quadro andam no relogio do projetor.
+          final lum = flick <= 0.01
+              ? 1.0
+              : 1 + (fxNoise(frame.toDouble(), 0, seed) - 0.5) * flick * 0.4;
+          final dy = jump <= 0.01
+              ? 0.0
+              : (fxNoise(frame.toDouble(), 1, seed + 5) - 0.5) * jump * 10;
+          var body = out;
+          if ((lum - 1).abs() > 0.005) {
+            body = ColorFiltered(
+              colorFilter:
+                  ColorFilter.matrix(_scaleShiftMatrix(lum, 0)),
+              child: body,
+            );
+          }
+          out = Stack(clipBehavior: Clip.none, children: [
+            Transform.translate(offset: Offset(0, dy), child: body),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: FilmDamagePainter(
+                    dust: effect.paramAt('poeira', local),
+                    scratches: effect.paramAt('riscos', local),
+                    burn: effect.paramAt('queimado', local),
+                    time: local,
+                    seed: seed,
+                  ),
+                ),
+              ),
+            ),
+            if (effect.paramAt('granulacao', local) > 0.01)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: BlendMask(
+                    blendMode: BlendMode.overlay,
+                    child: CustomPaint(
+                      painter: _GrainPainter(
+                        amount: effect.paramAt('granulacao', local),
+                        size: 1,
+                        seed: seed,
+                        time: local,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ]);
+
+        case EffectType.blobTracker:
+          out = Stack(clipBehavior: Clip.none, children: [
+            out,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: BlobTrackerPainter(
+                    count: effect
+                        .paramAt('quantidade', local)
+                        .round()
+                        .clamp(1, 16),
+                    boxSize: effect.paramAt('tamanho', local),
+                    spread:
+                        effect.paramAt('espalhar', local).clamp(0.0, 1.0),
+                    speed: effect.paramAt('velocidade', local),
+                    stroke: effect.paramAt('traco', local),
+                    cornersOnly:
+                        effect.paramAt('cantos', local) >= 0.5,
+                    color: effect.color,
+                    time: local,
+                    seed: effect.paramAt('semente', local).round(),
+                  ),
+                ),
+              ),
+            ),
+          ]);
       }
     }
     return out;
@@ -1896,8 +2182,7 @@ class _LayerContent extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget child = switch (layer) {
       // Caminho rapido sem animador ativo (I2: linha inteira, com kerning).
-      TextLayer l when l.animators
-              .any((a) => a.enabled && a.properties.isNotEmpty) =>
+      TextLayer l when l.hasTextAnimation =>
         AnimatedTextView(layer: l, localTime: localTime),
       TextLayer l => Text(
           l.text,
@@ -1906,6 +2191,23 @@ class _LayerContent extends StatelessWidget {
         ),
       // Forma vetorial: arvore avaliada no tempo local, pintada por Path.
       ShapeLayer l => _ShapeView(layer: l, localTime: localTime),
+      // CONTEINER CENA 3D: por fora e uma camada; por dentro roda o
+      // proprio renderizador, com passe opaco e passe transparente
+      // ordenados POR TRIANGULO.
+      Scene3DLayer l => SizedBox(
+          width: compWidth,
+          height: project.outputHeight.toDouble(),
+          child: CustomPaint(
+            painter: Scene3DPainter(
+              scene: l.scene,
+              camera: l.camera,
+              view: l.view,
+              time: localTime,
+              // Ajudas NUNCA entram na exportacao — so no preview.
+              showHelpers: l.showHelpers,
+            ),
+          ),
+        ),
       // Precomp: filhos compostos no tempo local do grupo.
       GroupLayer l => SizedBox(
           width: compWidth,

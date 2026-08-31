@@ -38,9 +38,17 @@ class ProjectRepository {
     return out;
   }
 
+  /// O id vira NOME DE ARQUIVO. Ele nasce de um uuid, mas um projeto
+  /// vindo de fora (importacao, arquivo editado na mao) poderia trazer
+  /// "../" e escrever fora da pasta — entao so passa o que e seguro.
+  static String _safeId(String id) {
+    final clean = id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '');
+    return clean.isEmpty ? 'projeto' : clean;
+  }
+
   Future<void> save(VideoProject project) async {
     final dir = await _dir();
-    final file = File('${dir.path}/${project.id}.json');
+    final file = File('${dir.path}/${_safeId(project.id)}.json');
     final tmp = File('${file.path}.tmp');
     tmp.writeAsStringSync(jsonEncode(projectToJson(project)));
     if (file.existsSync()) file.deleteSync();
@@ -49,7 +57,7 @@ class ProjectRepository {
 
   Future<void> delete(String id) async {
     final dir = await _dir();
-    final file = File('${dir.path}/$id.json');
+    final file = File('${dir.path}/${_safeId(id)}.json');
     if (file.existsSync()) file.deleteSync();
   }
 }

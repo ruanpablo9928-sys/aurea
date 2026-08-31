@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/ui/snack.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -34,9 +35,7 @@ class SettingsTab extends ConsumerWidget {
     } catch (_) {}
     if (!context.mounted) return;
     final mb = (removedBytes / (1024 * 1024)).toStringAsFixed(1);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Cache limpo ($mb MB liberados)')),
-    );
+    AureaSnack.show(context, 'Cache limpo ($mb MB liberados)');
   }
 
   @override

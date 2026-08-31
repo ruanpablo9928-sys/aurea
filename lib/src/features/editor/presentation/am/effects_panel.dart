@@ -7,6 +7,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/effect.dart';
 import '../../domain/effect_preset.dart';
 import 'am_colors.dart';
+import 'color_picker_sheet.dart';
 import 'am_widgets.dart';
 
 /// Painel "Efeitos": pilha de cards, cada parametro com regua + diamante
@@ -727,33 +728,12 @@ class _ColorRow extends StatelessWidget {
           const SizedBox(width: 10),
           GestureDetector(
             onTap: () async {
-              final picked = await showModalBottomSheet<Color>(
-                context: context,
-                backgroundColor: AmColors.panel,
-                builder: (sheetContext) => SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Wrap(
-                      spacing: 14,
-                      runSpacing: 14,
-                      children: [
-                        for (final s in _swatches)
-                          GestureDetector(
-                            onTap: () => Navigator.of(sheetContext).pop(s),
-                            child: Container(
-                              width: 54,
-                              height: 54,
-                              decoration: BoxDecoration(
-                                color: s,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white24),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
+              // Espectro completo: qualquer cor, com hex e alfa.
+              final picked = await showColorPicker(
+                context,
+                initial: c,
+                recent: _swatches,
+                onChanged: onColor,
               );
               if (picked != null) onColor(picked);
             },

@@ -34,6 +34,19 @@ enum EffectType {
   zoomWarp,
   posterize,
   curves,
+  // --- lote 2 ---
+  timeRemap,
+  pixelSort,
+  blobTracker,
+  turbulentDisplace,
+  unsharpMask,
+  motionTile,
+  bend,
+  ccScatterize,
+  ccSplit,
+  vhs,
+  filmDamage,
+  glitchify,
 }
 
 /// TIPO do parametro (PR-C1). Sem isto, todo efeito que precisa de uma
@@ -447,6 +460,211 @@ const effectSpecs = <EffectType, EffectSpec>{
       'niveis': EffectParam('Niveis', 6.0, 2.0, 32.0),
     },
   ),
+
+  // ------------------------------------------------------- lote 2
+
+  /// REMAPEAMENTO DE TEMPO, igual ao do After Effects: em vez de mexer
+  /// na velocidade, voce anima QUAL INSTANTE da camada aparece agora.
+  /// Congelar, voltar, acelerar no meio — tudo vira keyframe de tempo.
+  EffectType.timeRemap: EffectSpec(
+    name: 'Remapear tempo',
+    category: 'Tempo',
+    synonyms: ['time remap', 'tempo', 'congelar', 'freeze', 'reverso',
+      'velocidade', 'speed ramp'],
+    cost: 1,
+    params: {
+      'tempo': EffectParam('Tempo (s)', 0.0, 0.0, 60.0),
+    },
+  ),
+
+  EffectType.pixelSort: EffectSpec(
+    name: 'Ordenar pixels',
+    category: 'Estilizar',
+    synonyms: ['pixel sort', 'sorting', 'databend', 'arrastar'],
+    cost: 3,
+    params: {
+      'limiar': EffectParam('Limiar', 0.55, 0.0, 1.0),
+      'comprimento':
+          EffectParam('Comprimento', 60.0, 0.0, 400.0, relative: true),
+      'direcao': EffectParam('Direcao', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: ['Baixo', 'Cima', 'Direita', 'Esquerda']),
+      'densidade': EffectParam('Densidade', 0.5, 0.05, 1.0),
+      'semente': EffectParam('Semente', 1.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
+
+  /// RASTREADOR DE BLOBS: os marcadores de rastreio como elemento
+  /// grafico. Nao e visao computacional — sao alvos que voce posiciona e
+  /// anima, que e para o que o efeito e usado em motion.
+  EffectType.blobTracker: EffectSpec(
+    name: 'Rastreador de blobs',
+    category: 'Estilizar',
+    synonyms: ['blob tracker', 'tracking', 'alvo', 'hud', 'mira'],
+    hasColor: true,
+    params: {
+      'quantidade': EffectParam('Quantidade', 4.0, 1.0, 16.0),
+      'tamanho': EffectParam('Tamanho', 90.0, 10.0, 400.0, relative: true),
+      'espalhar': EffectParam('Espalhar', 0.6, 0.0, 1.0),
+      'velocidade': EffectParam('Velocidade', 0.4, 0.0, 3.0),
+      'traco': EffectParam('Traco', 2.0, 0.5, 8.0),
+      'cantos': EffectParam('So os cantos', 1.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'semente': EffectParam('Semente', 7.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
+
+  EffectType.turbulentDisplace: EffectSpec(
+    name: 'Deslocar turbulento',
+    category: 'Distorcer',
+    synonyms: ['turbulent displace', 'turbulencia', 'ondular', 'liquido',
+      'warp'],
+    cost: 3,
+    params: {
+      'quantidade':
+          EffectParam('Quantidade', 40.0, 0.0, 300.0, relative: true),
+      'tamanho': EffectParam('Tamanho', 60.0, 5.0, 300.0, relative: true),
+      'complexidade': EffectParam('Complexidade', 2.0, 1.0, 5.0),
+      'evolucao': EffectParam('Evolucao', 0.0, -3600.0, 3600.0),
+      'semente': EffectParam('Semente', 1.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
+
+  /// MASCARA DE NITIDEZ de verdade: original + quantidade * (original -
+  /// borrado), com limiar para nao realcar ruido.
+  EffectType.unsharpMask: EffectSpec(
+    name: 'Mascara de nitidez',
+    category: 'Lente',
+    synonyms: ['unsharp mask', 'nitidez', 'sharpen', 'foco'],
+    params: {
+      'quantidade': EffectParam('Quantidade', 0.8, 0.0, 3.0),
+      'raio': EffectParam('Raio', 3.0, 0.5, 40.0, relative: true),
+      'limiar': EffectParam('Limiar', 0.0, 0.0, 1.0),
+    },
+  ),
+
+  EffectType.motionTile: EffectSpec(
+    name: 'Mosaico de movimento',
+    category: 'Estilizar',
+    synonyms: ['motion tile', 'ladrilho', 'repetir', 'tile', 'espelhar'],
+    cost: 2,
+    params: {
+      'largura': EffectParam('Largura do bloco', 100.0, 10.0, 300.0),
+      'altura': EffectParam('Altura do bloco', 100.0, 10.0, 300.0),
+      'saidaLargura': EffectParam('Largura da saida', 200.0, 100.0, 600.0),
+      'saidaAltura': EffectParam('Altura da saida', 200.0, 100.0, 600.0),
+      'deslocX': EffectParam('Deslocar X', 0.0, -200.0, 200.0),
+      'deslocY': EffectParam('Deslocar Y', 0.0, -200.0, 200.0),
+      'espelhar': EffectParam('Espelhar bordas', 1.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'desvanecer': EffectParam('Desvanecer', 0.0, 0.0, 1.0),
+    },
+  ),
+
+  EffectType.bend: EffectSpec(
+    name: 'Entortar',
+    category: 'Distorcer',
+    synonyms: ['bend', 'curvar', 'arco', 'entortar', 'wave warp'],
+    cost: 2,
+    params: {
+      'quantidade': EffectParam('Quantidade', 40.0, -300.0, 300.0,
+          relative: true),
+      'eixo': EffectParam('Eixo', 0.0, 0.0, 1.0,
+          kind: ParamKind.choice, options: ['Horizontal', 'Vertical']),
+      'curvatura': EffectParam('Curvatura', 1.0, 0.2, 4.0),
+      'ancora': EffectParam('Ancora', 0.5, 0.0, 1.0),
+    },
+  ),
+
+  /// CC SEMEAR (CC Scatterize): quebra a imagem em graos e espalha.
+  EffectType.ccScatterize: EffectSpec(
+    name: 'CC Semear',
+    category: 'Estilizar',
+    synonyms: ['cc scatterize', 'semear', 'dispersar', 'scatter',
+      'desintegrar', 'particulas'],
+    cost: 3,
+    params: {
+      'dispersao':
+          EffectParam('Dispersao', 60.0, 0.0, 400.0, relative: true),
+      'grao': EffectParam('Grao', 24.0, 4.0, 120.0, relative: true),
+      'rotacao': EffectParam('Rotacao', 0.0, -180.0, 180.0),
+      'transferencia': EffectParam('Transferencia', 1.0, 0.0, 1.0),
+      'gravidade': EffectParam('Gravidade', 0.0, -1.0, 1.0),
+      'semente': EffectParam('Semente', 3.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
+
+  /// CC SPLIT: a imagem se abre em duas metades a partir de dois pontos.
+  EffectType.ccSplit: EffectSpec(
+    name: 'CC Split',
+    category: 'Distorcer',
+    synonyms: ['cc split', 'dividir', 'rasgar', 'abrir', 'separar'],
+    cost: 2,
+    params: {
+      'divisao': EffectParam('Divisao', 40.0, 0.0, 400.0, relative: true),
+      'angulo': EffectParam('Angulo', 0.0, -180.0, 180.0),
+      'centro': EffectParam('Centro', 0.5, 0.0, 1.0),
+      'suavidade': EffectParam('Suavidade', 0.0, 0.0, 1.0),
+    },
+  ),
+
+  EffectType.vhs: EffectSpec(
+    name: 'VHS',
+    category: 'Estilizar',
+    synonyms: ['vhs', 'fita', 'analogico', 'retro', 'tv', 'scanline'],
+    cost: 2,
+    params: {
+      'intensidade': EffectParam('Intensidade', 0.6, 0.0, 1.0),
+      'linhas': EffectParam('Linhas', 0.5, 0.0, 1.0),
+      'sangramento': EffectParam('Sangramento', 0.5, 0.0, 1.0),
+      'tremor': EffectParam('Tremor', 0.35, 0.0, 1.0),
+      'ruido': EffectParam('Ruido', 0.3, 0.0, 1.0),
+      'desbotar': EffectParam('Desbotar', 0.4, 0.0, 1.0),
+      'semente': EffectParam('Semente', 5.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
+
+  EffectType.filmDamage: EffectSpec(
+    name: 'Filme danificado',
+    category: 'Estilizar',
+    synonyms: ['film damage', 'filme', 'velho', 'riscos', 'poeira',
+      'super 8', 'granulado'],
+    cost: 2,
+    params: {
+      'poeira': EffectParam('Poeira', 0.5, 0.0, 1.0),
+      'riscos': EffectParam('Riscos', 0.4, 0.0, 1.0),
+      'cintilacao': EffectParam('Cintilacao', 0.35, 0.0, 1.0),
+      'granulacao': EffectParam('Granulacao', 0.4, 0.0, 1.0),
+      'queimado': EffectParam('Queimado', 0.3, 0.0, 1.0),
+      'salto': EffectParam('Salto de quadro', 0.25, 0.0, 1.0),
+      'semente': EffectParam('Semente', 11.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
+
+  EffectType.glitchify: EffectSpec(
+    name: 'Glitchify',
+    category: 'Estilizar',
+    synonyms: ['glitch', 'glitchify', 'datamosh', 'erro', 'digital',
+      'corromper'],
+    cost: 3,
+    params: {
+      'intensidade': EffectParam('Intensidade', 0.6, 0.0, 1.0),
+      'blocos': EffectParam('Blocos', 8.0, 1.0, 40.0),
+      'deslocamento':
+          EffectParam('Deslocamento', 60.0, 0.0, 400.0, relative: true),
+      'cor': EffectParam('Separacao de cor', 0.5, 0.0, 1.0),
+      'velocidade': EffectParam('Velocidade', 8.0, 0.5, 40.0),
+      'ruidoLinha': EffectParam('Linhas de erro', 0.4, 0.0, 1.0),
+      'semente': EffectParam('Semente', 13.0, 1.0, 999.0,
+          kind: ParamKind.seed),
+    },
+  ),
 };
 
 /// Categorias do catalogo, na ordem em que aparecem.
@@ -457,8 +675,10 @@ const effectCategories = <String>[
   'Desfoque',
   'Glitch',
   'Distorcao',
+  'Distorcer',
   'Estilizar',
   'Textura',
+  'Tempo',
 ];
 
 /// BUSCA (§5): nome, categoria e SINONIMOS. Quem digita "bloom" acha

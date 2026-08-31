@@ -168,7 +168,9 @@ bool projectNeedsClockRebuild(VideoProject project) {
     if (l is ParticlesLayer) return true;
     // Animadores de texto evoluem com o tempo mesmo sem keyframe
     // (wiggly/fase); efeitos de ruido idem (fase integrada).
-    if (l is TextLayer && l.animators.isNotEmpty) return true;
+    if (l is TextLayer && (l.anims.isNotEmpty || l.animators.isNotEmpty)) {
+      return true;
+    }
     for (final e in l.effects) {
       if (!e.enabled) continue;
       if (e.type == EffectType.tremor ||

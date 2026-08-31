@@ -35,9 +35,18 @@ class TranscriptionService {
     onStatus?.call('Extraindo audio...');
     final tmp = await getTemporaryDirectory();
     final wav = '${tmp.path}/whisper_input.wav';
-    final session = await FFmpegKit.execute(
-      '-y -i "$mediaPath" -vn -ac 1 -ar 16000 -c:a pcm_s16le "$wav"',
-    );
+    // ARGUMENTOS EM LISTA, nunca uma linha de comando montada com
+    // aspas: um nome de arquivo com aspas viraria argumento extra do
+    // FFmpeg, e argumento de FFmpeg escreve arquivo.
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i', mediaPath,
+      '-vn',
+      '-ac', '1',
+      '-ar', '16000',
+      '-c:a', 'pcm_s16le',
+      wav,
+    ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {
       throw Exception('Falha ao extrair o audio da midia.');
     }

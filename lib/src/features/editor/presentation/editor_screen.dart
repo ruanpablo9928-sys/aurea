@@ -12,6 +12,7 @@ import '../application/video_layer_manager.dart';
 import '../domain/gear.dart';
 import '../domain/layer.dart';
 import 'am/align_sheet.dart';
+import '../../../core/ui/snack.dart';
 import 'am/am_colors.dart';
 import 'am/export_sheet.dart';
 import 'am/am_widgets.dart';
@@ -80,7 +81,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         _Mode.colorFill => 'Cor e preenchimento',
         _Mode.effects => 'Efeitos',
         _Mode.curve => 'Curva de gradacao',
-        _Mode.animators => 'Animadores de texto',
+        _Mode.animators => 'Animacao de texto',
       };
 
   void _back() {
@@ -561,18 +562,13 @@ class _ActionBar extends ConsumerWidget {
             onTap: () {
               final count = n;
               controller.removeLayers(targets);
-              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                SnackBar(
-                  content: Text(count == 1
-                      ? 'Camada excluida'
-                      : '$count camadas excluidas'),
-                  duration: const Duration(seconds: 5),
-                  behavior: SnackBarBehavior.floating,
-                  action: SnackBarAction(
-                    label: 'Desfazer',
-                    onPressed: controller.undo,
-                  ),
-                ),
+              AureaSnack.show(
+                context,
+                count == 1
+                    ? 'Camada excluida'
+                    : '$count camadas excluidas',
+                actionLabel: 'Desfazer',
+                onAction: controller.undo,
               );
             },
           ),

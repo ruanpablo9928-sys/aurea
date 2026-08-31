@@ -13,9 +13,13 @@ import '../../domain/layer.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
 import 'am_colors.dart';
+import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
+import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'oficio_sheets.dart';
+import 'scene3d_sheet.dart';
+import 'scene3d_studio.dart';
 
 /// Acao escolhida no menu da camada.
 enum LayerMenuAction {
@@ -94,11 +98,22 @@ Future<LayerMenuAction?> showLayerMenu(
                   label: 'Cor',
                   enabled: layer is ShapeLayer ||
                       layer is TextLayer ||
-                      layer is Element3DLayer,
+                      layer is Element3DLayer ||
+                      layer is Scene3DLayer,
                   disabledReason: layer is AdjustmentLayer
                       ? 'Camada de ajuste nao tem preenchimento proprio'
                       : 'Este tipo de camada nao tem cor editavel',
                   onTap: () {
+                    // Cena 3D: a cor mora no material de cada objeto.
+                    if (layer is Scene3DLayer) {
+                      Navigator.of(sheetContext).pop();
+                      Future.microtask(() {
+                        if (context.mounted) {
+                          showScene3DSheet(context, ref, layer.id);
+                        }
+                      });
+                      return;
+                    }
                     // Elemento 3D edita cor/forma no sheet proprio.
                     if (layer is Element3DLayer) {
                       Navigator.of(sheetContext).pop();
@@ -154,11 +169,8 @@ Future<LayerMenuAction?> showLayerMenu(
 /// Toast curto com a razao de um controle desabilitado ou de um comando
 /// sem alvo (contrato: nada visivel pode ser inerte em silencio).
 void showReasonToast(BuildContext context, String msg) {
-  ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-    content: Text(msg),
-    duration: const Duration(milliseconds: 1500),
-    behavior: SnackBarBehavior.floating,
-  ));
+  AureaSnack.show(context, msg,
+      duration: const Duration(milliseconds: 1500));
 }
 
 /// Sheet "mais" do inspetor: o que e raro ou especifico do tipo.
@@ -276,6 +288,24 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                   }
                 });
               }),
+            if (layer is Scene3DLayer) ...[
+              item(CupertinoIcons.cube_box, 'Cena 3D', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showScene3DSheet(context, ref, layer.id);
+                  }
+                });
+              }),
+              item(CupertinoIcons.viewfinder, 'Estudio 3D', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    openScene3DStudio(context, ref, layer.id);
+                  }
+                });
+              }),
+            ],
             if (layer is GroupLayer)
               item(CupertinoIcons.square_stack_3d_down_right,
                   'Desagrupar', () {
@@ -1543,13 +1573,21 @@ Future<void> showElement3DSheet(
                       ),
                     ),
                     const Spacer(),
+                    // Qualquer cor: espectro, hex e alfa.
+                    ColorWell(
+                      color: layer.color,
+                      size: 30,
+                      onChanged: (c) {
+                        controller.updateElement3D(layerId,
+                            (e) => e.copyElement3D(color: c));
+                        setSheetState(() {});
+                      },
+                    ),
                     for (final c in const [
                       Color(0xFF7C62FF),
                       Color(0xFFB8FF3D),
                       Color(0xFFFF3B52),
                       Color(0xFFFFFFFF),
-                      Color(0xFFFFB020),
-                      Color(0xFF35C4E7),
                     ])
                       GestureDetector(
                         onTap: () {
@@ -2546,6 +2584,59 @@ class ColorFillPanel extends ConsumerWidget {
                     builder: (context, t, _) => ListView(
                       padding: const EdgeInsets.fromLTRB(4, 16, 16, 16),
                       children: [
+                        // QUALQUER COR: espectro completo, hex e alfa.
+                        // Os atalhos abaixo continuam para o caso comum.
+                        GestureDetector(
+                          onTap: () async {
+                            void set(Color c) {
+                              if (layer is ShapeLayer) {
+                                controller.setShapePrimaryColor(id, c);
+                              } else if (layer is TextLayer) {
+                                controller.editTextLayer(id, color: c);
+                              }
+                            }
+
+                            final picked = await showColorPicker(
+                              context,
+                              initial: current,
+                              onChanged: set,
+                            );
+                            if (picked != null) set(picked);
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 11),
+                            decoration: BoxDecoration(
+                              color: AmColors.chip,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: current,
+                                    borderRadius:
+                                        BorderRadius.circular(9),
+                                    border: Border.all(
+                                        color: Colors.white24),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Text('Escolher qualquer cor',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          color: AmColors.text)),
+                                ),
+                                const Icon(CupertinoIcons.chevron_right,
+                                    size: 15, color: AmColors.muted),
+                              ],
+                            ),
+                          ),
+                        ),
                         Wrap(
                           spacing: 14,
                           runSpacing: 14,

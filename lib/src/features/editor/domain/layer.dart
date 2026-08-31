@@ -2,13 +2,16 @@ import 'dart:ui';
 
 import 'package:uuid/uuid.dart';
 
+import 'camera3d.dart';
 import 'caption.dart';
 import 'effect.dart';
 import 'element3d.dart';
 import 'grid_rig.dart';
 import 'keyframe.dart';
 import 'mask.dart';
+import 'scene3d.dart';
 import 'shape.dart';
+import 'text_anim.dart';
 import 'text_animator.dart';
 
 /// Camada da composicao (compositor por camadas: tudo tem transform
@@ -422,6 +425,7 @@ class TextLayer extends Layer {
     this.fontSize = 120,
     this.color = const Color(0xFFFFFFFF),
     this.bold = true,
+    List<TextAnim>? anims,
     List<TextAnimator>? animators,
     super.position,
     super.scaleX,
@@ -440,15 +444,33 @@ class TextLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
-  }) : animators = List.unmodifiable(animators ?? const <TextAnimator>[]);
+  })  : anims = List.unmodifiable(anims ?? const <TextAnim>[]),
+        animators = List.unmodifiable(animators ?? const <TextAnimator>[]);
 
   final String text;
   final double fontSize;
   final Color color;
   final bool bold;
 
-  /// Animadores de texto (motor AM2-motor-de-texto).
+  /// ANIMACOES do catalogo (modelo Alight Motion): escolhe-se a animacao
+  /// e mexe-se em seis controles. E o caminho normal.
+  final List<TextAnim> anims;
+
+  /// Animadores CRUS (modelo After Effects): seletor + propriedades na
+  /// mao. Continuam existindo para quem quer montar do zero.
   final List<TextAnimator> animators;
+
+  /// O que o render usa: as animacoes do catalogo compiladas, e por cima
+  /// delas os animadores montados a mao.
+  List<TextAnimator> effectiveAnimators(int unitCount) => [
+        ...compileTextAnims(anims,
+            layerDuration: duration, unitCount: unitCount),
+        ...animators,
+      ];
+
+  bool get hasTextAnimation =>
+      anims.any((a) => a.enabled) ||
+      animators.any((a) => a.enabled && a.properties.isNotEmpty);
 
   @override
   TextLayer copyLayer({
@@ -476,6 +498,7 @@ class TextLayer extends Layer {
     double? fontSize,
     Color? color,
     bool? bold,
+    List<TextAnim>? anims,
     List<TextAnimator>? animators,
   }) {
     return TextLayer(
@@ -487,6 +510,7 @@ class TextLayer extends Layer {
       fontSize: fontSize ?? this.fontSize,
       color: color ?? this.color,
       bold: bold ?? this.bold,
+      anims: anims ?? this.anims,
       animators: animators ?? this.animators,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
@@ -517,6 +541,7 @@ class TextLayer extends Layer {
         fontSize: fontSize,
         color: color,
         bold: bold,
+        anims: anims,
         animators: animators,
         position: position,
         scaleX: scaleX,
@@ -1555,6 +1580,199 @@ class Element3DLayer extends Layer {
         size: size,
         color: color,
         edges: edges,
+        position: position,
+        scaleX: scaleX,
+        scaleY: scaleY,
+        rotation: rotation,
+        rotationX: rotationX,
+        rotationY: rotationY,
+        opacity: opacity,
+        skewX: skewX,
+        skewY: skewY,
+        pivot: pivot,
+        blendMode: blendMode,
+        is3D: is3D,
+        positionZ: positionZ,
+        effects: [for (final e in effects) e.duplicated()],
+        masks: masks,
+        matteMode: matteMode,
+        matteSourceId: matteSourceId,
+      );
+}
+
+/// CONTEINER CENA 3D (spec AUREA-cena-3d): por FORA e uma camada do
+/// compositor; por DENTRO tem grafo de cena, camera e um renderizador
+/// proprio que ordena por triangulo — o que resolve interpenetracao,
+/// impossivel com o algoritmo do pintor por camada.
+///
+/// A camada 3D comum (planos no espaco) continua existindo para 2.5D:
+/// esta nao a substitui.
+class Scene3DLayer extends Layer {
+  Scene3DLayer({
+    super.id,
+    required super.name,
+    required super.startTime,
+    required super.duration,
+    Scene3D? scene,
+    Camera3D? camera,
+    this.view = SceneView.camera,
+    this.showHelpers = true,
+    super.position,
+    super.scaleX,
+    super.scaleY,
+    super.rotation,
+    super.rotationX,
+    super.rotationY,
+    super.opacity,
+    super.skewX,
+    super.skewY,
+    super.pivot,
+    super.blendMode,
+    super.is3D,
+    super.positionZ,
+    super.effects,
+    super.masks,
+    super.matteMode,
+    super.matteSourceId,
+  })  : scene = scene ?? const Scene3D(),
+        camera = camera ?? _defaultCamera();
+
+  static Camera3D _defaultCamera() => Camera3D();
+
+  final Scene3D scene;
+  final Camera3D camera;
+
+  /// Vista mostrada no preview (camera ativa ou ortografica).
+  final SceneView view;
+
+  /// Ajudas de cena: grade do chao, frustum, eixos. NUNCA renderizam na
+  /// exportacao.
+  final bool showHelpers;
+
+  Scene3DLayer withScene(Scene3D s) => copyScene(scene: s);
+  Scene3DLayer withCamera(Camera3D c) => copyScene(camera: c);
+
+  Scene3DLayer copyScene({
+    Scene3D? scene,
+    Camera3D? camera,
+    SceneView? view,
+    bool? showHelpers,
+  }) =>
+      Scene3DLayer(
+        id: id,
+        name: name,
+        startTime: startTime,
+        duration: duration,
+        scene: scene ?? this.scene,
+        camera: camera ?? this.camera,
+        view: view ?? this.view,
+        showHelpers: showHelpers ?? this.showHelpers,
+        position: position,
+        scaleX: scaleX,
+        scaleY: scaleY,
+        rotation: rotation,
+        rotationX: rotationX,
+        rotationY: rotationY,
+        opacity: opacity,
+        skewX: skewX,
+        skewY: skewY,
+        pivot: pivot,
+        blendMode: blendMode,
+        is3D: is3D,
+        positionZ: positionZ,
+        effects: effects,
+        masks: masks,
+        matteMode: matteMode,
+        matteSourceId: matteSourceId,
+      );
+
+  /// Keyframes da cena e da camera aparecem na barra da camada.
+  @override
+  Set<int> get moduleTimesUs {
+    final out = <int>{};
+    for (final n in scene.nodes) {
+      out
+        ..addAll(_times(n.x.keyframes))
+        ..addAll(_times(n.y.keyframes))
+        ..addAll(_times(n.z.keyframes))
+        ..addAll(_times(n.rotX.keyframes))
+        ..addAll(_times(n.rotY.keyframes))
+        ..addAll(_times(n.rotZ.keyframes))
+        ..addAll(_times(n.scale.keyframes));
+    }
+    out
+      ..addAll(_times(camera.posX.keyframes))
+      ..addAll(_times(camera.posY.keyframes))
+      ..addAll(_times(camera.posZ.keyframes))
+      ..addAll(_times(camera.poiX.keyframes))
+      ..addAll(_times(camera.poiY.keyframes))
+      ..addAll(_times(camera.poiZ.keyframes))
+      ..addAll(_times(camera.focalLength.keyframes))
+      ..addAll(_times(camera.rotY.keyframes));
+    return out;
+  }
+
+  @override
+  Scene3DLayer copyLayer({
+    String? name,
+    Duration? startTime,
+    Duration? duration,
+    AnimatedOffset? position,
+    AnimatedDouble? scaleX,
+    AnimatedDouble? scaleY,
+    AnimatedDouble? rotation,
+    AnimatedDouble? rotationX,
+    AnimatedDouble? rotationY,
+    AnimatedDouble? opacity,
+    AnimatedDouble? skewX,
+    AnimatedDouble? skewY,
+    AnimatedOffset? pivot,
+    BlendMode? blendMode,
+    bool? is3D,
+    AnimatedDouble? positionZ,
+    List<EffectInstance>? effects,
+    List<LayerMask>? masks,
+    MatteMode? matteMode,
+    String? matteSourceId,
+  }) {
+    return Scene3DLayer(
+      id: id,
+      name: name ?? this.name,
+      startTime: startTime ?? this.startTime,
+      duration: duration ?? this.duration,
+      scene: scene,
+      camera: camera,
+      view: view,
+      showHelpers: showHelpers,
+      position: position ?? this.position,
+      scaleX: scaleX ?? this.scaleX,
+      scaleY: scaleY ?? this.scaleY,
+      rotation: rotation ?? this.rotation,
+      rotationX: rotationX ?? this.rotationX,
+      rotationY: rotationY ?? this.rotationY,
+      opacity: opacity ?? this.opacity,
+      skewX: skewX ?? this.skewX,
+      skewY: skewY ?? this.skewY,
+      pivot: pivot ?? this.pivot,
+      blendMode: blendMode ?? this.blendMode,
+      is3D: is3D ?? this.is3D,
+      positionZ: positionZ ?? this.positionZ,
+      effects: effects ?? this.effects,
+      masks: masks ?? this.masks,
+      matteMode: matteMode ?? this.matteMode,
+      matteSourceId: matteSourceId ?? this.matteSourceId,
+    );
+  }
+
+  @override
+  Scene3DLayer duplicated() => Scene3DLayer(
+        name: name,
+        startTime: startTime,
+        duration: duration,
+        scene: scene,
+        camera: camera,
+        view: view,
+        showHelpers: showHelpers,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,

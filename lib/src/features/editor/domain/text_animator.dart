@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:characters/characters.dart';
-import 'package:flutter/animation.dart' show Cubic;
+import 'package:flutter/animation.dart';
 import 'package:uuid/uuid.dart';
 
 import 'keyframe.dart';
@@ -527,15 +527,43 @@ class TextUnits {
   }
 }
 
-/// Propriedades animaveis pelo animador (nucleo; mais em PR-T4).
+/// Propriedades animaveis pelo animador.
+///
+/// As seis primeiras sao o nucleo antigo; as demais entraram com o
+/// animador novo, porque sem DESFOQUE, COR e ESCALA POR EIXO metade das
+/// animacoes de texto que as pessoas querem sao impossiveis de montar.
 enum TextAnimProp {
   positionX,
   positionY,
-  scale, // %; multiplicativa
+  scale, // %; multiplicativa (uniforme)
   rotation, // graus; aditiva
   opacity, // %; multiplicativa
   tracking, // px; aditivo no avanco
+
+  scaleX, // %; multiplicativa
+  scaleY, // %; multiplicativa
+  blur, // px; aditivo
+  skew, // graus; aditivo
+  hue, // graus; aditivo
+  saturation, // %; multiplicativa
+  brightness, // %; multiplicativa
 }
+
+String textAnimPropLabel(TextAnimProp p) => switch (p) {
+      TextAnimProp.positionX => 'Posicao X',
+      TextAnimProp.positionY => 'Posicao Y',
+      TextAnimProp.scale => 'Escala',
+      TextAnimProp.rotation => 'Rotacao',
+      TextAnimProp.opacity => 'Opacidade',
+      TextAnimProp.tracking => 'Espacamento',
+      TextAnimProp.scaleX => 'Escala X',
+      TextAnimProp.scaleY => 'Escala Y',
+      TextAnimProp.blur => 'Desfoque',
+      TextAnimProp.skew => 'Inclinacao',
+      TextAnimProp.hue => 'Matiz',
+      TextAnimProp.saturation => 'Saturacao',
+      TextAnimProp.brightness => 'Brilho',
+    };
 
 class AnimatorProperty {
   AnimatorProperty({
@@ -553,27 +581,37 @@ class AnimatorProperty {
       AnimatorProperty(id: id, type: type, value: value ?? this.value);
 
   static double _neutralOf(TextAnimProp type) => switch (type) {
-        TextAnimProp.scale || TextAnimProp.opacity => 100,
+        TextAnimProp.scale ||
+        TextAnimProp.opacity ||
+        TextAnimProp.scaleX ||
+        TextAnimProp.scaleY ||
+        TextAnimProp.saturation ||
+        TextAnimProp.brightness =>
+          100,
         _ => 0,
       };
 
   double get neutral => _neutralOf(type);
 
+  /// Escala, opacidade, saturacao e brilho sao MULTIPLICATIVAS; o resto
+  /// e aditivo. Em ambos os casos cobertura zero devolve a base intacta
+  /// — e o que garante a invariante de neutralidade.
+  static bool isMultiplicative(TextAnimProp type) => switch (type) {
+        TextAnimProp.scale ||
+        TextAnimProp.opacity ||
+        TextAnimProp.scaleX ||
+        TextAnimProp.scaleY ||
+        TextAnimProp.saturation ||
+        TextAnimProp.brightness =>
+          true,
+        _ => false,
+      };
+
   /// Combina o valor base da unidade com este animador sob cobertura [c].
-  /// Escala e opacidade sao MULTIPLICATIVAS; o resto e aditivo.
   double apply(double base, Duration t, double c) {
     final v = value.valueAt(t);
-    switch (type) {
-      case TextAnimProp.scale:
-      case TextAnimProp.opacity:
-        final factor = 1 + (v / 100 - 1) * c;
-        return base * factor;
-      case TextAnimProp.positionX:
-      case TextAnimProp.positionY:
-      case TextAnimProp.rotation:
-      case TextAnimProp.tracking:
-        return base + v * c;
-    }
+    if (isMultiplicative(type)) return base * (1 + (v / 100 - 1) * c);
+    return base + v * c;
   }
 }
 
@@ -617,4 +655,223 @@ class TextAnimator {
       allowOvershoot: allowOvershoot ?? this.allowOvershoot,
     );
   }
+}
+
+// ===================================================================
+/// Em que ordem as unidades entram.
+enum TextAnimOrder { forward, reverse, center, edges, random }
+
+String textAnimOrderLabel(TextAnimOrder o) => switch (o) {
+      TextAnimOrder.forward => 'Do inicio',
+      TextAnimOrder.reverse => 'Do fim',
+      TextAnimOrder.center => 'Do centro',
+      TextAnimOrder.edges => 'Das bordas',
+      TextAnimOrder.random => 'Aleatoria',
+    };
+
+SelectorOrder selectorOrderFor(TextAnimOrder o) => switch (o) {
+      TextAnimOrder.forward => SelectorOrder.identity,
+      TextAnimOrder.reverse => SelectorOrder.inverse,
+      TextAnimOrder.center => SelectorOrder.center,
+      TextAnimOrder.edges => SelectorOrder.edges,
+      TextAnimOrder.random => SelectorOrder.random,
+    };
+
+/// A curva de cada unidade.
+enum TextAnimEase { linear, suave, acelerar, desacelerar, mola, quicar }
+
+String textAnimEaseLabel(TextAnimEase e) => switch (e) {
+      TextAnimEase.linear => 'Linear',
+      TextAnimEase.suave => 'Suave',
+      TextAnimEase.acelerar => 'Acelerar',
+      TextAnimEase.desacelerar => 'Desacelerar',
+      TextAnimEase.mola => 'Mola',
+      TextAnimEase.quicar => 'Quicar',
+    };
+
+/// MOLA — a mesma conta da extensao MultiTools:
+///
+///   s = amplitude * cos(freq * t * 2pi) / exp(decay * t)
+///
+/// Ali ela e a quantidade do seletor; aqui ela vira a CURVA da unidade,
+/// que e a mesma coisa vista do outro lado: comeca deslocada, cruza o
+/// alvo, passa um pouco, e volta — o overshoot que da vida ao movimento.
+double springEase(
+  double u, {
+  double amplitude = 1,
+  double frequency = 1.8,
+  double decay = 5,
+}) {
+  if (u <= 0) return 0;
+  final t = u;
+  return 1 -
+      amplitude *
+          math.cos(frequency * t * 2 * math.pi) *
+          math.exp(-decay * t);
+}
+
+/// Quique de bola: cai e bate, sem passar do alvo.
+double bounceEase(double u) {
+  if (u <= 0) return 0;
+  if (u >= 1) return 1;
+  const n = 7.5625, d = 2.75;
+  var x = u;
+  if (x < 1 / d) return n * x * x;
+  if (x < 2 / d) return n * (x -= 1.5 / d) * x + 0.75;
+  if (x < 2.5 / d) return n * (x -= 2.25 / d) * x + 0.9375;
+  return n * (x -= 2.625 / d) * x + 0.984375;
+}
+
+double applyEase(
+  TextAnimEase ease,
+  double u, {
+  double amplitude = 1,
+  double frequency = 1.8,
+  double decay = 5,
+}) {
+  final x = u.clamp(0.0, 1.0);
+  return switch (ease) {
+    TextAnimEase.linear => x,
+    TextAnimEase.suave => Curves.easeInOut.transform(x),
+    TextAnimEase.acelerar => Curves.easeIn.transform(x),
+    TextAnimEase.desacelerar => Curves.easeOut.transform(x),
+    TextAnimEase.mola => springEase(x,
+        amplitude: amplitude, frequency: frequency, decay: decay),
+    TextAnimEase.quicar => bounceEase(x),
+  };
+}
+
+// -------------------------------------------------------- o seletor
+
+/// A forma da onda de uma ENFASE (animacao que fica repetindo).
+enum LoopShape { sine, triangle, square, pulse, noise }
+
+/// SELETOR ESCALONADO: a cobertura de cada unidade vem direto de
+/// (inicio, duracao, atraso, ordem, curva).
+///
+/// O seletor de faixa do AE consegue a mesma coisa, mas exige converter
+/// tempo em porcentagem de janela na cabeca — que e exatamente o que
+/// tornava o animador antigo insuportavel de usar.
+class StaggerSelector extends TextSelector {
+  StaggerSelector({
+    super.id,
+    super.mode,
+    super.basedOn,
+    this.start = Duration.zero,
+    this.duration = const Duration(milliseconds: 600),
+    this.stagger = const Duration(milliseconds: 60),
+    this.order = TextAnimOrder.forward,
+    this.seed = 1,
+    this.ease = TextAnimEase.suave,
+    this.amplitude = 1,
+    this.frequency = 1.8,
+    this.decay = 5,
+    this.startCovered = true,
+    this.loop = false,
+    this.loopShape = LoopShape.sine,
+  });
+
+  final Duration start;
+  final Duration duration;
+  final Duration stagger;
+  final TextAnimOrder order;
+  final int seed;
+  final TextAnimEase ease;
+  final double amplitude;
+  final double frequency;
+  final double decay;
+
+  /// ENTRADA comeca COBERTA (a unidade nasce deslocada e caminha para o
+  /// neutro). SAIDA comeca neutra e vai para a coberta. Sem essa
+  /// distincao, animacao de entrada mostraria tudo pronto no frame 0.
+  final bool startCovered;
+
+  /// ENFASE: em vez de ir de um estado ao outro, oscila para sempre.
+  final bool loop;
+  final LoopShape loopShape;
+
+  @override
+  double coverageAt(int i, int n, Duration t) {
+    if (n <= 0) return 0;
+    final idx = orderMapIndex(selectorOrderFor(order), i, n, seed);
+    final t0us = start.inMicroseconds + stagger.inMicroseconds * idx;
+    final dus = duration.inMicroseconds;
+    if (dus <= 0) {
+      // Duracao zero = maquina de escrever: liga de uma vez.
+      final on = t.inMicroseconds >= t0us;
+      if (loop) return on ? 1 : 0;
+      return startCovered ? (on ? 0 : 1) : (on ? 1 : 0);
+    }
+
+    final raw = (t.inMicroseconds - t0us) / dus;
+
+    if (loop) {
+      // Fase continua: cada unidade entra defasada da anterior.
+      final phase = raw - raw.floorToDouble();
+      return _loopValue(phase < 0 ? phase + 1 : phase, idx);
+    }
+
+    final e = applyEase(ease, raw.clamp(0.0, 1.0),
+        amplitude: amplitude, frequency: frequency, decay: decay);
+    return startCovered ? 1 - e : e;
+  }
+
+  double _loopValue(double p, int idx) {
+    switch (loopShape) {
+      case LoopShape.sine:
+        return 0.5 - 0.5 * math.cos(p * 2 * math.pi);
+      case LoopShape.triangle:
+        return 1 - (2 * p - 1).abs();
+      case LoopShape.square:
+        return p < 0.5 ? 1 : 0;
+      case LoopShape.pulse:
+        // Um pico curto e um longo descanso — o "piscar".
+        return p < 0.18 ? 0.5 - 0.5 * math.cos(p / 0.18 * 2 * math.pi) : 0;
+      case LoopShape.noise:
+        // Ruido deterministico por unidade e por fase (invariante I1).
+        final a = _hash(idx * 7919 + (p * 64).floor());
+        final b = _hash(idx * 7919 + (p * 64).floor() + 1);
+        final f = (p * 64) - (p * 64).floorToDouble();
+        return a + (b - a) * (f * f * (3 - 2 * f));
+    }
+  }
+
+  static double _hash(int x) {
+    var h = x * 374761393 + 668265263;
+    h = (h ^ (h >> 13)) * 1274126177;
+    return ((h ^ (h >> 16)) & 0x7fffffff) / 0x7fffffff;
+  }
+
+  StaggerSelector copyWith({
+    Duration? start,
+    Duration? duration,
+    Duration? stagger,
+    TextAnimOrder? order,
+    int? seed,
+    TextAnimEase? ease,
+    double? amplitude,
+    double? frequency,
+    double? decay,
+    bool? startCovered,
+    bool? loop,
+    LoopShape? loopShape,
+    SelectorBasedOn? basedOn,
+  }) =>
+      StaggerSelector(
+        id: id,
+        mode: mode,
+        basedOn: basedOn ?? this.basedOn,
+        start: start ?? this.start,
+        duration: duration ?? this.duration,
+        stagger: stagger ?? this.stagger,
+        order: order ?? this.order,
+        seed: seed ?? this.seed,
+        ease: ease ?? this.ease,
+        amplitude: amplitude ?? this.amplitude,
+        frequency: frequency ?? this.frequency,
+        decay: decay ?? this.decay,
+        startCovered: startCovered ?? this.startCovered,
+        loop: loop ?? this.loop,
+        loopShape: loopShape ?? this.loopShape,
+      );
 }

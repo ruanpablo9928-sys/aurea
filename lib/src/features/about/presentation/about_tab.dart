@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/aurea_logo.dart';
+import 'report_sheet.dart';
 
-const _appVersion = '1.0.0';
+const _appVersion = AureaAutor.versao;
 
 /// Aba Sobre: identidade do app, versao e creditos.
 class AboutTab extends StatelessWidget {
@@ -56,7 +57,9 @@ class AboutTab extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
+          const BetaBanner(),
+          const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -96,6 +99,41 @@ class AboutTab extends StatelessWidget {
                   child: Divider(color: AppColors.hairline),
                 ),
                 ListTile(
+                  leading: const Icon(
+                      CupertinoIcons.exclamationmark_bubble,
+                      color: AppColors.lime,
+                      size: 21),
+                  title: const Text('Reportar erro ou sugerir'),
+                  subtitle: const Text(
+                    'Vai direto para o criador',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                  trailing: const Icon(CupertinoIcons.chevron_right,
+                      size: 16, color: AppColors.muted),
+                  onTap: () => showReportSheet(context),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Divider(color: AppColors.hairline),
+                ),
+                ListTile(
+                  leading: const Icon(CupertinoIcons.person_crop_circle,
+                      color: AppColors.lime, size: 21),
+                  title: const Text('Criador'),
+                  subtitle: const Text(
+                    '${AureaAutor.nome}  ·  @${AureaAutor.instagram}  ·  '
+                    'TikTok @${AureaAutor.tiktok}',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                  trailing: const Icon(CupertinoIcons.chevron_right,
+                      size: 16, color: AppColors.muted),
+                  onTap: () => showReportSheet(context),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Divider(color: AppColors.hairline),
+                ),
+                ListTile(
                   leading: const Icon(CupertinoIcons.doc_text,
                       color: AppColors.lime, size: 21),
                   title: const Text('Licencas de codigo aberto'),
@@ -113,7 +151,7 @@ class AboutTab extends StatelessWidget {
           const SizedBox(height: 26),
           Center(
             child: Text(
-              'Feito com Flutter',
+              'Feito por ${AureaAutor.nome} com Flutter',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall

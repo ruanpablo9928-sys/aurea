@@ -148,6 +148,14 @@ Future<void> showAddLayerSheet(
                     _showElement3DPickerSheet(context, ref, playhead);
                   },
                 ),
+                _AddOption(
+                  icon: CupertinoIcons.cube_box,
+                  label: 'Cena 3D',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    controller.addScene3DLayer(playhead);
+                  },
+                ),
                 const Spacer(),
               ],
             ),
