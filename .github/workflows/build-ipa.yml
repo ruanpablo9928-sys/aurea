@@ -1,0 +1,43 @@
+# Gera um IPA SEM ASSINATURA num runner macOS — para sideload com
+# Sideloadly (que assina com o seu Apple ID na hora de instalar).
+# iOS nao compila no Windows; este workflow e o caminho ate ter um Mac.
+#
+# Como usar:
+#   1. Suba este repositorio para o GitHub (git init + push).
+#   2. Aba Actions -> "Build IPA (unsigned)" -> Run workflow.
+#   3. Baixe o artefato "aurea-ipa" e arraste o .ipa no Sideloadly.
+name: Build IPA (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ipa-*']
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Build iOS (sem assinatura)
+        run: flutter build ios --release --no-codesign
+
+      - name: Empacotar IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -qr aurea-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurea-ipa
+          path: aurea-unsigned.ipa
