@@ -6,6 +6,7 @@ import 'element3d.dart';
 import 'grid_rig.dart';
 import 'keyframe.dart';
 import 'layer.dart';
+import 'layer_meta.dart';
 import 'mask.dart';
 import 'shape.dart';
 import 'text_animator.dart';
@@ -47,18 +48,35 @@ Map<String, dynamic> _ad(AnimatedDouble a) => {
           for (final k in a.keyframes)
             {'t': _dur(k.time), 'v': k.value, 'e': _easing(k.ease)},
         ],
+      if (a.loop.active)
+        'loop': {
+          'm': a.loop.mode.index,
+          'w': a.loop.when.index,
+          'n': a.loop.count,
+        },
     };
 
 AnimatedDouble _asAd(dynamic v) {
   final m = v as Map<String, dynamic>;
-  return AnimatedDouble((m['b'] as num).toDouble(), [
-    for (final k in (m['k'] as List? ?? const []))
-      Keyframe<double>(
-        time: _asDur(k['t']),
-        value: (k['v'] as num).toDouble(),
-        ease: _asEasing(k['e'] as Map<String, dynamic>),
-      ),
-  ]);
+  final loopMap = m['loop'] as Map<String, dynamic>?;
+  return AnimatedDouble(
+    (m['b'] as num).toDouble(),
+    [
+      for (final k in (m['k'] as List? ?? const []))
+        Keyframe<double>(
+          time: _asDur(k['t']),
+          value: (k['v'] as num).toDouble(),
+          ease: _asEasing(k['e'] as Map<String, dynamic>),
+        ),
+    ],
+    loopMap == null
+        ? LoopSpec.none
+        : LoopSpec(
+            mode: LoopMode.values[(loopMap['m'] as num).toInt()],
+            when: LoopWhen.values[(loopMap['w'] as num).toInt()],
+            count: (loopMap['n'] as num).toInt(),
+          ),
+  );
 }
 
 Map<String, dynamic> _ao(AnimatedOffset a) => {
@@ -461,6 +479,8 @@ Map<String, dynamic> _selector(TextSelector s) => switch (s) {
           'easeLow': _ad(r.easeLow),
           'rand': r.randomizeOrder,
           'seed': r.randomSeed,
+          'order': r.order.index,
+          'hold': r.holdBeyond,
         },
       WigglySelector w => {
           'kind': 'wiggly',
@@ -494,6 +514,10 @@ TextSelector _asSelector(Map<String, dynamic> m) => switch (m['kind']) {
           easeLow: _asAd(m['easeLow']),
           randomizeOrder: m['rand'] as bool,
           randomSeed: (m['seed'] as num).toInt(),
+          order: m['order'] == null
+              ? SelectorOrder.identity
+              : SelectorOrder.values[(m['order'] as num).toInt()],
+          holdBeyond: m['hold'] as bool? ?? false,
         ),
       'wiggly' => WigglySelector(
           id: m['id'] as String,
@@ -849,6 +873,227 @@ Layer layerFromJson(Map<String, dynamic> m) {
 
 // --------------------------------------------------------------- projeto
 
+// ------------------------------------------------- camada de oficio
+
+Map<String, dynamic> _shadow(ShadowStyle s) => {
+      'on': s.enabled,
+      'c': _col(s.color),
+      'op': _ad(s.opacity),
+      'ang': _ad(s.angleDeg),
+      'dist': _ad(s.distance),
+      'size': _ad(s.size),
+    };
+
+ShadowStyle _asShadow(Map<String, dynamic> m) => ShadowStyle(
+      enabled: m['on'] as bool? ?? true,
+      color: _asCol(m['c']),
+      opacity: _asAd(m['op']),
+      angleDeg: _asAd(m['ang']),
+      distance: _asAd(m['dist']),
+      size: _asAd(m['size']),
+    );
+
+Map<String, dynamic> _styles(LayerStyles s) => {
+      if (s.dropShadow != null) 'ds': _shadow(s.dropShadow!),
+      if (s.innerShadow != null) 'is': _shadow(s.innerShadow!),
+      if (s.outerGlow != null)
+        'og': {
+          'on': s.outerGlow!.enabled,
+          'c': _col(s.outerGlow!.color),
+          'op': _ad(s.outerGlow!.opacity),
+          'size': _ad(s.outerGlow!.size),
+        },
+      if (s.colorOverlay != null)
+        'co': {
+          'on': s.colorOverlay!.enabled,
+          'c': _col(s.colorOverlay!.color),
+          'op': _ad(s.colorOverlay!.opacity),
+          'bm': s.colorOverlay!.blend.index,
+        },
+      if (s.gradientOverlay != null)
+        'go': {
+          'on': s.gradientOverlay!.enabled,
+          'ca': _col(s.gradientOverlay!.colorA),
+          'cb': _col(s.gradientOverlay!.colorB),
+          'ang': _ad(s.gradientOverlay!.angleDeg),
+          'op': _ad(s.gradientOverlay!.opacity),
+        },
+      if (s.stroke != null)
+        'st': {
+          'on': s.stroke!.enabled,
+          'c': _col(s.stroke!.color),
+          'w': _ad(s.stroke!.width),
+          'op': _ad(s.stroke!.opacity),
+        },
+    };
+
+LayerStyles _asStyles(Map<String, dynamic> m) => LayerStyles(
+      dropShadow: m['ds'] == null
+          ? null
+          : _asShadow(m['ds'] as Map<String, dynamic>),
+      innerShadow: m['is'] == null
+          ? null
+          : _asShadow(m['is'] as Map<String, dynamic>),
+      outerGlow: m['og'] == null
+          ? null
+          : GlowStyle(
+              enabled: (m['og'] as Map)['on'] as bool? ?? true,
+              color: _asCol((m['og'] as Map)['c']),
+              opacity: _asAd((m['og'] as Map)['op']),
+              size: _asAd((m['og'] as Map)['size']),
+            ),
+      colorOverlay: m['co'] == null
+          ? null
+          : OverlayStyle(
+              enabled: (m['co'] as Map)['on'] as bool? ?? true,
+              color: _asCol((m['co'] as Map)['c']),
+              opacity: _asAd((m['co'] as Map)['op']),
+              blend: BlendMode
+                  .values[((m['co'] as Map)['bm'] as num).toInt()],
+            ),
+      gradientOverlay: m['go'] == null
+          ? null
+          : GradientOverlayStyle(
+              enabled: (m['go'] as Map)['on'] as bool? ?? true,
+              colorA: _asCol((m['go'] as Map)['ca']),
+              colorB: _asCol((m['go'] as Map)['cb']),
+              angleDeg: _asAd((m['go'] as Map)['ang']),
+              opacity: _asAd((m['go'] as Map)['op']),
+            ),
+      stroke: m['st'] == null
+          ? null
+          : StrokeStyle(
+              enabled: (m['st'] as Map)['on'] as bool? ?? true,
+              color: _asCol((m['st'] as Map)['c']),
+              width: _asAd((m['st'] as Map)['w']),
+              opacity: _asAd((m['st'] as Map)['op']),
+            ),
+    );
+
+Map<String, dynamic> _meta(LayerMeta m) => {
+      if (m.label != null)
+        'label': {'c': _col(m.label!.color), 'n': m.label!.name},
+      if (m.solo) 'solo': true,
+      if (m.shy) 'shy': true,
+      if (m.locked) 'lock': true,
+      if (m.folder != null) 'folder': m.folder,
+      if (!m.styles.isEmpty) 'styles': _styles(m.styles),
+      if (m.textBox != null)
+        'box': {
+          'mode': m.textBox!.mode.index,
+          'w': m.textBox!.width,
+          'h': m.textBox!.height,
+          'anchor': m.textBox!.anchor.index,
+        },
+      if (m.container != null)
+        'cont': {
+          'target': m.container!.targetLayerId,
+          'pl': m.container!.padLeft,
+          'pr': m.container!.padRight,
+          'pt': m.container!.padTop,
+          'pb': m.container!.padBottom,
+          'min': m.container!.minWidth,
+          'max': m.container!.maxWidth,
+          'anchor': m.container!.anchor.index,
+          'follow': m.container!.follow,
+        },
+      if (m.stack != null)
+        'stack': {
+          'dir': m.stack!.direction.index,
+          'gap': m.stack!.gap,
+          'align': m.stack!.align.index,
+          'pad': m.stack!.padding,
+          'dist': m.stack!.distribution.index,
+          'ext': m.stack!.extent,
+        },
+      if (m.counter != null)
+        'counter': {
+          'v': _ad(m.counter!.value),
+          'f': _numFmt(m.counter!.format),
+        },
+      if (m.colorRef != null) 'colorRef': m.colorRef,
+      if (m.textStyleRef != null) 'styleRef': m.textStyleRef,
+      if (m.motionBlur) 'mb': true,
+    };
+
+Map<String, dynamic> _numFmt(NumberFormatSpec f) => {
+      'd': f.decimals,
+      't': f.thousands,
+      'p': f.prefix,
+      's': f.suffix,
+      'pc': f.percent,
+    };
+
+NumberFormatSpec _asNumFmt(Map<String, dynamic> m) => NumberFormatSpec(
+      decimals: (m['d'] as num).toInt(),
+      thousands: m['t'] as bool? ?? true,
+      prefix: m['p'] as String? ?? '',
+      suffix: m['s'] as String? ?? '',
+      percent: m['pc'] as bool? ?? false,
+    );
+
+LayerMeta _asMeta(Map<String, dynamic> m) => LayerMeta(
+      label: m['label'] == null
+          ? null
+          : LayerLabel(
+              color: _asCol((m['label'] as Map)['c']),
+              name: (m['label'] as Map)['n'] as String? ?? ''),
+      solo: m['solo'] as bool? ?? false,
+      shy: m['shy'] as bool? ?? false,
+      locked: m['lock'] as bool? ?? false,
+      folder: m['folder'] as String?,
+      styles: m['styles'] == null
+          ? const LayerStyles()
+          : _asStyles(m['styles'] as Map<String, dynamic>),
+      textBox: m['box'] == null
+          ? null
+          : TextBoxSpec(
+              mode: TextBoxMode
+                  .values[((m['box'] as Map)['mode'] as num).toInt()],
+              width: ((m['box'] as Map)['w'] as num).toDouble(),
+              height: ((m['box'] as Map)['h'] as num).toDouble(),
+              anchor: GrowAnchor
+                  .values[((m['box'] as Map)['anchor'] as num).toInt()],
+            ),
+      container: m['cont'] == null
+          ? null
+          : ContainerSpec(
+              targetLayerId: (m['cont'] as Map)['target'] as String,
+              padLeft: ((m['cont'] as Map)['pl'] as num).toDouble(),
+              padRight: ((m['cont'] as Map)['pr'] as num).toDouble(),
+              padTop: ((m['cont'] as Map)['pt'] as num).toDouble(),
+              padBottom: ((m['cont'] as Map)['pb'] as num).toDouble(),
+              minWidth: ((m['cont'] as Map)['min'] as num).toDouble(),
+              maxWidth: ((m['cont'] as Map)['max'] as num).toDouble(),
+              anchor: GrowAnchor
+                  .values[((m['cont'] as Map)['anchor'] as num).toInt()],
+              follow: (m['cont'] as Map)['follow'] as bool? ?? true,
+            ),
+      stack: m['stack'] == null
+          ? null
+          : StackSpec(
+              direction: StackDirection
+                  .values[((m['stack'] as Map)['dir'] as num).toInt()],
+              gap: ((m['stack'] as Map)['gap'] as num).toDouble(),
+              align: StackAlign
+                  .values[((m['stack'] as Map)['align'] as num).toInt()],
+              padding: ((m['stack'] as Map)['pad'] as num).toDouble(),
+              distribution: StackDistribution
+                  .values[((m['stack'] as Map)['dist'] as num).toInt()],
+              extent: ((m['stack'] as Map)['ext'] as num).toDouble(),
+            ),
+      counter: m['counter'] == null
+          ? null
+          : CounterSpec(
+              value: _asAd((m['counter'] as Map)['v']),
+              format: _asNumFmt(
+                  (m['counter'] as Map)['f'] as Map<String, dynamic>),
+            ),
+      colorRef: m['colorRef'] as String?,
+      textStyleRef: m['styleRef'] as String?,
+      motionBlur: m['mb'] as bool? ?? false,
+    );
+
 Map<String, dynamic> projectToJson(VideoProject p) => {
       'v': 1,
       'id': p.id,
@@ -857,6 +1102,77 @@ Map<String, dynamic> projectToJson(VideoProject p) => {
       'aspect': p.aspectRatio,
       'fps': p.fps,
       'resH': p.resolutionHeight,
+      if (p.meta.isNotEmpty)
+        'meta': {
+          for (final e in p.meta.entries)
+            if (!e.value.isEmpty) e.key: _meta(e.value),
+        },
+      'palette': {
+        for (final e in p.palette.entries.entries) e.key: _col(e.value),
+      },
+      if (p.textStyles.isNotEmpty)
+        'textStyles': [
+          for (final s in p.textStyles)
+            {
+              'n': s.name,
+              'fs': s.fontSize,
+              'b': s.bold,
+              'c': _col(s.color),
+              if (s.colorRef != null) 'cr': s.colorRef,
+              'tr': s.tracking,
+              'lh': s.lineHeight,
+            },
+        ],
+      if (p.exposed.isNotEmpty)
+        'exposed': [
+          for (final e in p.exposed)
+            {
+              'id': e.id,
+              'layer': e.layerId,
+              'prop': e.property,
+              'label': e.label,
+              'type': e.type.index,
+              'group': e.group,
+              if (e.min != null) 'min': e.min,
+              if (e.max != null) 'max': e.max,
+              if (e.step != null) 'step': e.step,
+              if (e.options.isNotEmpty) 'options': e.options,
+            },
+        ],
+      'guides': {
+        'v': p.guides.vertical,
+        'h': p.guides.horizontal,
+        'cols': p.guides.columns,
+        'gut': p.guides.gutter,
+        'mar': p.guides.margin,
+        'safe': p.guides.showSafeAreas,
+        if (p.guides.framePreview != null) 'fp': p.guides.framePreview,
+      },
+      'mblur': {
+        'on': p.motionBlur.enabled,
+        'ang': p.motionBlur.shutterAngle,
+        'ph': p.motionBlur.shutterPhase,
+        'smp': p.motionBlur.samples,
+        'lim': p.motionBlur.adaptiveLimit,
+      },
+      if (p.lottieMode) 'lottieMode': true,
+      if (p.data != null)
+        'data': {
+          'n': p.data!.name,
+          'cols': p.data!.columns,
+          'rows': p.data!.rows,
+        },
+      if (p.bindings.isNotEmpty)
+        'bindings': [
+          for (final b in p.bindings)
+            {
+              'layer': b.layerId,
+              'col': b.column,
+              'prop': b.property,
+              'row': b.row,
+              'f': _numFmt(b.format),
+            },
+        ],
       'layers': [for (final l in p.layers) layerToJson(l)],
       'links': [
         for (final l in p.links)
@@ -903,6 +1219,106 @@ VideoProject projectFromJson(Map<String, dynamic> m) => VideoProject(
             baseRotationX: (l['bRotX'] as num?)?.toDouble() ?? 0,
             baseRotationY: (l['bRotY'] as num?)?.toDouble() ?? 0,
             baseZ: (l['bZ'] as num?)?.toDouble() ?? 0,
+          ),
+      ],
+      meta: {
+        for (final e in (m['meta'] as Map<String, dynamic>? ?? const {})
+            .entries)
+          e.key: _asMeta(e.value as Map<String, dynamic>),
+      },
+      palette: m['palette'] == null
+          ? Palette.aurea
+          : Palette(entries: {
+              for (final e in (m['palette'] as Map<String, dynamic>).entries)
+                e.key: _asCol(e.value),
+            }),
+      textStyles: [
+        for (final s in (m['textStyles'] as List? ?? const []))
+          TextStyleDef(
+            name: s['n'] as String,
+            fontSize: (s['fs'] as num).toDouble(),
+            bold: s['b'] as bool? ?? true,
+            color: _asCol(s['c']),
+            colorRef: s['cr'] as String?,
+            tracking: (s['tr'] as num?)?.toDouble() ?? 0,
+            lineHeight: (s['lh'] as num?)?.toDouble() ?? 1.2,
+          ),
+      ],
+      exposed: [
+        for (final e in (m['exposed'] as List? ?? const []))
+          ExposedProperty(
+            id: e['id'] as String,
+            layerId: e['layer'] as String,
+            property: e['prop'] as String,
+            label: e['label'] as String,
+            type: ExposedType.values[(e['type'] as num).toInt()],
+            group: e['group'] as String? ?? 'Geral',
+            min: (e['min'] as num?)?.toDouble(),
+            max: (e['max'] as num?)?.toDouble(),
+            step: (e['step'] as num?)?.toDouble(),
+            options: [
+              for (final o in (e['options'] as List? ?? const []))
+                o as String,
+            ],
+          ),
+      ],
+      guides: m['guides'] == null
+          ? const GuidesSpec()
+          : GuidesSpec(
+              vertical: [
+                for (final v in ((m['guides'] as Map)['v'] as List? ??
+                    const []))
+                  (v as num).toDouble(),
+              ],
+              horizontal: [
+                for (final v in ((m['guides'] as Map)['h'] as List? ??
+                    const []))
+                  (v as num).toDouble(),
+              ],
+              columns: ((m['guides'] as Map)['cols'] as num?)?.toInt() ?? 0,
+              gutter:
+                  ((m['guides'] as Map)['gut'] as num?)?.toDouble() ?? 24,
+              margin:
+                  ((m['guides'] as Map)['mar'] as num?)?.toDouble() ?? 48,
+              showSafeAreas:
+                  (m['guides'] as Map)['safe'] as bool? ?? false,
+              framePreview:
+                  ((m['guides'] as Map)['fp'] as num?)?.toDouble(),
+            ),
+      motionBlur: m['mblur'] == null
+          ? const MotionBlurSpec()
+          : MotionBlurSpec(
+              enabled: (m['mblur'] as Map)['on'] as bool? ?? false,
+              shutterAngle:
+                  ((m['mblur'] as Map)['ang'] as num?)?.toDouble() ?? 180,
+              shutterPhase:
+                  ((m['mblur'] as Map)['ph'] as num?)?.toDouble() ?? -90,
+              samples: ((m['mblur'] as Map)['smp'] as num?)?.toInt() ?? 16,
+              adaptiveLimit:
+                  ((m['mblur'] as Map)['lim'] as num?)?.toInt() ?? 32,
+            ),
+      lottieMode: m['lottieMode'] as bool? ?? false,
+      data: m['data'] == null
+          ? null
+          : DataSource(
+              name: (m['data'] as Map)['n'] as String? ?? 'dados',
+              columns: [
+                for (final c in ((m['data'] as Map)['cols'] as List))
+                  c as String,
+              ],
+              rows: [
+                for (final r in ((m['data'] as Map)['rows'] as List))
+                  [for (final c in (r as List)) c as String],
+              ],
+            ),
+      bindings: [
+        for (final b in (m['bindings'] as List? ?? const []))
+          DataBinding(
+            layerId: b['layer'] as String,
+            column: b['col'] as String,
+            property: b['prop'] as String? ?? 'text',
+            row: (b['row'] as num?)?.toInt() ?? 0,
+            format: _asNumFmt(b['f'] as Map<String, dynamic>),
           ),
       ],
     );

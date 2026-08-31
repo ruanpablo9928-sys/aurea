@@ -23,6 +23,39 @@ enum SelectorBasedOn { characters, charactersNoSpaces, words, lines }
 
 enum SelectorShape { square, rampUp, rampDown, triangle, round, smooth }
 
+/// Ordem em que as unidades sao percorridas (PR-R1 da spec
+/// autoria-de-texto): remapeia o INDICE da unidade antes de calcular a
+/// posicao no seletor. E o que destrava "do centro", "das bordas" e
+/// "aleatoria" sem tocar em mais nada do motor.
+enum SelectorOrder { identity, inverse, center, edges, random }
+
+/// Rank da unidade [i] quando a ordem parte do CENTRO: distancia
+/// crescente do meio, desempate pela esquerda. Formula fechada (O(1)) —
+/// isto roda por unidade, por frame.
+int _centerRank(int i, int n) {
+  final mid = (n - 1) ~/ 2;
+  if (n.isOdd) {
+    final d = (i - mid).abs();
+    if (d == 0) return 0;
+    return i < mid ? 2 * d - 1 : 2 * d;
+  }
+  if (i <= mid) return 2 * (mid - i);
+  return 2 * (i - mid - 1) + 1;
+}
+
+/// Indice efetivo da unidade [i] sob a ordem [order].
+int orderMapIndex(SelectorOrder order, int i, int n, int seed) {
+  if (n <= 1) return 0;
+  return switch (order) {
+    SelectorOrder.identity => i,
+    SelectorOrder.inverse => n - 1 - i,
+    SelectorOrder.center => _centerRank(i, n),
+    // Bordas e o inverso de centro: as pontas primeiro, o meio por ultimo.
+    SelectorOrder.edges => n - 1 - _centerRank(i, n),
+    SelectorOrder.random => seededPermutation(seed, n)[i],
+  };
+}
+
 /// Um seletor produz cobertura c em [0,1] (ou fora, com overshoot) por
 /// unidade de texto.
 sealed class TextSelector {
@@ -85,6 +118,8 @@ class RangeSelector extends TextSelector {
     AnimatedDouble? easeLow,
     this.randomizeOrder = false,
     this.randomSeed = 1,
+    this.order = SelectorOrder.identity,
+    this.holdBeyond = false,
   })  : start = start ?? AnimatedDouble(0),
         end = end ?? AnimatedDouble(1),
         offset = offset ?? AnimatedDouble(0),
@@ -111,16 +146,25 @@ class RangeSelector extends TextSelector {
   final AnimatedDouble easeHigh;
   final AnimatedDouble easeLow;
 
+  /// Legado: equivale a [SelectorOrder.random].
   final bool randomizeOrder;
   final int randomSeed;
+
+  /// Ordem de percurso das unidades (PR-R1).
+  final SelectorOrder order;
+
+  /// Unidade AINDA NAO alcancada pela janela (p > hi) mantem cobertura
+  /// cheia em vez de zero. Sem isto nao existe animacao de ENTRADA: quem
+  /// ainda nao entrou apareceria no estado neutro (ou seja, visivel).
+  /// O que ja passou (p < lo) continua em zero — ja entrou.
+  final bool holdBeyond;
 
   @override
   double coverageAt(int i, int n, Duration t) {
     if (n <= 0) return 0;
-    var index = i;
-    if (randomizeOrder) {
-      index = seededPermutation(randomSeed, n)[i];
-    }
+    final effectiveOrder =
+        randomizeOrder ? SelectorOrder.random : order;
+    final index = orderMapIndex(effectiveOrder, i, n, randomSeed);
     final p = (index + 0.5) / n;
 
     final s = start.valueAt(t);
@@ -139,7 +183,9 @@ class RangeSelector extends TextSelector {
 
     final tt = (p - lo) / w;
     double c;
-    if (tt < 0 || tt > 1) {
+    if (tt > 1 && holdBeyond) {
+      c = 1;
+    } else if (tt < 0 || tt > 1) {
       c = 0;
     } else {
       c = switch (shape) {
@@ -192,9 +238,13 @@ class RangeSelector extends TextSelector {
     AnimatedDouble? easeLow,
     bool? randomizeOrder,
     int? randomSeed,
+    SelectorOrder? order,
+    bool? holdBeyond,
   }) {
     return RangeSelector(
       id: id,
+      order: order ?? this.order,
+      holdBeyond: holdBeyond ?? this.holdBeyond,
       mode: mode ?? this.mode,
       basedOn: basedOn ?? this.basedOn,
       units: units ?? this.units,

@@ -202,12 +202,131 @@ class KeyframeSegment {
 }
 
 /// Propriedade double animavel (escala, rotacao, opacidade...).
+/// LOOP DE KEYFRAMES (spec motion-graphics-pro, PR-X6). E o recurso mais
+/// usado do sistema de expressoes do AE: dois keyframes em Ciclo ja sao
+/// uma animacao infinita, sem encher a timeline.
+enum LoopMode {
+  /// Sem loop: segura o primeiro/ultimo valor (comportamento padrao).
+  none,
+
+  /// Repete do inicio.
+  cycle,
+
+  /// Repete alternando a direcao.
+  pingPong,
+
+  /// Repete SOMANDO o delta total a cada volta — movimento continuo
+  /// (esteira, marquee).
+  offset,
+
+  /// Mantem a VELOCIDADE do ultimo trecho, indefinidamente.
+  continueValue,
+}
+
+/// Onde o loop vale.
+enum LoopWhen { after, before, both }
+
+class LoopSpec {
+  const LoopSpec({
+    this.mode = LoopMode.none,
+    this.when = LoopWhen.after,
+    this.count = 0,
+  });
+
+  final LoopMode mode;
+  final LoopWhen when;
+
+  /// Quantos keyframes finais (ou iniciais) participam do ciclo.
+  /// 0 = todos.
+  final int count;
+
+  bool get active => mode != LoopMode.none;
+
+  bool get loopsAfter =>
+      active && (when == LoopWhen.after || when == LoopWhen.both);
+  bool get loopsBefore =>
+      active && (when == LoopWhen.before || when == LoopWhen.both);
+
+  LoopSpec copyWith({LoopMode? mode, LoopWhen? when, int? count}) =>
+      LoopSpec(
+        mode: mode ?? this.mode,
+        when: when ?? this.when,
+        count: count ?? this.count,
+      );
+
+  static const none = LoopSpec();
+}
+
+/// Resultado do remapeamento de tempo do loop: em que instante DENTRO do
+/// trecho ciclado amostrar, e quanto somar ao valor (modo Deslocado).
+typedef _LoopSample = ({Duration time, double cycles});
+
+/// Remapeia [t] para dentro do trecho [from]..[to], conforme o modo.
+/// Devolve null quando o loop nao se aplica.
+_LoopSample? _loopRemap(
+  LoopSpec loop,
+  Duration t,
+  Duration first,
+  Duration last,
+  Duration from,
+  Duration to,
+) {
+  if (!loop.active) return null;
+  final span = to - from;
+  if (span <= Duration.zero) return null;
+
+  if (t > last && loop.loopsAfter) {
+    final over = t - last;
+    final spanUs = span.inMicroseconds;
+    final n = over.inMicroseconds ~/ spanUs;
+    final rem = Duration(microseconds: over.inMicroseconds % spanUs);
+    switch (loop.mode) {
+      case LoopMode.cycle:
+      case LoopMode.offset:
+        return (time: from + rem, cycles: (n + 1).toDouble());
+      case LoopMode.pingPong:
+        // Voltas impares correm de tras para frente.
+        final backwards = n.isEven;
+        return (
+          time: backwards ? to - rem : from + rem,
+          cycles: 0,
+        );
+      case LoopMode.continueValue:
+      case LoopMode.none:
+        return null;
+    }
+  }
+
+  if (t < first && loop.loopsBefore) {
+    final under = first - t;
+    final spanUs = span.inMicroseconds;
+    final n = under.inMicroseconds ~/ spanUs;
+    final rem = Duration(microseconds: under.inMicroseconds % spanUs);
+    switch (loop.mode) {
+      case LoopMode.cycle:
+      case LoopMode.offset:
+        return (time: to - rem, cycles: -(n + 1).toDouble());
+      case LoopMode.pingPong:
+        final forwards = n.isEven;
+        return (time: forwards ? from + rem : to - rem, cycles: 0);
+      case LoopMode.continueValue:
+      case LoopMode.none:
+        return null;
+    }
+  }
+  return null;
+}
+
 class AnimatedDouble {
-  AnimatedDouble(this.base, [List<Keyframe<double>>? keyframes])
+  AnimatedDouble(this.base,
+      [List<Keyframe<double>>? keyframes, this.loop = LoopSpec.none])
       : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<double>>[]);
 
   final double base;
   final List<Keyframe<double>> keyframes;
+
+  /// Loop dos keyframes (PR-X6).
+  final LoopSpec loop;
 
   bool get isAnimated => keyframes.isNotEmpty;
 
@@ -216,6 +335,57 @@ class AnimatedDouble {
 
   double valueAt(Duration t) {
     if (keyframes.isEmpty) return base;
+    final first = keyframes.first;
+    final last = keyframes.last;
+
+    // LOOP (PR-X6): fora do intervalo dos keyframes, o tempo e
+    // remapeado para dentro do trecho ciclado.
+    if (loop.active && keyframes.length >= 2) {
+      if (loop.mode == LoopMode.continueValue) {
+        // Mantem a velocidade do trecho da ponta, indefinidamente.
+        if (t > last.time && loop.loopsAfter) {
+          final prev = keyframes[keyframes.length - 2];
+          final dt = (last.time - prev.time).inMicroseconds;
+          if (dt <= 0) return last.value;
+          final v = (last.value - prev.value) / dt;
+          return last.value + v * (t - last.time).inMicroseconds;
+        }
+        if (t < first.time && loop.loopsBefore) {
+          final next = keyframes[1];
+          final dt = (next.time - first.time).inMicroseconds;
+          if (dt <= 0) return first.value;
+          final v = (next.value - first.value) / dt;
+          return first.value - v * (first.time - t).inMicroseconds;
+        }
+      } else {
+        final (from, to) = _loopRange(t);
+        final s = _loopRemap(loop, t, first.time, last.time, from, to);
+        if (s != null) {
+          final delta = valueAt(to) - valueAt(from);
+          return _rawValueAt(s.time) +
+              (loop.mode == LoopMode.offset ? delta * s.cycles : 0);
+        }
+      }
+    }
+    return _rawValueAt(t);
+  }
+
+  /// Trecho que participa do loop: os [LoopSpec.count] keyframes da
+  /// ponta (0 = todos).
+  (Duration, Duration) _loopRange(Duration t) {
+    final n = keyframes.length;
+    final c = loop.count;
+    if (c <= 0 || c >= n) {
+      return (keyframes.first.time, keyframes.last.time);
+    }
+    // Depois do fim usa os ULTIMOS c; antes do inicio, os PRIMEIROS c.
+    if (t > keyframes.last.time) {
+      return (keyframes[n - c].time, keyframes.last.time);
+    }
+    return (keyframes.first.time, keyframes[c - 1].time);
+  }
+
+  double _rawValueAt(Duration t) {
     if (t <= keyframes.first.time) return keyframes.first.value;
     if (t >= keyframes.last.time) return keyframes.last.value;
     final (a, b, f) = _segmentAt(keyframes, t)!;
@@ -230,17 +400,25 @@ class AnimatedDouble {
     return KeyframeSegment(a, b, f);
   }
 
-  AnimatedDouble withBase(double v) => AnimatedDouble(v, keyframes);
+  AnimatedDouble withBase(double v) => AnimatedDouble(v, keyframes, loop);
+
+  /// Liga/desliga o loop dos keyframes (PR-X6).
+  AnimatedDouble withLoop(LoopSpec spec) =>
+      AnimatedDouble(base, keyframes, spec);
 
   AnimatedDouble withKeyframe(Duration t, double v,
           [Easing ease = Easing.linear]) =>
-      AnimatedDouble(base, _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)));
+      AnimatedDouble(
+          base,
+          _insertSorted(
+              keyframes, Keyframe(time: t, value: v, ease: ease)),
+          loop);
 
   AnimatedDouble withoutKeyframe(Duration t) {
     final rest = _removeAt(keyframes, t);
     // Removeu o ultimo keyframe: volta a ser estatico no valor atual.
     if (rest.isEmpty) return AnimatedDouble(valueAt(t));
-    return AnimatedDouble(base, rest);
+    return AnimatedDouble(base, rest, loop);
   }
 
   /// Editar = keyframe automatico se a propriedade ja anima (comportamento AE).
@@ -256,24 +434,49 @@ class AnimatedDouble {
   }
 
   /// Troca o easing do keyframe em [t], se existir.
-  AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(base, [
+  AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(
+      base,
+      [
         for (final k in keyframes)
           if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
-      ]);
+      ],
+      loop);
 
   /// Aplica a curva a TODOS os segmentos ("Paste Curve to All Keyframes").
-  AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(base, [
+  AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(
+      base,
+      [
         for (final k in keyframes) k.copyWith(ease: ease),
-      ]);
+      ],
+      loop);
+
+  /// INVERTER NO TEMPO (assistente PR-X7): espelha os keyframes dentro
+  /// do proprio intervalo — o percurso passa a correr de tras para
+  /// frente, mantendo as posicoes no tempo.
+  AnimatedDouble reversedInTime() {
+    if (keyframes.length < 2) return this;
+    final first = keyframes.first.time;
+    final last = keyframes.last.time;
+    final flipped = <Keyframe<double>>[
+      for (final k in keyframes)
+        Keyframe(
+            time: first + (last - k.time), value: k.value, ease: k.ease),
+    ]..sort((a, b) => a.time.compareTo(b.time));
+    return AnimatedDouble(base, flipped, loop);
+  }
 }
 
 /// Propriedade Offset animavel (posicao, ancora...).
 class AnimatedOffset {
-  AnimatedOffset(this.base, [List<Keyframe<Offset>>? keyframes])
+  AnimatedOffset(this.base,
+      [List<Keyframe<Offset>>? keyframes, this.loop = LoopSpec.none])
       : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<Offset>>[]);
 
   final Offset base;
   final List<Keyframe<Offset>> keyframes;
+
+  /// Loop dos keyframes (PR-X6).
+  final LoopSpec loop;
 
   bool get isAnimated => keyframes.isNotEmpty;
 
@@ -282,22 +485,73 @@ class AnimatedOffset {
 
   Offset valueAt(Duration t) {
     if (keyframes.isEmpty) return base;
+    final first = keyframes.first;
+    final last = keyframes.last;
+
+    if (loop.active && keyframes.length >= 2) {
+      if (loop.mode == LoopMode.continueValue) {
+        if (t > last.time && loop.loopsAfter) {
+          final prev = keyframes[keyframes.length - 2];
+          final dt = (last.time - prev.time).inMicroseconds.toDouble();
+          if (dt <= 0) return last.value;
+          final over = (t - last.time).inMicroseconds.toDouble();
+          return last.value + (last.value - prev.value) / dt * over;
+        }
+        if (t < first.time && loop.loopsBefore) {
+          final next = keyframes[1];
+          final dt = (next.time - first.time).inMicroseconds.toDouble();
+          if (dt <= 0) return first.value;
+          final under = (first.time - t).inMicroseconds.toDouble();
+          return first.value - (next.value - first.value) / dt * under;
+        }
+      } else {
+        final (from, to) = _loopRange(t);
+        final s = _loopRemap(loop, t, first.time, last.time, from, to);
+        if (s != null) {
+          final delta = _rawValueAt(to) - _rawValueAt(from);
+          return _rawValueAt(s.time) +
+              (loop.mode == LoopMode.offset ? delta * s.cycles : Offset.zero);
+        }
+      }
+    }
+    return _rawValueAt(t);
+  }
+
+  (Duration, Duration) _loopRange(Duration t) {
+    final n = keyframes.length;
+    final c = loop.count;
+    if (c <= 0 || c >= n) {
+      return (keyframes.first.time, keyframes.last.time);
+    }
+    if (t > keyframes.last.time) {
+      return (keyframes[n - c].time, keyframes.last.time);
+    }
+    return (keyframes.first.time, keyframes[c - 1].time);
+  }
+
+  Offset _rawValueAt(Duration t) {
     if (t <= keyframes.first.time) return keyframes.first.value;
     if (t >= keyframes.last.time) return keyframes.last.value;
     final (a, b, f) = _segmentAt(keyframes, t)!;
     return Offset.lerp(a, b, f)!;
   }
 
-  AnimatedOffset withBase(Offset v) => AnimatedOffset(v, keyframes);
+  AnimatedOffset withBase(Offset v) => AnimatedOffset(v, keyframes, loop);
+
+  AnimatedOffset withLoop(LoopSpec spec) =>
+      AnimatedOffset(base, keyframes, spec);
 
   AnimatedOffset withKeyframe(Duration t, Offset v,
           [Easing ease = Easing.linear]) =>
-      AnimatedOffset(base, _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)));
+      AnimatedOffset(
+          base,
+          _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)),
+          loop);
 
   AnimatedOffset withoutKeyframe(Duration t) {
     final rest = _removeAt(keyframes, t);
     if (rest.isEmpty) return AnimatedOffset(valueAt(t));
-    return AnimatedOffset(base, rest);
+    return AnimatedOffset(base, rest, loop);
   }
 
   AnimatedOffset edited(Duration t, Offset v) =>
@@ -310,12 +564,31 @@ class AnimatedOffset {
     return Easing.linear;
   }
 
-  AnimatedOffset withEase(Duration t, Easing ease) => AnimatedOffset(base, [
+  AnimatedOffset withEase(Duration t, Easing ease) => AnimatedOffset(
+      base,
+      [
         for (final k in keyframes)
           if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
-      ]);
+      ],
+      loop);
 
-  AnimatedOffset withEaseAll(Easing ease) => AnimatedOffset(base, [
+  AnimatedOffset withEaseAll(Easing ease) => AnimatedOffset(
+      base,
+      [
         for (final k in keyframes) k.copyWith(ease: ease),
-      ]);
+      ],
+      loop);
+
+  /// Inverter no tempo (PR-X7).
+  AnimatedOffset reversedInTime() {
+    if (keyframes.length < 2) return this;
+    final first = keyframes.first.time;
+    final last = keyframes.last.time;
+    final flipped = <Keyframe<Offset>>[
+      for (final k in keyframes)
+        Keyframe(
+            time: first + (last - k.time), value: k.value, ease: k.ease),
+    ]..sort((a, b) => a.time.compareTo(b.time));
+    return AnimatedOffset(base, flipped, loop);
+  }
 }

@@ -1,0 +1,256 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+
+import '../../editor/presentation/am/am_colors.dart';
+
+/// Uma novidade da versao.
+class NewsItem {
+  const NewsItem(this.icon, this.title, this.body);
+
+  final IconData icon;
+  final String title;
+  final String body;
+}
+
+/// TUDO que entrou nesta rodada, em linguagem de quem usa — nao em nome
+/// de PR. A lista completa abre no toque.
+const aureaNews = <NewsItem>[
+  NewsItem(
+    CupertinoIcons.wand_stars,
+    'Catalogo de efeitos com busca',
+    'Agora sao 26 efeitos organizados por categoria, com busca que '
+        'entende sinonimo: procure "bloom" e acha Glow, "pixelate" acha '
+        'Mosaico, "shake" acha Tremor. Novos: Niveis, Curvas, Vibracao '
+        'com protecao de tom de pele, Balanco de branco, Rodas de cor, '
+        'Unmult (tira o fundo preto de fogo e fumaca), Vinheta, '
+        'Desfoque direcional e radial, Raios de luz, Mosaico, Grao de '
+        'filme, Ruido fractal, Dano digital, Zoom warp e Posterizar.',
+  ),
+  NewsItem(
+    CupertinoIcons.square_stack_3d_down_right,
+    'Presets de efeito',
+    'Salve uma pilha inteira e reaplique quando quiser. Os keyframes '
+        'sao gravados relativos ao inicio, entao aplicar aos 12 s '
+        'funciona; e distancias sao normalizadas, entao um preset feito '
+        'em 9:16 nao sai errado em 16:9. Vem com 6 presets prontos.',
+  ),
+  NewsItem(
+    CupertinoIcons.slider_horizontal_3,
+    'Controles que faltavam',
+    'Parametro de escolha virou chip, semente ganhou botao de sortear, '
+        'e ha liga/desliga. Antes so existia numero — efeito que '
+        'precisava de opcao ficava na tela sem funcionar.',
+  ),
+  NewsItem(
+    CupertinoIcons.repeat,
+    'Loop de keyframes e assar',
+    'Dois keyframes e um Ciclo ja sao animacao infinita: Ciclo, '
+        'Vai-e-volta, Deslocado (esteira) e Continuar. E "assar em '
+        'keyframes" converte o Tremor em keyframes reais, para voce '
+        'ajustar quadro a quadro.',
+  ),
+  NewsItem(
+    CupertinoIcons.square_grid_3x2,
+    'Alinhar e distribuir',
+    'Alinhamento exato ao pixel pelas bordas reais das camadas, '
+        'distribuicao por centro OU por vao igual (sao diferentes), e '
+        'espacamento exato em px. O encaixe ao arrastar agora gruda nas '
+        'bordas das outras camadas e nas guias.',
+  ),
+  NewsItem(
+    CupertinoIcons.textformat,
+    'Animacao de texto por receita',
+    '12 receitas prontas (Apple, Maquina de escrever, Cascata, Do '
+        'centro...) com um visualizador que mostra o escalonamento. '
+        'Voce pensa "cada palavra 40 ms depois da anterior" e o app '
+        'monta o rig sozinho.',
+  ),
+  NewsItem(
+    CupertinoIcons.square_on_circle,
+    'Formas com Tamanho de verdade',
+    'Tamanho agora e parametro da geometria: crescer a forma nao '
+        'engorda o traco. Pontas fracionarias animam triangulo virando '
+        'quadrado, e o arredondamento vai de -100 a 200 para virar '
+        'flor. Tudo animavel.',
+  ),
+  NewsItem(
+    CupertinoIcons.cube,
+    'Elementos 3D',
+    'Nove solidos que giram de verdade no espaco — cubo, piramide, '
+        'cone, esfera, cilindro, prisma, diamante, anel e estrela — e '
+        'seguem um nulo 3D como qualquer camada.',
+  ),
+  NewsItem(
+    CupertinoIcons.captions_bubble,
+    'Legendas com configuracao',
+    'Escolha entre frases, blocos curtos ou palavra por palavra antes '
+        'de transcrever, e corrija o texto errado direto na lista de '
+        'legendas — o cue corrigido nao e sobrescrito numa nova '
+        'transcricao. Importar audio tambem chegou.',
+  ),
+  NewsItem(
+    CupertinoIcons.sparkles,
+    'Estilos de camada e paleta',
+    'Sombra projetada, sombra interna, brilho externo, contorno e '
+        'sobreposicao de cor ou gradiente. Mais paleta do projeto: '
+        'trocar uma cor nomeada muda todas as camadas ligadas a ela.',
+  ),
+  NewsItem(
+    CupertinoIcons.rectangle_expand_vertical,
+    'Layout responsivo',
+    'Uma forma pode abracar um texto e se redimensionar sozinha quando '
+        'o texto muda, com ancora escolhendo qual lado fica parado. '
+        'Grupos empilham os filhos automaticamente.',
+  ),
+  NewsItem(
+    CupertinoIcons.share,
+    'Exportar Lottie e SVG',
+    'Exporte a cena como Lottie (.json) para apps e sites, com um '
+        'validador que avisa antes quais camadas nao sobrevivem e por '
+        'que. Tambem exporta SVG animado.',
+  ),
+  NewsItem(
+    CupertinoIcons.speedometer,
+    'Preview mais liso',
+    'A composicao so recalcula quando algo muda de verdade, o corte '
+        'agora decupa certo, e a travada periodica do audio acabou: o '
+        'relogio segue a midia continuamente em vez de corrigir em '
+        'bloco. A engrenagem mostra a marcha e os numeros.',
+  ),
+  NewsItem(
+    CupertinoIcons.tag,
+    'Organizacao',
+    'Rotulos coloridos, solo, camadas timidas, bloqueio, busca por '
+        'nome/tipo/"tem keyframe" e renomear em lote.',
+  ),
+];
+
+/// Cartao "O que ha de novo" na tela inicial.
+class WhatsNewCard extends StatelessWidget {
+  const WhatsNewCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => showWhatsNewSheet(context),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1B2130), Color(0xFF16281B)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(color: AmColors.hairline),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AmColors.accent.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(CupertinoIcons.sparkles,
+                  color: AmColors.accent, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('O que ha de novo',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AmColors.text)),
+                  SizedBox(height: 2),
+                  Text(
+                    'Catalogo de efeitos, presets, alinhar e distribuir, '
+                    'receitas de texto, Lottie e mais.',
+                    style:
+                        TextStyle(fontSize: 12, color: AmColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(CupertinoIcons.chevron_right,
+                size: 18, color: AmColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> showWhatsNewSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AmColors.panel,
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        children: [
+          Center(
+            child: Container(
+              width: 34,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('O que ha de novo',
+              style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text)),
+          const SizedBox(height: 4),
+          Text('${aureaNews.length} novidades nesta versao',
+              style: const TextStyle(
+                  fontSize: 13, color: AmColors.muted)),
+          const SizedBox(height: 18),
+          for (final item in aureaNews)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(item.icon, size: 20, color: AmColors.accent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.title,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AmColors.text)),
+                        const SizedBox(height: 3),
+                        Text(item.body,
+                            style: const TextStyle(
+                                fontSize: 12.5,
+                                height: 1.45,
+                                color: AmColors.muted)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+}

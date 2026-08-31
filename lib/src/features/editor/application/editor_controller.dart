@@ -7,14 +7,20 @@ import 'package:video_player/video_player.dart';
 import '../../media/application/media_import_service.dart';
 import '../domain/caption.dart';
 import '../domain/effect.dart';
+import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
+import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
 import '../domain/layer.dart';
+import '../domain/layer_meta.dart';
+import '../domain/layout_ops.dart';
+import '../domain/measure.dart';
 import '../domain/mask.dart';
 import '../domain/shape.dart';
 import '../domain/text_animator.dart';
 import '../domain/text_presets.dart';
+import '../domain/text_recipe.dart';
 import '../domain/video_project.dart';
 
 export '../domain/video_project.dart' show LayerProp, PropertyLink;
@@ -195,6 +201,569 @@ class EditorController extends Notifier<VideoProject> {
         _replace(layer.copyLayer(duration: d));
       }
     });
+  }
+
+  // ------------------------------------------ oficio: meta da camada
+
+  void _updateMeta(String id, LayerMeta Function(LayerMeta) fn) {
+    final next = fn(state.metaOf(id));
+    _mutate(state.copyWith(meta: {...state.meta, id: next}));
+  }
+
+  /// Rotulo colorido (PR-X26).
+  void setLayerLabel(String id, LayerLabel? label) => _updateMeta(
+      id,
+      (m) => label == null
+          ? m.copyWith(clearLabel: true)
+          : m.copyWith(label: label));
+
+  /// SOLO: havendo qualquer solo, so os solos renderizam.
+  void toggleSolo(String id) =>
+      _updateMeta(id, (m) => m.copyWith(solo: !m.solo));
+
+  /// TIMIDA: some da timeline, continua no render.
+  void toggleShy(String id) =>
+      _updateMeta(id, (m) => m.copyWith(shy: !m.shy));
+
+  void toggleLocked(String id) =>
+      _updateMeta(id, (m) => m.copyWith(locked: !m.locked));
+
+  void setLayerFolder(String id, String? folder) =>
+      _updateMeta(id, (m) => m.copyWith(folder: folder));
+
+  /// BUSCA na timeline (PR-X26): nome, tipo, rotulo e predicados.
+  List<Layer> searchLayers(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return state.layers;
+    return [
+      for (final l in state.layers)
+        if (_matchesSearch(l, q)) l,
+    ];
+  }
+
+  bool _matchesSearch(Layer l, String q) {
+    if (l.name.toLowerCase().contains(q)) return true;
+    final meta = state.metaOf(l.id);
+    if (meta.label?.name.toLowerCase().contains(q) ?? false) return true;
+    final type = switch (l) {
+      VideoLayer _ => 'video',
+      ImageLayer _ => 'imagem',
+      TextLayer _ => 'texto',
+      ShapeLayer _ => 'forma',
+      GroupLayer _ => 'grupo',
+      NullLayer _ => 'nulo',
+      AudioLayer _ => 'audio',
+      CaptionLayer _ => 'legenda',
+      ParticlesLayer _ => 'particulas',
+      AdjustmentLayer _ => 'ajuste',
+      Element3DLayer _ => '3d',
+    };
+    if (type.contains(q)) return true;
+    if (q == 'keyframe' || q == 'animado') return l.hasAnimation;
+    if (q == 'efeito') return l.effects.isNotEmpty;
+    if (q == 'loop') {
+      return l.position.loop.active ||
+          l.scaleX.loop.active ||
+          l.rotation.loop.active ||
+          l.opacity.loop.active;
+    }
+    if (q == 'solo') return meta.solo;
+    if (q == 'timida' || q == 'shy') return meta.shy;
+    return false;
+  }
+
+  /// RENOMEAR EM LOTE com numeracao automatica (PR-X26).
+  void renameLayers(Iterable<String> ids, String pattern) {
+    var n = 1;
+    final byId = {for (final id in ids) id};
+    _mutate(state.copyWith(layers: [
+      for (final l in state.layers)
+        if (byId.contains(l.id))
+          l.copyLayer(
+              name: pattern.contains('#')
+                  ? pattern.replaceAll('#', '${n++}')
+                  : '$pattern ${n++}')
+        else
+          l,
+    ]));
+  }
+
+  // ---------------------------------------------- presets de efeito
+
+  /// Salva a pilha (ou parte dela) como preset, com keyframes relativos
+  /// e parametros de distancia normalizados (PR-C2).
+  EffectPreset? saveEffectPresetFrom(String layerId, String name,
+      {Set<String>? onlyEffectIds}) {
+    final layer = _layer(layerId);
+    if (layer == null || layer.effects.isEmpty) return null;
+    final chosen = onlyEffectIds == null
+        ? layer.effects
+        : [
+            for (final e in layer.effects)
+              if (onlyEffectIds.contains(e.id)) e,
+          ];
+    if (chosen.isEmpty) return null;
+    return saveEffectPreset(
+      name: name,
+      effects: chosen,
+      layerStart: Duration.zero,
+      layerDuration: layer.duration,
+      layerSize: layerBoxSize(layer, layer.startTime),
+    );
+  }
+
+  /// Aplica um preset no cabecote. [replace] troca a pilha em vez de
+  /// somar; [stretchTo] estica o preset para a duracao pedida.
+  List<String> applyPreset(
+    String layerId,
+    EffectPreset preset, {
+    required Duration at,
+    bool replace = false,
+    Duration? stretchTo,
+  }) {
+    final layer = _layer(layerId);
+    if (layer == null) return const [];
+    final compat = reconcilePreset(preset);
+    final applied = applyEffectPreset(
+      EffectPreset(
+        name: preset.name,
+        effects: compat.effects,
+        suggestedDuration: preset.suggestedDuration,
+      ),
+      at: at - layer.startTime,
+      targetSize: layerBoxSize(layer, at),
+      stretchTo: stretchTo,
+    );
+    _replace(layer.copyLayer(
+      effects: replace ? applied : [...layer.effects, ...applied],
+    ));
+    return compat.warnings;
+  }
+
+  /// ASSAR EM KEYFRAMES (PR-C3): o movimento procedural do Tremor vira
+  /// keyframes reais na camada, e o efeito sai da pilha.
+  void bakeEffectToKeyframes(String layerId, String effectId, int fps) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    EffectInstance? effect;
+    for (final e in layer.effects) {
+      if (e.id == effectId) effect = e;
+    }
+    if (effect == null || !effect.spec.procedural) return;
+
+    // Amostra o MESMO calculo que o compositor faz, frame a frame — por
+    // isso o assado bate com o procedural.
+    final fx = effect;
+    TremorSample sampleAt(Duration t) => tremorSample(
+          amplitudePx: fx.paramAt('amplitude', t),
+          phase: integratedPhase(fx.track('frequencia'), t),
+          style: fx.paramAt('estilo', t).round().clamp(0, 2),
+          seed: fx.paramAt('semente', t).round(),
+          zoom: fx.paramAt('zoom', t).clamp(0.0, 1.0),
+          tiltDeg: fx.paramAt('inclinacao', t),
+        );
+
+    final baked = bakeProceduralMotion(
+      effect: effect,
+      duration: layer.duration,
+      fps: fps,
+      basePosition: layer.position.valueAt(Duration.zero),
+      baseRotation: layer.rotation.valueAt(Duration.zero),
+      baseScale: layer.scaleX.valueAt(Duration.zero),
+      sampleOffset: (t) {
+        final s = sampleAt(t);
+        return Offset(s.dx, s.dy);
+      },
+      sampleRotation: (t) => sampleAt(t).rotationDeg,
+      sampleScale: (t) => sampleAt(t).scale,
+    );
+
+    _replace(layer.copyLayer(
+      position: baked.position,
+      rotation: baked.rotation,
+      scaleX: baked.scale,
+      scaleY: baked.scale,
+      effects: [
+        for (final e in layer.effects)
+          if (e.id != effectId) e,
+      ],
+    ));
+  }
+
+  // ------------------------------------------------------ aparencia
+
+  /// Estilos de camada (PR-X10).
+  void setLayerStyles(String id, LayerStyles styles) =>
+      _updateMeta(id, (m) => m.copyWith(styles: styles));
+
+  void updateLayerStyles(
+          String id, LayerStyles Function(LayerStyles) fn) =>
+      _updateMeta(id, (m) => m.copyWith(styles: fn(m.styles)));
+
+  /// PALETA (PR-X11): trocar uma entrada muda TODAS as camadas
+  /// vinculadas a ela, e nenhuma outra.
+  void setPaletteColor(String name, Color color) =>
+      _mutate(state.copyWith(palette: state.palette.withColor(name, color)));
+
+  void removePaletteColor(String name) =>
+      _mutate(state.copyWith(palette: state.palette.without(name)));
+
+  /// Vincula a cor da camada a uma entrada da paleta.
+  void linkLayerColor(String id, String? paletteName) => _updateMeta(
+      id,
+      (m) => paletteName == null
+          ? m.copyWith(clearColorRef: true)
+          : m.copyWith(colorRef: paletteName));
+
+  /// Estilos de texto nomeados (PR-X12).
+  void upsertTextStyle(TextStyleDef style) {
+    final rest = [
+      for (final s in state.textStyles)
+        if (s.name != style.name) s,
+    ];
+    _mutate(state.copyWith(textStyles: [...rest, style]));
+  }
+
+  void linkTextStyle(String id, String? styleName) =>
+      _updateMeta(id, (m) => m.copyWith(textStyleRef: styleName));
+
+  // ------------------------------------------------------ responsivo
+
+  /// Caixa de texto (PR-X13).
+  void setTextBox(String id, TextBoxSpec spec) =>
+      _updateMeta(id, (m) => m.copyWith(textBox: spec));
+
+  /// Forma CONTEINER que abraca um texto (PR-X14).
+  void setContainer(String id, ContainerSpec? spec) {
+    _updateMeta(
+        id,
+        (m) => spec == null
+            ? m.copyWith(clearContainer: true)
+            : m.copyWith(container: spec));
+    if (spec != null) applyContainer(id);
+  }
+
+  /// Redimensiona a forma para abracar o texto alvo. O ponto de
+  /// ancoragem decide QUAL lado fica parado quando ela cresce — sem
+  /// isso, um nome mais longo desloca o layout inteiro.
+  void applyContainer(String shapeId) {
+    final shape = _layer(shapeId);
+    final spec = state.metaOf(shapeId).container;
+    if (shape is! ShapeLayer || spec == null) return;
+    final target = _layer(spec.targetLayerId);
+    if (target == null) return;
+
+    final textSize = measureLayerBox(target, Duration.zero);
+    final wanted = spec.sizeFor(textSize);
+    final before = measureLayerBox(shape, Duration.zero);
+
+    // Reescreve a geometria parametrica para o tamanho pedido.
+    var found = false;
+    final contents = [
+      for (final item in shape.contents)
+        if (!found && item is ShapeParametric)
+          (() {
+            found = true;
+            return item.copyWith(
+              sizeX: AnimatedDouble(wanted.width),
+              sizeY: AnimatedDouble(wanted.height),
+            );
+          })()
+        else
+          item,
+    ];
+    if (!found) return;
+
+    // A ancora mantem o lado escolhido parado.
+    final shift = anchorShift(before, wanted, spec.anchor);
+    final basePos = spec.follow
+        ? target.position.valueAt(Duration.zero)
+        : shape.position.valueAt(Duration.zero);
+    _replace(shape.copyLayer(
+      contents: contents,
+      position: shape.position.withBase(basePos + shift),
+    ));
+  }
+
+  /// Empilhamento automatico num grupo (PR-X15).
+  void setStack(String id, StackSpec? spec) {
+    _updateMeta(
+        id,
+        (m) => spec == null
+            ? m.copyWith(clearStack: true)
+            : m.copyWith(stack: spec));
+    if (spec != null) applyStack(id);
+  }
+
+  /// Reposiciona os filhos do grupo conforme o empilhamento. Remover o
+  /// filho do meio reposiciona os outros mantendo o espaco.
+  void applyStack(String groupId) {
+    final group = _layer(groupId);
+    final spec = state.metaOf(groupId).stack;
+    if (group is! GroupLayer || spec == null) return;
+    final children = <({String id, Size size})>[
+      for (final c in group.children)
+        (id: c.id, size: measureLayerBox(c, Duration.zero)),
+    ];
+    final places = stackLayout(spec, children);
+    _replace(group.copyLayer(children: [
+      for (final c in group.children)
+        if (places[c.id] case final p?)
+          c.copyLayer(position: c.position.withBase(p))
+        else
+          c,
+    ]));
+  }
+
+  /// Reaplica o layout responsivo de tudo que depende de [layerId] —
+  /// chamado quando o texto muda, para a forma acompanhar SOZINHA.
+  void _refreshResponsive(String layerId) {
+    for (final e in state.meta.entries) {
+      if (e.value.container?.targetLayerId == layerId) {
+        applyContainer(e.key);
+      }
+    }
+    for (final l in state.layers) {
+      if (l is GroupLayer &&
+          state.metaOf(l.id).stack != null &&
+          l.children.any((c) => c.id == layerId)) {
+        applyStack(l.id);
+      }
+    }
+  }
+
+  // -------------------------------------------------------- template
+
+  /// Expor uma propriedade da precomp (PR-X16).
+  void exposeProperty(ExposedProperty prop) {
+    final rest = [
+      for (final e in state.exposed)
+        if (e.id != prop.id) e,
+    ];
+    _mutate(state.copyWith(exposed: [...rest, prop]));
+  }
+
+  void unexposeProperty(String id) => _mutate(state.copyWith(exposed: [
+        for (final e in state.exposed)
+          if (e.id != id) e,
+      ]));
+
+  /// Mexer no controle do PAI altera a precomp sem abri-la.
+  void setExposedValue(String exposedId, double value, Duration t) {
+    ExposedProperty? prop;
+    for (final e in state.exposed) {
+      if (e.id == exposedId) prop = e;
+    }
+    if (prop == null) return;
+    final v = prop.clampValue(value);
+    switch (prop.property) {
+      case 'opacity':
+        editOpacity(prop.layerId, t, v);
+      case 'rotation':
+        editRotation(prop.layerId, t, v);
+      case 'scale':
+        editScaleUniform(prop.layerId, t, v);
+      default:
+        break;
+    }
+  }
+
+  // ----------------------------------------------------- dados/Lottie
+
+  /// CSV/JSON dirigindo a animacao (PR-X21).
+  void setDataSource(DataSource? source) =>
+      _mutate(state.copyWith(data: source));
+
+  void addDataBinding(DataBinding binding) =>
+      _mutate(state.copyWith(bindings: [...state.bindings, binding]));
+
+  void removeDataBinding(String layerId) =>
+      _mutate(state.copyWith(bindings: [
+        for (final b in state.bindings)
+          if (b.layerId != layerId) b,
+      ]));
+
+  /// Aplica os vinculos: cada campo escreve no texto da sua camada.
+  void applyDataBindings() {
+    final data = state.data;
+    if (data == null) return;
+    var layers = state.layers;
+    for (final b in state.bindings) {
+      final raw = data.cell(b.row, b.column);
+      if (raw == null) continue;
+      final num = data.number(b.row, b.column);
+      final text = num == null ? raw : b.format.format(num);
+      layers = [
+        for (final l in layers)
+          if (l.id == b.layerId && l is TextLayer)
+            l.copyLayer(text: text)
+          else
+            l,
+      ];
+    }
+    _mutate(state.copyWith(layers: layers));
+  }
+
+  /// REPETIR POR LINHA (PR-X21): N copias de uma camada, uma por linha,
+  /// com escalonamento de tempo automatico.
+  void repeatForEachRow(String layerId, String column,
+      {Duration stagger = const Duration(milliseconds: 120)}) {
+    final data = state.data;
+    final src = _layer(layerId);
+    if (data == null || src is! TextLayer) return;
+    final copies = <Layer>[
+      for (var i = 0; i < data.rowCount; i++)
+        src.duplicated().copyLayer(
+          name: '${src.name} ${i + 1}',
+          startTime: src.startTime + stagger * i,
+          text: data.cell(i, column) ?? '',
+        ),
+    ];
+    _mutate(state.copyWith(layers: [...copies, ...state.layers]));
+  }
+
+  /// Modo "compativel com Lottie" (PR-X23): recursos nao suportados
+  /// aparecem esmaecidos desde o comeco.
+  void setLottieMode(bool on) => _mutate(state.copyWith(lottieMode: on));
+
+  // --------------------------------------------------------- guias
+
+  void setGuides(GuidesSpec spec) => _mutate(state.copyWith(guides: spec));
+
+  void addGuide({double? x, double? y}) => _mutate(state.copyWith(
+        guides: state.guides.copyWith(
+          vertical: x == null
+              ? null
+              : [...state.guides.vertical, x],
+          horizontal: y == null
+              ? null
+              : [...state.guides.horizontal, y],
+        ),
+      ));
+
+  /// Motion blur da composicao (PR-X9).
+  void setMotionBlur(MotionBlurSpec spec) =>
+      _mutate(state.copyWith(motionBlur: spec));
+
+  void toggleLayerMotionBlur(String id) =>
+      _updateMeta(id, (m) => m.copyWith(motionBlur: !m.motionBlur));
+
+  // ------------------------------------------------ precisao e layout
+
+  /// Caixa renderizada da camada (px logicos).
+  Size layerBoxSize(Layer layer, Duration t) => measureLayerBox(
+      layer, layer.localTime(t),
+      fallbackWidth: state.outputWidth.toDouble());
+
+  List<LayoutBox> _layoutBoxes(Iterable<String> ids, Duration t) => [
+        for (final id in ids)
+          if (_layer(id) case final l?)
+            (
+              id: l.id,
+              center: l.position.valueAt(l.localTime(t)),
+              size: layerBoxSize(l, t),
+            ),
+      ];
+
+  void _applyCenters(Map<String, Offset> centers, Duration t) {
+    if (centers.isEmpty) return;
+    var layers = state.layers;
+    for (final e in centers.entries) {
+      layers = [
+        for (final l in layers)
+          if (l.id == e.key)
+            l.copyLayer(
+                position: l.position
+                    .edited(l.localTime(t), e.value))
+          else
+            l,
+      ];
+    }
+    _mutate(state.copyWith(layers: layers));
+  }
+
+  /// ALINHAR a selecao (PR-X1). Exato ao pixel: usa a caixa real de
+  /// cada camada, entao tamanhos diferentes encostam no mesmo lugar.
+  void alignSelection(Iterable<String> ids, AlignEdge edge, Duration t,
+      {AlignTo to = AlignTo.composition, String? anchorId}) {
+    final boxes = _layoutBoxes(ids, t);
+    if (boxes.isEmpty) return;
+    _applyCenters(
+        alignLayers(boxes, edge,
+            to: to,
+            anchorId: anchorId,
+            compSize: Size(state.outputWidth.toDouble(),
+                state.outputHeight.toDouble())),
+        t);
+  }
+
+  /// DISTRIBUIR (PR-X1): por centro OU por vao igual — sao operacoes
+  /// diferentes quando as camadas tem tamanhos distintos.
+  void distributeSelection(Iterable<String> ids, DistributeAxis axis,
+      DistributeMode mode, Duration t) {
+    _applyCenters(
+        distributeLayers(_layoutBoxes(ids, t), axis, mode), t);
+  }
+
+  /// Espacamento exato em px entre as camadas da selecao.
+  void spaceSelection(Iterable<String> ids, DistributeAxis axis,
+      double gap, Duration t) {
+    _applyCenters(spaceLayers(_layoutBoxes(ids, t), axis, gap), t);
+  }
+
+  // ------------------------------------------------------------ loop
+
+  /// Liga/desliga o LOOP de keyframes de uma propriedade (PR-X6).
+  void setPropertyLoop(String id, LayerProp prop, LoopSpec spec) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    switch (prop) {
+      case LayerProp.position:
+        _replace(layer.copyLayer(position: layer.position.withLoop(spec)));
+      case LayerProp.scale:
+        _replace(layer.copyLayer(
+          scaleX: layer.scaleX.withLoop(spec),
+          scaleY: layer.scaleY.withLoop(spec),
+        ));
+      case LayerProp.rotation:
+        _replace(layer.copyLayer(rotation: layer.rotation.withLoop(spec)));
+      case LayerProp.opacity:
+        _replace(layer.copyLayer(opacity: layer.opacity.withLoop(spec)));
+      case LayerProp.skew:
+        _replace(layer.copyLayer(skewX: layer.skewX.withLoop(spec)));
+      case LayerProp.pivot:
+        _replace(layer.copyLayer(pivot: layer.pivot.withLoop(spec)));
+      case LayerProp.parent:
+        break;
+    }
+  }
+
+  /// Assistente "inverter no tempo" (PR-X7) na propriedade dada.
+  void reversePropertyInTime(String id, LayerProp prop) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    switch (prop) {
+      case LayerProp.position:
+        _replace(
+            layer.copyLayer(position: layer.position.reversedInTime()));
+      case LayerProp.scale:
+        _replace(layer.copyLayer(
+          scaleX: layer.scaleX.reversedInTime(),
+          scaleY: layer.scaleY.reversedInTime(),
+        ));
+      case LayerProp.rotation:
+        _replace(
+            layer.copyLayer(rotation: layer.rotation.reversedInTime()));
+      case LayerProp.opacity:
+        _replace(
+            layer.copyLayer(opacity: layer.opacity.reversedInTime()));
+      case LayerProp.skew:
+        _replace(layer.copyLayer(skewX: layer.skewX.reversedInTime()));
+      case LayerProp.pivot:
+        _replace(layer.copyLayer(pivot: layer.pivot.reversedInTime()));
+      case LayerProp.parent:
+        break;
+    }
   }
 
   /// Camada de ajuste: efeitos aplicados ao composto de tudo abaixo.
@@ -1030,6 +1599,29 @@ class EditorController extends Notifier<VideoProject> {
         id, (l) => l.copyLayer(animators: preset.build()));
   }
 
+  /// Quantas unidades o texto tem na base da receita — e o N que o
+  /// compilador precisa para acertar a janela do seletor.
+  int textUnitCount(String id, RecipeUnit unit) {
+    final layer = _layer(id);
+    if (layer is! TextLayer) return 1;
+    final u = TextUnits.of(layer.text);
+    return switch (unit) {
+      RecipeUnit.character => u.charCount,
+      RecipeUnit.word => u.wordCount,
+      RecipeUnit.line => u.lineCount,
+      RecipeUnit.all => 1,
+    };
+  }
+
+  /// AUTORIA (spec autoria-de-texto): a receita COMPILA para o motor de
+  /// animadores — nao existe segundo caminho de avaliacao. Aplicar uma
+  /// receita substitui a pilha pelo rig que ela gera.
+  void applyTextRecipe(String id, TextRecipe recipe) {
+    final n = textUnitCount(id, recipe.unit);
+    _updateTextLayer(
+        id, (l) => l.copyLayer(animators: [compileRecipe(recipe, n)]));
+  }
+
   void addTextAnimator(String id) {
     _updateTextLayer(id, (l) {
       final n = l.animators.length + 1;
@@ -1195,6 +1787,8 @@ class EditorController extends Notifier<VideoProject> {
       fontSize: fontSize,
       color: color,
     ));
+    // A forma-conteiner acompanha o texto SOZINHA (PR-X14).
+    _refreshResponsive(id);
   }
 
   // ------------------------------------------------------ forma vetorial

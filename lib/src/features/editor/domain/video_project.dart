@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:uuid/uuid.dart';
 
 import 'layer.dart';
+import 'layer_meta.dart';
 
 /// Propriedade animavel de camada (alvo de keyframes, curvas e vinculos).
 /// [parent] nao e uma propriedade animavel: e o vinculo de parenting
@@ -68,9 +69,25 @@ class VideoProject {
     this.resolutionHeight = 1080,
     List<Layer>? layers,
     List<PropertyLink>? links,
+    Map<String, LayerMeta>? meta,
+    this.palette = Palette.aurea,
+    List<TextStyleDef>? textStyles,
+    List<ExposedProperty>? exposed,
+    this.guides = const GuidesSpec(),
+    this.motionBlur = const MotionBlurSpec(),
+    this.data,
+    List<DataBinding>? bindings,
+    this.lottieMode = false,
   })  : id = id ?? const Uuid().v4(),
         layers = List.unmodifiable(layers ?? const <Layer>[]),
-        links = List.unmodifiable(links ?? const <PropertyLink>[]);
+        links = List.unmodifiable(links ?? const <PropertyLink>[]),
+        meta = Map.unmodifiable(meta ?? const <String, LayerMeta>{}),
+        textStyles =
+            List.unmodifiable(textStyles ?? const <TextStyleDef>[]),
+        exposed =
+            List.unmodifiable(exposed ?? const <ExposedProperty>[]),
+        bindings =
+            List.unmodifiable(bindings ?? const <DataBinding>[]);
 
   final String id;
   final String name;
@@ -84,6 +101,58 @@ class VideoProject {
 
   /// Vinculos de propriedade (pickwhip).
   final List<PropertyLink> links;
+
+  // ---- camada de OFICIO (spec motion-graphics-pro) ----
+
+  /// Rotulo, solo, timida, estilos, responsivo... por camada.
+  final Map<String, LayerMeta> meta;
+
+  /// Paleta do projeto (PR-X11).
+  final Palette palette;
+
+  /// Estilos de texto nomeados (PR-X12).
+  final List<TextStyleDef> textStyles;
+
+  /// Propriedades expostas do template (PR-X16).
+  final List<ExposedProperty> exposed;
+
+  /// Guias, grade, areas seguras e mascara de enquadramento (PR-X3).
+  final GuidesSpec guides;
+
+  /// Motion blur mestre da composicao (PR-X9).
+  final MotionBlurSpec motionBlur;
+
+  /// Fonte de dados e vinculos (PR-X21).
+  final DataSource? data;
+  final List<DataBinding> bindings;
+
+  /// Modo "compativel com Lottie" (PR-X23): recursos nao suportados
+  /// aparecem esmaecidos desde o comeco, em vez de surpreender no fim.
+  final bool lottieMode;
+
+  LayerMeta metaOf(String id) => meta[id] ?? LayerMeta.empty;
+
+  /// Cor efetiva de uma camada: o vinculo com a paleta vence.
+  Color? paletteColorFor(String layerId) {
+    final ref = metaOf(layerId).colorRef;
+    return ref == null ? null : palette[ref];
+  }
+
+  TextStyleDef? textStyleFor(String layerId) {
+    final ref = metaOf(layerId).textStyleRef;
+    if (ref == null) return null;
+    for (final s in textStyles) {
+      if (s.name == ref) return s;
+    }
+    return null;
+  }
+
+  /// SOLO (PR-X26): havendo qualquer camada em solo, so as em solo
+  /// renderizam.
+  bool get hasSolo => meta.values.any((m) => m.solo);
+
+  bool rendersInPreview(String layerId) =>
+      !hasSolo || metaOf(layerId).solo;
 
   factory VideoProject.empty(
     String name, {
@@ -148,6 +217,15 @@ class VideoProject {
     int? resolutionHeight,
     List<Layer>? layers,
     List<PropertyLink>? links,
+    Map<String, LayerMeta>? meta,
+    Palette? palette,
+    List<TextStyleDef>? textStyles,
+    List<ExposedProperty>? exposed,
+    GuidesSpec? guides,
+    MotionBlurSpec? motionBlur,
+    DataSource? data,
+    List<DataBinding>? bindings,
+    bool? lottieMode,
   }) {
     return VideoProject(
       id: id,
@@ -158,6 +236,15 @@ class VideoProject {
       resolutionHeight: resolutionHeight ?? this.resolutionHeight,
       layers: layers ?? this.layers,
       links: links ?? this.links,
+      meta: meta ?? this.meta,
+      palette: palette ?? this.palette,
+      textStyles: textStyles ?? this.textStyles,
+      exposed: exposed ?? this.exposed,
+      guides: guides ?? this.guides,
+      motionBlur: motionBlur ?? this.motionBlur,
+      data: data ?? this.data,
+      bindings: bindings ?? this.bindings,
+      lottieMode: lottieMode ?? this.lottieMode,
     );
   }
 }

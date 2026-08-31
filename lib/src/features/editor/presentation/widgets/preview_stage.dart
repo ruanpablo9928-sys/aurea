@@ -14,8 +14,10 @@ import '../../application/video_layer_manager.dart';
 import '../../domain/effect.dart';
 import '../../domain/fx.dart';
 import '../../domain/gear.dart';
+import '../../domain/text_animator.dart' show valueNoise01;
 import '../../domain/grid_rig.dart';
 import '../../domain/layer.dart';
+import '../../domain/layer_meta.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
 import '../../domain/video_project.dart';
@@ -91,12 +93,61 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
       }
     }
 
-    // Guias inteligentes: gruda no centro da composicao.
-    final cx = project.outputWidth / 2;
-    final cy = project.outputHeight / 2;
+    // ENCAIXE (PR-X2): centro e bordas da composicao, centros e bordas
+    // das OUTRAS camadas, e as guias. O primeiro alvo dentro da
+    // tolerancia vence, por eixo.
     final snap = 16 / _stageScale;
-    if ((target.dx - cx).abs() < snap) target = Offset(cx, target.dy);
-    if ((target.dy - cy).abs() < snap) target = Offset(target.dx, cy);
+    final self = ref.read(editorControllerProvider.notifier);
+    final size = self.layerBoxSize(
+        ref.read(editorControllerProvider).layerById(id)!, t);
+    final half = Offset(size.width / 2, size.height / 2);
+
+    final xs = <double>[
+      project.outputWidth / 2,
+      half.dx,
+      project.outputWidth - half.dx,
+      ...project.guides.vertical,
+      ...project.guides.vertical.map((g) => g + half.dx),
+      ...project.guides.vertical.map((g) => g - half.dx),
+    ];
+    final ys = <double>[
+      project.outputHeight / 2,
+      half.dy,
+      project.outputHeight - half.dy,
+      ...project.guides.horizontal,
+      ...project.guides.horizontal.map((g) => g + half.dy),
+      ...project.guides.horizontal.map((g) => g - half.dy),
+    ];
+    for (final other in project.layers) {
+      if (other.id == id || !other.activeAt(t)) continue;
+      final oc = other.position.valueAt(other.localTime(t));
+      final os = self.layerBoxSize(other, t);
+      final oh = Offset(os.width / 2, os.height / 2);
+      xs
+        ..add(oc.dx)
+        ..add(oc.dx - oh.dx + half.dx)
+        ..add(oc.dx + oh.dx - half.dx)
+        ..add(oc.dx - oh.dx - half.dx)
+        ..add(oc.dx + oh.dx + half.dx);
+      ys
+        ..add(oc.dy)
+        ..add(oc.dy - oh.dy + half.dy)
+        ..add(oc.dy + oh.dy - half.dy)
+        ..add(oc.dy - oh.dy - half.dy)
+        ..add(oc.dy + oh.dy + half.dy);
+    }
+    for (final x in xs) {
+      if ((target.dx - x).abs() < snap) {
+        target = Offset(x, target.dy);
+        break;
+      }
+    }
+    for (final y in ys) {
+      if ((target.dy - y).abs() < snap) {
+        target = Offset(target.dx, y);
+        break;
+      }
+    }
 
     controller.editPosition(id, t, target);
   }
@@ -133,10 +184,28 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                       maxWidth: compW,
                       minHeight: compH,
                       maxHeight: compH,
-                      child: _CompositionView(
-                        playback: widget.playback,
-                        videos: widget.videos,
-                        selectedId: selectedId,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          _CompositionView(
+                            playback: widget.playback,
+                            videos: widget.videos,
+                            selectedId: selectedId,
+                          ),
+                          // GUIAS, GRADE, AREAS SEGURAS e mascara de
+                          // enquadramento (PR-X3): vivem ACIMA da
+                          // composicao e nunca entram no render final.
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _GuidesPainter(
+                                  guides: project.guides,
+                                  compSize: Size(compW, compH),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -148,6 +217,212 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
       ),
     );
   }
+}
+
+/// Recorta uma FAIXA horizontal (dano digital): topo e altura em fracao
+/// da caixa.
+class _BandClipper extends CustomClipper<Rect> {
+  const _BandClipper(this.top, this.height);
+
+  final double top;
+  final double height;
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTWH(0, size.height * top, size.width, size.height * height);
+
+  @override
+  bool shouldReclip(_BandClipper old) =>
+      old.top != top || old.height != height;
+}
+
+/// GRAO DE FILME: ruido puro por (semente, posicao, tempo) — nada
+/// acumula, entao o frame 200 e igual direto ou depois de reproduzir.
+class _GrainPainter extends CustomPainter {
+  const _GrainPainter({
+    required this.amount,
+    required this.size,
+    required this.seed,
+    required this.time,
+  });
+
+  final double amount;
+  final double size;
+  final int seed;
+  final Duration time;
+
+  @override
+  void paint(Canvas canvas, Size canvasSize) {
+    final step = size.clamp(0.5, 6.0) * 3;
+    final frame = time.inMilliseconds ~/ 33;
+    final paint = Paint();
+    for (var y = 0.0; y < canvasSize.height; y += step) {
+      for (var x = 0.0; x < canvasSize.width; x += step) {
+        final n =
+            fxHash01(seed, frame, (x * 7919 + y * 104729).toInt());
+        final v = (n - 0.5) * amount;
+        paint.color = Color.fromRGBO(
+            128, 128, 128, (v.abs() * 2).clamp(0.0, 1.0));
+        if (v > 0) {
+          paint.color = Color.fromRGBO(255, 255, 255,
+              (v * 1.6).clamp(0.0, 1.0));
+        } else {
+          paint.color =
+              Color.fromRGBO(0, 0, 0, (-v * 1.6).clamp(0.0, 1.0));
+        }
+        canvas.drawRect(Rect.fromLTWH(x, y, step, step), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GrainPainter old) =>
+      old.amount != amount ||
+      old.seed != seed ||
+      old.size != size ||
+      old.time.inMilliseconds ~/ 33 != time.inMilliseconds ~/ 33;
+}
+
+/// RUIDO FRACTAL: soma de oitavas de ruido de valor, com EVOLUCAO —
+/// funcao pura de (semente, posicao, tempo), como manda a invariante I1.
+class _FractalNoisePainter extends CustomPainter {
+  const _FractalNoisePainter({
+    required this.scale,
+    required this.octaves,
+    required this.contrast,
+    required this.evolution,
+    required this.seed,
+    required this.color,
+    required this.time,
+  });
+
+  final double scale;
+  final int octaves;
+  final double contrast;
+  final double evolution;
+  final int seed;
+  final Color color;
+  final Duration time;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cell = (18 / scale.clamp(0.02, 1.0)).clamp(6.0, 90.0);
+    final z = evolution * time.inMicroseconds / 1e6;
+    final paint = Paint();
+    for (var y = 0.0; y < size.height; y += cell) {
+      for (var x = 0.0; x < size.width; x += cell) {
+        var v = 0.0;
+        var amp = 1.0;
+        var freq = 1.0;
+        var norm = 0.0;
+        for (var o = 0; o < octaves.clamp(1, 6); o++) {
+          v += amp *
+              valueNoise01(seed + o, x / cell * freq + z,
+                  y / cell * freq + z);
+          norm += amp;
+          amp *= 0.5;
+          freq *= 2;
+        }
+        v = ((v / norm - 0.5) * contrast + 0.5).clamp(0.0, 1.0);
+        paint.color = color.withValues(alpha: v);
+        canvas.drawRect(Rect.fromLTWH(x, y, cell + 1, cell + 1), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_FractalNoisePainter old) =>
+      old.scale != scale ||
+      old.octaves != octaves ||
+      old.contrast != contrast ||
+      old.evolution != evolution ||
+      old.seed != seed ||
+      old.color != color ||
+      (evolution > 0 && old.time != time);
+}
+
+/// GUIAS E GRADE (PR-X3): guias arrastaveis, grade de layout com
+/// colunas/medianiz/margem, areas seguras de titulo e acao, e a mascara
+/// de enquadramento que mostra como o quadro fica cortado noutra
+/// proporcao — sem alterar o projeto.
+class _GuidesPainter extends CustomPainter {
+  const _GuidesPainter({required this.guides, required this.compSize});
+
+  final GuidesSpec guides;
+  final Size compSize;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = compSize.width;
+    final h = compSize.height;
+
+    // Grade de layout.
+    if (guides.columns > 0) {
+      final paint = Paint()..color = const Color(0x22B8FF3D);
+      final usable = w - guides.margin * 2;
+      final colW =
+          (usable - guides.gutter * (guides.columns - 1)) / guides.columns;
+      for (var i = 0; i < guides.columns; i++) {
+        final x = guides.margin + i * (colW + guides.gutter);
+        canvas.drawRect(Rect.fromLTWH(x, 0, colW, h), paint);
+      }
+    }
+
+    // Areas seguras: titulo (80%) e acao (90%).
+    if (guides.showSafeAreas) {
+      final stroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0x66FFFFFF);
+      for (final f in const [0.9, 0.8]) {
+        canvas.drawRect(
+          Rect.fromCenter(
+              center: Offset(w / 2, h / 2), width: w * f, height: h * f),
+          stroke,
+        );
+      }
+    }
+
+    // Guias.
+    final guide = Paint()
+      ..color = const Color(0xAA35C4E7)
+      ..strokeWidth = 2;
+    for (final x in guides.vertical) {
+      canvas.drawLine(Offset(x, 0), Offset(x, h), guide);
+    }
+    for (final y in guides.horizontal) {
+      canvas.drawLine(Offset(0, y), Offset(w, y), guide);
+    }
+
+    // Mascara de enquadramento: escurece o que sai do corte.
+    final fp = guides.framePreview;
+    if (fp != null && fp > 0) {
+      final cropW = fp >= w / h ? w : h * fp;
+      final cropH = fp >= w / h ? w / fp : h;
+      final crop = Rect.fromCenter(
+          center: Offset(w / 2, h / 2), width: cropW, height: cropH);
+      final shade = Paint()..color = const Color(0x99000000);
+      canvas.drawPath(
+        Path.combine(
+          PathOperation.difference,
+          Path()..addRect(Rect.fromLTWH(0, 0, w, h)),
+          Path()..addRect(crop),
+        ),
+        shade,
+      );
+      canvas.drawRect(
+        crop,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = const Color(0xCCB8FF3D),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GuidesPainter old) =>
+      old.guides != guides || old.compSize != compSize;
 }
 
 /// Estado do portao de recomposicao — um por app (ha um preview). Vive
@@ -234,7 +509,9 @@ class _CompositionView extends ConsumerWidget {
       for (final layer in layers.reversed)
         if (layer is! AudioLayer &&
             layer.activeAt(t) &&
-            !matteSourceIds.contains(layer.id))
+            !matteSourceIds.contains(layer.id) &&
+            // SOLO (PR-X26): havendo solo, so os solos renderizam.
+            project.rendersInPreview(layer.id))
           layer,
     ];
     final sorted = depthSortPaintOrder(paintOrder, t);
@@ -609,6 +886,13 @@ class _CompositionView extends ConsumerWidget {
 
     content = _applyEffects(layer.effects, content, local);
 
+    // ESTILOS DE CAMADA (PR-X10): aplicam DEPOIS dos efeitos e
+    // acompanham a forma da camada — e o que os diferencia de efeito.
+    final styles = project.metaOf(layer.id).styles;
+    if (!styles.isEmpty) {
+      content = _applyLayerStyles(styles, content, local);
+    }
+
     // Selecao desenhada DEPOIS dos efeitos: blur/glow nao pegam a borda.
     // Copias de eco (opacityMul < 1) nao ganham borda de selecao.
     if (layer.id == selectedId && opacityMul == 1) {
@@ -680,6 +964,181 @@ class _CompositionView extends ConsumerWidget {
       ),
     );
   }
+
+  /// ESTILOS DE CAMADA (PR-X10). Sombra e brilho usam a SILHUETA da
+  /// camada (o alfa), nao uma caixa — por isso o desenho e uma copia
+  /// tingida e borrada por baixo do original.
+  Widget _applyLayerStyles(
+      LayerStyles s, Widget child, Duration local) {
+    var out = child;
+
+    // Sobreposicoes pintam POR CIMA, respeitando o alfa.
+    if (s.colorOverlay?.enabled ?? false) {
+      final o = s.colorOverlay!;
+      out = Stack(clipBehavior: Clip.none, children: [
+        out,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: o.opacity.valueAt(local).clamp(0.0, 1.0),
+              child: BlendMask(
+                blendMode: BlendMode.srcIn,
+                child: ColoredBox(color: o.color),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    }
+    if (s.gradientOverlay?.enabled ?? false) {
+      final g = s.gradientOverlay!;
+      final rad = g.angleDeg.valueAt(local) * math.pi / 180;
+      out = Stack(clipBehavior: Clip.none, children: [
+        out,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: g.opacity.valueAt(local).clamp(0.0, 1.0),
+              child: BlendMask(
+                blendMode: BlendMode.srcIn,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment(-math.cos(rad), -math.sin(rad)),
+                      end: Alignment(math.cos(rad), math.sin(rad)),
+                      colors: [g.colorA, g.colorB],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    }
+
+    // Contorno: silhueta dilatada por tras.
+    if (s.stroke?.enabled ?? false) {
+      final st = s.stroke!;
+      final w = st.width.valueAt(local);
+      if (w > 0.01) {
+        out = Stack(clipBehavior: Clip.none, children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: st.opacity.valueAt(local).clamp(0.0, 1.0),
+                child: ImageFiltered(
+                  imageFilter: ui.ImageFilter.dilate(
+                      radiusX: w, radiusY: w),
+                  child: _tinted(child, st.color),
+                ),
+              ),
+            ),
+          ),
+          out,
+        ]);
+      }
+    }
+
+    // Brilho externo: silhueta borrada e tingida, por tras.
+    if (s.outerGlow?.enabled ?? false) {
+      final g = s.outerGlow!;
+      final size = g.size.valueAt(local);
+      if (size > 0.01) {
+        out = Stack(clipBehavior: Clip.none, children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: g.opacity.valueAt(local).clamp(0.0, 1.0),
+                child: ImageFiltered(
+                  imageFilter: ui.ImageFilter.blur(
+                      sigmaX: size / 2,
+                      sigmaY: size / 2,
+                      tileMode: TileMode.decal),
+                  child: _tinted(child, g.color),
+                ),
+              ),
+            ),
+          ),
+          out,
+        ]);
+      }
+    }
+
+    // Sombra projetada: silhueta deslocada, borrada e tingida, por tras.
+    if (s.dropShadow?.enabled ?? false) {
+      final d = s.dropShadow!;
+      final off = d.offsetAt(local);
+      final size = d.size.valueAt(local);
+      out = Stack(clipBehavior: Clip.none, children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Transform.translate(
+              offset: off,
+              child: Opacity(
+                opacity: d.opacity.valueAt(local).clamp(0.0, 1.0),
+                child: size > 0.01
+                    ? ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(
+                            sigmaX: size / 2,
+                            sigmaY: size / 2,
+                            tileMode: TileMode.decal),
+                        child: _tinted(child, d.color),
+                      )
+                    : _tinted(child, d.color),
+              ),
+            ),
+          ),
+        ),
+        out,
+      ]);
+    }
+
+    // Sombra interna: mancha escura recortada pelo proprio alfa.
+    if (s.innerShadow?.enabled ?? false) {
+      final d = s.innerShadow!;
+      final off = d.offsetAt(local);
+      final size = d.size.valueAt(local);
+      out = Stack(clipBehavior: Clip.none, children: [
+        out,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: d.opacity.valueAt(local).clamp(0.0, 1.0),
+              child: BlendMask(
+                blendMode: BlendMode.srcATop,
+                child: ImageFiltered(
+                  imageFilter: ui.ImageFilter.blur(
+                      sigmaX: math.max(0.1, size / 2),
+                      sigmaY: math.max(0.1, size / 2),
+                      tileMode: TileMode.decal),
+                  child: Transform.translate(
+                    offset: off,
+                    child: _invertedSilhouette(child, d.color),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ]);
+    }
+    return out;
+  }
+
+  /// Silhueta da camada pintada de uma cor so (usa o alfa como forma).
+  static Widget _tinted(Widget child, Color color) => ColorFiltered(
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        child: child,
+      );
+
+  /// Negativo do alfa: onde a camada NAO esta, na cor dada — e o que
+  /// forma a mancha da sombra interna.
+  static Widget _invertedSilhouette(Widget child, Color color) =>
+      ColorFiltered(
+        colorFilter: ColorFilter.mode(color, BlendMode.srcOut),
+        child: child,
+      );
 
   Widget _applyEffects(
       List<EffectInstance> effects, Widget child, Duration local) {
@@ -988,9 +1447,400 @@ class _CompositionView extends ConsumerWidget {
                   child: scaled(1 + spread, 2)),
             ]);
           }
+
+        // ------------------- catalogo, lote 1 -------------------
+
+        case EffectType.levels:
+          // Entrada -> gama -> saida, por canal, em matriz.
+          final inMin = effect.paramAt('entradaMin', local);
+          final inMax = effect.paramAt('entradaMax', local);
+          final gamma = effect.paramAt('gama', local);
+          final outMin = effect.paramAt('saidaMin', local);
+          final outMax = effect.paramAt('saidaMax', local);
+          final span = (inMax - inMin).abs() < 1e-4 ? 1e-4 : inMax - inMin;
+          final scale = (outMax - outMin) / span;
+          final shift = outMin - inMin * scale;
+          if ((scale - 1).abs() > 1e-4 || shift.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(_scaleShiftMatrix(
+                  scale, shift)),
+              child: out,
+            );
+          }
+          // Gama por aproximacao: uma segunda passada de ganho.
+          if ((gamma - 1).abs() > 0.01) {
+            final g = 1 / gamma;
+            out = ColorFiltered(
+              colorFilter:
+                  ColorFilter.matrix(_scaleShiftMatrix(g, (1 - g) * 0.18)),
+              child: out,
+            );
+          }
+
+        case EffectType.curves:
+          final contrast = effect.paramAt('contraste', local);
+          final bright = effect.paramAt('brilho', local);
+          final lift = effect.paramAt('sombras', local);
+          final pull = effect.paramAt('altas', local);
+          final c = 1 + contrast;
+          final b = bright * 0.5 + lift * 0.25 - pull * 0.25;
+          if ((c - 1).abs() > 1e-4 || b.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(
+                  _scaleShiftMatrix(c, b + (1 - c) * 0.5)),
+              child: out,
+            );
+          }
+
+        case EffectType.vibrance:
+          final vib = effect.paramAt('vibracao', local);
+          final sat = effect.paramAt('saturacao', local);
+          final skin = effect.paramAt('protecaoPele', local)
+              .clamp(0.0, 1.0);
+          // Vibracao sobe mais o que esta POUCO saturado; a protecao de
+          // pele segura o ganho no canal vermelho, que e onde o tom de
+          // pele vive — sem isso o rosto fica laranja.
+          final amount = sat + vib * 0.6 * (1 - skin * 0.7);
+          if (amount.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(
+                  _saturationMatrix(1 + amount, redGuard: skin * vib)),
+              child: out,
+            );
+          }
+
+        case EffectType.whiteBalance:
+          final temp = effect.paramAt('temperatura', local);
+          final tintV = effect.paramAt('matiz', local);
+          if (temp.abs() > 1e-4 || tintV.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(<double>[
+                1 + temp * 0.3, 0, 0, 0, 0,
+                0, 1 + tintV * 0.2, 0, 0, 0,
+                0, 0, 1 - temp * 0.3, 0, 0,
+                0, 0, 0, 1, 0,
+              ]),
+              child: out,
+            );
+          }
+
+        case EffectType.colorWheels:
+          // Sombras = deslocamento (lift); altas = ganho (gain).
+          final sr = effect.paramAt('sombrasR', local);
+          final sg = effect.paramAt('sombrasG', local);
+          final sb = effect.paramAt('sombrasB', local);
+          final hr = effect.paramAt('altasR', local);
+          final hg = effect.paramAt('altasG', local);
+          final hb = effect.paramAt('altasB', local);
+          if ([sr, sg, sb, hr, hg, hb].any((v) => v.abs() > 1e-4)) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(<double>[
+                1 + hr, 0, 0, 0, sr * 255,
+                0, 1 + hg, 0, 0, sg * 255,
+                0, 0, 1 + hb, 0, sb * 255,
+                0, 0, 0, 1, 0,
+              ]),
+              child: out,
+            );
+          }
+
+        case EffectType.unmult:
+          // O preto vira TRANSPARENTE: a luminancia entra no alfa. E o
+          // que faz overlay de fogo/fumaca/faisca funcionar direto.
+          final soft =
+              effect.paramAt('suavidade', local).clamp(0.0, 1.0);
+          final k = 0.7 + soft * 0.6;
+          out = ColorFiltered(
+            colorFilter: ColorFilter.matrix(<double>[
+              1, 0, 0, 0, 0,
+              0, 1, 0, 0, 0,
+              0, 0, 1, 0, 0,
+              0.2126 * k, 0.7152 * k, 0.0722 * k, 0, 0,
+            ]),
+            child: out,
+          );
+
+        case EffectType.vignette:
+          final amt =
+              effect.paramAt('quantidade', local).clamp(0.0, 1.0);
+          if (amt > 0.01) {
+            final radius = effect.paramAt('raio', local);
+            final soft =
+                effect.paramAt('suavidade', local).clamp(0.0, 1.0);
+            out = Stack(clipBehavior: Clip.none, children: [
+              out,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        radius: radius,
+                        colors: [
+                          effect.color.withValues(alpha: 0),
+                          effect.color.withValues(alpha: 0),
+                          effect.color.withValues(alpha: amt),
+                        ],
+                        stops: [0, (1 - soft * 0.6).clamp(0.0, 0.99), 1],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ]);
+          }
+
+        case EffectType.directionalBlur:
+          final len = effect.paramAt('comprimento', local);
+          if (len > 0.5) {
+            final ang = effect.paramAt('angulo', local) * math.pi / 180;
+            // Blur anisotropico girado: sigma no eixo do movimento.
+            out = Transform.rotate(
+              angle: -ang,
+              child: ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(
+                    sigmaX: len / 3,
+                    sigmaY: 0.01,
+                    tileMode: TileMode.decal),
+                child: Transform.rotate(angle: ang, child: out),
+              ),
+            );
+          }
+
+        case EffectType.radialBlur:
+          final amt =
+              effect.paramAt('quantidade', local).clamp(0.0, 1.0);
+          if (amt > 0.01) {
+            final zoom = effect.paramAt('modo', local) < 0.5;
+            final n = effect.paramAt('amostras', local).round().clamp(2, 16);
+            final layers = <Widget>[];
+            for (var i = 0; i < n; i++) {
+              final f = i / (n - 1);
+              final o = 1.0 / n;
+              layers.add(Opacity(
+                opacity: o * 1.6,
+                child: zoom
+                    ? Transform.scale(
+                        scale: 1 + amt * 0.25 * f, child: out)
+                    : Transform.rotate(
+                        angle: amt * 0.4 * f, child: out),
+              ));
+            }
+            out = Stack(clipBehavior: Clip.none, children: layers);
+          }
+
+        case EffectType.lightRays:
+          final len = effect.paramAt('comprimento', local);
+          if (len > 0.01) {
+            final n =
+                effect.paramAt('amostras', local).round().clamp(2, 20);
+            final gain = effect.paramAt('intensidade', local);
+            final cx = effect.paramAt('centroX', local);
+            final cy = effect.paramAt('centroY', local);
+            final origin = Alignment(cx * 2 - 1, cy * 2 - 1);
+            final rays = <Widget>[];
+            for (var i = 1; i <= n; i++) {
+              final s = 1 + len * 0.6 * i / n;
+              rays.add(Opacity(
+                opacity: (gain / n).clamp(0.0, 1.0),
+                child: Transform.scale(
+                  scale: s,
+                  alignment: origin,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                        effect.color, BlendMode.srcATop),
+                    child: out,
+                  ),
+                ),
+              ));
+            }
+            out = Stack(clipBehavior: Clip.none, children: [
+              BlendMask(
+                blendMode: BlendMode.plus,
+                child: Stack(clipBehavior: Clip.none, children: rays),
+              ),
+              out,
+            ]);
+          }
+
+        case EffectType.mosaic:
+          final blocks =
+              effect.paramAt('blocos', local).clamp(3.0, 160.0);
+          // Reduz e amplia SEM interpolacao: e o pixelate de verdade.
+          out = ImageFiltered(
+            imageFilter: ui.ImageFilter.compose(
+              outer: ui.ImageFilter.matrix(
+                  Matrix4.diagonal3Values(blocks / 3, blocks / 3, 1)
+                      .storage,
+                  filterQuality: FilterQuality.none),
+              inner: ui.ImageFilter.matrix(
+                  Matrix4.diagonal3Values(3 / blocks, 3 / blocks, 1)
+                      .storage,
+                  filterQuality: FilterQuality.none),
+            ),
+            child: out,
+          );
+
+        case EffectType.posterize:
+          final levels =
+              effect.paramAt('niveis', local).round().clamp(2, 32);
+          // Aproximacao por quantizacao de contraste em degraus.
+          out = ColorFiltered(
+            colorFilter: ColorFilter.matrix(
+                _posterizeMatrix(levels.toDouble())),
+            child: out,
+          );
+
+        case EffectType.filmGrain:
+          final amt =
+              effect.paramAt('intensidade', local).clamp(0.0, 1.0);
+          if (amt > 0.01) {
+            out = Stack(clipBehavior: Clip.none, children: [
+              out,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: BlendMask(
+                    blendMode: BlendMode.overlay,
+                    child: CustomPaint(
+                      painter: _GrainPainter(
+                        amount: amt,
+                        size: effect.paramAt('tamanho', local),
+                        seed: effect.paramAt('semente', local).round(),
+                        time: local,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ]);
+          }
+
+        case EffectType.fractalNoise:
+          final op =
+              effect.paramAt('opacidade', local).clamp(0.0, 1.0);
+          if (op > 0.01) {
+            out = Stack(clipBehavior: Clip.none, children: [
+              out,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: op,
+                    child: BlendMask(
+                      blendMode: BlendMode.screen,
+                      child: CustomPaint(
+                        painter: _FractalNoisePainter(
+                          scale: effect.paramAt('escala', local),
+                          octaves: effect
+                              .paramAt('complexidade', local)
+                              .round(),
+                          contrast: effect.paramAt('contraste', local),
+                          evolution: effect.paramAt('evolucao', local),
+                          seed: effect.paramAt('semente', local).round(),
+                          color: effect.color,
+                          time: local,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ]);
+          }
+
+        case EffectType.digitalDamage:
+          final n = effect.paramAt('blocos', local).round().clamp(1, 24);
+          final interval = effect.paramAt('intervalo', local);
+          final seed = effect.paramAt('semente', local).round();
+          final tick = interval <= 0
+              ? 0
+              : (local.inMicroseconds / 1e6 / interval).floor();
+          final shift = effect.paramAt('deslocamento', local);
+          final colorAmt = effect.paramAt('cor', local);
+          final h = effect.paramAt('altura', local);
+          final slices = <Widget>[];
+          for (var i = 0; i < n; i++) {
+            final r = fxHash01(seed, tick, i * 7 + 3);
+            final r2 = fxHash01(seed, tick, i * 7 + 11);
+            if (r > 0.55) continue;
+            final top = r2.clamp(0.0, 1 - h);
+            slices.add(Positioned.fill(
+              child: ClipRect(
+                clipper: _BandClipper(top, h),
+                child: Transform.translate(
+                  offset: Offset((r - 0.275) * 4 * shift * 200, 0),
+                  child: colorAmt > 0.05
+                      ? _channelIso(out, (i % 3))
+                      : out,
+                ),
+              ),
+            ));
+          }
+          if (slices.isNotEmpty) {
+            out = Stack(clipBehavior: Clip.none, children: [out, ...slices]);
+          }
+
+        case EffectType.zoomWarp:
+          final amt = effect.paramAt('quantidade', local);
+          if (amt.abs() > 0.005) {
+            final trail =
+                effect.paramAt('rastro', local).clamp(0.0, 1.0);
+            final n =
+                effect.paramAt('amostras', local).round().clamp(2, 12);
+            if (trail < 0.02) {
+              out = Transform.scale(scale: 1 + amt, child: out);
+            } else {
+              final layers = <Widget>[];
+              for (var i = 0; i < n; i++) {
+                final f = i / (n - 1);
+                layers.add(Opacity(
+                  opacity: 1.0 / n * 1.8,
+                  child: Transform.scale(
+                      scale: 1 + amt * (1 - trail * f), child: out),
+                ));
+              }
+              out = Stack(clipBehavior: Clip.none, children: layers);
+            }
+          }
       }
     }
     return out;
+  }
+
+  /// Matriz de ganho+deslocamento igual nos tres canais.
+  static List<double> _scaleShiftMatrix(double s, double shift) {
+    final b = shift * 255;
+    return <double>[
+      s, 0, 0, 0, b,
+      0, s, 0, 0, b,
+      0, 0, s, 0, b,
+      0, 0, 0, 1, 0,
+    ];
+  }
+
+  /// Saturacao com guarda no vermelho (protecao de tom de pele).
+  static List<double> _saturationMatrix(double sat,
+      {double redGuard = 0}) {
+    const lr = 0.2126, lg = 0.7152, lb = 0.0722;
+    final s = sat;
+    final rs = s - (s - 1) * redGuard.clamp(0.0, 1.0);
+    return <double>[
+      lr * (1 - rs) + rs, lg * (1 - rs), lb * (1 - rs), 0, 0,
+      lr * (1 - s), lg * (1 - s) + s, lb * (1 - s), 0, 0,
+      lr * (1 - s), lg * (1 - s), lb * (1 - s) + s, 0, 0,
+      0, 0, 0, 1, 0,
+    ];
+  }
+
+  /// Aproximacao de posterizacao: contraste alto centrado, que agrupa os
+  /// tons em patamares visiveis.
+  static List<double> _posterizeMatrix(double levels) {
+    final c = 1 + (32 - levels) / 12;
+    final b = (1 - c) * 0.5 * 255;
+    return <double>[
+      c, 0, 0, 0, b,
+      0, c, 0, 0, b,
+      0, 0, c, 0, b,
+      0, 0, 0, 1, 0,
+    ];
   }
 
   /// Isola um canal (0=R, 1=G, 2=B) preservando o alfa — base da franja

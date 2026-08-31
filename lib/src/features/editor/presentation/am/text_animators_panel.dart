@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,8 +10,52 @@ import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import '../../domain/text_animator.dart';
 import '../../domain/text_presets.dart';
+import '../../domain/text_recipe.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+
+/// Visualizador de ESCALONAMENTO (spec autoria-de-texto §8): uma barra
+/// por unidade, comecando em i*intervalo e durando "duracao". Mexer no
+/// intervalo move as barras — a pessoa VE o escalonamento em vez de
+/// imaginar.
+class _StaggerPainter extends CustomPainter {
+  const _StaggerPainter({required this.recipe});
+
+  final TextRecipe recipe;
+
+  /// Amostra de unidades na miniatura (o texto real pode ter dezenas).
+  static const int units = 5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = recipe.unit == RecipeUnit.all ? 1 : units;
+    final total = recipe.totalFor(n).inMicroseconds.toDouble();
+    if (total <= 0) return;
+    final s = recipe.stagger.inMicroseconds.toDouble();
+    final d = recipe.duration.inMicroseconds.toDouble();
+    final rowH = size.height / n;
+    final paint = Paint()..color = AmColors.accent;
+    for (var i = 0; i < n; i++) {
+      final x0 = (i * s) / total * size.width;
+      // Duracao zero (maquina de escrever) ainda precisa ser visivel.
+      final w = math.max(2.0, d / total * size.width);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x0, i * rowH + rowH * 0.18,
+              math.min(w, size.width - x0), rowH * 0.64),
+          const Radius.circular(2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StaggerPainter old) =>
+      old.recipe.stagger != recipe.stagger ||
+      old.recipe.duration != recipe.duration ||
+      old.recipe.unit != recipe.unit;
+}
 
 /// Painel "Animadores" de camadas de texto: presets, pilha de animadores
 /// (chips de propriedade + seletores) e a barra de cobertura visual.
@@ -29,26 +75,92 @@ class TextAnimatorsPanel extends ConsumerStatefulWidget {
 }
 
 class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
+  /// Nivel 1 (PRONTO): grade de receitas. Cada tile mostra o
+  /// ESCALONAMENTO — uma barra por unidade, na posicao em que ela comeca
+  /// — que e o que torna "40 ms entre palavras" tangivel.
   Future<void> _showPresets(BuildContext context, String layerId) async {
     final controller = ref.read(editorControllerProvider.notifier);
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: AmColors.panel,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.55),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
           children: [
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: Text('Presets de texto',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text)),
+            const Text('Animar o texto',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text)),
+            const SizedBox(height: 2),
+            const Text(
+              'Toque para aplicar. Cada barra e uma unidade, na hora '
+              'em que ela entra.',
+              style: TextStyle(fontSize: 11, color: AmColors.muted),
             ),
+            const SizedBox(height: 12),
+            for (final recipe in RecipeLibrary.entrada)
+              GestureDetector(
+                onTap: () {
+                  controller.applyTextRecipe(layerId, recipe);
+                  Navigator.of(sheetContext).pop();
+                  widget.playback.seek(Duration.zero);
+                  widget.playback.play();
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(
+                    color: AmColors.chip,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(recipe.name,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AmColors.accent)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${_unitLabel(recipe.unit)} · '
+                              '${recipe.stagger.inMilliseconds} ms entre · '
+                              '${recipe.duration.inMilliseconds} ms cada',
+                              style: const TextStyle(
+                                  fontSize: 10, color: AmColors.muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 110,
+                        height: 34,
+                        child: CustomPaint(
+                          painter: _StaggerPainter(recipe: recipe),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
+            const Text('Presets classicos',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text)),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -57,9 +169,9 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                   GestureDetector(
                     onTap: () {
                       controller.applyTextPreset(layerId, preset);
+                      Navigator.of(sheetContext).pop();
                       widget.playback.seek(Duration.zero);
                       widget.playback.play();
-                      Navigator.of(sheetContext).pop();
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -77,12 +189,18 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
+
+  static String _unitLabel(RecipeUnit u) => switch (u) {
+        RecipeUnit.character => 'Caractere',
+        RecipeUnit.word => 'Palavra',
+        RecipeUnit.line => 'Linha',
+        RecipeUnit.all => 'Tudo junto',
+      };
 
   @override
   Widget build(BuildContext context) {

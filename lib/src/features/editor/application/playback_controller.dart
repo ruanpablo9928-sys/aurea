@@ -45,11 +45,41 @@ class PlaybackController {
         microseconds: (t.inMicroseconds ~/ frameUs) * frameUs);
     if (quantized != time.value) {
       // Cadencia (marchas §6): a metrica de suavidade e a VARIANCIA do
-      // intervalo entre ticks, nao a media de fps.
+      // intervalo entre ticks, nao a media de fps. FrameLog mede no
+      // ponto de APRESENTACAO (travada-periodica, PR-J0).
       PreviewStats.clockTick();
+      FrameLog.present();
       time.value = quantized;
     }
   }
+
+  /// ANCORAGEM CONTINUA na midia (PR-J1, fim da deriva por construcao).
+  ///
+  /// O padrao "se a diferenca passar de X, corrige" corrige em BLOCO — e
+  /// o bloco E a travada periodica. Aqui o erro medido contra a posicao
+  /// real do player e absorvido em fracoes, a cada amostra: a deriva
+  /// nunca acumula, entao nunca existe correcao em bloco. Como a imagem
+  /// do video vem da textura da plataforma, deslocar o relogio em alguns
+  /// ms nao mexe um pixel — ao contrario do seek, que esvazia o decoder.
+  void anchorToMedia(Duration mediaTime) {
+    if (!playing.value) return;
+    final errUs = mediaTime.inMicroseconds - time.value.inMicroseconds;
+    if (errUs.abs() > 1000000) {
+      // Dessincronia REAL (app em background, midia reiniciada): nao e
+      // deriva — realinha de uma vez.
+      _base += Duration(microseconds: errUs);
+      debugBaseShiftUs = errUs;
+      return;
+    }
+    // Slew proporcional, teto de 20 ms por amostra (~2 amostras/s).
+    final step = (errUs * 0.25).round().clamp(-20000, 20000);
+    debugBaseShiftUs = step;
+    if (step != 0) _base += Duration(microseconds: step);
+  }
+
+  /// Ultimo deslocamento aplicado pela ancoragem (us) — so para teste e
+  /// diagnostico: mostra que a correcao e fracionada, nunca em bloco.
+  int debugBaseShiftUs = 0;
 
   void play() {
     if (playing.value) return;
@@ -59,6 +89,7 @@ class PlaybackController {
     _base = time.value;
     _ticker.start();
     playing.value = true;
+    FrameLog.reset();
   }
 
   void pause() {

@@ -11,7 +11,9 @@ import '../application/preview_stats.dart';
 import '../application/video_layer_manager.dart';
 import '../domain/gear.dart';
 import '../domain/layer.dart';
+import 'am/align_sheet.dart';
 import 'am/am_colors.dart';
+import 'am/export_sheet.dart';
 import 'am/am_widgets.dart';
 import 'am/am_timeline.dart';
 import 'am/curve_panel.dart';
@@ -56,8 +58,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   void _syncVideos() {
     final project = ref.read(editorControllerProvider);
-    _videos.sync(
+    // A midia devolve o RELOGIO MESTRE (PR-J1): o clock da composicao e
+    // ancorado nela continuamente, em vez de corrigir a deriva em bloco
+    // com um seek — que era a travada periodica.
+    final master = _videos.sync(
         project.layers, _playback.time.value, _playback.playing.value);
+    if (master != null) _playback.anchorToMedia(master);
   }
 
   @override
@@ -334,9 +340,7 @@ class _TopBar extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: GestureDetector(
-                onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Exportacao em breve')),
-                ),
+                onTap: () => showExportSheet(context, ref),
                 child: Container(
                   width: 42,
                   height: 38,
@@ -392,18 +396,27 @@ class _DiagOverlay extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AmColors.hairline),
                   ),
-                  child: Text(
-                    'MARCHA: ${gear == null ? '—' : gearLabel(gear.gear)}\n'
-                    'motivo: ${gear?.reason ?? '—'}\n'
-                    'compoe $comps/s · projeto ${fps}fps\n'
-                    'variancia entre ticks: $variance ms\n'
-                    'camadas no frame: $inFrame / $total · '
-                    'M1+M2: $lowPct%',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AmColors.accent,
-                      height: 1.4,
-                      fontFeatures: [FontFeature.tabularFigures()],
+                  child: ValueListenableBuilder<FrameReport?>(
+                    valueListenable: FrameLog.report,
+                    builder: (context, r, _) => Text(
+                      'MARCHA: ${gear == null ? '—' : gearLabel(gear.gear)}\n'
+                      'motivo: ${gear?.reason ?? '—'}\n'
+                      'compoe $comps/s · projeto ${fps}fps\n'
+                      'variancia entre ticks: $variance ms\n'
+                      'camadas no frame: $inFrame / $total · '
+                      'M1+M2: $lowPct%\n'
+                      '── registrador (${r?.seconds ?? 0}s) ──\n'
+                      'mediana ${r?.medianMs ?? 0} ms · '
+                      'pico ${r?.peakMs ?? 0} ms\n'
+                      'travadas ${r?.stutters ?? 0} · '
+                      'intervalo ${r?.gapS ?? 0}s (±${r?.gapSdS ?? 0})\n'
+                      'deriva video-audio ${r?.driftMs ?? 0} ms',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AmColors.accent,
+                        height: 1.4,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 );
@@ -522,6 +535,15 @@ class _ActionBar extends ConsumerWidget {
                     context, ref, layer, playback.time.value);
               }
             },
+          ),
+          // ALINHAR E DISTRIBUIR (PR-X1): exato ao pixel, o que no dedo
+          // nunca fica.
+          btn(
+            icon: CupertinoIcons.square_grid_3x2,
+            enabled: n >= 1,
+            reason: 'Selecione uma camada',
+            onTap: () => showAlignSheet(
+                context, ref, targets.toList(), playback.time.value),
           ),
           const Spacer(),
           if (n > 1)

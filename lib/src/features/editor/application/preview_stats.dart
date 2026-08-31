@@ -117,3 +117,123 @@ abstract final class PreviewStats {
     _intervals.clear();
   }
 }
+
+/// Relatorio do registrador de frames (PR-J0).
+typedef FrameReport = ({
+  double medianMs,
+  int stutters,
+  double gapS,
+  double gapSdS,
+  double peakMs,
+  double driftMs,
+  int seconds,
+});
+
+/// Analise PURA da serie de intervalos entre frames (ms), sem relogio:
+/// mediana, travadas (> 2x a mediana), intervalo medio entre travadas e
+/// o DESVIO desse intervalo — desvio baixo significa ciclo regular, e
+/// ciclo regular aponta causa mecanica.
+FrameReport analyzeIntervals(List<double> intervalsMs,
+    {double driftMs = 0}) {
+  if (intervalsMs.isEmpty) {
+    return (
+      medianMs: 0,
+      stutters: 0,
+      gapS: 0,
+      gapSdS: 0,
+      peakMs: 0,
+      driftMs: driftMs,
+      seconds: 0
+    );
+  }
+  final sorted = List<double>.of(intervalsMs)..sort();
+  final n = sorted.length;
+  final median = n.isOdd
+      ? sorted[n >> 1]
+      : (sorted[(n >> 1) - 1] + sorted[n >> 1]) / 2;
+  final peak = sorted.last;
+
+  // Instante de cada travada vem da soma cumulativa: nada de relogio.
+  final at = <double>[];
+  var elapsedMs = 0.0;
+  for (final v in intervalsMs) {
+    elapsedMs += v;
+    if (median > 0 && v > median * 2) at.add(elapsedMs / 1000.0);
+  }
+
+  var gap = 0.0;
+  var sd = 0.0;
+  if (at.length >= 2) {
+    var sum = 0.0;
+    for (var i = 1; i < at.length; i++) {
+      sum += at[i] - at[i - 1];
+    }
+    gap = sum / (at.length - 1);
+    var acc = 0.0;
+    for (var i = 1; i < at.length; i++) {
+      final d = (at[i] - at[i - 1]) - gap;
+      acc += d * d;
+    }
+    sd = math.sqrt(acc / (at.length - 1));
+  }
+
+  double r1(double v) => double.parse(v.toStringAsFixed(1));
+  return (
+    medianMs: r1(median),
+    stutters: at.length,
+    gapS: r1(gap),
+    gapSdS: double.parse(sd.toStringAsFixed(2)),
+    peakMs: double.parse(peak.toStringAsFixed(0)),
+    driftMs: r1(driftMs),
+    seconds: (elapsedMs / 1000).round(),
+  );
+}
+
+/// REGISTRADOR DE FRAMES (spec travada-periodica, PR-J0): a travada
+/// periodica nao se diagnostica pela media de fps — se diagnostica pelo
+/// INTERVALO ENTRE AS TRAVADAS. Intervalo regular = causa mecanica.
+///
+/// Mede no ponto exato de apresentacao: mediana do intervalo, travadas
+/// (> 2x a mediana), intervalo entre elas e o desvio desse intervalo,
+/// pico, e a DERIVA entre o relogio da composicao e o da midia — a
+/// deriva subindo e zerando de repente e a assinatura exata de C1.
+abstract final class FrameLog {
+  /// ~60 s a 30 fps.
+  static const int _cap = 1800;
+
+  static final List<double> _intervals = <double>[];
+  static double _driftMs = 0;
+  static int _lastUs = 0;
+
+  /// Snapshot para a UI (recalculado no maximo 1x/s).
+  static final ValueNotifier<FrameReport?> report =
+      ValueNotifier<FrameReport?>(null);
+  static int _lastReportMs = 0;
+
+  static void reset() {
+    _intervals.clear();
+    _lastUs = 0;
+    _driftMs = 0;
+    report.value = null;
+  }
+
+  /// Deriva medida entre o relogio da composicao e a posicao real da
+  /// midia (ms). Positivo = composicao adiantada.
+  static void reportDrift(double ms) => _driftMs = ms;
+
+  /// Ponto de APRESENTACAO do frame.
+  static void present() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    if (_lastUs != 0) {
+      _intervals.add((now - _lastUs) / 1000.0);
+      if (_intervals.length > _cap) _intervals.removeAt(0);
+    }
+    _lastUs = now;
+
+    final nowMs = now ~/ 1000;
+    if (nowMs - _lastReportMs >= 1000) {
+      _lastReportMs = nowMs;
+      report.value = analyzeIntervals(_intervals, driftMs: _driftMs);
+    }
+  }
+}

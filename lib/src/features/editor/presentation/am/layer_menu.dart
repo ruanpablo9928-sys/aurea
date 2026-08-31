@@ -15,6 +15,7 @@ import '../../domain/shape.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'curve_panel.dart';
+import 'oficio_sheets.dart';
 
 /// Acao escolhida no menu da camada.
 enum LayerMenuAction {
@@ -218,6 +219,32 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                   }
                 });
               }),
+            // OFICIO (motion-graphics-pro): organizacao, estilos e loop.
+            item(CupertinoIcons.tag, 'Organizar (rotulo, solo, timida)',
+                () {
+              Navigator.of(moreContext).pop();
+              Future.microtask(() {
+                if (context.mounted) {
+                  showOrganizeSheet(context, ref, layer.id);
+                }
+              });
+            }),
+            item(CupertinoIcons.sparkles, 'Estilos de camada', () {
+              Navigator.of(moreContext).pop();
+              Future.microtask(() {
+                if (context.mounted) {
+                  showLayerStylesSheet(context, ref, layer.id, playback);
+                }
+              });
+            }),
+            item(CupertinoIcons.repeat, 'Loop de keyframes', () {
+              Navigator.of(moreContext).pop();
+              Future.microtask(() {
+                if (context.mounted) {
+                  showLoopSheet(context, ref, layer.id);
+                }
+              });
+            }),
             if (layer is CaptionLayer)
               item(CupertinoIcons.text_badge_checkmark,
                   'Editar legendas', () {

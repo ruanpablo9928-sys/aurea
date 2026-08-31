@@ -10,6 +10,7 @@ import '../../editor/presentation/editor_screen.dart';
 import '../../user/application/user_profile_controller.dart';
 import '../application/projects_controller.dart';
 import '../domain/project_presets.dart';
+import 'whats_new.dart';
 import 'new_project_sheet.dart';
 
 /// Aba Inicio: large title, criar projeto, atalhos e recentes.
@@ -89,6 +90,8 @@ class ProjectsTab extends ConsumerWidget {
                 ),
             ],
           ),
+          const SizedBox(height: 26),
+          const WhatsNewCard(),
           const SizedBox(height: 26),
           Text('Recentes', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),

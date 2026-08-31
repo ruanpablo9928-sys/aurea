@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/effect.dart';
+import '../../domain/effect_preset.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 
@@ -27,42 +28,208 @@ class EffectsPanel extends ConsumerStatefulWidget {
 class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   String? _selectedParam;
 
+  /// CATALOGO (PR-C4): o gargalo de quem tem muitos efeitos nao e ter —
+  /// e ACHAR. Busca com sinonimos, chips por categoria com contador,
+  /// presets de fabrica, e aplicacao em dois toques.
   Future<void> _addEffect(BuildContext context, String layerId) async {
     final controller = ref.read(editorControllerProvider.notifier);
+    final search = TextEditingController();
+    var query = '';
+    String? category;
+    var showPresets = false;
+
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: AmColors.panel,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.62),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Adicionar efeito',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text)),
-            ),
-            for (final type in EffectType.values)
-              ListTile(
-                leading: const Icon(CupertinoIcons.wand_stars,
-                    color: AmColors.accent, size: 22),
-                title: Text(effectSpecs[type]!.name,
-                    style: const TextStyle(color: AmColors.text)),
-                onTap: () {
-                  controller.addEffect(layerId, type);
-                  Navigator.of(sheetContext).pop();
-                },
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final results = query.isNotEmpty
+              ? searchEffects(query)
+              : (category == null
+                  ? effectSpecs.keys.toList()
+                  : effectsInCategory(category!));
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 16,
+                  10 + MediaQuery.of(sheetContext).viewInsets.bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('Efeitos',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AmColors.text)),
+                      ),
+                      GestureDetector(
+                        onTap: () => setSheetState(
+                            () => showPresets = !showPresets),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: showPresets
+                                ? AmColors.accentDim
+                                : AmColors.chip,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Text('Presets',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AmColors.accent)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  CupertinoTextField(
+                    controller: search,
+                    placeholder: 'buscar (glow, rgb split, pixelate...)',
+                    placeholderStyle: const TextStyle(
+                        fontSize: 13, color: AmColors.muted),
+                    style: const TextStyle(
+                        fontSize: 14, color: AmColors.text),
+                    prefix: const Padding(
+                      padding: EdgeInsets.only(left: 10),
+                      child: Icon(CupertinoIcons.search,
+                          size: 16, color: AmColors.muted),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AmColors.chip,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    onChanged: (v) => setSheetState(() {
+                      query = v;
+                      showPresets = false;
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  if (!showPresets && query.isEmpty)
+                    SizedBox(
+                      height: 34,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (final c in [null, ...effectCategories])
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: GestureDetector(
+                                onTap: () => setSheetState(
+                                    () => category = c),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: category == c
+                                        ? AmColors.accentDim
+                                        : AmColors.chip,
+                                    borderRadius:
+                                        BorderRadius.circular(9),
+                                  ),
+                                  child: Text(
+                                    c == null
+                                        ? 'Todos ${effectSpecs.length}'
+                                        : '$c ${effectsInCategory(c).length}',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AmColors.accent),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: showPresets
+                        ? ListView(
+                            children: [
+                              for (final p in factoryPresets())
+                                ListTile(
+                                  leading: const Icon(
+                                      CupertinoIcons.square_stack_3d_down_right,
+                                      color: AmColors.accent,
+                                      size: 20),
+                                  title: Text(p.name,
+                                      style: const TextStyle(
+                                          color: AmColors.text,
+                                          fontSize: 14)),
+                                  subtitle: Text(
+                                    '${p.category} · '
+                                    '${p.effects.length} efeito(s)',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AmColors.muted),
+                                  ),
+                                  onTap: () {
+                                    controller.applyPreset(
+                                        layerId, p,
+                                        at: widget.playback.time.value);
+                                    Navigator.of(sheetContext).pop();
+                                  },
+                                ),
+                            ],
+                          )
+                        : ListView(
+                            children: [
+                              if (results.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text(
+                                      'Nada encontrado. Tente "glow", '
+                                      '"rgb", "pixel", "shake".',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: AmColors.muted)),
+                                ),
+                              for (final type in results)
+                                ListTile(
+                                  dense: true,
+                                  leading: const Icon(
+                                      CupertinoIcons.wand_stars,
+                                      color: AmColors.accent,
+                                      size: 20),
+                                  title: Text(effectSpecs[type]!.name,
+                                      style: const TextStyle(
+                                          color: AmColors.text,
+                                          fontSize: 14)),
+                                  subtitle: Text(
+                                    '${effectSpecs[type]!.category}'
+                                    '${effectSpecs[type]!.cost > 1 ? ' · custo ${effectSpecs[type]!.cost}' : ''}',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AmColors.muted),
+                                  ),
+                                  onTap: () {
+                                    controller.addEffect(layerId, type);
+                                    Navigator.of(sheetContext).pop();
+                                  },
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
               ),
-            const SizedBox(height: 8),
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
+    search.dispose();
   }
 
   @override
@@ -223,19 +390,47 @@ class _EffectCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
+            // PR-C1: cada TIPO de parametro ganha seu controle. Antes so
+            // havia numero, e todo efeito que precisava de escolha ou
+            // ponto ficava visivel e inerte.
             for (final entry in effect.spec.params.entries)
-              _ParamRow(
-                paramKey: '${effect.id}/${entry.key}',
-                label: entry.value.$1,
-                track: effect.track(entry.key),
-                local: local,
-                min: entry.value.$3,
-                max: entry.value.$4,
-                selected: selectedParam == '${effect.id}/${entry.key}',
-                onSelect: onSelectParam,
-                onChanged: (v) => onParam(entry.key, v),
-                onKeyframe: () => onParamKeyframe(entry.key),
-              ),
+              switch (entry.value.kind) {
+                ParamKind.choice => _ChoiceRow(
+                    label: entry.value.label,
+                    options: entry.value.options,
+                    value: effect
+                        .paramAt(entry.key, local)
+                        .round()
+                        .clamp(0, entry.value.options.length - 1),
+                    onChanged: (i) => onParam(entry.key, i.toDouble()),
+                  ),
+                ParamKind.seed => _SeedRow(
+                    label: entry.value.label,
+                    value: effect.paramAt(entry.key, local),
+                    onChanged: (v) => onParam(entry.key, v),
+                  ),
+                ParamKind.toggle => _ToggleRow(
+                    label: entry.value.label,
+                    value: effect.paramAt(entry.key, local) > 0.5,
+                    onChanged: (v) =>
+                        onParam(entry.key, v ? 1.0 : 0.0),
+                  ),
+                // Ponto e numero usam a regua; o ponto vem em 0..1 e o
+                // par X/Y aparece como duas linhas nomeadas.
+                _ => _ParamRow(
+                    paramKey: '${effect.id}/${entry.key}',
+                    label: entry.value.label,
+                    track: effect.track(entry.key),
+                    local: local,
+                    min: entry.value.min,
+                    max: entry.value.max,
+                    selected:
+                        selectedParam == '${effect.id}/${entry.key}',
+                    onSelect: onSelectParam,
+                    onChanged: (v) => onParam(entry.key, v),
+                    onKeyframe: () => onParamKeyframe(entry.key),
+                  ),
+              },
             if (effect.spec.hasColor)
               _ColorRow(effect: effect, onColor: onColor),
           ],
@@ -339,6 +534,153 @@ class _ParamRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Controle de ESCOLHA em chips (PR-C1).
+class _ChoiceRow extends StatelessWidget {
+  const _ChoiceRow({
+    required this.label,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final List<String> options;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 96,
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 13, color: AmColors.muted))),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (var i = 0; i < options.length; i++)
+                  GestureDetector(
+                    onTap: () => onChanged(i),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 11, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: value == i
+                            ? AmColors.accentDim
+                            : AmColors.chip,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(options[i],
+                          style: const TextStyle(
+                              fontSize: 12, color: AmColors.accent)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// SEMENTE (PR-C1): inteiro que nunca interpola — o dado sorteia de
+/// novo, o resultado continua deterministico.
+class _SeedRow extends StatelessWidget {
+  const _SeedRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 96,
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 13, color: AmColors.muted))),
+          Text('${value.round()}',
+              style: const TextStyle(
+                  fontSize: 13, color: AmColors.accent)),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () =>
+                onChanged(((value.round() + 1) % 100).toDouble()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AmColors.chip,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.shuffle,
+                      size: 14, color: AmColors.accent),
+                  SizedBox(width: 6),
+                  Text('Sortear',
+                      style: TextStyle(
+                          fontSize: 12, color: AmColors.accent)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Liga/desliga (PR-C1).
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+            width: 96,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 13, color: AmColors.muted))),
+        Transform.scale(
+          scale: 0.7,
+          child: CupertinoSwitch(
+            value: value,
+            activeTrackColor: AmColors.accent,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
     );
   }
 }
