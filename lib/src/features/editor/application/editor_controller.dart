@@ -8,6 +8,7 @@ import '../../media/application/media_import_service.dart';
 import '../domain/blend_extra.dart';
 import '../domain/caption.dart';
 import '../domain/camera3d.dart';
+import '../domain/camera_cuts.dart';
 import '../domain/scene3d.dart';
 import '../domain/effect.dart';
 import '../domain/effect_preset.dart';
@@ -860,6 +861,84 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;
     _replace(layer.withCamera(fn(layer.camera)));
+  }
+
+  /// Acrescenta uma camera com o enquadramento ATUAL. Nascer olhando
+  /// para outro lugar obrigaria a reenquadrar do zero toda vez.
+  String addScene3DCamera(String id) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return '';
+    final base = layer.camera;
+    final nova = Camera3D(
+      name: 'Camera ${layer.allCameras.length + 1}',
+      kind: base.kind,
+      posX: AnimatedDouble(base.posX.base),
+      posY: AnimatedDouble(base.posY.base),
+      posZ: AnimatedDouble(base.posZ.base),
+      poiX: AnimatedDouble(base.poiX.base),
+      poiY: AnimatedDouble(base.poiY.base),
+      poiZ: AnimatedDouble(base.poiZ.base),
+      focalLength: AnimatedDouble(base.focalLength.base),
+      filmWidth: base.filmWidth,
+      orthographic: base.orthographic,
+    );
+    _replace(layer.copyScene(
+        extraCameras: [...layer.extraCameras, nova]));
+    return nova.id;
+  }
+
+  void removeScene3DCamera(String id, String cameraId) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.copyScene(
+      extraCameras: [
+        for (final c in layer.extraCameras)
+          if (c.id != cameraId) c
+      ],
+      // Tomada que aponta para camera apagada viraria cena sem camera.
+      shots: [
+        for (final t in layer.shots)
+          if (t.cameraId != cameraId) t
+      ],
+    ));
+  }
+
+  /// CORTA para [cameraId] em [local]. Marcar de novo no mesmo instante
+  /// troca a camera daquela tomada, em vez de empilhar duas.
+  void setCameraShot(
+    String id,
+    Duration local,
+    String cameraId, {
+    Duration transition = Duration.zero,
+  }) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    const tol = Duration(milliseconds: 60);
+    final resto = [
+      for (final t in layer.shots)
+        if ((t.time - local).inMicroseconds.abs() > tol.inMicroseconds) t
+    ];
+    _replace(layer.copyScene(shots: [
+      ...resto,
+      CameraShot(
+          time: local, cameraId: cameraId, transition: transition),
+    ]));
+  }
+
+  void removeCameraShot(String id, Duration local) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    const tol = Duration(milliseconds: 60);
+    _replace(layer.copyScene(shots: [
+      for (final t in layer.shots)
+        if ((t.time - local).inMicroseconds.abs() > tol.inMicroseconds) t
+    ]));
+  }
+
+  void clearCameraShots(String id) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.copyScene(shots: const []));
   }
 
   void setScene3DHelpers(String id, bool show) {

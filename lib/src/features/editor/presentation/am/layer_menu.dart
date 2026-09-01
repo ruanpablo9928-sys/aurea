@@ -18,6 +18,7 @@ import 'am_colors.dart';
 import 'audio_sheet.dart';
 import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
+import 'cameras_sheet.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'decupagem_screen.dart';
@@ -311,6 +312,14 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 Future.microtask(() {
                   if (context.mounted) {
                     showScene3DSheet(context, ref, layer.id);
+                  }
+                });
+              }),
+              item(CupertinoIcons.videocam, 'Cameras e cortes', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showCamerasSheet(context, ref, layer.id, playback);
                   }
                 });
               }),

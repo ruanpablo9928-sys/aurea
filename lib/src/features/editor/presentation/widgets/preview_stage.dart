@@ -2397,6 +2397,8 @@ class _LayerContent extends StatelessWidget {
             painter: Scene3DPainter(
               scene: l.scene,
               camera: l.camera,
+              resolvedCamera:
+                  l.shots.isEmpty ? null : l.cameraAt(localTime),
               view: l.view,
               time: localTime,
               // Ajudas NUNCA entram na exportacao — so no preview.

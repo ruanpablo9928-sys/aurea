@@ -7,6 +7,7 @@ import 'element3d.dart';
 import 'grid_rig.dart';
 import 'keyframe.dart';
 import 'blend_extra.dart';
+import 'camera_cuts.dart';
 import 'layer.dart';
 import 'layer_meta.dart';
 import 'mask.dart';
@@ -923,6 +924,20 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['edges'] = e.edges;
     case Scene3DLayer s:
       base['kind'] = 'scene3d';
+      if (s.extraCameras.isNotEmpty) {
+        base['cams'] = [for (final c in s.extraCameras) _camera(c)];
+      }
+      if (s.shots.isNotEmpty) {
+        base['shots'] = [
+          for (final t in s.shots)
+            {
+              'us': t.time.inMicroseconds,
+              'cam': t.cameraId,
+              if (t.transition > Duration.zero)
+                'tr': t.transition.inMicroseconds,
+            }
+        ];
+      }
       base['scene'] = _scene(s.scene);
       base['cam'] = _camera(s.camera);
       base['view'] = s.view.index;
@@ -1335,6 +1350,20 @@ Layer layerFromJson(Map<String, dynamic> m) {
       );
     case 'scene3d':
       return Scene3DLayer(
+        extraCameras: [
+          for (final c in (m['cams'] as List? ?? const []))
+            _asCamera(c as Map<String, dynamic>),
+        ],
+        shots: [
+          for (final t in (m['shots'] as List? ?? const []))
+            CameraShot(
+              time: Duration(
+                  microseconds: ((t as Map)['us'] as num).toInt()),
+              cameraId: t['cam'] as String,
+              transition: Duration(
+                  microseconds: ((t['tr'] as num?) ?? 0).toInt()),
+            ),
+        ],
         id: id, name: name, startTime: start, duration: dur,
         scene: _asScene(m['scene'] as Map<String, dynamic>),
         camera: _asCamera(m['cam'] as Map<String, dynamic>),

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:uuid/uuid.dart';
 
 import 'camera3d.dart';
+import 'camera_cuts.dart';
 import 'caption.dart';
 import 'effect.dart';
 import 'element3d.dart';
@@ -1869,6 +1870,8 @@ class Scene3DLayer extends Layer {
     required super.duration,
     Scene3D? scene,
     Camera3D? camera,
+    List<Camera3D>? extraCameras,
+    List<CameraShot>? shots,
     this.view = SceneView.camera,
     this.showHelpers = true,
     super.position,
@@ -1890,7 +1893,10 @@ class Scene3DLayer extends Layer {
     super.matteMode,
     super.matteSourceId,
   })  : scene = scene ?? const Scene3D(),
-        camera = camera ?? _defaultCamera();
+        camera = camera ?? _defaultCamera(),
+        extraCameras =
+            List.unmodifiable(extraCameras ?? const <Camera3D>[]),
+        shots = List.unmodifiable(shots ?? const <CameraShot>[]);
 
   static Camera3D _defaultCamera() => Camera3D();
 
@@ -1898,6 +1904,20 @@ class Scene3DLayer extends Layer {
   final Camera3D camera;
 
   /// Vista mostrada no preview (camera ativa ou ortografica).
+  /// Cameras ALEM da principal. Uma camera so obriga a animar a mesma
+  /// camera de um enquadramento ao outro — e ai todo corte vira voo.
+  final List<Camera3D> extraCameras;
+
+  /// Quando cada camera entra no ar. Vazio = so a principal.
+  final List<CameraShot> shots;
+
+  /// Todas as cameras, com a principal na frente.
+  List<Camera3D> get allCameras => [camera, ...extraCameras];
+
+  /// A camera de render em [local], ja resolvendo corte e transicao.
+  RenderCamera cameraAt(Duration local) =>
+      resolveCamera(allCameras, shots, local, camera);
+
   final SceneView view;
 
   /// Ajudas de cena: grade do chao, frustum, eixos. NUNCA renderizam na
@@ -1910,6 +1930,8 @@ class Scene3DLayer extends Layer {
   Scene3DLayer copyScene({
     Scene3D? scene,
     Camera3D? camera,
+    List<Camera3D>? extraCameras,
+    List<CameraShot>? shots,
     SceneView? view,
     bool? showHelpers,
   }) =>
@@ -1920,6 +1942,8 @@ class Scene3DLayer extends Layer {
         duration: duration,
         scene: scene ?? this.scene,
         camera: camera ?? this.camera,
+        extraCameras: extraCameras ?? this.extraCameras,
+        shots: shots ?? this.shots,
         view: view ?? this.view,
         showHelpers: showHelpers ?? this.showHelpers,
         position: position,
@@ -2031,6 +2055,8 @@ class Scene3DLayer extends Layer {
         duration: duration,
         scene: scene,
         camera: camera,
+        extraCameras: extraCameras,
+        shots: shots,
         view: view,
         showHelpers: showHelpers,
         position: position,

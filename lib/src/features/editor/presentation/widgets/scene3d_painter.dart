@@ -20,6 +20,7 @@ class Scene3DPainter extends CustomPainter {
   Scene3DPainter({
     required this.scene,
     required this.camera,
+    this.resolvedCamera,
     required this.view,
     required this.time,
     this.showHelpers = false,
@@ -45,10 +46,16 @@ class Scene3DPainter extends CustomPainter {
 
   final void Function(SceneFrame frame)? onMetrics;
 
+  /// Camera ja resolvida por quem monta a cena (tomadas e transicoes).
+  /// Nula = usa [camera] direto.
+  final RenderCamera? resolvedCamera;
+
   RenderCamera _renderCamera() =>
       overrideCamera ??
       (view == SceneView.camera
-          ? camera.renderAt(time)
+          // A camera ATIVA no instante: com tomadas, e a da tomada no
+          // ar (ou a mistura, se ainda esta na transicao).
+          ? (resolvedCamera ?? camera.renderAt(time))
           : orthoViewCamera(view));
 
   @override
@@ -337,6 +344,7 @@ class Scene3DPainter extends CustomPainter {
   bool shouldRepaint(Scene3DPainter old) =>
       old.scene != scene ||
       old.camera != camera ||
+      old.resolvedCamera != resolvedCamera ||
       old.view != view ||
       old.time != time ||
       old.showHelpers != showHelpers ||
