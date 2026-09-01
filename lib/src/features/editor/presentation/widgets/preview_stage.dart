@@ -25,6 +25,8 @@ import '../../domain/video_project.dart';
 import 'animated_text.dart';
 import 'blend_mask.dart';
 import 'custom_blend.dart';
+import 'linear_light.dart';
+import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
@@ -1362,6 +1364,14 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     return local;
   }
 
+  /// Tamanho da composicao — o raio dos efeitos de luz e uma FRACAO do
+  /// menor lado, e o shader de gama precisa do tamanho para achar o
+  /// pixel.
+  int get fxWidth => ref.read(editorControllerProvider).outputWidth;
+  int get fxHeight => ref.read(editorControllerProvider).outputHeight;
+
+  Size get fxSize => Size(fxWidth.toDouble(), fxHeight.toDouble());
+
   Widget _applyEffects(
       List<EffectInstance> effects, Widget child, Duration local) {
     var out = child;
@@ -1369,16 +1379,23 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       if (!effect.enabled) continue;
       switch (effect.type) {
         case EffectType.gaussianBlur:
-          final sigma = effect.paramAt('amount', local) * 40;
+          // Raio em FRACAO do menor lado (0..1 -> 0..4% do menor lado
+          // por unidade): o mesmo numero da o mesmo desfoque aparente em
+          // 720p e em 4K. E o desfoque acontece em espaco LINEAR, senao
+          // a borda entre claro e escuro ganha halo escuro.
+          final sigma = radiusToPixels(
+              effect.paramAt('amount', local) * 0.04, fxWidth, fxHeight);
           if (sigma > 0.01) {
             out = ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(
-                  sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal),
+              imageFilter: LinearLight.blur(
+                  sigmaX: sigma, sigmaY: sigma, size: fxSize),
               child: out,
             );
           }
         case EffectType.lightGlow:
-          final sigma = 4 + effect.paramAt('diffusion', local) * 60;
+          final sigma = 4 +
+              radiusToPixels(effect.paramAt('diffusion', local) * 0.055,
+                  fxWidth, fxHeight);
           final intensity =
               effect.paramAt('intensity', local).clamp(0.0, 1.0);
           out = Stack(
@@ -1420,7 +1437,14 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 effect.paramAt('aberracao', local).clamp(0.0, 1.0);
             final tintAmt =
                 effect.paramAt('tonalizar', local).clamp(0.0, 1.0);
-            final base = 6 + r * 90;
+            // RAIO EM FRACAO DO MENOR LADO, nao em pixel absoluto.
+            //
+            // Raio "20" em pixel num projeto 4K e um quarto do raio "20"
+            // em 1080p: o mesmo numero dava glows diferentes so por
+            // trocar a resolucao. Metade da divergencia com o Alight
+            // Motion mora nessa unidade, e nao se descobre olhando o
+            // resultado.
+            final base = radiusToPixels(r * 0.09, fxWidth, fxHeight) + 6;
 
             Widget source = out;
             if (tintAmt > 0.01) {
@@ -1433,9 +1457,16 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             }
 
             Widget level(double sigma, double weight) {
+              // EM ESPACO LINEAR: luz soma em linear. Borrar o valor
+              // corrigido para o olho e o que faz o glow sair
+              // acinzentado e fraco — a soma de dois meios-tons da menos
+              // luz do que deveria.
               Widget blurred(Widget c, double s) => ImageFiltered(
-                    imageFilter: ui.ImageFilter.blur(
-                        sigmaX: s, sigmaY: s, tileMode: TileMode.decal),
+                    imageFilter: LinearLight.blur(
+                      sigmaX: s,
+                      sigmaY: s,
+                      size: Size(fxWidth.toDouble(), fxHeight.toDouble()),
+                    ),
                     child: c,
                   );
               Widget w;
@@ -1457,10 +1488,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                   opacity: (weight * intensity).clamp(0.0, 1.0), child: w);
             }
 
+            // Pesos que SOMAM 1: sem normalizar, mudar o numero de
+            // niveis mudava o brilho junto, e "mais suave" virava
+            // "mais claro".
             out = Stack(clipBehavior: Clip.none, children: [
-              level(base * 2.2, 0.18),
-              level(base, 0.30),
-              level(base * 0.45, 0.42),
+              level(base * 2.2, 0.20),
+              level(base, 0.33),
+              level(base * 0.45, 0.47),
               out,
             ]);
           }
