@@ -1,3 +1,4 @@
+import '../../application/font_service.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
@@ -33,6 +34,9 @@ class AnimatedTextView extends StatelessWidget {
   static TextStyle styleFor(TextLayer l, {bool animated = false}) => TextStyle(
         color: l.color,
         fontSize: l.fontSize,
+        // Fonte importada. Se ela sumiu (projeto trazido de outro
+        // aparelho), cai na do aplicativo em vez de nao desenhar nada.
+        fontFamily: resolveFontFamily(l.fontFamily),
         fontWeight: l.bold ? FontWeight.w700 : FontWeight.w400,
         letterSpacing: -l.fontSize * 0.02,
         height: 1.1,

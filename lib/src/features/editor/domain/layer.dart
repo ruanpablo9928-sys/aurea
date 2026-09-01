@@ -513,6 +513,7 @@ class TextLayer extends Layer {
     this.fontSize = 120,
     this.color = const Color(0xFFFFFFFF),
     this.bold = true,
+    this.fontFamily,
     this.textPath = const TextPathSpec(),
     List<TextAnim>? anims,
     List<TextAnimator>? animators,
@@ -541,6 +542,12 @@ class TextLayer extends Layer {
   final double fontSize;
   final Color color;
   final bool bold;
+
+  /// FONTE IMPORTADA pela pessoa. Nulo = a do aplicativo. Guarda-se o
+  /// NOME da familia, nao o caminho: o arquivo mora dentro do
+  /// aplicativo, e o projeto continua abrindo mesmo se o .ttf original
+  /// sumir da pasta de Downloads.
+  final String? fontFamily;
 
   /// TEXTO EM CAMINHO: selo circular, arco, ou seguindo outra forma.
   final TextPathSpec textPath;
@@ -596,6 +603,8 @@ class TextLayer extends Layer {
     double? fontSize,
     Color? color,
     bool? bold,
+    String? fontFamily,
+    bool clearFont = false,
     TextPathSpec? textPath,
     List<TextAnim>? anims,
     List<TextAnimator>? animators,
@@ -609,6 +618,7 @@ class TextLayer extends Layer {
       fontSize: fontSize ?? this.fontSize,
       color: color ?? this.color,
       bold: bold ?? this.bold,
+      fontFamily: clearFont ? null : (fontFamily ?? this.fontFamily),
       textPath: textPath ?? this.textPath,
       anims: anims ?? this.anims,
       animators: animators ?? this.animators,
@@ -643,6 +653,7 @@ class TextLayer extends Layer {
         fontSize: fontSize,
         color: color,
         bold: bold,
+        fontFamily: fontFamily,
         textPath: textPath,
         anims: anims,
         animators: animators,

@@ -25,6 +25,7 @@ import '../../domain/video_project.dart';
 import 'animated_text.dart';
 import 'blend_mask.dart';
 import 'custom_blend.dart';
+import 'mask_node_editor.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
@@ -217,6 +218,16 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                                   compSize: Size(compW, compH),
                                 ),
                               ),
+                            ),
+                          ),
+                          // NOS DA MASCARA: quando alguem esta editando
+                          // o caminho, o dedo passa a mexer nos nos em
+                          // vez de mover a camada. Fora disso o widget
+                          // nao existe e nao intercepta nada.
+                          Positioned.fill(
+                            child: MaskNodeEditor(
+                              time: widget.playback.time,
+                              stageScale: () => _stageScale,
                             ),
                           ),
                         ],

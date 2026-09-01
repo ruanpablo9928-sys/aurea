@@ -21,7 +21,9 @@ import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'decupagem_screen.dart';
+import 'font_sheet.dart';
 import 'oficio_sheets.dart';
+import 'path_edit_sheet.dart';
 import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
 import 'text_path_sheet.dart';
@@ -212,6 +214,14 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
               item(CupertinoIcons.pencil, 'Editar texto', () {
                 Navigator.of(moreContext)
                     .pop(LayerMenuAction.editText);
+              }),
+              item(CupertinoIcons.textformat, 'Fonte', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showFontSheet(context, ref, layer.id);
+                  }
+                });
               }),
               item(CupertinoIcons.textformat_abc_dottedunderline,
                   'Animadores de texto', () {
@@ -1214,6 +1224,25 @@ Future<void> showMasksSheet(BuildContext context, WidgetRef ref,
                                       layerId, m.id);
                                   setSheetState(() {});
                                 },
+                              ),
+                            ),
+                            // Editar no a no, com os nos em cima da
+                            // composicao.
+                            CupertinoButton(
+                              padding: const EdgeInsets.all(4),
+                              onPressed: () {
+                                Navigator.of(context).maybePop();
+                                Future.microtask(() {
+                                  if (context.mounted) {
+                                    showPathEditSheet(context, ref,
+                                        layerId, m.id, playback);
+                                  }
+                                });
+                              },
+                              child: const Icon(
+                                CupertinoIcons.pencil_outline,
+                                size: 18,
+                                color: AmColors.muted,
                               ),
                             ),
                             // Diamante: keyframe do CAMINHO.

@@ -862,6 +862,7 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['fontSize'] = t.fontSize;
       base['color'] = _col(t.color);
       base['bold'] = t.bold;
+      if (t.fontFamily != null) base['font'] = t.fontFamily;
       base['animators'] = [for (final a in t.animators) _animator(a)];
       if (t.anims.isNotEmpty) {
         base['anims'] = [for (final a in t.anims) _textAnim(a)];
@@ -1201,6 +1202,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         fontSize: (m['fontSize'] as num).toDouble(),
         color: _asCol(m['color']),
         bold: m['bold'] as bool,
+        fontFamily: m['font'] as String?,
         animators: [
           for (final a in (m['animators'] as List))
             _asAnimator(a as Map<String, dynamic>),

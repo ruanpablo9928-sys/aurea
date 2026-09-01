@@ -1951,6 +1951,21 @@ class EditorController extends Notifier<VideoProject> {
     });
   }
 
+  /// EDITAR OS NOS da mascara. Com o caminho ja animado, vira keyframe
+  /// no tempo atual; sem, muda a forma base.
+  void editMaskPath(
+    String layerId,
+    String maskId,
+    Duration globalTime,
+    BezierPath Function(BezierPath) fn,
+  ) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    updateMask(layerId, maskId,
+        (m) => m.copyWith(path: m.path.edited(local, fn(m.path.valueAt(local)))));
+  }
+
   /// Keyframe do CAMINHO da mascara no tempo atual (PR-M1 aplicado).
   void toggleMaskPathKeyframe(
       String layerId, String maskId, Duration globalTime) {
@@ -2367,7 +2382,11 @@ class EditorController extends Notifier<VideoProject> {
   // ------------------------------------------------------------- conteudo
 
   void editTextLayer(String id,
-      {String? text, double? fontSize, Color? color}) {
+      {String? text,
+      double? fontSize,
+      Color? color,
+      String? fontFamily,
+      bool clearFont = false}) {
     final layer = _layer(id);
     if (layer is! TextLayer) return;
     _replace(layer.copyLayer(
@@ -2375,6 +2394,8 @@ class EditorController extends Notifier<VideoProject> {
       name: text ?? layer.name,
       fontSize: fontSize,
       color: color,
+      fontFamily: fontFamily,
+      clearFont: clearFont,
     ));
     // A forma-conteiner acompanha o texto SOZINHA (PR-X14).
     _refreshResponsive(id);
