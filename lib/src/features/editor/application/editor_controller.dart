@@ -23,6 +23,7 @@ import '../domain/audio_ops.dart';
 import '../domain/mask.dart';
 import '../domain/nle_ops.dart';
 import '../domain/shape.dart';
+import '../domain/shape_ops.dart';
 import '../domain/text_anim.dart';
 import '../domain/text_animator.dart';
 import '../domain/text_presets.dart';
@@ -2426,6 +2427,69 @@ class EditorController extends Notifier<VideoProject> {
       out.insert(paintIdx < 0 ? out.length : paintIdx, op);
       return out;
     });
+  }
+
+  /// Os operadores de caminho que entram pelo menu.
+  ///
+  /// Entram ANTES das pinturas, como no AE: operador mexe no caminho, e
+  /// o traco pintado depois sai com a espessura certa.
+  void addPathOperator(String id, ShapePathOp kind) {
+    _updateShape(id, (items) {
+      final paintIdx = items.indexWhere((i) =>
+          i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill);
+      final op = switch (kind) {
+        ShapePathOp.offset => OffsetPathOperator(),
+        ShapePathOp.roundCorners => RoundCornersOperator(),
+        ShapePathOp.zigZag => ZigZagOperator(),
+        ShapePathOp.puckerBloat => PuckerBloatOperator(
+            amount: AnimatedDouble(0.4)),
+        ShapePathOp.twist => TwistOperator(),
+        ShapePathOp.wiggle => WigglePathOperator(),
+        ShapePathOp.merge => MergePathsOperator(),
+      };
+      final out = [...items];
+      out.insert(paintIdx < 0 ? out.length : paintIdx, op);
+      return out;
+    });
+  }
+
+  /// Edita o valor principal de um operador de caminho, com keyframe
+  /// automatico quando a propriedade ja anima.
+  void editPathOperator(
+      String id, String itemId, Duration local, double value) {
+    _updateShape(id, (items) => [
+          for (final i in items)
+            if (i.id != itemId)
+              i
+            else
+              switch (i) {
+                OffsetPathOperator o =>
+                  o.copyWith(amount: o.amount.edited(local, value)),
+                RoundCornersOperator r =>
+                  r.copyWith(radius: r.radius.edited(local, value)),
+                ZigZagOperator z =>
+                  z.copyWith(amplitude: z.amplitude.edited(local, value)),
+                PuckerBloatOperator pb =>
+                  pb.copyWith(amount: pb.amount.edited(local, value)),
+                TwistOperator tw =>
+                  tw.copyWith(angle: tw.angle.edited(local, value)),
+                WigglePathOperator w =>
+                  w.copyWith(amount: w.amount.edited(local, value)),
+                _ => i,
+              },
+        ]);
+  }
+
+  void cycleMergeMode(String id, String itemId) {
+    _updateShape(id, (items) => [
+          for (final i in items)
+            if (i is MergePathsOperator && i.id == itemId)
+              i.copyWith(
+                  mode: MergeMode.values[
+                      (i.mode.index + 1) % MergeMode.values.length])
+            else
+              i,
+        ]);
   }
 
   /// Transforma a forma num MORPH: a primeira ShapePath (ou o destino do

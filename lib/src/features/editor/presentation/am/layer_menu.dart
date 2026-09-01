@@ -12,6 +12,7 @@ import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
+import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import 'audio_sheet.dart';
 import '../../../../core/ui/snack.dart';
@@ -2979,6 +2980,96 @@ class _ShapeOperators extends ConsumerWidget {
                 ],
               ),
             ),
+        // Operadores de caminho: cada um com o seu numero principal
+        // animavel e um botao para tirar.
+        for (final item in layer.contents)
+          if (item is OffsetPathOperator ||
+              item is RoundCornersOperator ||
+              item is ZigZagOperator ||
+              item is PuckerBloatOperator ||
+              item is TwistOperator ||
+              item is WigglePathOperator ||
+              item is MergePathsOperator)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: BoxDecoration(
+                color: AmColors.bg.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(_opName(item),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AmColors.text)),
+                      const Spacer(),
+                      if (item is MergePathsOperator)
+                        GestureDetector(
+                          onTap: () =>
+                              controller.cycleMergeMode(layerId, item.id),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AmColors.chip,
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Text(mergeModeLabel(item.mode),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmColors.accent)),
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () =>
+                            controller.removeShapeItem(layerId, item.id),
+                        child: const Icon(CupertinoIcons.trash,
+                            size: 14, color: AmColors.muted),
+                      ),
+                    ],
+                  ),
+                  if (item is! MergePathsOperator)
+                    ruler(
+                      _opUnit(item),
+                      _opValue(item, local),
+                      _opMin(item),
+                      _opMax(item),
+                      (v) => controller.editPathOperator(
+                          layerId, item.id, local, v),
+                    ),
+                ],
+              ),
+            ),
+        // Menu de operadores: cabe em duas linhas e nao esconde nada
+        // atras de um submenu.
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final op in ShapePathOp.values)
+              GestureDetector(
+                onTap: () => controller.addPathOperator(layerId, op),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AmColors.chip,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('+ ${shapePathOpLabel(op)}',
+                      style: const TextStyle(
+                          fontSize: 11, color: AmColors.accent)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
         Row(
           children: [
             CupertinoButton(
@@ -3009,6 +3100,52 @@ class _ShapeOperators extends ConsumerWidget {
       ],
     );
   }
+
+  static String _opName(ShapeItem i) => switch (i) {
+        OffsetPathOperator _ => 'Deslocar caminho',
+        RoundCornersOperator _ => 'Arredondar cantos',
+        ZigZagOperator _ => 'Zig zag',
+        PuckerBloatOperator _ => 'Inchar e encolher',
+        TwistOperator _ => 'Torcer',
+        WigglePathOperator _ => 'Baguncar caminho',
+        MergePathsOperator _ => 'Combinar caminhos',
+        _ => 'Operador',
+      };
+
+  static String _opUnit(ShapeItem i) => switch (i) {
+        OffsetPathOperator _ => 'px',
+        RoundCornersOperator _ => 'raio',
+        ZigZagOperator _ => 'altura',
+        PuckerBloatOperator _ => 'forca',
+        TwistOperator _ => 'graus',
+        WigglePathOperator _ => 'px',
+        _ => 'valor',
+      };
+
+  static double _opValue(ShapeItem i, Duration t) => switch (i) {
+        OffsetPathOperator o => o.amount.valueAt(t),
+        RoundCornersOperator r => r.radius.valueAt(t),
+        ZigZagOperator z => z.amplitude.valueAt(t),
+        PuckerBloatOperator pb => pb.amount.valueAt(t) * 100,
+        TwistOperator tw => tw.angle.valueAt(t),
+        WigglePathOperator w => w.amount.valueAt(t),
+        _ => 0,
+      };
+
+  static double _opMin(ShapeItem i) => switch (i) {
+        RoundCornersOperator _ => 0,
+        ZigZagOperator _ => 0,
+        WigglePathOperator _ => 0,
+        TwistOperator _ => -720,
+        PuckerBloatOperator _ => -100,
+        _ => -300,
+      };
+
+  static double _opMax(ShapeItem i) => switch (i) {
+        TwistOperator _ => 720,
+        PuckerBloatOperator _ => 100,
+        _ => 300,
+      };
 
   static String _primName(ShapePrimitive p) => switch (p) {
         ShapePrimitive.rectangle => 'Retangulo',

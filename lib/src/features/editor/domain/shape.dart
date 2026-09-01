@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:uuid/uuid.dart';
 
 import 'keyframe.dart';
+import 'shape_ops.dart';
 import 'svg_path.dart';
 
 /// Formas vetoriais (spec AM2-formas-3d §1): a camada de forma vira uma
@@ -1035,6 +1036,165 @@ Path _dashPath(Path source, double dashLength, double gapLength,
   return out;
 }
 
+/// DESLOCAR CAMINHO: engorda ou afina a forma andando na NORMAL de cada
+/// ponto. Diferente de escalar, que afasta do centro.
+class OffsetPathOperator extends ShapeItem {
+  OffsetPathOperator({super.id, AnimatedDouble? amount})
+      : amount = amount ?? AnimatedDouble(6);
+
+  final AnimatedDouble amount;
+
+  List<Path> apply(List<Path> paths, Duration t) {
+    final a = amount.valueAt(t);
+    return [for (final p in paths) offsetPath(p, a)];
+  }
+
+  OffsetPathOperator copyWith({AnimatedDouble? amount}) =>
+      OffsetPathOperator(id: id, amount: amount ?? this.amount);
+}
+
+/// ARREDONDAR CANTOS: troca quina por arco, so onde ha quina de verdade.
+class RoundCornersOperator extends ShapeItem {
+  RoundCornersOperator({super.id, AnimatedDouble? radius})
+      : radius = radius ?? AnimatedDouble(12);
+
+  final AnimatedDouble radius;
+
+  List<Path> apply(List<Path> paths, Duration t) {
+    final r = radius.valueAt(t);
+    return [for (final p in paths) roundCorners(p, r)];
+  }
+
+  RoundCornersOperator copyWith({AnimatedDouble? radius}) =>
+      RoundCornersOperator(id: id, radius: radius ?? this.radius);
+}
+
+/// ZIG ZAG: serra ou onda ao longo do contorno.
+class ZigZagOperator extends ShapeItem {
+  ZigZagOperator({
+    super.id,
+    AnimatedDouble? amplitude,
+    AnimatedDouble? ridges,
+    this.smooth = false,
+  })  : amplitude = amplitude ?? AnimatedDouble(10),
+        ridges = ridges ?? AnimatedDouble(0.5);
+
+  final AnimatedDouble amplitude;
+  final AnimatedDouble ridges;
+
+  /// Onda em vez de serra.
+  final bool smooth;
+
+  List<Path> apply(List<Path> paths, Duration t) {
+    final a = amplitude.valueAt(t);
+    final r = ridges.valueAt(t);
+    return [for (final p in paths) zigZag(p, a, r, smooth: smooth)];
+  }
+
+  ZigZagOperator copyWith({
+    AnimatedDouble? amplitude,
+    AnimatedDouble? ridges,
+    bool? smooth,
+  }) =>
+      ZigZagOperator(
+        id: id,
+        amplitude: amplitude ?? this.amplitude,
+        ridges: ridges ?? this.ridges,
+        smooth: smooth ?? this.smooth,
+      );
+}
+
+/// INCHAR E ENCOLHER: circulo vira flor, estrela vira bolha.
+class PuckerBloatOperator extends ShapeItem {
+  PuckerBloatOperator({super.id, AnimatedDouble? amount})
+      : amount = amount ?? AnimatedDouble(0);
+
+  /// Positivo incha, negativo encolhe.
+  final AnimatedDouble amount;
+
+  List<Path> apply(List<Path> paths, Duration t) {
+    final a = amount.valueAt(t);
+    return [for (final p in paths) puckerBloat(p, a)];
+  }
+
+  PuckerBloatOperator copyWith({AnimatedDouble? amount}) =>
+      PuckerBloatOperator(id: id, amount: amount ?? this.amount);
+}
+
+/// TORCER: o centro fica parado, a borda gira.
+class TwistOperator extends ShapeItem {
+  TwistOperator({super.id, AnimatedDouble? angle})
+      : angle = angle ?? AnimatedDouble(45);
+
+  final AnimatedDouble angle;
+
+  List<Path> apply(List<Path> paths, Duration t) {
+    final a = angle.valueAt(t);
+    return [for (final p in paths) twist(p, a)];
+  }
+
+  TwistOperator copyWith({AnimatedDouble? angle}) =>
+      TwistOperator(id: id, angle: angle ?? this.angle);
+}
+
+/// BAGUNCAR O CAMINHO: ruido deterministico na normal.
+class WigglePathOperator extends ShapeItem {
+  WigglePathOperator({
+    super.id,
+    AnimatedDouble? amount,
+    AnimatedDouble? detail,
+    AnimatedDouble? evolution,
+    this.seed = 1,
+  })  : amount = amount ?? AnimatedDouble(8),
+        detail = detail ?? AnimatedDouble(1),
+        evolution = evolution ?? AnimatedDouble(0);
+
+  final AnimatedDouble amount;
+  final AnimatedDouble detail;
+
+  /// Anima a bagunca sem sortear de novo.
+  final AnimatedDouble evolution;
+  final int seed;
+
+  List<Path> apply(List<Path> paths, Duration t) {
+    final a = amount.valueAt(t);
+    final d = detail.valueAt(t);
+    final e = evolution.valueAt(t);
+    return [
+      for (final p in paths)
+        wigglePath(p, a, seed: seed, detail: d, evolution: e),
+    ];
+  }
+
+  WigglePathOperator copyWith({
+    AnimatedDouble? amount,
+    AnimatedDouble? detail,
+    AnimatedDouble? evolution,
+    int? seed,
+  }) =>
+      WigglePathOperator(
+        id: id,
+        amount: amount ?? this.amount,
+        detail: detail ?? this.detail,
+        evolution: evolution ?? this.evolution,
+        seed: seed ?? this.seed,
+      );
+}
+
+/// COMBINAR CAMINHOS: as booleanas. E o que faz furo de verdade, em vez
+/// de pintar por cima com a cor do fundo.
+class MergePathsOperator extends ShapeItem {
+  MergePathsOperator({super.id, this.mode = MergeMode.union});
+
+  final MergeMode mode;
+
+  List<Path> apply(List<Path> paths, Duration t) =>
+      paths.isEmpty ? paths : [mergePaths(paths, mode)];
+
+  MergePathsOperator copyWith({MergeMode? mode}) =>
+      MergePathsOperator(id: id, mode: mode ?? this.mode);
+}
+
 /// Avalia a lista de itens (de baixo para cima como no AE: operadores e
 /// pinturas afetam os caminhos que vieram ANTES na lista).
 List<ShapeDraw> evaluateShape(
@@ -1060,6 +1220,20 @@ List<ShapeDraw> evaluateShape(
       case TrimOperator op:
         paths = op.apply(paths, t);
       case RepeaterOperator op:
+        paths = op.apply(paths, t);
+      case OffsetPathOperator op:
+        paths = op.apply(paths, t);
+      case RoundCornersOperator op:
+        paths = op.apply(paths, t);
+      case ZigZagOperator op:
+        paths = op.apply(paths, t);
+      case PuckerBloatOperator op:
+        paths = op.apply(paths, t);
+      case TwistOperator op:
+        paths = op.apply(paths, t);
+      case WigglePathOperator op:
+        paths = op.apply(paths, t);
+      case MergePathsOperator op:
         paths = op.apply(paths, t);
       case ShapeFill fill:
         for (final path in paths) {

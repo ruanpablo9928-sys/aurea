@@ -11,6 +11,7 @@ import 'layer_meta.dart';
 import 'mask.dart';
 import 'scene3d.dart';
 import 'shape.dart';
+import 'shape_ops.dart';
 import 'text_anim.dart';
 import 'text_animator.dart';
 import 'video_project.dart';
@@ -363,6 +364,46 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
           'offset': _ad(t.offset),
           'ind': t.individually,
         },
+      OffsetPathOperator o => {
+          'kind': 'offsetPath',
+          'id': o.id,
+          'amt': _ad(o.amount),
+        },
+      RoundCornersOperator r => {
+          'kind': 'roundCorners',
+          'id': r.id,
+          'r': _ad(r.radius),
+        },
+      ZigZagOperator z => {
+          'kind': 'zigzag',
+          'id': z.id,
+          'amp': _ad(z.amplitude),
+          'ridges': _ad(z.ridges),
+          'smooth': z.smooth,
+        },
+      PuckerBloatOperator pb => {
+          'kind': 'pucker',
+          'id': pb.id,
+          'amt': _ad(pb.amount),
+        },
+      TwistOperator tw => {
+          'kind': 'twist',
+          'id': tw.id,
+          'ang': _ad(tw.angle),
+        },
+      WigglePathOperator w => {
+          'kind': 'wigglePath',
+          'id': w.id,
+          'amt': _ad(w.amount),
+          'detail': _ad(w.detail),
+          'evo': _ad(w.evolution),
+          'seed': w.seed,
+        },
+      MergePathsOperator mp => {
+          'kind': 'merge',
+          'id': mp.id,
+          'mode': mp.mode.index,
+        },
       RepeaterOperator r => {
           'kind': 'repeater',
           'id': r.id,
@@ -459,6 +500,39 @@ ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
           dy: (m['dy'] as num).toDouble(),
           rotation: _asAd(m['rot']),
           scaleStep: (m['step'] as num).toDouble(),
+        ),
+      'offsetPath' => OffsetPathOperator(
+          id: m['id'] as String,
+          amount: _asAd(m['amt']),
+        ),
+      'roundCorners' => RoundCornersOperator(
+          id: m['id'] as String,
+          radius: _asAd(m['r']),
+        ),
+      'zigzag' => ZigZagOperator(
+          id: m['id'] as String,
+          amplitude: _asAd(m['amp']),
+          ridges: _asAd(m['ridges']),
+          smooth: m['smooth'] as bool? ?? false,
+        ),
+      'pucker' => PuckerBloatOperator(
+          id: m['id'] as String,
+          amount: _asAd(m['amt']),
+        ),
+      'twist' => TwistOperator(
+          id: m['id'] as String,
+          angle: _asAd(m['ang']),
+        ),
+      'wigglePath' => WigglePathOperator(
+          id: m['id'] as String,
+          amount: _asAd(m['amt']),
+          detail: _asAd(m['detail']),
+          evolution: _asAd(m['evo']),
+          seed: (m['seed'] as num?)?.toInt() ?? 1,
+        ),
+      'merge' => MergePathsOperator(
+          id: m['id'] as String,
+          mode: MergeMode.values[(m['mode'] as num).toInt()],
         ),
       _ => throw FormatException('ShapeItem desconhecido: ${m['kind']}'),
     };
