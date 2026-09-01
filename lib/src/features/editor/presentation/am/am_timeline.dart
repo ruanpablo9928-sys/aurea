@@ -12,6 +12,7 @@ import '../../domain/video_project.dart' as proj;
 import '../../application/media_preview_service.dart';
 import '../../application/proxy_service.dart';
 import 'am_colors.dart';
+import 'layer_look.dart';
 import 'clip_preview_painters.dart';
 
 const double kAmRowHeight = 46;
@@ -470,18 +471,24 @@ class _BeatsPainter extends CustomPainter {
   final List<Duration> beats;
   final double pps;
 
+  static final Paint _tinta = Paint()
+    ..color = AmColors.teal.withValues(alpha: 0.55)
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+
   @override
   void paint(Canvas canvas, Size size) {
     if (beats.isEmpty) return;
-    final p = Paint()
-      ..color = AmColors.teal.withValues(alpha: 0.55)
-      ..strokeWidth = 1;
+    // Uma grade densa tem milhares de riscos; num Path so, uma chamada.
+    final caminho = Path();
     for (final b in beats) {
       final x = b.inMicroseconds / 1e6 * pps;
       if (x < -2 || x > size.width + 2) continue;
-      canvas.drawLine(
-          Offset(x, size.height * 0.55), Offset(x, size.height), p);
+      caminho
+        ..moveTo(x, size.height * 0.55)
+        ..lineTo(x, size.height);
     }
+    canvas.drawPath(caminho, _tinta);
   }
 
   @override
@@ -665,25 +672,40 @@ class _AmRulerPainter extends CustomPainter {
 
   final double pps;
 
+  // Objetos de pintura reaproveitados: `paint` roda a cada quadro
+  // enquanto a linha rola.
+  static final Paint _minor = Paint()
+    ..color = const Color(0xFF5A6880)
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+  static final Paint _major = Paint()
+    ..color = const Color(0xFF8A97AD)
+    ..strokeWidth = 1.4
+    ..style = PaintingStyle.stroke;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final minor = Paint()
-      ..color = const Color(0xFF5A6880)
-      ..strokeWidth = 1;
-    final major = Paint()
-      ..color = const Color(0xFF8A97AD)
-      ..strokeWidth = 1.4;
-    final step = pps / 10; // 10 ticks por segundo
+    // DOIS CAMINHOS, DUAS CHAMADAS. Antes era um drawLine por marca, e a
+    // regua cobre a linha do tempo INTEIRA: num projeto de tres minutos
+    // sao milhares de chamadas gravadas a cada quadro so para desenhar
+    // tracinhos. Juntas num Path, viram duas.
+    var step = pps / 10; // 10 marcas por segundo
+    if (step < 2) step = pps; // reduzido demais: so as marcas de segundo
+    if (step <= 0) return;
+
+    final minor = Path();
+    final major = Path();
     var i = 0;
     for (var x = 0.0; x < size.width; x += step) {
-      final isMajor = i % 10 == 0;
-      canvas.drawLine(
-        Offset(x, isMajor ? 2 : 9),
-        Offset(x, size.height - 2),
-        isMajor ? major : minor,
-      );
+      final ehMajor = i % 10 == 0;
+      final alvo = ehMajor ? major : minor;
+      alvo
+        ..moveTo(x, ehMajor ? 2 : 9)
+        ..lineTo(x, size.height - 2);
       i++;
     }
+    canvas.drawPath(minor, _minor);
+    canvas.drawPath(major, _major);
   }
 
   @override
@@ -888,7 +910,11 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
               onHorizontalDragCancel:
                   selected && !compact ? onEditEnd : null,
               child: CustomPaint(
-                painter: _AmBarPainter(selected: selected),
+                painter: _AmBarPainter(
+                  selected: selected,
+                  color: layerTypeColor(layer),
+                  stripeColor: layerTypeStripe(layer),
+                ),
                 // FORMA DE ONDA e TIRA DE MINIATURAS dentro da barra:
                 // sem elas, achar o corte e tatear.
                 child: _ClipPreview(
@@ -897,6 +923,13 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
+                      // ICONE DO TIPO na ponta: reconhecer sem ler.
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Icon(layerTypeIcon(layer),
+                            size: 13,
+                            color: Colors.white.withValues(alpha: 0.85)),
+                      ),
                       Flexible(
                         child: Text(
                           layer.name,
@@ -980,39 +1013,75 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
               ),
           // Diamantes de keyframe sobre a barra: acesos = propriedade
           // ativa; apagados e sem borda = de outra propriedade.
-          for (final kf in layer.keyframeTimes)
+          // FAIXA DE KEYFRAMES COM DENSIDADE.
+          //
+          // Vinte keyframes a 2 px de distancia desenhados um a um viram
+          // uma mancha de losangos sobrepostos — que informa menos que
+          // uma barra lisa, e custa vinte widgets. Aqui o que esta junto
+          // demais para se distinguir vira barra, e o que da para
+          // distinguir continua losango.
+          for (final grupo in _agrupaKeyframes(layer.keyframeTimes, pps))
             Builder(builder: (context) {
               final active = activeTimesUs == null ||
-                  activeTimesUs!.contains(kf.inMicroseconds);
-              final diamante = Transform.rotate(
-                angle: 0.785398,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: 0.30),
-                    borderRadius: BorderRadius.circular(2),
-                    border: active ? Border.all(color: Colors.black38) : null,
-                  ),
-                ),
-              );
+                  grupo.times.any(
+                      (t) => activeTimesUs!.contains(t.inMicroseconds));
+              final cor = active
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.30);
+              final x0 = grupo.times.first.inMicroseconds / 1e6 * pps;
+              final x1 = grupo.times.last.inMicroseconds / 1e6 * pps;
+
+              final Widget marca = grupo.times.length == 1
+                  ? Transform.rotate(
+                      angle: 0.785398,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: cor,
+                          borderRadius: BorderRadius.circular(2),
+                          border: active
+                              ? Border.all(color: Colors.black38)
+                              : null,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: cor,
+                        borderRadius: BorderRadius.circular(4),
+                        border: active
+                            ? Border.all(color: Colors.black38)
+                            : null,
+                      ),
+                    );
+
+              final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
               return Positioned(
-                left: left + (kf.inMicroseconds / 1e6 * pps) - 11,
+                left: left + x0 - 11,
                 top: kAmBarHeight / 2 - 11,
-                width: 22,
+                width: largura,
                 height: 22,
-                // O APAGADO RESPONDE AO TOQUE. Diamante que se ve e nao
-                // se consegue tocar vira enigma: de quem e esse? So
-                // `onTap` — arrastar continua movendo o clipe, porque um
+                // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
+                // consegue tocar vira enigma: de quem e essa? So `onTap`
+                // — arrastar continua movendo o clipe, porque um
                 // reconhecedor de toque perde a arena para um de arrasto.
                 child: (active || onForeignKeyframe == null)
-                    ? IgnorePointer(child: Center(child: diamante))
+                    ? IgnorePointer(
+                        child: Center(
+                            child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 11),
+                                child: marca)))
                     : GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => onForeignKeyframe!(kf),
-                        child: Center(child: diamante),
+                        onTap: () => onForeignKeyframe!(grupo.times.first),
+                        child: Center(
+                            child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 11),
+                                child: marca)),
                       ),
               );
             }),
@@ -1102,33 +1171,76 @@ class _NavArrow extends StatelessWidget {
 }
 
 /// Barra teal; selecionada ganha listras diagonais claras.
+/// Um punhado de keyframes perto demais para se distinguirem.
+class _GrupoDeKeyframes {
+  const _GrupoDeKeyframes(this.times);
+  final List<Duration> times;
+}
+
+/// Junta os keyframes que ficariam a menos de [minPx] um do outro.
+///
+/// O criterio e em PIXEL, nao em tempo: o mesmo par de keyframes se
+/// distingue com a linha ampliada e some quando ela e reduzida, e o
+/// desenho tem de acompanhar isso.
+List<_GrupoDeKeyframes> _agrupaKeyframes(List<Duration> times, double pps,
+    {double minPx = 9}) {
+  if (times.isEmpty) return const [];
+  final ordenados = [...times]..sort();
+  final out = <_GrupoDeKeyframes>[];
+  var atual = <Duration>[ordenados.first];
+  for (var i = 1; i < ordenados.length; i++) {
+    final dx = (ordenados[i] - atual.last).inMicroseconds / 1e6 * pps;
+    if (dx < minPx) {
+      atual.add(ordenados[i]);
+    } else {
+      out.add(_GrupoDeKeyframes(atual));
+      atual = <Duration>[ordenados[i]];
+    }
+  }
+  out.add(_GrupoDeKeyframes(atual));
+  return out;
+}
+
 class _AmBarPainter extends CustomPainter {
-  const _AmBarPainter({required this.selected});
+  const _AmBarPainter({
+    required this.selected,
+    required this.color,
+    required this.stripeColor,
+  });
 
   final bool selected;
+
+  /// A cor DO TIPO da camada. Antes era o mesmo violeta para tudo, e uma
+  /// linha do tempo com dez faixas exigia ler dez rotulos para achar o
+  /// audio no meio dos videos.
+  final Color color;
+  final Color stripeColor;
+
+  // Objetos de pintura reaproveitados: `paint` roda a cada quadro
+  // enquanto a linha rola, e alocar aqui dentro e lixo por quadro.
+  static final Paint _fundo = Paint();
+  static final Paint _listra = Paint()..strokeWidth = 7;
 
   @override
   void paint(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
         Offset.zero & size, const Radius.circular(8));
-    canvas.drawRRect(
-        rrect, Paint()..color = selected ? AmColors.teal : AmColors.teal);
+    canvas.drawRRect(rrect, _fundo..color = color);
     if (selected) {
       canvas.save();
       canvas.clipRRect(rrect);
-      final stripe = Paint()
-        ..color = AmColors.tealBright.withValues(alpha: 0.55)
-        ..strokeWidth = 7;
+      _listra.color = stripeColor.withValues(alpha: 0.55);
       for (var x = -size.height; x < size.width + size.height; x += 22) {
         canvas.drawLine(Offset(x, size.height + 4),
-            Offset(x + size.height + 8, -4), stripe);
+            Offset(x + size.height + 8, -4), _listra);
       }
       canvas.restore();
     }
   }
 
   @override
-  bool shouldRepaint(_AmBarPainter old) => old.selected != selected;
+  bool shouldRepaint(_AmBarPainter old) =>
+      old.selected != selected || old.color != color;
 }
 
 class _TrimHandle extends StatelessWidget {

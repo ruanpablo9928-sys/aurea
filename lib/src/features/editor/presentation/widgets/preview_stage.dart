@@ -1513,33 +1513,70 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                   fxWidth, fxHeight);
           final intensity =
               effect.paramAt('intensity', local).clamp(0.0, 1.0);
-          out = Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Opacity(
-                opacity: intensity,
-                child: ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(
-                      sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.decal),
-                  child: ColorFiltered(
-                    colorFilter:
-                        ColorFilter.mode(effect.color, BlendMode.srcATop),
+          // NEUTRO E NEUTRO: em intensidade zero o resultado ja era
+          // identico, mas o caminho ainda desfocava a camada e abria uma
+          // camada de composicao para depois multiplicar tudo por zero.
+          // Efeito desligado tem de custar zero, nao so parecer zero.
+          if (intensity > 0.004) {
+            // O LIMITE VOLTOU A EXISTIR.
+            //
+            // O controle estava na tela e a conta nunca o lia: o glow
+            // borrava a camada INTEIRA e somava por cima. E dai que vem o
+            // aspecto acinzentado — brilho e o que passa de um certo
+            // ponto, nao a imagem toda desfocada. Aqui o que esta abaixo
+            // do limite vai a zero antes do desfoque, e o que passou dele
+            // e reescalado para nao perder forca no caminho.
+            final th =
+                effect.paramAt('threshold', local).clamp(0.0, 0.98);
+            final e = 1 / (1 - th);
+            final o = -th * 255 * e;
+            final acimaDoLimite = th < 0.004
+                ? out
+                : ColorFiltered(
+                    colorFilter: ColorFilter.matrix(<double>[
+                      e, 0, 0, 0, o,
+                      0, e, 0, 0, o,
+                      0, 0, e, 0, o,
+                      0, 0, 0, 1, 0,
+                    ]),
                     child: out,
+                  );
+
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Opacity(
+                  opacity: intensity,
+                  child: ImageFiltered(
+                    imageFilter: ui.ImageFilter.blur(
+                        sigmaX: sigma,
+                        sigmaY: sigma,
+                        tileMode: TileMode.decal),
+                    child: ColorFiltered(
+                      colorFilter:
+                          ColorFilter.mode(effect.color, BlendMode.srcATop),
+                      child: acimaDoLimite,
+                    ),
                   ),
                 ),
-              ),
-              out,
-            ],
-          );
+                out,
+              ],
+            );
+          }
         case EffectType.tint:
-          out = ColorFiltered(
-            colorFilter: ColorFilter.mode(
-              effect.color.withValues(
-                  alpha: effect.paramAt('strength', local).clamp(0.0, 1.0)),
-              BlendMode.srcATop,
-            ),
-            child: out,
-          );
+          final forcaTint =
+              effect.paramAt('strength', local).clamp(0.0, 1.0);
+          // Em forca zero o srcATop ja devolvia o destino intacto — mas
+          // pagava uma camada de composicao para isso.
+          if (forcaTint > 0.004) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.mode(
+                effect.color.withValues(alpha: forcaTint),
+                BlendMode.srcATop,
+              ),
+              child: out,
+            );
+          }
 
         case EffectType.glowVol:
           // DEEP GLOW: piramide de bloom com pesos NORMALIZADOS, em
@@ -2074,12 +2111,22 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           final soft =
               effect.paramAt('suavidade', local).clamp(0.0, 1.0);
           final k = 0.7 + soft * 0.6;
+          // O LIMIAR EXISTIA NA TELA E NAO EXISTIA NA CONTA.
+          //
+          // O controle estava exposto, com nome e faixa, e o codigo nunca
+          // o lia: mexer nele nao mudava um pixel. Agora ele entra como
+          // deslocamento constante da linha de alfa — que e como um
+          // limiar se escreve numa matriz de cor, onde nao cabe
+          // comparacao. Cinza abaixo do limiar vai a zero; acima, sobra
+          // o que passou dele.
+          final limiar =
+              effect.paramAt('limiar', local).clamp(0.0, 1.0);
           out = ColorFiltered(
             colorFilter: ColorFilter.matrix(<double>[
               1, 0, 0, 0, 0,
               0, 1, 0, 0, 0,
               0, 0, 1, 0, 0,
-              0.2126 * k, 0.7152 * k, 0.0722 * k, 0, 0,
+              0.2126 * k, 0.7152 * k, 0.0722 * k, 0, -limiar * 255,
             ]),
             child: out,
           );
@@ -2415,21 +2462,39 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           }
 
         case EffectType.motionTile:
-          out = FxSnapshot(
-            painter: MotionTilePainter(
-              tileW: effect.paramAt('tile_width', local),
-              tileH: effect.paramAt('tile_height', local),
-              outW: effect.paramAt('output_width', local),
-              outH: effect.paramAt('output_height', local),
-              centerX: effect.paramAt('tile_center', local),
-              centerY: effect.paramAt('tile_center_y', local),
-              mirror: effect.paramAt('mirror_edges', local) >= 0.5,
-              phase: effect.paramAt('phase', local),
-              horizontalPhase:
-                  effect.paramAt('horizontal_phase_shift', local) >= 0.5,
-            ),
-            child: out,
-          );
+          final ladoW = effect.paramAt('tile_width', local);
+          final ladoH = effect.paramAt('tile_height', local);
+          final saidaW = effect.paramAt('output_width', local);
+          final saidaH = effect.paramAt('output_height', local);
+          final fase = effect.paramAt('phase', local);
+          final espelha = effect.paramAt('mirror_edges', local) >= 0.5;
+          // IDENTIDADE do After Effects: ladrilho de 100% num quadro de
+          // 100%, sem fase e sem espelho, e a propria camada. Passar por
+          // aqui assim mesmo custava uma FOTO da camada inteira por
+          // quadro — e foto e justamente o que congelava a camada.
+          final identidade = (ladoW - 100).abs() < 0.01 &&
+              (ladoH - 100).abs() < 0.01 &&
+              (saidaW - 100).abs() < 0.01 &&
+              (saidaH - 100).abs() < 0.01 &&
+              fase.abs() < 0.01 &&
+              !espelha;
+          if (!identidade) {
+            out = FxSnapshot(
+              painter: MotionTilePainter(
+                tileW: ladoW,
+                tileH: ladoH,
+                outW: saidaW,
+                outH: saidaH,
+                centerX: effect.paramAt('tile_center', local),
+                centerY: effect.paramAt('tile_center_y', local),
+                mirror: espelha,
+                phase: fase,
+                horizontalPhase:
+                    effect.paramAt('horizontal_phase_shift', local) >= 0.5,
+              ),
+              child: out,
+            );
+          }
 
         case EffectType.ccSplit:
           final sp = effect.paramAt('divisao', local);
@@ -2593,6 +2658,9 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           // As caixas vem da ANALISE ja gravada. Sem analise, o pintor
           // simula — para a pessoa ajustar a aparencia antes de gastar
           // o processamento.
+          // Opacidade zero e o desligado do rastreio: sem isto ele
+          // desenhava tudo para pintar com alfa zero em cima.
+          if (effect.paramAt('opacity', local) <= 0.4) break;
           final rastreio =
               BlobTrackService.instance.dataFor(effect.id);
           final sobreposicao = Positioned.fill(
