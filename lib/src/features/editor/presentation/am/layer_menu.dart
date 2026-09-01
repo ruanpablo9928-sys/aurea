@@ -306,6 +306,33 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 });
               }),
             ],
+            // MONTAGEM: o que faz a linha do tempo se comportar como
+            // fila, em vez de retangulos soltos.
+            item(CupertinoIcons.delete_left, 'Excluir e fechar', () {
+              Navigator.of(moreContext).pop();
+              controller.rippleDeleteLayer(layer.id);
+              if (context.mounted) {
+                AureaSnack.show(context,
+                    'Camada excluida — o que vinha depois andou para tras',
+                    actionLabel: 'Desfazer', onAction: controller.undo);
+              }
+            }),
+            item(CupertinoIcons.arrow_left_to_line, 'Fechar buracos', () {
+              final n = controller.gapCount();
+              Navigator.of(moreContext).pop();
+              if (n == 0) {
+                if (context.mounted) {
+                  showReasonToast(context, 'Nao ha buraco para fechar');
+                }
+                return;
+              }
+              controller.closeTimelineGaps();
+              if (context.mounted) {
+                AureaSnack.show(
+                    context, n == 1 ? '1 buraco fechado' : '$n buracos fechados',
+                    actionLabel: 'Desfazer', onAction: controller.undo);
+              }
+            }),
             if (layer is GroupLayer)
               item(CupertinoIcons.square_stack_3d_down_right,
                   'Desagrupar', () {

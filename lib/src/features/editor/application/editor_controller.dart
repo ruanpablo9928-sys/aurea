@@ -19,6 +19,7 @@ import '../domain/layer_meta.dart';
 import '../domain/layout_ops.dart';
 import '../domain/measure.dart';
 import '../domain/mask.dart';
+import '../domain/nle_ops.dart';
 import '../domain/shape.dart';
 import '../domain/text_anim.dart';
 import '../domain/text_animator.dart';
@@ -1107,6 +1108,60 @@ class EditorController extends Notifier<VideoProject> {
       ref.read(selectedLayerProvider.notifier).state = null;
     }
     ref.read(multiSelectProvider.notifier).state = const {};
+  }
+
+  // ------------------------------------------ montagem (NLE)
+
+  /// EXCLUSAO COM ARRASTO: tira a camada e puxa para tras o que vinha
+  /// depois. E a diferenca entre "apaguei um trecho" e "apaguei um
+  /// trecho e agora tenho um silencio no meio".
+  void rippleDeleteLayer(String id) {
+    if (_layer(id) == null) return;
+    _mutate(state.copyWith(layers: rippleDelete(state.layers, id)));
+    if (ref.read(selectedLayerProvider) == id) {
+      ref.read(selectedLayerProvider.notifier).state = null;
+    }
+  }
+
+  /// FECHAR BURACOS: encosta tudo, sem mudar ordem nem duracao.
+  void closeTimelineGaps({Duration from = Duration.zero}) {
+    final antes = gapsIn(state.layers, from: from);
+    if (antes.isEmpty) return;
+    _mutate(state.copyWith(layers: closeGaps(state.layers, from: from)));
+  }
+
+  /// Quantos vazios existem hoje — para o comando saber se tem o que
+  /// fazer, em vez de piscar sem efeito.
+  int gapCount({Duration from = Duration.zero}) =>
+      gapsIn(state.layers, from: from).length;
+
+  /// INSERIR: abre espaco e empurra para frente o que vem depois.
+  void insertLayerAt(Layer novo, Duration at) {
+    final r = insertAt(state.layers, novo, at);
+    _mutate(state.copyWith(layers: r.layers));
+    ref.read(selectedLayerProvider.notifier).state = r.inserted.id;
+  }
+
+  /// SOBRESCREVER: poe por cima apagando o que estava embaixo, sem
+  /// esticar a linha do tempo.
+  void overwriteLayerAt(Layer novo, Duration at) {
+    final r = overwriteAt(state.layers, novo, at);
+    _mutate(state.copyWith(layers: r.layers));
+    ref.read(selectedLayerProvider.notifier).state = r.inserted.id;
+  }
+
+  /// LEVANTAR: tira o trecho e deixa o buraco (mantem a sincronia).
+  void liftTimeRange(Duration from, Duration to, {Set<String>? only}) {
+    if (to <= from) return;
+    _mutate(state.copyWith(
+        layers: liftRange(state.layers, from, to, only: only)));
+  }
+
+  /// EXTRAIR: tira o trecho e fecha o buraco.
+  void extractTimeRange(Duration from, Duration to, {Set<String>? only}) {
+    if (to <= from) return;
+    _mutate(state.copyWith(
+        layers: extractRange(state.layers, from, to, only: only)));
   }
 
   void duplicateLayer(String id) {
