@@ -13,6 +13,7 @@ import '../domain/scene3d.dart';
 import '../domain/effect.dart';
 import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
+import '../domain/extrude3d.dart';
 import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
@@ -941,6 +942,68 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.copyScene(shots: const []));
   }
 
+  /// EXTRUDAR uma forma do projeto para dentro da cena 3D.
+  ///
+  /// Pega o contorno que a camada de forma ja desenha, vira volume, e
+  /// entra como um no da cena. E o caminho de logo plano para logo
+  /// girando — sem obrigar ninguem a modelar nada.
+  String? extrudeShapeIntoScene(
+    String sceneId,
+    String shapeLayerId, {
+    double depth = 40,
+  }) {
+    final cena = _layer(sceneId);
+    final forma = _layer(shapeLayerId);
+    if (cena is! Scene3DLayer || forma is! ShapeLayer) return null;
+
+    final desenhos = evaluateShape(forma.contents, Duration.zero);
+    if (desenhos.isEmpty) return null;
+    // O maior desenho e a forma; os outros sao contorno e enfeite.
+    var maior = desenhos.first.path;
+    var maiorArea = 0.0;
+    for (final d in desenhos) {
+      final b = d.path.getBounds();
+      final a = b.width * b.height;
+      if (a > maiorArea) {
+        maiorArea = a;
+        maior = d.path;
+      }
+    }
+    final contorno = dedupeOutline(outlineOfPath(maior));
+    if (contorno.length < 3) return null;
+
+    final malha = extrudeOutline(contorno, depth: depth);
+    if (malha.verts.isEmpty) return null;
+
+    final no = SceneNode(
+      name: forma.name,
+      mesh: malha,
+      outline: contorno,
+      extrudeDepth: depth,
+      size: 120,
+    );
+    _replace(cena.withScene(
+        cena.scene.copyWith(nodes: [...cena.scene.nodes, no])));
+    return no.id;
+  }
+
+  /// Muda a ESPESSURA de um no extrudado, reaproveitando o contorno —
+  /// pedir a forma de novo perderia qualquer ajuste ja feito no no.
+  void setExtrudeDepth(String sceneId, String nodeId, double depth) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return;
+    _replace(cena.withScene(cena.scene.copyWith(nodes: [
+      for (final n in cena.scene.nodes)
+        if (n.id == nodeId && n.outline != null)
+          n.copyWith(
+            mesh: extrudeOutline(n.outline!, depth: depth),
+            extrudeDepth: depth,
+          )
+        else
+          n,
+    ])));
+  }
+
   void setScene3DHelpers(String id, bool show) {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;
@@ -1326,6 +1389,78 @@ class EditorController extends Notifier<VideoProject> {
         VideoLayer v => v.sourcePath,
         _ => null,
       };
+
+  // ------------------------------------------------------ pulso na batida
+
+  /// PULSAR NA BATIDA: escala a camada em cada ataque da musica.
+  ///
+  /// Feito na mao, isso e um keyframe a cada meio segundo por tres
+  /// minutos — ninguem faz, e o video fica parado. A conta e a mesma que
+  /// o detector de batida ja faz; o que faltava era virar keyframe.
+  ///
+  /// Cada batida vira TRES keyframes: o repouso logo antes, o pico, e a
+  /// volta. Sem o repouso antes, a escala viria subindo desde a batida
+  /// anterior e o pulso viraria uma onda mole.
+  ///
+  /// Devolve quantas batidas entraram, ou null se a forma de onda ainda
+  /// nao esta pronta.
+  int? applyBeatPulse(
+    String targetId,
+    String audioId, {
+    double amount = 0.12,
+    Duration attack = const Duration(milliseconds: 60),
+    Duration release = const Duration(milliseconds: 180),
+  }) {
+    final alvo = _layer(targetId);
+    if (alvo == null) return null;
+    final batidas = beatsOf(audioId);
+    if (batidas == null) return null;
+
+    final fonte = _layer(audioId);
+    if (fonte == null) return null;
+
+    final base = alvo.scaleX.valueAt(Duration.zero);
+    final pico = base * (1 + amount.clamp(0.0, 2.0));
+
+    var sx = alvo.scaleX;
+    var sy = alvo.scaleY;
+    var n = 0;
+    for (final b in batidas) {
+      // As batidas vem em tempo do ARQUIVO de audio; a camada alvo tem
+      // o relogio dela.
+      final naLinha = fonte.startTime + b;
+      if (naLinha < alvo.startTime || naLinha > alvo.endTime) continue;
+      final t = alvo.localTime(naLinha);
+
+      final antes = t - attack;
+      final depois = t + release;
+      if (antes >= Duration.zero) {
+        sx = sx.withKeyframe(antes, base, Easing.easeOut);
+        sy = sy.withKeyframe(antes, base, Easing.easeOut);
+      }
+      sx = sx.withKeyframe(t, pico, Easing.easeOut);
+      sy = sy.withKeyframe(t, pico, Easing.easeOut);
+      if (depois <= alvo.duration) {
+        sx = sx.withKeyframe(depois, base, Easing.easeInOut);
+        sy = sy.withKeyframe(depois, base, Easing.easeInOut);
+      }
+      n++;
+    }
+    if (n == 0) return 0;
+    _replace(alvo.copyLayer(scaleX: sx, scaleY: sy));
+    return n;
+  }
+
+  /// Tira todos os keyframes de escala — o "desfazer" do pulso quando a
+  /// pessoa ja mexeu em outras coisas depois.
+  void clearScaleKeyframes(String id) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    _replace(layer.copyLayer(
+      scaleX: AnimatedDouble(layer.scaleX.valueAt(Duration.zero)),
+      scaleY: AnimatedDouble(layer.scaleY.valueAt(Duration.zero)),
+    ));
+  }
 
   // -------------------------------------------------------- velocidade
 

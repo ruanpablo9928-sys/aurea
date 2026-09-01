@@ -16,6 +16,7 @@ import '../../domain/shape.dart';
 import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import 'audio_sheet.dart';
+import 'beat_pulse_sheet.dart';
 import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
 import 'cameras_sheet.dart';
@@ -341,6 +342,14 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                   }
                 });
               }),
+            item(CupertinoIcons.metronome, 'Pulsar na batida', () {
+              Navigator.of(moreContext).pop();
+              Future.microtask(() {
+                if (context.mounted) {
+                  showBeatPulseSheet(context, ref, layer.id);
+                }
+              });
+            }),
             if (layer is AudioLayer || layer is VideoLayer)
               item(CupertinoIcons.speedometer, 'Velocidade', () {
                 Navigator.of(moreContext).pop();

@@ -186,6 +186,74 @@ class _ObjectsTab extends StatelessWidget {
             },
           ),
         const SizedBox(height: 8),
+
+        // EXTRUDAR: a forma plana do projeto vira volume. E o caminho de
+        // logo chapado para logo girando, sem modelar nada.
+        Builder(builder: (context) {
+          final project = ProviderScope.containerOf(context)
+              .read(editorControllerProvider);
+          final formas = project.layers.whereType<ShapeLayer>().toList();
+          if (formas.isEmpty) {
+            return const _Hint(
+                'Desenhe uma camada de forma para poder extrudar ela em '
+                '3D.');
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SectionTitle('Extrudar uma forma'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final f in formas)
+                    GestureDetector(
+                      onTap: () {
+                        final id = controller.extrudeShapeIntoScene(
+                            layer.id, f.id);
+                        if (id != null) onSelect(id);
+                        onChanged();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 11, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: AmColors.chip,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(CupertinoIcons.cube,
+                                size: 13, color: AmColors.accent),
+                            const SizedBox(width: 6),
+                            Text(f.name,
+                                style: const TextStyle(
+                                    fontSize: 11, color: AmColors.text)),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (node?.outline != null) ...[
+                const SizedBox(height: 6),
+                _Num(
+                  label: 'Espessura',
+                  track: AnimatedDouble(node!.extrudeDepth),
+                  min: 2,
+                  max: 300,
+                  onChanged: (v) {
+                    controller.setExtrudeDepth(layer.id, node.id, v);
+                    onChanged();
+                  },
+                ),
+              ],
+              const SizedBox(height: 10),
+            ],
+          );
+        }),
+
         Wrap(
           spacing: 8,
           runSpacing: 8,

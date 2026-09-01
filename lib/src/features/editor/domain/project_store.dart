@@ -4,6 +4,7 @@ import 'camera3d.dart';
 import 'caption.dart';
 import 'effect.dart';
 import 'element3d.dart';
+import 'extrude3d.dart';
 import 'grid_rig.dart';
 import 'keyframe.dart';
 import 'blend_extra.dart';
@@ -1002,6 +1003,14 @@ Map<String, dynamic> _scene(Scene3D s) => {
             'vis': n.visible,
             if (n.instances.isNotEmpty)
               'inst': [for (final i in n.instances) _vec(i)],
+            // O CONTORNO basta: a malha se refaz na leitura, e o arquivo
+            // nao carrega milhares de vertices que saem em milissegundos.
+            if (n.outline != null) ...{
+              'outline': [
+                for (final p in n.outline!) [p.dx, p.dy]
+              ],
+              'depth': n.extrudeDepth,
+            },
           },
       ],
       'lights': [
@@ -1023,6 +1032,14 @@ Map<String, dynamic> _scene(Scene3D s) => {
             {'n': v.name, 'p': _vec(v.position), 't': _vec(v.target)},
         ],
     };
+
+List<Offset>? _asOutline(dynamic v) => v == null
+    ? null
+    : [
+        for (final p in (v as List))
+          Offset(((p as List)[0] as num).toDouble(),
+              (p[1] as num).toDouble()),
+      ];
 
 Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
       ambient: (m['ambient'] as num?)?.toDouble() ?? 0.28,
@@ -1050,6 +1067,12 @@ Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
               for (final i in (n['inst'] as List? ?? const []))
                 _asVec(i),
             ],
+            outline: _asOutline(n['outline']),
+            extrudeDepth: (n['depth'] as num?)?.toDouble() ?? 40.0,
+            mesh: _asOutline(n['outline']) == null
+                ? null
+                : extrudeOutline(_asOutline(n['outline'])!,
+                    depth: (n['depth'] as num?)?.toDouble() ?? 40.0),
           ),
       ],
       lights: [

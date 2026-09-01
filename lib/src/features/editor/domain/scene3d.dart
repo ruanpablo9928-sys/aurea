@@ -180,6 +180,9 @@ class SceneNode {
     this.size = 100,
     this.visible = true,
     this.instances = const [],
+    this.mesh,
+    this.outline,
+    this.extrudeDepth = 40,
   })  : id = id ?? const Uuid().v4(),
         x = x ?? AnimatedDouble(0),
         y = y ?? AnimatedDouble(0),
@@ -207,6 +210,17 @@ class SceneNode {
   /// chamada. Vazio = so o proprio no.
   final List<Vec3> instances;
 
+  /// MALHA PROPRIA (forma extrudada). Quando existe, manda no lugar da
+  /// malha do [kind] — e como um logo vira volume sem virar um dos
+  /// solidos prontos.
+  final Element3DMesh? mesh;
+
+  /// O contorno 2D que gerou a malha, guardado para poder mudar a
+  /// espessura depois sem pedir a forma de novo.
+  final List<Offset>? outline;
+
+  final double extrudeDepth;
+
   Vec3 positionAt(Duration t) =>
       Vec3(x.valueAt(t), y.valueAt(t), z.valueAt(t));
 
@@ -224,6 +238,9 @@ class SceneNode {
     double? size,
     bool? visible,
     List<Vec3>? instances,
+    Element3DMesh? mesh,
+    List<Offset>? outline,
+    double? extrudeDepth,
   }) =>
       SceneNode(
         id: id,
@@ -240,6 +257,9 @@ class SceneNode {
         size: size ?? this.size,
         visible: visible ?? this.visible,
         instances: instances ?? this.instances,
+        mesh: mesh ?? this.mesh,
+        outline: outline ?? this.outline,
+        extrudeDepth: extrudeDepth ?? this.extrudeDepth,
       );
 }
 
@@ -472,7 +492,9 @@ SceneFrame renderScene(
 
   for (final node in scene.nodes) {
     if (!node.visible) continue;
-    final mesh = element3DMesh(node.kind);
+    // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
+    final mesh = node.mesh ?? element3DMesh(node.kind);
+    if (mesh.verts.isEmpty) continue;
     final s = node.size * node.scale.valueAt(t);
     final base = node.positionAt(t);
     final rx = node.rotX.valueAt(t) * math.pi / 180;
