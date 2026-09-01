@@ -1470,6 +1470,67 @@ class EditorController extends Notifier<VideoProject> {
     return offs.length;
   }
 
+  /// REENQUADRAR SOZINHO: o clipe horizontal vira vertical seguindo o
+  /// que se move.
+  ///
+  /// Cortar 16:9 para 9:16 no centro corta a cabeca de quem esta na
+  /// lateral. Aqui o mesmo rastreador acha o que se mexe, o caminho e
+  /// suavizado (senao o enquadramento treme junto com o assunto) e vira
+  /// keyframe de posicao — com a escala que preenche o novo quadro.
+  ///
+  /// Devolve quantos quadros foram usados, ou null se nao deu para ler.
+  Future<int?> autoReframeLayer(String id) async {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return null;
+
+    final frames = await TrackingService.instance.grayFrames(
+      layer.sourcePath,
+      start: layer.sourceOffset,
+      duration: layer.sourceSpan,
+      fps: 6,
+    );
+    if (frames.length < 4) return null;
+
+    final centro =
+        Offset(frames.first.width / 2, frames.first.height / 2);
+    final track = trackSequence(frames, centro, patch: 20, busca: 40);
+
+    // Suaviza MUITO mais que a estabilizacao: aqui nao se quer copiar o
+    // movimento do assunto, e sim acompanhar de longe. Enquadramento que
+    // treme junto com o assunto e pior que enquadramento parado.
+    final caminho =
+        smoothPath([for (final p in track) p.position], janela: 31);
+
+    // Escala que preenche o quadro do projeto com o video da fonte.
+    final larguraFonte = frames.first.width.toDouble();
+    final alturaFonte = frames.first.height.toDouble();
+    final proporcaoFonte = larguraFonte / alturaFonte;
+    final proporcaoAlvo = state.outputWidth / state.outputHeight;
+    final preenche = proporcaoFonte > proporcaoAlvo
+        ? state.outputHeight / alturaFonte
+        : state.outputWidth / larguraFonte;
+
+    final centroComp =
+        Offset(state.outputWidth / 2, state.outputHeight / 2);
+    final passoUs = layer.duration.inMicroseconds / caminho.length;
+
+    var pos = AnimatedOffset(centroComp);
+    for (var i = 0; i < caminho.length; i++) {
+      final t = Duration(microseconds: (i * passoUs).round());
+      // O assunto no centro: a camada anda o contrario de onde ele esta.
+      final desvio = (caminho[i] - centro) * preenche;
+      pos = pos.withKeyframe(t, centroComp - desvio);
+    }
+
+    final escala = preenche * larguraFonte / state.outputWidth;
+    _replace(layer.copyLayer(
+      position: pos,
+      scaleX: AnimatedDouble(escala),
+      scaleY: AnimatedDouble(escala),
+    ));
+    return caminho.length;
+  }
+
   /// Desfaz a estabilizacao: posicao fixa de volta no valor do comeco.
   void clearStabilization(String id) {
     final layer = _layer(id);
