@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 
 import '../domain/layer.dart';
 import 'preview_stats.dart';
+import 'proxy_service.dart';
 
 /// Gerencia um VideoPlayerController por camada de video e mantem todos
 /// sincronizados ao clock mestre (play/pause/seek + correcao de drift).
@@ -100,7 +101,10 @@ class VideoLayerManager {
             if (l is VideoLayer)
               (
                 id: l.id,
-                path: l.sourcePath,
+                // PROXY quando ha: quadro-chave a cada 6 quadros faz o
+                // scrub ficar continuo. Sem proxy, o original — nunca
+                // deixa de tocar por falta de cache.
+                path: ProxyService.instance.playbackPath(l.sourcePath),
                 volume: l.volume,
                 offset: l.sourceOffset,
                 layer: l

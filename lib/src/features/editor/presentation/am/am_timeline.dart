@@ -8,6 +8,7 @@ import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import '../../application/media_preview_service.dart';
+import '../../application/proxy_service.dart';
 import 'am_colors.dart';
 import 'clip_preview_painters.dart';
 
@@ -849,6 +850,10 @@ class _ClipPreviewState extends State<_ClipPreview> {
       _service.ensureWaveform(l.sourcePath);
       _service.ensureFilmstrip(
           l.sourcePath, l.sourceOffset + l.duration);
+      // PROXY: pedido daqui porque a barra do clipe sempre monta —
+      // pendurar no caminho de sincronia do player era fragil, ele so
+      // roda quando o relogio anda.
+      ProxyService.instance.ensureProxy(l.sourcePath);
     }
   }
 

@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../editor/application/proxy_service.dart';
+import '../../editor/application/media_preview_service.dart';
 import '../../../core/ui/snack.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -35,6 +37,9 @@ class SettingsTab extends ConsumerWidget {
     } catch (_) {}
     if (!context.mounted) return;
     final mb = (removedBytes / (1024 * 1024)).toStringAsFixed(1);
+    await ProxyService.instance.clearCache();
+    MediaPreviewService.instance.clearMemory();
+    if (!context.mounted) return;
     AureaSnack.show(context, 'Cache limpo ($mb MB liberados)');
   }
 
