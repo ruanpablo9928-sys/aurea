@@ -73,6 +73,10 @@ class Scene3DPainter extends CustomPainter {
     final frame = renderScene(scene, cam, size, time);
     onMetrics?.call(frame);
 
+    // SOMBRA DE CONTATO antes da geometria: ela vive no chao, e tudo
+    // que e objeto passa por cima dela.
+    if (!scene.draftMode) _paintContactShadows(canvas, frame);
+
     // Passe OPACO e passe TRANSPARENTE, nessa ordem.
     _paintTriangles(canvas, frame.opaque);
     _paintTriangles(canvas, frame.transparent);
@@ -91,6 +95,52 @@ class Scene3DPainter extends CustomPainter {
     }
     if (showHelpers && selectedNodeId != null) {
       _paintSelectionBox(canvas, size, cam);
+    }
+  }
+
+  /// SOMBRA DE CONTATO: a mancha escura debaixo de cada objeto.
+  ///
+  /// Nao e sombra projetada — nao ha mapa de profundidade aqui, e nao
+  /// vale ter. O que a percepcao cobra e uma coisa so: saber se o objeto
+  /// esta APOIADO ou flutuando. Sem nada embaixo, todo objeto parece
+  /// colado no fundo, e e o que mais denuncia render amador.
+  ///
+  /// A mancha e uma elipse desfocada sob o ponto mais baixo do objeto,
+  /// com o tamanho vindo da largura dele em tela e a opacidade caindo
+  /// com a altura — objeto longe do chao lanca sombra maior e mais fraca,
+  /// que e o que a sombra de verdade faz.
+  void _paintContactShadows(Canvas canvas, SceneFrame frame) {
+    // Agrupa por objeto: a caixa de cada um em coordenadas de tela.
+    final caixas = <String, Rect>{};
+    for (final tri in frame.opaque) {
+      if (tri.nodeId.isEmpty) continue;
+      final r = Rect.fromLTRB(
+        math.min(tri.a.dx, math.min(tri.b.dx, tri.c.dx)),
+        math.min(tri.a.dy, math.min(tri.b.dy, tri.c.dy)),
+        math.max(tri.a.dx, math.max(tri.b.dx, tri.c.dx)),
+        math.max(tri.a.dy, math.max(tri.b.dy, tri.c.dy)),
+      );
+      final antiga = caixas[tri.nodeId];
+      caixas[tri.nodeId] = antiga == null ? r : antiga.expandToInclude(r);
+    }
+    if (caixas.isEmpty) return;
+
+    final tinta = Paint()
+      ..color = const Color(0x66000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9);
+
+    for (final r in caixas.values) {
+      if (r.width < 2 || r.height < 2) continue;
+      final largura = r.width * 0.62;
+      final altura = math.max(4.0, r.width * 0.16);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(r.center.dx, r.bottom - altura * 0.35),
+          width: largura,
+          height: altura,
+        ),
+        tinta,
+      );
     }
   }
 
@@ -181,6 +231,32 @@ class Scene3DPainter extends CustomPainter {
         BlendMode.srcOver,
         paint,
       );
+
+      // BORDA SUAVIZADA. `drawVertices` NAO suaviza: os triangulos saem
+      // com a escada de pixel na silhueta, e serrilhado e o que mais
+      // denuncia um render. Contornar o mesmo lote com um traco fino da
+      // MESMA cor, esse sim suavizado, cobre o degrau — e de quebra
+      // fecha as costuras de meio pixel entre triangulos vizinhos.
+      if (scene.msaa) {
+        final contorno = Path();
+        for (var k = 0; k < count; k++) {
+          final t = tris[start + k];
+          contorno
+            ..moveTo(t.a.dx, t.a.dy)
+            ..lineTo(t.b.dx, t.b.dy)
+            ..lineTo(t.c.dx, t.c.dy)
+            ..close();
+        }
+        canvas.drawPath(
+          contorno,
+          Paint()
+            ..isAntiAlias = true
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.9
+            ..strokeJoin = StrokeJoin.round
+            ..color = color,
+        );
+      }
     }
   }
 

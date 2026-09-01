@@ -298,6 +298,9 @@ class Scene3D {
     this.lights = const [],
     this.savedViews = const [],
     this.ambient = 0.28,
+    this.skyColor = const Color(0xFF8FB7E8),
+    this.groundColor = const Color(0xFF3A3128),
+    this.tonemap = true,
     this.background,
     this.showFloorGrid = true,
     this.msaa = true,
@@ -324,6 +327,22 @@ class Scene3D {
   final List<Light3D> lights;
   final List<SavedView> savedViews;
   final double ambient;
+
+  /// AMBIENTE POR HEMISFERIO: a cor que vem de cima e a que volta do
+  /// chao.
+  ///
+  /// Ambiente como UM numero acende todas as faces igual, e e por isso
+  /// que tudo parecia plastico: no mundo real a face virada para o ceu
+  /// recebe luz de ceu e a virada para baixo recebe o que o chao
+  /// devolveu. Duas cores e a interpolacao pela normal ja separam metal
+  /// de plastico — e custam uma multiplicacao por face.
+  final Color skyColor;
+  final Color groundColor;
+
+  /// Curva de saida ACES. Sem ela o realce estoura em branco chapado e
+  /// a imagem inteira parece renderizada em 1998.
+  final bool tonemap;
+
   final Color? background;
   final bool showFloorGrid;
 
@@ -340,6 +359,9 @@ class Scene3D {
     List<Light3D>? lights,
     List<SavedView>? savedViews,
     double? ambient,
+    Color? skyColor,
+    Color? groundColor,
+    bool? tonemap,
     Color? background,
     bool? showFloorGrid,
     bool? msaa,
@@ -352,6 +374,9 @@ class Scene3D {
         lights: lights ?? this.lights,
         savedViews: savedViews ?? this.savedViews,
         ambient: ambient ?? this.ambient,
+        skyColor: skyColor ?? this.skyColor,
+        groundColor: groundColor ?? this.groundColor,
+        tonemap: tonemap ?? this.tonemap,
         background: background ?? this.background,
         showFloorGrid: showFloorGrid ?? this.showFloorGrid,
         msaa: msaa ?? this.msaa,
@@ -379,8 +404,37 @@ class Scene3D {
                 baseColor: Color(0xFFB8FF3D), roughness: 0.35),
           ),
         ],
-        lights: [Light3D()],
+        lights: tresPontos,
       );
+
+  /// TRES PONTOS: principal, preenchimento e contraluz.
+  ///
+  /// Uma luz so achata o objeto — a face iluminada estoura e a oposta
+  /// morre no ambiente. Ninguem deveria precisar montar iluminacao para
+  /// o primeiro cubo parecer decente, e este e o arranjo que qualquer
+  /// estudio usa: a principal desenha a forma, o preenchimento abre a
+  /// sombra sem apagar o volume, e a contraluz separa o objeto do fundo.
+  static List<Light3D> get tresPontos => [
+        // PRINCIPAL: alta, a 45 graus, levemente quente.
+        Light3D(
+          color: const Color(0xFFFFF4E6),
+          direction: const Vec3(-0.5, -0.75, -0.45),
+          intensity: AnimatedDouble(1),
+        ),
+        // PREENCHIMENTO: do outro lado, fria e fraca — abre a sombra
+        // sem competir com a principal.
+        Light3D(
+          color: const Color(0xFFCFE0FF),
+          direction: const Vec3(0.7, -0.25, -0.3),
+          intensity: AnimatedDouble(0.35),
+        ),
+        // CONTRALUZ: de tras e de cima, para o objeto descolar do fundo.
+        Light3D(
+          color: const Color(0xFFFFFFFF),
+          direction: const Vec3(0.15, -0.45, 0.85),
+          intensity: AnimatedDouble(0.55),
+        ),
+      ];
 }
 
 // ---------------------------------------------------------- pipeline
@@ -896,10 +950,23 @@ Color shadeFace({
   final baseG = material.baseColor.g;
   final baseB = material.baseColor.b;
 
-  // Ambiente.
-  r += baseR * scene.ambient;
-  g += baseG * scene.ambient;
-  b += baseB * scene.ambient;
+  // AMBIENTE POR HEMISFERIO, no lugar de um numero so.
+  //
+  // A face virada para cima pega a cor do ceu; a virada para baixo, o
+  // que o chao devolveu. E a versao barata do ambiente por imagem, e e
+  // ela que faz uma esfera lisa deixar de parecer um adesivo: o topo e
+  // frio, a base e quente, e o olho le isso como volume antes de
+  // qualquer luz direta chegar.
+  final paraCima = ((normal.y + 1) / 2).clamp(0.0, 1.0);
+  final ambR = scene.groundColor.r +
+      (scene.skyColor.r - scene.groundColor.r) * paraCima;
+  final ambG = scene.groundColor.g +
+      (scene.skyColor.g - scene.groundColor.g) * paraCima;
+  final ambB = scene.groundColor.b +
+      (scene.skyColor.b - scene.groundColor.b) * paraCima;
+  r += baseR * ambR * scene.ambient;
+  g += baseG * ambG * scene.ambient;
+  b += baseB * ambB * scene.ambient;
 
   for (final light in scene.lights) {
     final intensity = light.intensity.valueAt(t);
@@ -950,12 +1017,30 @@ Color shadeFace({
     b += baseB * material.emissive;
   }
 
+  if (scene.tonemap) {
+    r = acesFilmic(r);
+    g = acesFilmic(g);
+    b = acesFilmic(b);
+  }
+
   return Color.from(
     alpha: material.opacity.clamp(0.0, 1.0),
     red: r.clamp(0.0, 1.0),
     green: g.clamp(0.0, 1.0),
     blue: b.clamp(0.0, 1.0),
   );
+}
+
+/// CURVA DE SAIDA ACES (aproximacao de Narkowicz).
+///
+/// Sem curva, tudo acima de 1 vira o mesmo branco: dois realces de
+/// brilhos muito diferentes saem identicos e chapados, e e isso que da
+/// o aspecto de render antigo. A curva comprime o alto em vez de
+/// cortar, entao a diferenca continua visivel.
+double acesFilmic(double x) {
+  if (x <= 0) return 0;
+  const a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+  return ((x * (a * x + b)) / (x * (c * x + d) + e)).clamp(0.0, 1.0);
 }
 
 /// PROFUNDIDADE EXPORTADA (§8): a profundidade de cada triangulo,
