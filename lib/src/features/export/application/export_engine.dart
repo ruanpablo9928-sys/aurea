@@ -95,6 +95,8 @@ class ExportEngine {
     if (l.masks.isNotEmpty) return null;
     if (l.matteMode != MatteMode.none) return null;
     if (l.blendMode != BlendMode.srcOver) return null;
+    // Velocidade diferente de 1 nao e copia: tem de renderizar.
+    if (l.speed != 1.0) return null;
     // Vinculo de propriedade tambem muda o quadro.
     if (project.links.any((k) => k.targetLayerId == l.id)) return null;
 
@@ -140,7 +142,11 @@ class ExportEngine {
     dir.createSync(recursive: true);
 
     final start = layer.sourceOffset.inMicroseconds / 1000000.0;
-    final dur = layer.duration.inMicroseconds / 1000000.0;
+    // Le [speed] segundos de fonte para cada segundo de linha, e depois
+    // reescreve o relogio dos quadros com setpts: e assim que camera
+    // lenta vira quadros de verdade em vez de quadro repetido.
+    final vel = layer.speed <= 0 ? 1.0 : layer.speed;
+    final dur = layer.sourceSpan.inMicroseconds / 1000000.0;
 
     // Escala para caber na composicao mantendo proporcao — quadro maior
     // que isso e memoria jogada fora.
@@ -149,7 +155,9 @@ class ExportEngine {
       '-ss', start.toStringAsFixed(3),
       '-t', dur.toStringAsFixed(3),
       '-i', layer.sourcePath,
-      '-vf', 'fps=$fps,scale=$width:$height:force_original_aspect_ratio='
+      '-vf',
+      '${vel == 1.0 ? '' : 'setpts=PTS/${vel.toStringAsFixed(4)},'}'
+          'fps=$fps,scale=$width:$height:force_original_aspect_ratio='
           'decrease',
       '-q:v', '3',
       '-start_number', '0',
@@ -165,6 +173,28 @@ class ExportEngine {
   }
 
   // --------------------------------------------------------- audio
+
+  /// A corrente de `atempo` para uma velocidade qualquer.
+  ///
+  /// O filtro so aceita 0,5..2 de cada vez: 4x sai de duas etapas de 2x.
+  /// Uma etapa fora da faixa e ignorada em silencio pelo FFmpeg — e o
+  /// audio fica fora de sincronia com o video sem ninguem entender por
+  /// que.
+  static String _atempo(double v) {
+    if (v <= 0 || (v - 1).abs() < 0.001) return '';
+    var resto = v;
+    final etapas = <String>[];
+    while (resto > 2.0 && etapas.length < 6) {
+      etapas.add('atempo=2.0');
+      resto /= 2.0;
+    }
+    while (resto < 0.5 && etapas.length < 6) {
+      etapas.add('atempo=0.5');
+      resto /= 0.5;
+    }
+    etapas.add('atempo=${resto.toStringAsFixed(4)}');
+    return '${etapas.join(',')},';
+  }
 
   /// Camadas que carregam som. Mudo sai da conta aqui — nao adianta
   /// mixar uma faixa em volume zero e pagar por ela.
@@ -229,9 +259,19 @@ class ExportEngine {
             ':d=${d.toStringAsFixed(3)}:curve=qsin');
       }
 
+      final vel = switch (l) {
+        VideoLayer v => v.speed,
+        AudioLayer a => a.speed,
+        _ => 1.0,
+      };
+      // atempo so aceita 0,5..2 por etapa; velocidades maiores viram
+      // uma corrente de etapas.
+      final tempo = _atempo(vel);
+
       final label = 'a$idx';
       chains.add(
         '[$idx:a]aresample=44100,'
+        '$tempo'
         'volume=${ganho.toStringAsFixed(3)}'
         '${fades.isEmpty ? '' : ',${fades.join(',')}'},'
         'adelay=$delayMs|$delayMs,'

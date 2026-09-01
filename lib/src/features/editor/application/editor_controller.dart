@@ -1248,6 +1248,56 @@ class EditorController extends Notifier<VideoProject> {
         _ => null,
       };
 
+  // -------------------------------------------------------- velocidade
+
+  /// Muda a VELOCIDADE do clipe, encolhendo ou esticando a barra para
+  /// que a mesma fonte continue cabendo.
+  ///
+  /// Sem mexer na barra, acelerar cortaria o fim do clipe (a fonte
+  /// acabaria antes) — e a pessoa veria um pedaco congelado.
+  void setClipSpeed(String id, double speed) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    final v = speed.clamp(0.1, 8.0);
+
+    final atual = switch (layer) {
+      VideoLayer l => l.speed,
+      AudioLayer l => l.speed,
+      _ => 1.0,
+    };
+    if (atual <= 0) return;
+    final novaDur = Duration(
+        microseconds:
+            (layer.duration.inMicroseconds * atual / v).round());
+    if (novaDur.inMilliseconds < 50) return;
+
+    final novo = switch (layer) {
+      VideoLayer l => l.copyLayer(speed: v, duration: novaDur),
+      AudioLayer l => l.copyLayer(speed: v, duration: novaDur),
+      _ => null,
+    };
+    if (novo == null) return;
+
+    // O que vinha depois anda junto: acelerar um clipe no meio nao pode
+    // deixar buraco nem sobreposicao.
+    final delta = novaDur - layer.duration;
+    _mutate(state.copyWith(layers: [
+      for (final l in state.layers)
+        if (l.id == id)
+          novo
+        else if (l.startTime >= layer.endTime)
+          l.copyLayer(startTime: l.startTime + delta)
+        else
+          l,
+    ]));
+  }
+
+  double clipSpeedOf(String id) => switch (_layer(id)) {
+        VideoLayer l => l.speed,
+        AudioLayer l => l.speed,
+        _ => 1.0,
+      };
+
   // ------------------------------------------------------- marcadores
 
   /// Marca o instante atual. Marcar duas vezes no mesmo lugar TIRA a

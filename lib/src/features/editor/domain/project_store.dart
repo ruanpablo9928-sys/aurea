@@ -850,6 +850,7 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'video';
       base['src'] = v.sourcePath;
       base['srcOffset'] = _dur(v.sourceOffset);
+      if (v.speed != 1.0) base['speed'] = v.speed;
       base['volume'] = v.volume;
       final va = _audioSpec(v.audio);
       if (va != null) base['audio'] = va;
@@ -889,6 +890,7 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'audio';
       base['src'] = a.sourcePath;
       base['srcOffset'] = _dur(a.sourceOffset);
+      if (a.speed != 1.0) base['speed'] = a.speed;
       base['volume'] = a.volume;
       final aa = _audioSpec(a.audio);
       if (aa != null) base['audio'] = aa;
@@ -1175,6 +1177,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         id: id, name: name, startTime: start, duration: dur,
         sourcePath: m['src'] as String,
         sourceOffset: _asDur(m['srcOffset']),
+        speed: (m['speed'] as num?)?.toDouble() ?? 1.0,
         volume: (m['volume'] as num).toDouble(),
         audio: _asAudioSpec(m['audio']),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
@@ -1273,6 +1276,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         id: id, name: name, startTime: start, duration: dur,
         sourcePath: m['src'] as String,
         sourceOffset: _asDur(m['srcOffset']),
+        speed: (m['speed'] as num?)?.toDouble() ?? 1.0,
         volume: (m['volume'] as num).toDouble(),
         audio: _asAudioSpec(m['audio']),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,

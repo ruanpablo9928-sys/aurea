@@ -276,6 +276,7 @@ class VideoLayer extends Layer {
     required super.duration,
     required this.sourcePath,
     this.sourceOffset = Duration.zero,
+    this.speed = 1.0,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
     super.position,
@@ -300,7 +301,20 @@ class VideoLayer extends Layer {
 
   final String sourcePath;
   final Duration sourceOffset;
+
+  /// VELOCIDADE do clipe. 2 = o dobro; 0,5 = camera lenta.
+  ///
+  /// A barra na linha do tempo ja e o tempo FINAL: acelerar encurta a
+  /// barra. Guardar so o fator (e nao "quanto de fonte cabe") e o que
+  /// mantem a conta reversivel — voltar para 1x devolve o clipe
+  /// inteiro.
+  final double speed;
+
   final double volume;
+
+  /// Quanto de FONTE este clipe consome.
+  Duration get sourceSpan => Duration(
+      microseconds: (duration.inMicroseconds * speed).round());
 
   /// Fade, ganho, mudo e ducking do som deste clipe.
   final AudioSpec audio;
@@ -330,6 +344,7 @@ class VideoLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     Duration? sourceOffset,
+    double? speed,
     AudioSpec? audio,
     double? volume,
   }) {
@@ -340,6 +355,7 @@ class VideoLayer extends Layer {
       duration: duration ?? this.duration,
       sourcePath: sourcePath,
       sourceOffset: sourceOffset ?? this.sourceOffset,
+      speed: speed ?? this.speed,
       volume: volume ?? this.volume,
       audio: audio ?? this.audio,
       position: position ?? this.position,
@@ -371,6 +387,7 @@ class VideoLayer extends Layer {
         duration: duration,
         sourcePath: sourcePath,
         sourceOffset: sourceOffset,
+        speed: speed,
         volume: volume,
         audio: audio,
         position: position,
@@ -1133,6 +1150,7 @@ class AudioLayer extends Layer {
     required super.duration,
     required this.sourcePath,
     this.sourceOffset = Duration.zero,
+    this.speed = 1.0,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
     super.position,
@@ -1162,7 +1180,14 @@ class AudioLayer extends Layer {
   /// pedaco repete o mesmo audio em vez de continuar de onde parou.
   final Duration sourceOffset;
 
+  /// VELOCIDADE da faixa. Acelerar audio tambem sobe o tom — e por isso
+  /// que o controle avisa em vez de fingir que nao acontece.
+  final double speed;
+
   final double volume;
+
+  Duration get sourceSpan => Duration(
+      microseconds: (duration.inMicroseconds * speed).round());
 
   /// Fade, ganho, mudo e ducking desta trilha.
   final AudioSpec audio;
@@ -1194,6 +1219,7 @@ class AudioLayer extends Layer {
     double? volume,
     AudioSpec? audio,
     Duration? sourceOffset,
+    double? speed,
   }) {
     return AudioLayer(
       id: id,
@@ -1202,6 +1228,7 @@ class AudioLayer extends Layer {
       duration: duration ?? this.duration,
       sourcePath: sourcePath,
       sourceOffset: sourceOffset ?? this.sourceOffset,
+      speed: speed ?? this.speed,
       volume: volume ?? this.volume,
       audio: audio ?? this.audio,
       position: position ?? this.position,
@@ -1233,6 +1260,7 @@ class AudioLayer extends Layer {
         duration: duration,
         sourcePath: sourcePath,
         sourceOffset: sourceOffset,
+        speed: speed,
         volume: volume,
         audio: audio,
         position: position,

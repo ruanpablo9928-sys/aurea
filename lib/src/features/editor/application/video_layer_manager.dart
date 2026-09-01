@@ -140,11 +140,27 @@ class VideoLayerManager {
         controller.setVolume(m.volume);
       }
       final active = layer.activeAt(t);
-      final local = t - layer.startTime + m.offset;
+      // A VELOCIDADE estica a leitura da fonte: um segundo na linha
+      // consome [speed] segundos de arquivo.
+      final vel = switch (layer) {
+        VideoLayer v => v.speed,
+        AudioLayer a => a.speed,
+        _ => 1.0,
+      };
+      final decorrido = t - layer.startTime;
+      final local = m.offset +
+          (vel == 1.0
+              ? decorrido
+              : Duration(
+                  microseconds:
+                      (decorrido.inMicroseconds * vel).round()));
 
       if (active && isPlaying) {
         if (!controller.value.isPlaying) {
           controller.seekTo(local);
+          // O tocador tem velocidade propria: usar ela e o que mantem o
+          // som continuo em vez de picotado por seeks.
+          controller.setPlaybackSpeed(vel.clamp(0.1, 4.0));
           controller.play();
           _lastPos[m.id] = null;
           _biasUs.remove(m.id);

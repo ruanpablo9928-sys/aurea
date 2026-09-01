@@ -26,6 +26,7 @@ import 'oficio_sheets.dart';
 import 'path_edit_sheet.dart';
 import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
+import 'speed_sheet.dart';
 import 'text_path_sheet.dart';
 import 'scene3d_studio.dart';
 
@@ -328,6 +329,15 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 Future.microtask(() {
                   if (context.mounted) {
                     showTextPathSheet(context, ref, layer.id);
+                  }
+                });
+              }),
+            if (layer is AudioLayer || layer is VideoLayer)
+              item(CupertinoIcons.speedometer, 'Velocidade', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showSpeedSheet(context, ref, layer.id);
                   }
                 });
               }),
