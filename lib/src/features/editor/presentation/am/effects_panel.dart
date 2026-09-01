@@ -157,10 +157,14 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                   const SizedBox(height: 8),
                   Expanded(
                     child: showPresets
-                        ? ListView(
-                            children: [
-                              for (final p in factoryPresets())
-                                ListTile(
+                        // PREGUICOSO: `ListView(children:)` constroi
+                        // TUDO de uma vez. Com `builder`, so o visivel
+                        // (mais uma margem) existe.
+                        ? ListView.builder(
+                            itemCount: factoryPresets().length,
+                            itemBuilder: (context, i) {
+                              final p = factoryPresets()[i];
+                              return ListTile(
                                   leading: const Icon(
                                       CupertinoIcons.square_stack_3d_down_right,
                                       color: AmColors.accent,
@@ -182,46 +186,67 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                                         at: widget.playback.time.value);
                                     Navigator.of(sheetContext).pop();
                                   },
-                                ),
-                            ],
+                              );
+                            },
                           )
-                        : ListView(
-                            children: [
-                              if (results.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Text(
-                                      'Nada encontrado. Tente "glow", '
-                                      '"rgb", "pixel", "shake".',
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          color: AmColors.muted)),
-                                ),
-                              for (final type in results)
-                                ListTile(
-                                  dense: true,
-                                  leading: const Icon(
-                                      CupertinoIcons.wand_stars,
-                                      color: AmColors.accent,
-                                      size: 20),
-                                  title: Text(effectSpecs[type]!.name,
-                                      style: const TextStyle(
-                                          color: AmColors.text,
-                                          fontSize: 14)),
-                                  subtitle: Text(
-                                    '${effectSpecs[type]!.category}'
-                                    '${effectSpecs[type]!.cost > 1 ? ' · custo ${effectSpecs[type]!.cost}' : ''}',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AmColors.muted),
+                        // ESTADO VAZIO com aparencia propria, e a lista
+                        // preguicosa: trinta e oito ListTile construidos
+                        // de uma vez e trabalho jogado fora, porque so
+                        // meia duzia cabe na tela.
+                        : results.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(CupertinoIcons.search,
+                                          size: 30,
+                                          color: AmColors.muted),
+                                      SizedBox(height: 10),
+                                      Text(
+                                        'Nada encontrado. '
+                                        'Tente "glow", "rgb", "pixel" '
+                                        'ou "shake".',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            height: 1.4,
+                                            color: AmColors.muted),
+                                      ),
+                                    ],
                                   ),
-                                  onTap: () {
-                                    controller.addEffect(layerId, type);
-                                    Navigator.of(sheetContext).pop();
-                                  },
                                 ),
-                            ],
-                          ),
+                              )
+                            : ListView.builder(
+                                itemCount: results.length,
+                                itemBuilder: (context, i) {
+                                  final type = results[i];
+                                  final spec = effectSpecs[type]!;
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                        CupertinoIcons.wand_stars,
+                                        color: AmColors.accent,
+                                        size: 20),
+                                    title: Text(spec.name,
+                                        style: const TextStyle(
+                                            color: AmColors.text,
+                                            fontSize: 14)),
+                                    subtitle: Text(
+                                      '${spec.category}'
+                                      '${spec.cost > 1 ? ' · custo ${spec.cost}' : ''}',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AmColors.muted),
+                                    ),
+                                    onTap: () {
+                                      controller.addEffect(layerId, type);
+                                      Navigator.of(sheetContext).pop();
+                                    },
+                                  );
+                                },
+                              ),
                   ),
                 ],
               ),

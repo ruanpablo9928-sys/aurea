@@ -59,17 +59,36 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _slotTabs(layer),
+        // UMA superficie rolavel so. A grade era um GridView com
+        // shrinkWrap dentro de uma ListView: alem do conflito de gesto,
+        // shrinkWrap CONSTROI TUDO de uma vez — trinta e seis
+        // miniaturas animadas nascendo juntas era o travamento.
+        //
+        // Em sliver, a grade nasce preguicosa: a miniatura de fora da
+        // tela nao existe, entao nao anima e nao ocupa memoria.
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
-            children: [
-              _catalogGrid(layer, controller, current),
-              if (current != null) ...[
-                const SizedBox(height: 14),
-                _controls(layer, controller, current),
-              ],
-              const SizedBox(height: 16),
-              _advancedSection(layer, controller),
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                sliver: _catalogSliver(layer, controller, current),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (current != null) ...[
+                        const SizedBox(height: 14),
+                        _controls(layer, controller, current),
+                      ],
+                      const SizedBox(height: 16),
+                      _advancedSection(layer, controller),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -153,28 +172,38 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
     );
   }
 
-  Widget _catalogGrid(
+  Widget _catalogSliver(
       TextLayer layer, EditorController controller, TextAnim? current) {
     final specs = textAnimsForSlot(_slot);
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      childAspectRatio: 0.92,
-      children: [
-        _tile(
-          label: 'Nenhuma',
-          selected: current == null,
-          preview: const Center(
-            child: Icon(CupertinoIcons.nosign,
-                size: 22, color: AmColors.muted),
-          ),
-          onTap: () => controller.setTextAnim(layer.id, _slot, null),
-        ),
-        for (final spec in specs)
-          _tile(
+    final total = specs.length + 1;
+
+    return SliverGrid(
+      // COLUNAS PELA LARGURA, nao um numero fixo: tres colunas quebram
+      // em tela estreita e desperdicam espaco em tela larga ou deitada.
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 132,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        // PROPORCAO FIXA, reservada ANTES de a miniatura existir: o
+        // cartao nunca muda de tamanho por causa do conteudo, entao a
+        // grade nunca reflui.
+        childAspectRatio: 0.86,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, i) {
+          if (i == 0) {
+            return _tile(
+              label: 'Nenhuma',
+              selected: current == null,
+              preview: const Center(
+                child: Icon(CupertinoIcons.nosign,
+                    size: 22, color: AmColors.muted),
+              ),
+              onTap: () => controller.setTextAnim(layer.id, _slot, null),
+            );
+          }
+          final spec = specs[i - 1];
+          return _tile(
             label: spec.label,
             selected: current?.specId == spec.id,
             preview: _AnimPreview(
@@ -184,8 +213,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             ),
             onTap: () =>
                 controller.setTextAnim(layer.id, _slot, spec.id),
-          ),
-      ],
+          );
+        },
+        childCount: total,
+      ),
     );
   }
 
@@ -207,14 +238,20 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             Expanded(child: ClipRect(child: preview)),
             Padding(
               padding: const EdgeInsets.only(bottom: 7, left: 4, right: 4),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  color: selected ? AmColors.accent : AmColors.muted,
+              // DUAS linhas com reticencias e altura FIXA: nome longo
+              // nao pode esticar um cartao e desalinhar a fileira.
+              child: SizedBox(
+                height: 26,
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.15,
+                    color: selected ? AmColors.accent : AmColors.muted,
+                  ),
                 ),
               ),
             ),
