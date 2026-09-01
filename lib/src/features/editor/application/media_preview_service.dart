@@ -8,6 +8,8 @@ import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../domain/peak_pyramid.dart';
+
 /// FORMA DE ONDA e TIRA DE MINIATURAS.
 ///
 /// Sem elas nao existe decupagem: a forma de onda e como se acha a
@@ -48,6 +50,10 @@ class MediaPreviewService {
   static final instance = MediaPreviewService._();
 
   final Map<String, Float32List> _peaks = {};
+
+  /// A PIRAMIDE por arquivo — o que o desenho usa. Ampliar troca de
+  /// nivel, nunca recalcula.
+  final Map<String, PeakPyramid> _pyramids = {};
   final Map<String, List<ui.Image>> _strips = {};
   final Map<String, Future<void>> _emAndamento = {};
 
@@ -55,7 +61,13 @@ class MediaPreviewService {
   final ValueNotifier<int> revision = ValueNotifier(0);
 
   /// Picos ja calculados para [path], ou null se ainda nao ha.
+  ///
+  /// E o envelope simples de sempre (100 baldes por segundo), que os
+  /// detectores de silencio e batida consomem.
   Float32List? peaksOf(String path) => _peaks[path];
+
+  /// A PIRAMIDE de [path] — min, max e RMS em seis niveis de detalhe.
+  PeakPyramid? pyramidOf(String path) => _pyramids[path];
 
   /// Miniaturas ja extraidas para [path], ou null.
   List<ui.Image>? stripOf(String path) => _strips[path];
@@ -103,14 +115,26 @@ class MediaPreviewService {
       final cache = File('${dir.path}/${_key(path)}.pk');
       if (cache.existsSync()) {
         final bytes = await cache.readAsBytes();
-        _peaks[path] = Float32List.view(
+        final env = Float32List.view(
             bytes.buffer, bytes.offsetInBytes, bytes.length ~/ 4);
+        _peaks[path] = env;
+        // A piramide se remonta do envelope guardado: cada balde do
+        // envelope vira uma "amostra". Perde o detalhe abaixo de 10 ms,
+        // que e menor que um pixel em qualquer zoom da linha.
+        final comoAmostras = Int16List(env.length);
+        for (var i = 0; i < env.length; i++) {
+          comoAmostras[i] = (env[i].clamp(0.0, 1.0) * 32767).round();
+        }
+        _pyramids[path] =
+            buildPeakPyramid(comoAmostras, peaksPerSecond);
         revision.value++;
         return;
       }
 
-      // Decodifica para PCM cru mono. 8 kHz e mais que suficiente para
-      // desenhar envelope, e deixa o arquivo pequeno.
+      // Decodifica para PCM cru mono a 16 kHz. Oito bastava para
+      // desenhar, mas 16 e a taxa que o reconhecimento de fala usa — o
+      // mesmo PCM serve para os dois, e decodificar duas vezes o mesmo
+      // arquivo seria trabalho jogado fora.
       final tmp = await getTemporaryDirectory();
       final raw = File('${tmp.path}/wave_${path.hashCode}.pcm');
       if (raw.existsSync()) raw.deleteSync();
@@ -120,7 +144,7 @@ class MediaPreviewService {
         '-i', path,
         '-vn',
         '-ac', '1',
-        '-ar', '8000',
+        '-ar', '16000',
         '-f', 's16le',
         '-acodec', 'pcm_s16le',
         raw.path,
@@ -137,7 +161,8 @@ class MediaPreviewService {
       final samples = Int16List.view(
           bytes.buffer, bytes.offsetInBytes, bytes.length ~/ 2);
 
-      final out = computePeaks(samples, 8000, peaksPerSecond);
+      final out = computePeaks(samples, 16000, peaksPerSecond);
+      _pyramids[path] = buildPeakPyramid(samples, 16000);
 
       await cache.writeAsBytes(out.buffer.asUint8List(), flush: true);
       _peaks[path] = out;

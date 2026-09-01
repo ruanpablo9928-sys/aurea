@@ -41,6 +41,7 @@ class AmTimeline extends ConsumerStatefulWidget {
     this.height = 260,
     this.onTapLayer,
     this.activeTimesUs,
+    this.onScrub,
   });
 
   final PlaybackController playback;
@@ -48,6 +49,10 @@ class AmTimeline extends ConsumerStatefulWidget {
   final Color playheadColor;
   final double height;
   final void Function(Layer layer)? onTapLayer;
+
+  /// Chamado enquanto a regua e arrastada — o editor toca o som em
+  /// lasquinhas. Ouvir onde se esta e o que torna a decupagem rapida.
+  final VoidCallback? onScrub;
 
   /// Tempos locais (em us) com keyframe da propriedade ATIVA: esses
   /// diamantes acendem; os demais aparecem apagados. null = todos acesos.
@@ -105,6 +110,8 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       }
       if (!widget.playback.playing.value) {
         widget.playback.seek(_pxToTime(n.metrics.pixels));
+        // Ouvir onde se esta enquanto arrasta.
+        if (n.dragDetails != null) widget.onScrub?.call();
       }
     }
     return false;
@@ -965,6 +972,7 @@ class _ClipPreviewState extends State<_ClipPreview> {
       valueListenable: _service.revision,
       builder: (context, _, child) {
         final peaks = _service.peaksOf(path);
+        final piramide = _service.pyramidOf(path);
         final strip =
             l is VideoLayer ? _service.stripOf(path) : null;
 
@@ -1017,14 +1025,26 @@ class _ClipPreviewState extends State<_ClipPreview> {
                   height: temStrip ? kAmBarHeight * 0.34 : null,
                   top: temStrip ? null : 0,
                   child: CustomPaint(
-                    painter: WaveformPainter(
-                      peaks: peaks,
-                      start: inicio,
-                      end: fim,
-                      color: temStrip
-                          ? AmColors.accent.withValues(alpha: 0.85)
-                          : Colors.white.withValues(alpha: 0.8),
-                    ),
+                    // PIRAMIDE: contorno de pico e miolo de RMS, com o
+                    // nivel escolhido pelo zoom. Ampliar troca de nivel
+                    // e nunca recalcula.
+                    painter: piramide != null && !piramide.isEmpty
+                        ? PyramidWaveformPainter(
+                            pyramid: piramide,
+                            start: inicio,
+                            end: fim,
+                            color: temStrip
+                                ? AmColors.accent.withValues(alpha: 0.85)
+                                : Colors.white.withValues(alpha: 0.8),
+                          )
+                        : WaveformPainter(
+                            peaks: peaks,
+                            start: inicio,
+                            end: fim,
+                            color: temStrip
+                                ? AmColors.accent.withValues(alpha: 0.85)
+                                : Colors.white.withValues(alpha: 0.8),
+                          ),
                   ),
                 ),
               child!,

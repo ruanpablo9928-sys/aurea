@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -188,6 +189,23 @@ class VideoLayerManager {
             }
           }
         }
+      } else if (_scrubbing && active && m.volume > 0.001) {
+        // SCRUB DE AUDIO: enquanto a pessoa arrasta a regua, o som toca
+        // em lasquinhas. Ouvir onde se esta e o que torna a decupagem
+        // rapida — procurar a silaba no olho, na forma de onda, e muito
+        // mais lento do que ouvir.
+        //
+        // Sem esta saida, o proprio sync pausaria no tique seguinte e o
+        // scrub nao sairia do lugar.
+        final agora = DateTime.now();
+        final ultimo = _lastSeek[layer.id];
+        if (ultimo == null ||
+            agora.difference(ultimo) >
+                const Duration(milliseconds: 90)) {
+          controller.seekTo(local);
+          _lastSeek[layer.id] = agora;
+          if (!controller.value.isPlaying) controller.play();
+        }
       } else {
         if (controller.value.isPlaying) controller.pause();
         // Scrub pausado: video precisa do seek para MOSTRAR o frame;
@@ -207,6 +225,23 @@ class VideoLayerManager {
       }
     }
     return master;
+  }
+
+  bool _scrubbing = false;
+  Timer? _scrubTimer;
+
+  /// SCRUB: liga o modo "tocar em lasquinhas" por um instante.
+  ///
+  /// Chamado a cada movimento do dedo na regua; o temporizador desliga
+  /// sozinho quando o dedo para. Sem o desligamento automatico, o audio
+  /// continuaria tocando depois que a pessoa soltasse.
+  void scrub() {
+    _scrubbing = true;
+    _scrubTimer?.cancel();
+    _scrubTimer = Timer(const Duration(milliseconds: 160), () {
+      _scrubbing = false;
+      pauseAll();
+    });
   }
 
   void pauseAll() {

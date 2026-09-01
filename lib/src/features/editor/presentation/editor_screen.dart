@@ -265,6 +265,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     playheadColor:
                         pinkPlayhead ? AmColors.pink : Colors.white,
                     onTapLayer: _onTapLayer,
+                    onScrub: _videos.scrub,
                     activeTimesUs: activeTimesUs,
                   ),
                 ),
