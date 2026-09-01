@@ -107,23 +107,26 @@ final class VideoEncoderPlugin: NSObject {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true)
 
-        let w = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        let escritor = try AVAssetWriter(outputURL: url, fileType: .mp4)
 
-        // HEVC so quando o aparelho tem: sem codificador de H.265 a
-        // exportacao nao pode falhar — cai no H.264, que todo aparelho tem.
-        // HEVC so quando o aparelho REALMENTE aceita. `canApply` e a
-        // pergunta certa — pergunta ao proprio escritor se ele consegue
-        // com estes ajustes. A primeira versao usava
-        // VTIsHardwareDecodeSupported, que alem de perguntar por
-        // DECODIFICACAO (nao codificacao) nao existe no iOS: o arquivo
-        // parou de compilar inteiro e o IPA quebrou.
+        // HEVC so quando o aparelho REALMENTE aceita: sem codificador de
+        // H.265 a exportacao nao pode falhar — cai no H.264, que todo
+        // aparelho tem.
+        //
+        // Quem responde e o PROPRIO ESCRITOR, com estes ajustes: canApply
+        // e metodo de instancia, nao de tipo. Duas versoes anteriores
+        // erraram aqui — primeiro VTIsHardwareDecodeSupported, que
+        // pergunta por DECODIFICACAO e nem existe no iOS; depois
+        // `AVAssetWriter.canApply`, chamado no tipo.
         let testeHevc: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.hevc,
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
         ]
-        let usaHevc = hevc
-            && AVAssetWriter.canApply(outputSettings: testeHevc, forMediaType: .video)
+        let usaHevc =
+            hevc
+            && escritor.canApply(
+                outputSettings: testeHevc, forMediaType: .video)
         var compressao: [String: Any] = [
             AVVideoAverageBitRateKey: bitrate,
             // Um quadro-chave por segundo: buscar no arquivo fica rapido.
@@ -150,16 +153,16 @@ final class VideoEncoderPlugin: NSObject {
         let ad = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: inp, sourcePixelBufferAttributes: attrs)
 
-        guard w.canAdd(inp) else {
+        guard escritor.canAdd(inp) else {
             throw NSError(domain: "aurea", code: 1,
                           userInfo: [NSLocalizedDescriptionKey:
                                         "Nao consegui criar a trilha de video"])
         }
-        w.add(inp)
-        w.startWriting()
-        w.startSession(atSourceTime: .zero)
+        escritor.add(inp)
+        escritor.startWriting()
+        escritor.startSession(atSourceTime: .zero)
 
-        writer = w
+        writer = escritor
         input = inp
         adaptor = ad
         frameIndex = 0
