@@ -1,5 +1,4 @@
 import AVFoundation
-import VideoToolbox
 import Flutter
 import UIKit
 
@@ -112,7 +111,19 @@ final class VideoEncoderPlugin: NSObject {
 
         // HEVC so quando o aparelho tem: sem codificador de H.265 a
         // exportacao nao pode falhar — cai no H.264, que todo aparelho tem.
-        let usaHevc = hevc && VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
+        // HEVC so quando o aparelho REALMENTE aceita. `canApply` e a
+        // pergunta certa — pergunta ao proprio escritor se ele consegue
+        // com estes ajustes. A primeira versao usava
+        // VTIsHardwareDecodeSupported, que alem de perguntar por
+        // DECODIFICACAO (nao codificacao) nao existe no iOS: o arquivo
+        // parou de compilar inteiro e o IPA quebrou.
+        let testeHevc: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.hevc,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+        ]
+        let usaHevc = hevc
+            && AVAssetWriter.canApply(outputSettings: testeHevc, forMediaType: .video)
         var compressao: [String: Any] = [
             AVVideoAverageBitRateKey: bitrate,
             // Um quadro-chave por segundo: buscar no arquivo fica rapido.

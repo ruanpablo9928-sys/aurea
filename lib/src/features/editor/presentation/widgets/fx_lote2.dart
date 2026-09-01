@@ -61,22 +61,24 @@ class FxSnapshot extends StatefulWidget {
     super.key,
     required this.painter,
     required this.child,
-    this.mode = SnapshotMode.permissive,
+    this.mode = SnapshotMode.forced,
   });
 
   final SnapshotPainter painter;
   final Widget child;
 
-  /// PERMISSIVO, e nao FORCADO.
+  /// FORCADO — e tem de continuar forcado.
   ///
-  /// O modo forcado tira a foto mesmo quando ha uma TEXTURA de plataforma
-  /// embaixo — e a textura simplesmente nao aparece na foto. O video sai
-  /// PRETO. Era o que apagava o video do preview inteiro, porque o passe
-  /// de dithering embrulha a composicao toda.
+  /// O efeito PRECISA da imagem para existir: sem a foto, nao ha o que
+  /// mandar para o shader. Tentei trocar por `permissive` achando que
+  /// ele salvaria a textura de video, e o resultado foi a composicao
+  /// INTEIRA sair preta — o modo permissivo nao entrega a imagem, e o
+  /// pintor desenha em cima do nada.
   ///
-  /// No modo permissivo, havendo textura, o Flutter desenha o filho
-  /// direto e o efeito daquele quadro nao acontece. Perder o dithering e
-  /// pequeno; perder o video e o aplicativo nao funcionar.
+  /// A textura de video continua nao sobrevivendo a foto (ela nao entra
+  /// em `toImage`), e a solucao para isso e outra: quem embrulha a
+  /// composicao toda — o dithering — simplesmente NAO ACONTECE quando ha
+  /// video na cena.
   final SnapshotMode mode;
 
   @override
