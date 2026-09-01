@@ -350,6 +350,21 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 }
               });
             }),
+            if (layer is VideoLayer)
+              item(CupertinoIcons.hand_raised, 'Estabilizar', () async {
+                Navigator.of(moreContext).pop();
+                if (!context.mounted) return;
+                AureaSnack.show(context, 'Lendo o video para estabilizar...');
+                final n = await controller.stabilizeLayer(layer.id);
+                if (!context.mounted) return;
+                if (n == null) {
+                  AureaSnack.show(context, 'Nao consegui ler esse video');
+                  return;
+                }
+                AureaSnack.show(
+                    context, 'Estabilizado com $n quadros de referencia',
+                    actionLabel: 'Desfazer', onAction: controller.undo);
+              }),
             if (layer is AudioLayer || layer is VideoLayer)
               item(CupertinoIcons.speedometer, 'Velocidade', () {
                 Navigator.of(moreContext).pop();

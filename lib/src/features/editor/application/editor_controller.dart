@@ -15,6 +15,8 @@ import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
 import '../domain/extrude3d.dart';
 import '../domain/glb_import.dart';
+import 'tracking_service.dart';
+import '../domain/tracker2d.dart';
 import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
@@ -1408,6 +1410,74 @@ class EditorController extends Notifier<VideoProject> {
         VideoLayer v => v.sourcePath,
         _ => null,
       };
+
+  // ------------------------------------------------------- estabilizar
+
+  /// ESTABILIZAR: tira o tremor da mao.
+  ///
+  /// Rastreia um pedaco do centro do quadro, acha o caminho SUAVE que a
+  /// camera "queria" fazer, e escreve a diferenca como keyframe de
+  /// posicao — mais uma ampliacao, porque estabilizar sem ampliar mostra
+  /// o vazio nas bordas, que e o defeito que denuncia estabilizacao
+  /// caseira na hora.
+  ///
+  /// Devolve quantos quadros foram usados, ou null se nao deu para ler o
+  /// video.
+  Future<int?> stabilizeLayer(
+    String id, {
+    int janela = 15,
+    double forca = 1.0,
+  }) async {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return null;
+
+    final frames = await TrackingService.instance.grayFrames(
+      layer.sourcePath,
+      start: layer.sourceOffset,
+      duration: layer.sourceSpan,
+    );
+    if (frames.length < 4) return null;
+
+    final centro = Offset(
+        frames.first.width / 2, frames.first.height / 2);
+    final track = trackSequence(frames, centro);
+    final offs = stabilizeOffsets(track, janela: janela);
+    if (offs.isEmpty) return 0;
+
+    // O rastreio roda em resolucao baixa: o deslocamento volta para a
+    // escala da composicao antes de virar keyframe.
+    final escala = state.outputWidth / frames.first.width;
+    final zoom = stabilizeZoom(offs, frames.first.width,
+        frames.first.height);
+
+    final base = layer.position.valueAt(Duration.zero);
+    final passoUs = layer.duration.inMicroseconds / offs.length;
+
+    var pos = AnimatedOffset(base);
+    for (var i = 0; i < offs.length; i++) {
+      final t = Duration(microseconds: (i * passoUs).round());
+      final d = offs[i] * escala * forca.clamp(0.0, 1.0);
+      pos = pos.withKeyframe(t, base + d);
+    }
+
+    final zx = layer.scaleX.valueAt(Duration.zero) * zoom;
+    final zy = layer.scaleY.valueAt(Duration.zero) * zoom;
+    _replace(layer.copyLayer(
+      position: pos,
+      scaleX: AnimatedDouble(zx),
+      scaleY: AnimatedDouble(zy),
+    ));
+    return offs.length;
+  }
+
+  /// Desfaz a estabilizacao: posicao fixa de volta no valor do comeco.
+  void clearStabilization(String id) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    _replace(layer.copyLayer(
+      position: AnimatedOffset(layer.position.valueAt(Duration.zero)),
+    ));
+  }
 
   // ------------------------------------------------------ pulso na batida
 
