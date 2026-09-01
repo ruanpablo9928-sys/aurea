@@ -78,6 +78,34 @@ const _aliasesDeId = <String, EffectType>{
   'pixel_sort': EffectType.pixelSort,
 };
 
+/// PARAMETROS RENOMEADOS: chave antiga -> chave nova.
+///
+/// Renomear nao pode quebrar preset nem projeto salvo. Quem le o arquivo
+/// passa por aqui antes de montar o efeito, e a chave antiga vira a
+/// nova sem ninguem perceber.
+const effectParamAliases = <EffectType, Map<String, String>>{
+  EffectType.tremor: {
+    'frequencia': 'frequency',
+    'estilo': 'style',
+    'inclinacao': 'tilt_random_amplitude',
+    'semente': 'seed',
+    'fase': 'phase',
+    'rgb': 'rgb_randomness',
+  },
+  EffectType.motionTile: {
+    'largura': 'tile_width',
+    'altura': 'tile_height',
+    'saidaLargura': 'output_width',
+    'saidaAltura': 'output_height',
+    'deslocX': 'phase',
+    'espelhar': 'mirror_edges',
+  },
+};
+
+/// A chave de hoje para uma chave que pode ser de ontem.
+String resolveParamKey(EffectType type, String key) =>
+    effectParamAliases[type]?[key] ?? key;
+
 /// O identificador de um tipo.
 String effectIdOf(EffectType t) => effectSpecs[t]!.id;
 
@@ -224,20 +252,81 @@ const effectSpecs = <EffectType, EffectSpec>{
     id: 'shake',
     name: 'Shake',
     category: 'Distort',
-    synonyms: ['tremor', 'shake', 'camera shake', 'tremer'],
+    synonyms: [
+      'tremor', 'shake', 'camera shake', 'tremer', 'camera na mao',
+      'handheld',
+    ],
     procedural: true,
+    cost: 2,
     params: {
-      'amplitude':
-          EffectParam('Amplitude', 60.0, 0.0, 300.0, relative: true),
-      'frequencia': EffectParam('Frequencia', 8.0, 0.0, 30.0),
-      'estilo': EffectParam('Estilo', 0.0, 0.0, 2.0,
+      // --- General ---
+      'style': EffectParam('Style', 0.0, 0.0, 2.0,
           kind: ParamKind.choice,
-          options: ['Normal', 'Nervoso', 'Saltos']),
-      'zoom': EffectParam('Zoom', 0.0, 0.0, 1.0),
-      'inclinacao': EffectParam('Inclinacao', 0.0, 0.0, 30.0),
-      'rgb': EffectParam('Franja RGB', 0.0, 0.0, 1.0),
-      'semente': EffectParam('Semente', 0.0, 0.0, 100.0,
-          kind: ParamKind.seed),
+          options: ['Normal', 'Nervous', 'Jumpy']),
+      'amplitude':
+          EffectParam('Amplitude', 1.0, 0.0, 20.0, relative: true),
+      'frequency': EffectParam('Frequency', 8.0, 0.0, 60.0),
+      'phase': EffectParam('Phase', 0.0, -360.0, 360.0),
+      'stillness': EffectParam('Stillness', 0.7, 0.0, 1.0),
+      'twitch_frequency': EffectParam('Twitch Frequency', 2.0, 0.0, 20.0),
+      'drift': EffectParam('Drift', 0.3, 0.0, 1.0),
+      'center_bias': EffectParam('Center Bias', 0.0, 0.0, 1.0),
+      'z_distance': EffectParam('Z Distance', 1.0, 0.001, 10.0),
+      'motion_blur': EffectParam('Motion Blur', 0.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'blur_length': EffectParam('Blur Length', 1.0, 0.0, 10.0),
+      'seed': EffectParam('Seed', 0.0, 0.0, 100.0, kind: ParamKind.seed),
+      'edges': EffectParam('X / Y Edges', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Reflect', 'Tile', 'None']),
+
+      // --- Por eixo: a componente ALEATORIA e a de ONDA sao separadas.
+      // E o que faz parecer camera na mao em vez de senoide.
+      'x_random_amplitude':
+          EffectParam('X Random Amplitude', 0.2, 0.0, 5.0),
+      'x_random_frequency':
+          EffectParam('X Random Frequency', 1.0, 0.0, 10.0),
+      'x_wave_amplitude': EffectParam('X Wave Amplitude', 0.0, 0.0, 5.0),
+      'x_wave_frequency': EffectParam('X Wave Frequency', 0.5, 0.0, 20.0),
+      'x_phase': EffectParam('X Phase', 0.0, -360.0, 360.0),
+
+      'y_random_amplitude':
+          EffectParam('Y Random Amplitude', 0.1, 0.0, 5.0),
+      'y_random_frequency':
+          EffectParam('Y Random Frequency', 1.0, 0.0, 10.0),
+      'y_wave_amplitude': EffectParam('Y Wave Amplitude', 0.0, 0.0, 5.0),
+      'y_wave_frequency': EffectParam('Y Wave Frequency', 0.5, 0.0, 20.0),
+      'y_phase': EffectParam('Y Phase', 0.0, -360.0, 360.0),
+
+      'z_random_amplitude':
+          EffectParam('Z Random Amplitude', 0.0, 0.0, 5.0),
+      'z_random_frequency':
+          EffectParam('Z Random Frequency', 1.0, 0.0, 10.0),
+      'z_wave_amplitude': EffectParam('Z Wave Amplitude', 0.0, 0.0, 5.0),
+      'z_wave_frequency': EffectParam('Z Wave Frequency', 0.5, 0.0, 20.0),
+      'z_phase': EffectParam('Z Phase', 0.0, -360.0, 360.0),
+
+      'tilt_random_amplitude':
+          EffectParam('Tilt Random Amplitude', 0.0, 0.0, 5.0),
+      'tilt_random_frequency':
+          EffectParam('Tilt Random Frequency', 1.0, 0.0, 10.0),
+      'tilt_wave_amplitude':
+          EffectParam('Tilt Wave Amplitude', 0.0, 0.0, 5.0),
+      'tilt_wave_frequency':
+          EffectParam('Tilt Wave Frequency', 0.5, 0.0, 20.0),
+      'tilt_phase': EffectParam('Tilt Phase', 0.0, -360.0, 360.0),
+
+      // --- RGB: fase por canal desloca o canal NO TEMPO. O vermelho se
+      // move antes, os outros seguem — franja organica, muito melhor que
+      // um deslocamento estatico.
+      'red_amplitude': EffectParam('Red Amplitude', 1.0, 0.0, 5.0),
+      'green_amplitude': EffectParam('Green Amplitude', 1.0, 0.0, 5.0),
+      'blue_amplitude': EffectParam('Blue Amplitude', 1.0, 0.0, 5.0),
+      'red_phase': EffectParam('Red Phase', 0.0, -360.0, 360.0),
+      'green_phase': EffectParam('Green Phase', 0.0, -360.0, 360.0),
+      'blue_phase': EffectParam('Blue Phase', 0.0, -360.0, 360.0),
+      'rgb_randomness': EffectParam('RGB Randomness', 0.0, 0.0, 1.0),
+      'rgb_frequency': EffectParam('RGB Frequency', 2.0, 0.0, 30.0),
     },
   ),
   // Seis operadores sincronizados por um modulador mestre (quantidade +

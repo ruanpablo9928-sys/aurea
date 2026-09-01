@@ -74,6 +74,50 @@ class TremorSample {
 
 /// Estilos: 0 = Normal (constante), 1 = Nervoso (rajadas entre pausas),
 /// 2 = Aos saltos (saltos secos com deriva lenta).
+/// Um EIXO do Shake: a componente aleatoria e a de onda, separadas.
+///
+/// A separacao e o que faz parecer camera na mao. So ruido treme sem
+/// intencao; so senoide balanca como metronomo. A soma das duas tem
+/// deriva e ritmo ao mesmo tempo, que e o que a mao humana faz.
+class ShakeAxis {
+  const ShakeAxis({
+    this.randomAmplitude = 0,
+    this.randomFrequency = 1,
+    this.waveAmplitude = 0,
+    this.waveFrequency = 0.5,
+    this.phaseDeg = 0,
+  });
+
+  final double randomAmplitude;
+  final double randomFrequency;
+  final double waveAmplitude;
+  final double waveFrequency;
+  final double phaseDeg;
+
+  bool get isNeutral =>
+      randomAmplitude.abs() < 1e-9 && waveAmplitude.abs() < 1e-9;
+
+  /// O valor do eixo na fase [phase] (ja integrada) para o canal [ch].
+  double valueAt(int seed, int ch, double phase) {
+    if (isNeutral) return 0;
+    final p = phase + phaseDeg / 360.0;
+    final aleatorio = randomAmplitude <= 0
+        ? 0.0
+        : fxNoiseSigned(seed, ch, p * randomFrequency) * randomAmplitude;
+    final onda = waveAmplitude <= 0
+        ? 0.0
+        : math.sin(p * waveFrequency * 2 * math.pi) * waveAmplitude;
+    return aleatorio + onda;
+  }
+}
+
+/// Estilos: 0 = Normal (constante), 1 = Nervoso (rajadas entre pausas),
+/// 2 = Aos saltos (saltos secos com deriva lenta).
+///
+/// A FASE ja chega integrada no tempo (∫ frequencia dt). Calcular
+/// `fase = t x frequencia` e o defeito documentado do plugin de
+/// referencia: animar a frequencia faz o resultado depender da taxa de
+/// variacao do valor, e o tremor da um tranco a cada keyframe.
 TremorSample tremorSample({
   required double amplitudePx,
   required double phase,
@@ -81,31 +125,63 @@ TremorSample tremorSample({
   required int seed,
   double zoom = 0,
   double tiltDeg = 0,
+  ShakeAxis x = const ShakeAxis(randomAmplitude: 0.2),
+  ShakeAxis y = const ShakeAxis(randomAmplitude: 0.1),
+  ShakeAxis z = const ShakeAxis(),
+  ShakeAxis tilt = const ShakeAxis(),
+  double stillness = 0.7,
+  double twitchFrequency = 2,
+  double drift = 0.3,
+  double centerBias = 0,
+  double zDistance = 1,
 }) {
-  if (amplitudePx <= 0 && zoom <= 0 && tiltDeg <= 0) {
-    return TremorSample.none;
-  }
+  final semEixos = x.isNeutral && y.isNeutral && z.isNeutral && tilt.isNeutral;
+  if (amplitudePx <= 0 || semEixos) return TremorSample.none;
 
   var gate = 1.0;
   var px = phase;
   switch (style) {
-    case 1: // Nervoso: imobilidade ~0,7 com rajadas.
-      final burst = valueNoise01(seed * 7 + 99, 5.5, phase * 0.35);
-      gate = burst > 0.62 ? 1.0 : 0.05;
-    case 2: // Aos saltos: quantiza a fase; deriva pequena entre saltos.
+    case 1:
+      // NERVOSO: fica quieto e dispara em rajadas. `stillness` diz o
+      // quanto do tempo e pausa; `twitchFrequency`, com que pressa as
+      // rajadas se sucedem.
+      final burst =
+          valueNoise01(seed * 7 + 99, twitchFrequency * 2.75, phase * 0.35);
+      gate = burst > stillness.clamp(0.0, 0.99) ? 1.0 : 0.05;
+    case 2:
+      // AOS SALTOS: a fase e quantizada — a imagem fica parada e pula.
+      // `drift` e o tanto que ela escorrega entre um salto e outro.
       const jumpRate = 0.9;
       final slot = (phase * jumpRate).floorToDouble();
       final frac = phase * jumpRate - slot;
-      px = slot / jumpRate + frac * 0.12;
+      px = slot / jumpRate + frac * drift.clamp(0.0, 1.0) * 0.4;
   }
 
-  double n(int ch) => fxNoiseSigned(seed, ch, px);
+  // A distancia em Z divide o deslocamento: camera longe treme menos na
+  // tela para o mesmo tremor no espaco.
+  final escalaZ = 1 / math.max(0.001, zDistance);
+
+  var dx = x.valueAt(seed, 1, px) * amplitudePx * gate * escalaZ;
+  var dy = y.valueAt(seed, 2, px) * amplitudePx * gate * escalaZ;
+
+  // CENTER BIAS puxa de volta para o centro: quanto maior, menos a
+  // imagem se afasta, sem deixar de tremer.
+  final puxa = 1 - centerBias.clamp(0.0, 1.0) * 0.85;
+  dx *= puxa;
+  dy *= puxa;
+
+  final zoomExtra = z.isNeutral
+      ? fxNoiseSigned(seed, 3, px) * zoom.clamp(0, 1) * 0.22
+      : z.valueAt(seed, 3, px) * 0.22;
+  final giro = tilt.isNeutral
+      ? fxNoiseSigned(seed, 4, px) * tiltDeg
+      : tilt.valueAt(seed, 4, px) * 30;
 
   return TremorSample(
-    n(1) * amplitudePx * gate,
-    n(2) * amplitudePx * 0.6 * gate,
-    1 + n(3) * zoom.clamp(0, 1) * 0.22 * gate,
-    n(4) * tiltDeg * gate,
+    dx,
+    dy,
+    1 + zoomExtra * gate,
+    giro * gate,
   );
 }
 

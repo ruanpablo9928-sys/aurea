@@ -284,16 +284,21 @@ Map<String, dynamic> _effect(EffectInstance e) => {
       'params': {for (final p in e.params.entries) p.key: _ad(p.value)},
     };
 
-EffectInstance _asEffect(Map<String, dynamic> m) => EffectInstance(
-      id: m['id'] as String,
-      type: _tipoDoEfeito(m),
-      color: _asCol(m['color']),
-      enabled: m['enabled'] as bool,
-      params: {
-        for (final p in (m['params'] as Map<String, dynamic>).entries)
-          p.key: _asAd(p.value),
-      },
-    );
+EffectInstance _asEffect(Map<String, dynamic> m) {
+  final tipo = _tipoDoEfeito(m);
+  return EffectInstance(
+    id: m['id'] as String,
+    type: tipo,
+    color: _asCol(m['color']),
+    enabled: m['enabled'] as bool,
+    // A chave passa pela tabela de alias: parametro renomeado nao pode
+    // fazer o efeito voltar ao padrao sem aviso.
+    params: {
+      for (final p in (m['params'] as Map<String, dynamic>).entries)
+        resolveParamKey(tipo, p.key): _asAd(p.value),
+    },
+  );
+}
 
 /// O tipo do efeito: pelo id quando ha, pelo indice do enum quando o
 /// arquivo e antigo.

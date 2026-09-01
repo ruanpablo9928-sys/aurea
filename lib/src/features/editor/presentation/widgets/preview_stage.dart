@@ -1637,25 +1637,68 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           }
 
         case EffectType.tremor:
-          // Tremor aleatorio-mas-repetivel (PR-FX3) com fase integrada.
-          final amp = effect.paramAt('amplitude', local);
-          final zoom = effect.paramAt('zoom', local).clamp(0.0, 1.0);
-          final tilt = effect.paramAt('inclinacao', local);
-          final rgbAmt = effect.paramAt('rgb', local).clamp(0.0, 1.0);
-          final style =
-              effect.paramAt('estilo', local).round().clamp(0, 2);
-          final seed = effect.paramAt('semente', local).round();
-          final phase =
-              integratedPhase(effect.track('frequencia'), local);
+          // SHAKE: fase INTEGRADA no tempo, componentes aleatoria e de
+          // onda separadas por eixo, e canais RGB com fase propria.
+          final amp = effect.paramAt('amplitude', local) * 60;
+          final style = effect.paramAt('style', local).round().clamp(0, 2);
+          final seed = effect.paramAt('seed', local).round();
+          final phase = integratedPhase(effect.track('frequency'), local) +
+              effect.paramAt('phase', local) / 360.0;
+
+          ShakeAxis eixo(String pre) => ShakeAxis(
+                randomAmplitude:
+                    effect.paramAt('${pre}_random_amplitude', local),
+                randomFrequency:
+                    effect.paramAt('${pre}_random_frequency', local),
+                waveAmplitude:
+                    effect.paramAt('${pre}_wave_amplitude', local),
+                waveFrequency:
+                    effect.paramAt('${pre}_wave_frequency', local),
+                phaseDeg: effect.paramAt('${pre}_phase', local),
+              );
+
+          final ex = eixo('x');
+          final ey = eixo('y');
+          final ez = eixo('z');
+          final et = eixo('tilt');
 
           TremorSample sampleAt(double shift) => tremorSample(
                 amplitudePx: amp,
                 phase: phase + shift,
                 style: style,
                 seed: seed,
-                zoom: zoom,
-                tiltDeg: tilt,
+                x: ex,
+                y: ey,
+                z: ez,
+                tilt: et,
+                stillness: effect.paramAt('stillness', local),
+                twitchFrequency:
+                    effect.paramAt('twitch_frequency', local),
+                drift: effect.paramAt('drift', local),
+                centerBias: effect.paramAt('center_bias', local),
+                zDistance: effect.paramAt('z_distance', local),
               );
+
+          // BORDAS: refletir e a escolha certa por padrao — a imagem
+          // sacode e a borda continua parecendo imagem, em vez de virar
+          // faixa preta.
+          final bordas = effect.paramAt('edges', local).round().clamp(0, 2);
+          Widget comBorda(Widget c) => switch (bordas) {
+                0 => Stack(clipBehavior: Clip.none, children: [
+                    Transform.scale(scaleX: -1, child: c),
+                    Transform.scale(scaleY: -1, child: c),
+                    c,
+                  ]),
+                1 => Stack(clipBehavior: Clip.none, children: [
+                    Transform.translate(
+                        offset: Offset(-fxWidth.toDouble(), 0), child: c),
+                    Transform.translate(
+                        offset: Offset(fxWidth.toDouble(), 0), child: c),
+                    c,
+                  ]),
+                _ => c,
+              };
+
           Widget shaken(TremorSample s, Widget c) => Transform(
                 transform: Matrix4.identity()
                   ..translateByDouble(s.dx, s.dy, 0, 1)
@@ -1666,22 +1709,69 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               );
 
           final s0 = sampleAt(0);
-          if (!s0.isNeutral || rgbAmt > 0.01) {
-            if (rgbAmt > 0.01) {
-              // Fase por canal: o vermelho se move ANTES, os outros
-              // seguem — franja cromatica organica.
-              final delta = 0.05 + rgbAmt * 0.12;
-              out = Stack(clipBehavior: Clip.none, children: [
-                shaken(sampleAt(-delta), _channelIso(out, 0)),
+          final rgbAleatorio =
+              effect.paramAt('rgb_randomness', local).clamp(0.0, 1.0);
+          final rgbFreq = effect.paramAt('rgb_frequency', local);
+          final ampR = effect.paramAt('red_amplitude', local);
+          final ampG = effect.paramAt('green_amplitude', local);
+          final ampB = effect.paramAt('blue_amplitude', local);
+          final separaCanais = rgbAleatorio > 0.001 ||
+              (ampR - ampG).abs() > 0.001 ||
+              (ampG - ampB).abs() > 0.001 ||
+              effect.paramAt('red_phase', local).abs() > 0.5 ||
+              effect.paramAt('green_phase', local).abs() > 0.5 ||
+              effect.paramAt('blue_phase', local).abs() > 0.5;
+
+          if (!s0.isNeutral || separaCanais) {
+            if (separaCanais) {
+              // FASE POR CANAL: desloca o canal NO TEMPO. O vermelho se
+              // move antes, os outros seguem — franja organica, que um
+              // deslocamento estatico nao consegue imitar.
+              double faseDe(String p, double amplitude) =>
+                  effect.paramAt(p, local) / 360.0 +
+                  (rgbAleatorio <= 0
+                      ? 0.0
+                      : fxNoiseSigned(seed + 31, 9, phase * rgbFreq) *
+                          rgbAleatorio *
+                          0.15);
+
+              TremorSample canal(String p, double a) {
+                final base = sampleAt(faseDe(p, a));
+                return TremorSample(base.dx * a, base.dy * a, base.scale,
+                    base.rotationDeg);
+              }
+
+              out = comBorda(Stack(clipBehavior: Clip.none, children: [
+                shaken(canal('red_phase', ampR), _channelIso(out, 0)),
                 BlendMask(
                     blendMode: BlendMode.plus,
-                    child: shaken(s0, _channelIso(out, 1))),
+                    child: shaken(
+                        canal('green_phase', ampG), _channelIso(out, 1))),
                 BlendMask(
                     blendMode: BlendMode.plus,
-                    child: shaken(sampleAt(delta), _channelIso(out, 2))),
-              ]);
+                    child: shaken(
+                        canal('blue_phase', ampB), _channelIso(out, 2))),
+              ]));
             } else {
-              out = shaken(s0, out);
+              out = comBorda(shaken(s0, out));
+            }
+
+            // MOTION BLUR do proprio Shake: amostras ao longo do rastro
+            // do tremor. Sem ele, um tremor forte vira imagem picotada.
+            if (effect.paramAt('motion_blur', local) >= 0.5) {
+              final comprimento =
+                  effect.paramAt('blur_length', local).clamp(0.0, 10.0);
+              if (comprimento > 0.01) {
+                const n = 5;
+                final copias = <Widget>[];
+                for (var k = 0; k < n; k++) {
+                  final f = (k / (n - 1) - 0.5) * comprimento * 0.02;
+                  copias.add(Opacity(
+                      opacity: 1 / (k + 1),
+                      child: shaken(sampleAt(f), out)));
+                }
+                out = Stack(clipBehavior: Clip.none, children: copias);
+              }
             }
           }
 

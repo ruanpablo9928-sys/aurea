@@ -352,10 +352,10 @@ List<EffectPreset> factoryPresets() => [
         effects: [
           EffectInstance(type: EffectType.tremor, params: {
             'amplitude': AnimatedDouble(18),
-            'frequencia': AnimatedDouble(3.5),
-            'estilo': AnimatedDouble(0),
-            'inclinacao': AnimatedDouble(1.5),
-            'semente': AnimatedDouble(4),
+            'frequency': AnimatedDouble(3.5),
+            'style': AnimatedDouble(0),
+            'tilt_random_amplitude': AnimatedDouble(0.05),
+            'seed': AnimatedDouble(4),
           }),
         ],
       ),
