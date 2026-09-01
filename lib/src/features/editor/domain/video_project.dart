@@ -256,6 +256,31 @@ class VideoProject {
     return null;
   }
 
+  /// Uma copia com IDENTIDADE nova.
+  ///
+  /// Abrir o mesmo template duas vezes com o mesmo id sobrescreveria o
+  /// trabalho da primeira vez — e a pessoa perderia o que fez sem
+  /// entender por que.
+  VideoProject comIdNovo() => VideoProject(
+        name: name,
+        createdAt: createdAt,
+        aspectRatio: aspectRatio,
+        fps: fps,
+        resolutionHeight: resolutionHeight,
+        layers: layers,
+        links: links,
+        meta: meta,
+        palette: palette,
+        textStyles: textStyles,
+        exposed: exposed,
+        guides: guides,
+        motionBlur: motionBlur,
+        data: data,
+        bindings: bindings,
+        markers: markers,
+        lottieMode: lottieMode,
+      );
+
   VideoProject copyWith({
     String? name,
     double? aspectRatio,

@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import '../../editor/domain/template_pack.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +32,40 @@ class ProjectsTab extends ConsumerWidget {
 
     ref.read(projectsControllerProvider.notifier).add(project);
     ref.read(editorControllerProvider.notifier).openProject(project);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const EditorScreen()),
+    );
+  }
+
+  /// ABRIR TEMPLATE: o arquivo vira um projeto NOVO, com id novo.
+  ///
+  /// Sem id novo, abrir o mesmo template duas vezes sobrescreveria o
+  /// trabalho da primeira vez — e a pessoa perderia o que fez sem
+  /// entender por que.
+  Future<void> _openTemplate(BuildContext context, WidgetRef ref) async {
+    final r = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+    final caminho = r?.files.single.path;
+    if (caminho == null || !context.mounted) return;
+
+    TemplatePack? pack;
+    try {
+      pack = TemplatePack.decode(await File(caminho).readAsString());
+    } catch (_) {
+      pack = null;
+    }
+    if (!context.mounted) return;
+    if (pack == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Nao consegui ler esse template')));
+      return;
+    }
+
+    final novo = pack.project.copyWith(name: pack.name).comIdNovo();
+    ref.read(projectsControllerProvider.notifier).add(novo);
+    ref.read(editorControllerProvider.notifier).openProject(novo);
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const EditorScreen()),
     );
@@ -72,7 +109,10 @@ class ProjectsTab extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 22),
-          _HeroCard(onCreate: () => _createProject(context, ref)),
+          _HeroCard(
+            onCreate: () => _createProject(context, ref),
+            onTemplate: () => _openTemplate(context, ref),
+          ),
           const SizedBox(height: 30),
           Text('Comecar com um formato', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
@@ -116,9 +156,10 @@ class ProjectsTab extends ConsumerWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.onCreate});
+  const _HeroCard({required this.onCreate, required this.onTemplate});
 
   final VoidCallback onCreate;
+  final VoidCallback onTemplate;
 
   @override
   Widget build(BuildContext context) {
@@ -149,10 +190,20 @@ class _HeroCard extends StatelessWidget {
                 ?.copyWith(color: AppColors.muted),
           ),
           const SizedBox(height: 18),
-          FilledButton.icon(
-            icon: const Icon(CupertinoIcons.plus, size: 19),
-            label: const Text('Novo projeto'),
-            onPressed: onCreate,
+          Row(
+            children: [
+              FilledButton.icon(
+                icon: const Icon(CupertinoIcons.plus, size: 19),
+                label: const Text('Novo projeto'),
+                onPressed: onCreate,
+              ),
+              const SizedBox(width: 10),
+              TextButton.icon(
+                icon: const Icon(CupertinoIcons.doc_on_doc, size: 17),
+                label: const Text('Abrir template'),
+                onPressed: onTemplate,
+              ),
+            ],
           ),
         ],
       ),

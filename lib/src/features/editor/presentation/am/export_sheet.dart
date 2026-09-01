@@ -11,6 +11,7 @@ import '../../application/editor_controller.dart';
 import '../../../export/domain/export_settings.dart';
 import '../../../export/presentation/export_video_screen.dart';
 import '../../domain/lottie_export.dart';
+import '../../domain/template_pack.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 
@@ -397,6 +398,71 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                             color: AmColors.accent)),
                   ),
                 ),
+                const Divider(color: AmColors.hairline, height: 22),
+                const Text('Template',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text)),
+                const SizedBox(height: 4),
+                Builder(builder: (context) {
+                  final problemas = validateTemplate(project);
+                  final trava = problemas.where((i) => i.blocking).toList();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        trava.isEmpty
+                            ? '${project.exposed.length} campo(s) para quem '
+                                'receber preencher.'
+                            : trava.first.message,
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: trava.isEmpty
+                              ? AmColors.muted
+                              : AmColors.pink,
+                        ),
+                      ),
+                      for (final aviso
+                          in problemas.where((i) => !i.blocking))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(aviso.message,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  height: 1.35,
+                                  color: AmColors.muted)),
+                        ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: CupertinoButton(
+                          color: AmColors.chip,
+                          borderRadius: BorderRadius.circular(12),
+                          onPressed: busy || trava.isNotEmpty
+                              ? null
+                              : () => writeFile(
+                                    '${project.name}.aurea-template.json',
+                                    TemplatePack(
+                                      name: project.name,
+                                      project: project,
+                                    ).encode(),
+                                    'Template',
+                                  ),
+                          child: Text('Exportar template',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: trava.isEmpty
+                                      ? AmColors.accent
+                                      : AmColors.muted)),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+
                 if (status != null) ...[
                   const SizedBox(height: 10),
                   Text(status!,
