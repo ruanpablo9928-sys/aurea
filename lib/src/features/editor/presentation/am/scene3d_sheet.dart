@@ -1,4 +1,8 @@
-﻿import 'package:flutter/cupertino.dart';
+﻿import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import '../../domain/glb_import.dart';
+import '../../../../core/ui/snack.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -254,6 +258,39 @@ class _ObjectsTab extends StatelessWidget {
           );
         }),
 
+        // MODELO PRONTO: modelar em celular ninguem vai fazer; baixar um
+        // .glb, sim. Sem isso a cena 3D fica presa nos oito solidos.
+        _AcaoLarga(
+          rotulo: 'Trazer modelo .glb',
+          onTap: () async {
+            final r = await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: const ['glb'],
+            );
+            final caminho = r?.files.single.path;
+            if (caminho == null || !context.mounted) return;
+            try {
+              final modelo =
+                  parseGlb(await File(caminho).readAsBytes());
+              final id = controller.addGlbNode(layer.id, modelo);
+              if (id.isNotEmpty) onSelect(id);
+              onChanged();
+              if (context.mounted && modelo.warning != null) {
+                AureaSnack.show(context, modelo.warning!);
+              }
+            } on GlbException catch (e) {
+              if (context.mounted) {
+                AureaSnack.show(context, e.message);
+              }
+            } catch (_) {
+              if (context.mounted) {
+                AureaSnack.show(context, 'Nao consegui ler esse arquivo');
+              }
+            }
+          },
+        ),
+        const SizedBox(height: 10),
+
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -493,6 +530,32 @@ class _ObjectsTab extends StatelessWidget {
       ],
     );
   }
+}
+
+class _AcaoLarga extends StatelessWidget {
+  const _AcaoLarga({required this.rotulo, required this.onTap});
+
+  final String rotulo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AmColors.chip,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(rotulo,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AmColors.accent)),
+        ),
+      );
 }
 
 class _NodeRow extends StatelessWidget {

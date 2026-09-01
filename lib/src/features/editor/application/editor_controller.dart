@@ -14,6 +14,7 @@ import '../domain/effect.dart';
 import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
 import '../domain/extrude3d.dart';
+import '../domain/glb_import.dart';
 import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
@@ -980,6 +981,24 @@ class EditorController extends Notifier<VideoProject> {
       mesh: malha,
       outline: contorno,
       extrudeDepth: depth,
+      size: 120,
+    );
+    _replace(cena.withScene(
+        cena.scene.copyWith(nodes: [...cena.scene.nodes, no])));
+    return no.id;
+  }
+
+  /// TRAZ UM MODELO .glb para dentro da cena.
+  ///
+  /// Devolve o id do no criado. Erro de leitura sobe como [GlbException]
+  /// para a interface poder dizer o que houve — engolir e mostrar cena
+  /// vazia seria pior.
+  String addGlbNode(String sceneId, GlbResult modelo) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return '';
+    final no = SceneNode(
+      name: modelo.name,
+      mesh: modelo.mesh,
       size: 120,
     );
     _replace(cena.withScene(
