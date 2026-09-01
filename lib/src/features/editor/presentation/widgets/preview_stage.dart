@@ -33,7 +33,6 @@ import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
-import 'dither_layer.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import 'scene3d_painter.dart';
@@ -168,7 +167,6 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     final project = ref.watch(editorControllerProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final onion = ref.watch(onionSkinProvider);
-    final temVideo = project.layers.any((l) => l is VideoLayer);
     final compW = project.outputWidth.toDouble();
     final compH = project.outputHeight.toDouble();
 
@@ -200,33 +198,24 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // DITHERING na saida: sem ele, gradiente
-                          // escuro vira faixa em 8 bits.
-                          ValueListenableBuilder<Duration>(
-                            valueListenable: widget.playback.time,
-                            builder: (context, t, child) => DitherLayer(
-                              // COM VIDEO NA CENA, NAO TIRA A FOTO.
-                              //
-                              // O dithering rasteriza a composicao para
-                              // rodar o shader em cima. Textura de video
-                              // nao entra em `toImage` — ela vira um
-                              // buraco PRETO na foto, e o preview inteiro
-                              // fica sem o video. Era isto que fazia "o
-                              // preview nao funcionar".
-                              //
-                              // Perder o dithering numa cena com video e
-                              // pequeno: o video ja traz ruido proprio, e
-                              // e justamente em degrade liso que a faixa
-                              // aparece.
-                              enabled: !temVideo,
-                              time: t,
-                              child: child!,
-                            ),
-                            child: CompositionView(
-                              time: widget.playback.time,
-                              videos: widget.videos,
-                              selectedId: selectedId,
-                            ),
+                          // SEM DITHERING NO PREVIEW.
+                          //
+                          // O dithering precisa fotografar a composicao
+                          // para rodar o shader em cima, e essa foto e um
+                          // raster guardado: quando a cena muda, ele
+                          // continua mostrando o quadro velho. Na
+                          // pratica: apagar uma camada e ela continuar na
+                          // tela, dar play e nada andar, acrescentar uma
+                          // camada e nao ver nada.
+                          //
+                          // O preview e vivo; ele nao pode depender de
+                          // uma foto. O dithering continua onde ele
+                          // importa de verdade e onde o quadro e
+                          // desenhado uma vez so: na EXPORTACAO.
+                          CompositionView(
+                            time: widget.playback.time,
+                            videos: widget.videos,
+                            selectedId: selectedId,
                           ),
                           // CASCA DE CEBOLA: os quadros vizinhos,
                           // fantasmas, ATRAS do quadro atual. Passado
@@ -507,20 +496,15 @@ class _GuidesPainter extends CustomPainter {
 /// Estado do portao de recomposicao — um por app (ha um preview). Vive
 /// fora do widget porque _CompositionView e recriado a cada build do
 /// pai; widgets sao configuracoes imutaveis e reusa-los e valido.
-/// Portao de recomposicao — UM POR VISTA.
+/// A marcha vigente — UMA POR VISTA.
 ///
-/// Ele ja foi global, e isso era um defeito serio: o preview, a tela de
+/// Ela ja foi global, e isso era um defeito serio: o preview, a tela de
 /// exportacao e cada quadro fantasma da casca de cebola sao vistas
 /// DIFERENTES, com projeto e instante proprios, e todas liam e escreviam
-/// o mesmo cache. Uma via a arvore da outra — o sintoma era o preview
-/// mostrando o projeto anterior, ou nao mostrando o video.
+/// o mesmo estado. Uma via a leitura da outra.
 class _CompositionGate {
   VideoProject? project;
   GearDecision? decision;
-  bool needsClock = true;
-  String? signature;
-  String? selectedId;
-  List<Widget>? kids;
 }
 
 /// Reconstroi por tick do clock; midia isolada em RepaintBoundary.
@@ -642,33 +626,25 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 resolveLinks: true),
           );
         }
-        // ARQUITETURA DE MARCHAS (PR-G1 + portao): o classificador roda
-        // quando a CENA muda (identidade do projeto), nunca por frame; e
-        // uma cena SEM nada evoluindo no tempo reusa a arvore composta
-        // (o video atualiza sozinho pela Texture, a legenda troca por
-        // assinatura de cue). "Compoe X/s" cai a ~0 em cena estatica —
-        // o analogo Flutter de "o player nao compoe, so toca".
+        // MARCHA (PR-G1): o classificador e ESTRUTURAL — roda quando a
+        // cena muda (identidade do projeto), nunca por quadro.
+        //
+        // O QUE SAIU DAQUI, E POR QUE: existia um cache que reusava a
+        // arvore composta enquanto "nada parecesse evoluir no tempo".
+        // Decidir isso exige manter a lista de tudo que varia com o
+        // tempo, e essa lista nunca fica completa — ficaram de fora os
+        // efeitos com fase propria, o rastreio, o pulso na batida, o
+        // corte de camera. E o preco do erro e o pior que existe: o
+        // preview congela, e sem preview vivo nao da para animar, que e
+        // para o que o aplicativo serve. Montar a arvore e barato;
+        // congelar o preview nao tem preco que pague.
         if (!identical(project, _gate.project)) {
           _gate.project = project;
           _gate.decision = classifyGear(project);
-          _gate.needsClock = projectNeedsClockRebuild(project);
-          _gate.kids = null;
           PreviewStats.setGear(_gate.decision!);
-        }
-        final sig = compositionSignature(project, t);
-        if (!_gate.needsClock &&
-            _gate.kids != null &&
-            sig == _gate.signature &&
-            selectedId == _gate.selectedId) {
-          PreviewStats.idle();
-          return Stack(
-              clipBehavior: Clip.none, children: _gate.kids!);
         }
         final kids = _buildLayers(project, project.layers, t,
             resolveLinks: true);
-        _gate.kids = kids;
-        _gate.signature = sig;
-        _gate.selectedId = selectedId;
         PreviewStats.tick(kids.length);
         return Stack(clipBehavior: Clip.none, children: kids);
       },

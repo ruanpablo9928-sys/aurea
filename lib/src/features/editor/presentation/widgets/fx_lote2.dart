@@ -12,8 +12,9 @@ import 'package:flutter/rendering.dart';
 /// Vários deles precisam da camada COMO IMAGEM para funcionar de
 /// verdade — deslocar turbulento, entortar, ordenar pixels e semear nao
 /// sao filtros de cor, sao redistribuicao de pixels. O [SnapshotWidget]
-/// rasteriza a subarvore uma vez por quadro e entrega uma `ui.Image`, e
-/// dai para frente e malha e `drawVertices`, que a GPU faz de graca.
+/// rasteriza a subarvore e entrega uma `ui.Image`, e dai para frente e
+/// malha e `drawVertices`, que a GPU faz de graca. A foto e refeita a
+/// cada reconstrucao do efeito — ver [_FxSnapshotState.didUpdateWidget].
 
 // ------------------------------------------------------------ ruido
 
@@ -85,10 +86,33 @@ class FxSnapshot extends StatefulWidget {
   State<FxSnapshot> createState() => _FxSnapshotState();
 }
 
+/// Controle com um jeito de dizer "essa foto venceu".
+class _FxSnapshotController extends SnapshotController {
+  _FxSnapshotController() : super(allowSnapshotting: true);
+
+  /// Joga fora o raster guardado e manda pintar de novo.
+  void invalidar() => notifyListeners();
+}
+
 class _FxSnapshotState extends State<FxSnapshot> {
   // Ligado o tempo todo: o efeito PRECISA da imagem para existir.
-  final SnapshotController _controller =
-      SnapshotController(allowSnapshotting: true);
+  final _FxSnapshotController _controller = _FxSnapshotController();
+
+  @override
+  void didUpdateWidget(FxSnapshot old) {
+    super.didUpdateWidget(old);
+    // A FOTO NAO SE INVALIDA SOZINHA — e esse era o defeito.
+    //
+    // O SnapshotWidget guarda o raster no objeto de render e so o
+    // descarta em casos que nao incluem "o filho mudou": o filho e
+    // pintado num layer separado, entao o markNeedsPaint dele nao
+    // alcanca a foto. Na pratica a camada congelava no primeiro quadro
+    // pintado e ficava assim para sempre — dar play e nada andar,
+    // apagar e continuar na tela.
+    //
+    // Reconstruiu o efeito = o conteudo pode ter mudado = foto vencida.
+    _controller.invalidar();
+  }
 
   @override
   void dispose() {
