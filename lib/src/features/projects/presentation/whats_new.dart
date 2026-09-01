@@ -16,6 +16,107 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.eye,
+    'O preview voltou a mostrar video',
+    'Eram tres defeitos somados. Abrir um projeto salvo nunca montava '
+        'os tocadores, entao a tela ficava preta ate alguem apertar '
+        'play. O cache da composicao era compartilhado entre o preview, '
+        'a exportacao e a casca de cebola, e as vistas mostravam o '
+        'projeto uma da outra. E o passe de dithering, que rasteriza a '
+        'composicao para rodar o shader, apagava a textura do video — '
+        'ela nao entra nesse tipo de foto e virava um buraco preto. '
+        'Agora, com video na cena, o dithering nao acontece: perder ele '
+        'e pequeno, perder o video e o app nao funcionar.',
+  ),
+  NewsItem(
+    CupertinoIcons.videocam,
+    'Camera 3D e Cena 3D animam com nulo',
+    'Parentear a camera a um objeto nulo simplesmente nao funcionava, e '
+        'com isso TODOS os rigs estavam quebrados — orbita, tripe, '
+        'dolly, camera na mao. Agora funcionam os tres niveis: nulo da '
+        'composicao movendo a camera, nulo movendo a Cena 3D inteira, e '
+        'nulos DENTRO da cena, que e o que faltava para rigging la '
+        'dentro. A camera herda posicao e rotacao do pai, mas nunca '
+        'escala — herdar escala era o que fazia o enquadramento '
+        'explodir. Tem tambem rig de orbita em um toque, com keyframes '
+        'de verdade, editaveis.',
+  ),
+  NewsItem(
+    CupertinoIcons.scissors,
+    'Corta, apaga e junta de volta',
+    'Agora a linha do tempo e MAGNETICA por padrao: apagar fecha o '
+        'buraco e puxa o que vinha depois, com interruptor visivel para '
+        'desligar quando outra trilha precisa continuar no lugar. E '
+        'entrou o que faltava: JUNTAR dois pedacos do mesmo arquivo de '
+        'volta num clipe so. A marca verde na juncao mostra onde da, e '
+        'um toque nela desfaz o corte.',
+  ),
+  NewsItem(
+    CupertinoIcons.waveform,
+    'Forma de onda de verdade, e scrub de audio',
+    'A forma de onda passou a guardar seis niveis de detalhe de uma '
+        'vez: ampliar troca de nivel em vez de recalcular, entao a linha '
+        'do tempo nao engasga mais em audio longo. Cada pedaco guarda '
+        'pico E volume, entao a onda mostra o transiente e o corpo — a '
+        'leitura que qualquer editor de audio da. E arrastar a regua '
+        'agora TOCA o som: achar a silaba de ouvido e muito mais rapido '
+        'do que procurar no olho.',
+  ),
+  NewsItem(
+    CupertinoIcons.hand_raised,
+    'Estabilizar, reenquadrar e pulsar na batida',
+    'Tres coisas que antes eram keyframe na mao. Estabilizar tira o '
+        'tremor (e amplia junto, senao aparece borda preta). Reenquadrar '
+        'sozinho segue o assunto ao virar vertical, em vez de cortar no '
+        'centro e decepar a cabeca de quem esta na lateral. E pulsar na '
+        'batida poe a camada crescendo em cada ataque da musica — feito '
+        'na mao seriam centenas de keyframes.',
+  ),
+  NewsItem(
+    CupertinoIcons.sparkles,
+    'Os efeitos ficaram certos por dentro',
+    'Glow e desfoque estavam somando luz no espaco errado, e e por isso '
+        'que sempre saiam acinzentados e com halo escuro na borda. Agora '
+        'a conta acontece em espaco linear, que e onde luz soma. O raio '
+        'tambem virou fracao do lado da tela: o mesmo numero da o mesmo '
+        'tamanho em 720p e em 4K, o que antes nao acontecia.',
+  ),
+  NewsItem(
+    CupertinoIcons.wand_stars,
+    'Seis efeitos com a ficha completa',
+    'Deep Glow (piramide com energia conservada, limiar suave, '
+        'tonemap), Shake (tres estilos, aleatorio e onda separados por '
+        'eixo, RGB com fase propria), Motion Tile (com a semantica do '
+        'After Effects, em % da camada), Motion Blur da composicao (que '
+        'existia so no papel e agora acontece), Pixel Sorter e Blob '
+        'Tracker com identidade estavel e analise gravada.',
+  ),
+  NewsItem(
+    CupertinoIcons.textformat_abc,
+    'Nomes dos efeitos em ingles',
+    'Os 38 efeitos passaram a ter o nome que o resto do mundo usa — '
+        'Gaussian Blur, Deep Glow, RGB Split, Shake. A busca continua '
+        'aceitando portugues: digitar "desfoque" acha Gaussian Blur. '
+        'Nenhum projeto ou preset antigo quebrou.',
+  ),
+  NewsItem(
+    CupertinoIcons.cube_box,
+    'Modelo 3D, extrusao e template',
+    'Da para trazer um modelo .glb pronto para dentro da cena, '
+        'transformar uma forma plana em volume com espessura, e '
+        'empacotar um projeto como TEMPLATE para abrir noutro aparelho '
+        'com os campos preenchiveis.',
+  ),
+  NewsItem(
+    CupertinoIcons.rectangle_grid_2x2,
+    'Painel na altura do polegar',
+    'Todo painel de parametro agora tem tres alturas pela alca, botao '
+        'de voltar no canto inferior esquerdo (onde o polegar alcanca), '
+        'deslizar para fechar e atalho para os quatro ultimos paineis. '
+        'A grade do catalogo parou de travar: as miniaturas fora da tela '
+        'nao existem mais.',
+  ),
+  NewsItem(
     CupertinoIcons.film,
     'Exportar video (MP4) — agora existe de verdade',
     'Antes o app so exportava Lottie e SVG, e o "exportar video" nao '
