@@ -1803,6 +1803,24 @@ class EditorController extends Notifier<VideoProject> {
 
   // ------------------------------------------ montagem (NLE)
 
+  /// JUNTA dois pedacos do mesmo arquivo de volta num clipe so.
+  ///
+  /// Devolve false quando nao da (arquivos diferentes, separados na
+  /// linha, ou fora de sequencia na fonte) — a interface avisa em vez de
+  /// nao fazer nada em silencio.
+  bool joinWithNeighbour(String id) {
+    final vizinho = joinableNeighbour(state.layers, id);
+    if (vizinho == null) return false;
+    _mutate(state.copyWith(
+        layers: joinAdjacent(state.layers, id, vizinho.id)));
+    return true;
+  }
+
+  /// Se este clipe tem um vizinho para juntar (a marca na juncao).
+  bool hasJoinableNeighbour(String id) =>
+      joinableNeighbour(state.layers, id) != null;
+
+
   /// EXCLUSAO COM ARRASTO: tira a camada e puxa para tras o que vinha
   /// depois. E a diferenca entre "apaguei um trecho" e "apaguei um
   /// trecho e agora tenho um silencio no meio".

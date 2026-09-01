@@ -401,4 +401,100 @@ void main() {
       expect(keepRangesOf([base], 'nao-existe', const []), hasLength(1));
     });
   });
+
+  group('Juntar adjacentes', () {
+    VideoLayer clipe(num inicio, num dur, {num off = 0, String p = 'a.mp4'}) =>
+        VideoLayer(
+          name: 'tomada',
+          startTime: _s(inicio),
+          duration: _s(dur),
+          sourcePath: p,
+          sourceOffset: _s(off),
+        );
+
+    // A prova que o documento pede: cortar e juntar de volta devolve o
+    // clipe IDENTICO ao original.
+    test('cortar e juntar devolve o original', () {
+      final inteiro = clipe(0, 10);
+      final a = inteiro.copyLayer(duration: _s(4));
+      final b = inteiro.duplicated().copyLayer(
+            startTime: _s(4),
+            duration: _s(6),
+          );
+      final b2 = b.copyLayer(sourceOffset: _s(4));
+
+      expect(canJoin(a, b2), isTrue);
+      final r = joinAdjacent([a, b2], a.id, b2.id);
+      expect(r, hasLength(1));
+      final j = r.first as VideoLayer;
+      expect(j.startTime, Duration.zero);
+      expect(j.duration, _s(10));
+      expect(j.sourceOffset, Duration.zero);
+    });
+
+    test('separados na linha nao juntam', () {
+      final a = clipe(0, 4);
+      final b = clipe(6, 4, off: 4);
+      expect(canJoin(a, b), isFalse);
+    });
+
+    // Sem checar a FONTE, dois trechos distantes do mesmo arquivo
+    // "juntariam" e o video pularia no meio.
+    test('em sequencia na linha mas nao na fonte nao juntam', () {
+      final a = clipe(0, 4);
+      final b = clipe(4, 4, off: 30);
+      expect(canJoin(a, b), isFalse);
+    });
+
+    test('arquivos diferentes nao juntam', () {
+      expect(canJoin(clipe(0, 4), clipe(4, 4, off: 4, p: 'b.mp4')), isFalse);
+    });
+
+    test('tipos diferentes nao juntam', () {
+      final v = clipe(0, 4);
+      final a = AudioLayer(
+        name: 'f',
+        startTime: _s(4),
+        duration: _s(4),
+        sourcePath: 'a.mp4',
+        sourceOffset: _s(4),
+      );
+      expect(canJoin(v, a), isFalse);
+    });
+
+    test('velocidades diferentes nao juntam', () {
+      final a = clipe(0, 4);
+      final b = clipe(4, 4, off: 4).copyLayer(speed: 2);
+      expect(canJoin(a, b), isFalse);
+    });
+
+    // Exigir igualdade exata em microssegundos reprovaria juncoes
+    // legitimas por causa de arredondamento.
+    test('um quadro de folga ainda junta', () {
+      final a = clipe(0, 4);
+      final b = clipe(4.02, 4, off: 4.02);
+      expect(canJoin(a, b), isTrue);
+    });
+
+    test('acha o vizinho que da para juntar', () {
+      final a = clipe(0, 4);
+      final b = clipe(4, 4, off: 4);
+      final c = clipe(20, 4, off: 40);
+      expect(joinableNeighbour([a, b, c], a.id)?.id, b.id);
+      expect(joinableNeighbour([a, c], a.id), isNull);
+      expect(joinableNeighbour([a, b], 'fantasma'), isNull);
+    });
+
+    test('juntar o que nao da nao mexe em nada', () {
+      final a = clipe(0, 4);
+      final c = clipe(20, 4, off: 40);
+      expect(joinAdjacent([a, c], a.id, c.id), hasLength(2));
+      expect(joinAdjacent([a, c], a.id, 'fantasma'), hasLength(2));
+    });
+
+    test('o caminho da midia sai certo por tipo', () {
+      expect(mediaPathOf(clipe(0, 1)), 'a.mp4');
+      expect(mediaPathOf(_clip('titulo', 0, 1)), isNull);
+    });
+  });
 }

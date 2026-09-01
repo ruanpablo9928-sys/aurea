@@ -232,6 +232,86 @@ List<Layer> extractRange(
   return out;
 }
 
+/// Caminho da midia de uma camada, se ela tiver.
+String? mediaPathOf(Layer l) => switch (l) {
+      VideoLayer v => v.sourcePath,
+      AudioLayer a => a.sourcePath,
+      _ => null,
+    };
+
+Duration _fonteDe(Layer l) => switch (l) {
+      VideoLayer v => v.sourceOffset,
+      AudioLayer a => a.sourceOffset,
+      _ => Duration.zero,
+    };
+
+double _velocidadeDe(Layer l) => switch (l) {
+      VideoLayer v => v.speed,
+      AudioLayer a => a.speed,
+      _ => 1.0,
+    };
+
+/// DA PARA JUNTAR [a] e [b] de volta num clipe so?
+///
+/// Sim quando sao dois pedacos do MESMO arquivo, encostados na linha do
+/// tempo E em sequencia no tempo de origem. E exatamente a condicao em
+/// que o corte foi feito — juntar desfaz o corte e devolve o clipe
+/// original, com o mesmo ponto de entrada.
+///
+/// Encostados "na medida do quadro": exigir igualdade exata em
+/// microssegundos reprovaria juncoes legitimas por causa de
+/// arredondamento.
+bool canJoin(Layer a, Layer b,
+    {Duration tolerance = const Duration(milliseconds: 40)}) {
+  final pa = mediaPathOf(a);
+  final pb = mediaPathOf(b);
+  if (pa == null || pb == null || pa != pb) return false;
+  if (a.runtimeType != b.runtimeType) return false;
+  if ((_velocidadeDe(a) - _velocidadeDe(b)).abs() > 0.001) return false;
+
+  // Encostados na linha.
+  final vaoLinha = (b.startTime - a.endTime).inMicroseconds.abs();
+  if (vaoLinha > tolerance.inMicroseconds) return false;
+
+  // E em sequencia na FONTE: sem isto, dois trechos distantes do mesmo
+  // arquivo "juntariam" e o video pularia no meio.
+  final fimFonteA = _fonteDe(a) +
+      Duration(
+          microseconds:
+              (a.duration.inMicroseconds * _velocidadeDe(a)).round());
+  final vaoFonte = (_fonteDe(b) - fimFonteA).inMicroseconds.abs();
+  return vaoFonte <= tolerance.inMicroseconds;
+}
+
+/// O vizinho da direita com que [id] pode ser juntado, se houver.
+Layer? joinableNeighbour(List<Layer> layers, String id) {
+  final alvo = layers.where((l) => l.id == id).firstOrNull;
+  if (alvo == null) return null;
+  for (final l in layers) {
+    if (l.id == id) continue;
+    if (canJoin(alvo, l)) return l;
+  }
+  return null;
+}
+
+/// JUNTA os dois num clipe so, desfazendo o corte.
+///
+/// O resultado fica com as propriedades do PRIMEIRO pedaco (posicao,
+/// efeitos, mascaras) e a duracao somada — que e o clipe original de
+/// volta.
+List<Layer> joinAdjacent(List<Layer> layers, String idA, String idB) {
+  final a = layers.where((l) => l.id == idA).firstOrNull;
+  final b = layers.where((l) => l.id == idB).firstOrNull;
+  if (a == null || b == null || !canJoin(a, b)) return layers;
+
+  final juntos = a.copyLayer(duration: b.endTime - a.startTime);
+  return [
+    for (final l in layers)
+      if (l.id != idB)
+        if (l.id == idA) juntos else l,
+  ];
+}
+
 /// Tira VARIOS trechos de uma camada so — e a operacao da decupagem.
 ///
 /// Os trechos vem em tempo da LINHA (nao do arquivo) e sao aplicados do

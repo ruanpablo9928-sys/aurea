@@ -548,6 +548,28 @@ class _ActionBar extends ConsumerWidget {
               }
             },
           ),
+          // MAGNETICO: visivel, porque muda o que EXCLUIR faz. Um modo
+          // escondido que muda o resultado de um botao e pior que nao
+          // ter o modo.
+          Builder(builder: (context) {
+            final magnetico = ref.watch(magneticProvider);
+            return btn(
+              icon: magnetico
+                  ? CupertinoIcons.arrow_left_right_square_fill
+                  : CupertinoIcons.arrow_left_right_square,
+              enabled: true,
+              reason: '',
+              color: magnetico ? AmColors.accent : AmColors.text,
+              onTap: () {
+                ref.read(magneticProvider.notifier).state = !magnetico;
+                AureaSnack.show(
+                    context,
+                    magnetico
+                        ? 'Magnetico desligado: excluir deixa o buraco'
+                        : 'Magnetico ligado: excluir fecha o buraco');
+              },
+            );
+          }),
           // MARCADOR: o mesmo botao poe e tira. Toque longo pula para a
           // marca seguinte — ouvir a locucao marcando e depois montar
           // em cima das marcas e mais rapido que procurar o instante.
@@ -599,11 +621,24 @@ class _ActionBar extends ConsumerWidget {
             reason: 'Selecione uma camada',
             onTap: () {
               final count = n;
-              controller.removeLayers(targets);
+              // MAGNETICO: excluir FECHA o buraco e puxa o que vinha
+              // depois. Era a reclamacao "corta, apaga e fica um
+              // buraco". Desligado, o buraco fica — e o que se quer
+              // quando outra trilha precisa continuar no mesmo lugar.
+              final magnetico = ref.read(magneticProvider);
+              if (magnetico) {
+                for (final id in targets) {
+                  controller.rippleDeleteLayer(id);
+                }
+              } else {
+                controller.removeLayers(targets);
+              }
               AureaSnack.show(
                 context,
                 count == 1
-                    ? 'Camada excluida'
+                    ? (magnetico
+                        ? 'Camada excluida e o buraco fechado'
+                        : 'Camada excluida')
                     : '$count camadas excluidas',
                 actionLabel: 'Desfazer',
                 onAction: controller.undo,

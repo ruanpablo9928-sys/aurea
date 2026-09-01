@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/time_format.dart';
+import '../../../../core/ui/snack.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
@@ -15,6 +16,16 @@ import 'clip_preview_painters.dart';
 
 const double kAmRowHeight = 46;
 const double kAmBarHeight = 38;
+
+/// TIMELINE MAGNETICA — ligada por padrao.
+///
+/// Ligada: excluir fecha o buraco e o que vinha depois encosta. Sem
+/// isso, apagar um pedaco deixa um vazio que a pessoa arruma na mao — e
+/// era a reclamacao "corta, apaga e fica um buraco".
+///
+/// Desligada: cada clipe tem posicao livre, e excluir deixa o buraco.
+/// E o que se quer quando outra trilha precisa continuar no mesmo lugar.
+final magneticProvider = StateProvider<bool>((ref) => true);
 
 /// Timeline do editor: regua com relogio central, playhead fixo no centro,
 /// pilulas de camada (olho + miniatura) fixas a esquerda e barras teal.
@@ -650,6 +661,41 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
               ),
             ),
           ),
+          // MARCA NA JUNCAO: os dois pedacos vieram do mesmo arquivo e
+          // encostam em sequencia. Tocar oferece juntar de volta —
+          // desfazer um corte antigo sem procurar comando nenhum.
+          Consumer(builder: (context, ref, _) {
+            final ctrl = ref.read(editorControllerProvider.notifier);
+            if (!ctrl.hasJoinableNeighbour(layer.id)) {
+              return const SizedBox.shrink();
+            }
+            final x = left + (layer.duration.inMicroseconds / 1e6 * pps);
+            return Positioned(
+              left: x - 11,
+              top: 0,
+              width: 22,
+              height: kAmBarHeight,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (ctrl.joinWithNeighbour(layer.id)) {
+                    AureaSnack.show(context, 'Pedacos juntados',
+                        actionLabel: 'Desfazer', onAction: ctrl.undo);
+                  }
+                },
+                child: Center(
+                  child: Container(
+                    width: 3,
+                    height: kAmBarHeight - 10,
+                    decoration: BoxDecoration(
+                      color: AmColors.accent.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
           // Cues de legenda como marcas dentro da barra (§6.5).
           if (layer is CaptionLayer)
             for (final cue in (layer as CaptionLayer).cues)
