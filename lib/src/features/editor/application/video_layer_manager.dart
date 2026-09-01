@@ -94,7 +94,7 @@ class VideoLayerManager {
                 id: l.id,
                 path: l.sourcePath,
                 volume: l.volume,
-                offset: Duration.zero,
+                offset: l.sourceOffset,
                 layer: l
               ),
           for (final l in layers)

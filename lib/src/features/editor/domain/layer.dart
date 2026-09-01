@@ -1075,6 +1075,7 @@ class AudioLayer extends Layer {
     required super.startTime,
     required super.duration,
     required this.sourcePath,
+    this.sourceOffset = Duration.zero,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
     super.position,
@@ -1097,6 +1098,12 @@ class AudioLayer extends Layer {
   });
 
   final String sourcePath;
+
+  /// PONTO DE ENTRADA no arquivo. Cortar um trecho do meio de uma
+  /// locucao move o inicio da fonte do pedaco de tras — sem isso o
+  /// pedaco repete o mesmo audio em vez de continuar de onde parou.
+  final Duration sourceOffset;
+
   final double volume;
 
   /// Fade, ganho, mudo e ducking desta trilha.
@@ -1126,6 +1133,7 @@ class AudioLayer extends Layer {
     String? matteSourceId,
     double? volume,
     AudioSpec? audio,
+    Duration? sourceOffset,
   }) {
     return AudioLayer(
       id: id,
@@ -1133,6 +1141,7 @@ class AudioLayer extends Layer {
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
       sourcePath: sourcePath,
+      sourceOffset: sourceOffset ?? this.sourceOffset,
       volume: volume ?? this.volume,
       audio: audio ?? this.audio,
       position: position ?? this.position,
@@ -1161,6 +1170,7 @@ class AudioLayer extends Layer {
         startTime: startTime,
         duration: duration,
         sourcePath: sourcePath,
+        sourceOffset: sourceOffset,
         volume: volume,
         audio: audio,
         position: position,

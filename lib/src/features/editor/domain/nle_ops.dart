@@ -149,6 +149,15 @@ List<Layer> closeGaps(List<Layer> layers, {Duration from = Duration.zero}) {
   return (layers: out, inserted: colocado);
 }
 
+/// Avanca o PONTO DE ENTRADA na midia quando um pedaco vira o "depois"
+/// de um corte. Sem isso, tirar um trecho do meio faz o pedaco de tras
+/// repetir o audio (ou o video) que ja tinha passado.
+Layer _avancarFonte(Layer l, Duration quanto) => switch (l) {
+      VideoLayer v => v.copyLayer(sourceOffset: v.sourceOffset + quanto),
+      AudioLayer a => a.copyLayer(sourceOffset: a.sourceOffset + quanto),
+      _ => l,
+    };
+
 /// LEVANTAR (lift): tira o trecho e DEIXA o buraco. O oposto de
 /// [rippleDelete] — usado quando a sincronia com outra trilha importa
 /// mais do que fechar o vazio.
@@ -177,14 +186,15 @@ List<Layer> liftRange(
       continue;
     }
     if (l.startTime >= from && l.endTime > to) {
-      out.add(l.copyLayer(startTime: to, duration: l.endTime - to));
+      out.add(_avancarFonte(l, to - l.startTime)
+          .copyLayer(startTime: to, duration: l.endTime - to));
       continue;
     }
     out.add(l.copyLayer(duration: from - l.startTime));
-    out.add(l.duplicated().copyLayer(
-          startTime: to,
-          duration: l.endTime - to,
-        ));
+    out.add(_avancarFonte(l.duplicated(), to - l.startTime).copyLayer(
+      startTime: to,
+      duration: l.endTime - to,
+    ));
   }
   return out;
 }

@@ -865,8 +865,9 @@ class _ClipPreviewState extends State<_ClipPreview> {
     final path = l is AudioLayer
         ? l.sourcePath
         : (l as VideoLayer).sourcePath;
-    final inicio =
-        l is VideoLayer ? l.sourceOffset : Duration.zero;
+    final inicio = l is VideoLayer
+        ? l.sourceOffset
+        : (l as AudioLayer).sourceOffset;
     final fim = inicio + l.duration;
 
     return ValueListenableBuilder<int>(

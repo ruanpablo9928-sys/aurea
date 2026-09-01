@@ -1163,8 +1163,7 @@ class EditorController extends Notifier<VideoProject> {
     final peaks = MediaPreviewService.instance.peaksOf(path);
     if (peaks == null || peaks.isEmpty) return null;
 
-    final offset =
-        layer is VideoLayer ? layer.sourceOffset : Duration.zero;
+    final offset = _sourceOffsetOf(layer);
     final fim = offset + layer.duration;
 
     // Os trechos vem em tempo do ARQUIVO; interessa so o que cai dentro
@@ -1189,6 +1188,8 @@ class EditorController extends Notifier<VideoProject> {
             duration: dur,
           );
       if (copia is VideoLayer) {
+        copia = copia.copyLayer(sourceOffset: f.$1);
+      } else if (copia is AudioLayer) {
         copia = copia.copyLayer(sourceOffset: f.$1);
       }
       novas.add(copia);
@@ -1219,6 +1220,13 @@ class EditorController extends Notifier<VideoProject> {
     if (peaks == null || peaks.isEmpty) return null;
     return detectBeats(peaks);
   }
+
+  /// Ponto de entrada na midia, para video e audio.
+  static Duration _sourceOffsetOf(Layer l) => switch (l) {
+        VideoLayer v => v.sourceOffset,
+        AudioLayer a => a.sourceOffset,
+        _ => Duration.zero,
+      };
 
   String? _audioPathOf(String id) => switch (_layer(id)) {
         AudioLayer a => a.sourcePath,
@@ -1367,6 +1375,8 @@ class EditorController extends Notifier<VideoProject> {
           duration: secondDur,
         );
     if (second is VideoLayer && layer is VideoLayer) {
+      second = second.copyLayer(sourceOffset: layer.sourceOffset + firstDur);
+    } else if (second is AudioLayer && layer is AudioLayer) {
       second = second.copyLayer(sourceOffset: layer.sourceOffset + firstDur);
     }
 

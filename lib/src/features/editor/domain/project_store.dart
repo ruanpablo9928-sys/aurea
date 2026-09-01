@@ -881,6 +881,7 @@ Map<String, dynamic> layerToJson(Layer l) {
     case AudioLayer a:
       base['kind'] = 'audio';
       base['src'] = a.sourcePath;
+      base['srcOffset'] = _dur(a.sourceOffset);
       base['volume'] = a.volume;
       final aa = _audioSpec(a.audio);
       if (aa != null) base['audio'] = aa;
@@ -1254,6 +1255,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
       return AudioLayer(
         id: id, name: name, startTime: start, duration: dur,
         sourcePath: m['src'] as String,
+        sourceOffset: _asDur(m['srcOffset']),
         volume: (m['volume'] as num).toDouble(),
         audio: _asAudioSpec(m['audio']),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,

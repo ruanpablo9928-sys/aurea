@@ -197,7 +197,8 @@ class ExportEngine {
       final path =
           l is AudioLayer ? l.sourcePath : (l as VideoLayer).sourcePath;
       final volume = l is AudioLayer ? l.volume : (l as VideoLayer).volume;
-      final offset = l is VideoLayer ? l.sourceOffset : Duration.zero;
+      final offset =
+          l is VideoLayer ? l.sourceOffset : (l as AudioLayer).sourceOffset;
       final dur = l.duration.inMicroseconds / 1000000.0;
       final delayMs = l.startTime.inMilliseconds;
 

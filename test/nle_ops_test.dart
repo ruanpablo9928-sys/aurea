@@ -213,4 +213,68 @@ void main() {
       expect(gapsIn(const []), isEmpty);
     });
   });
+
+  group('Ponto de entrada na midia', () {
+    AudioLayer fala(num inicio, num dur, {Duration? off}) => AudioLayer(
+          name: 'fala',
+          startTime: _s(inicio),
+          duration: _s(dur),
+          sourcePath: 'fala.wav',
+          sourceOffset: off ?? Duration.zero,
+        );
+
+    // Tirar um pedaco do MEIO de uma locucao: o rabo tem que continuar
+    // de onde parou. Sem avancar a fonte, ele repetia o audio que ja
+    // tinha tocado — a frase saia gaguejando.
+    test('o rabo do corte continua de onde parou', () {
+      final r = liftRange([fala(0, 10)], _s(3), _s(5));
+      final rabo = r.whereType<AudioLayer>().reduce(
+          (a, b) => a.startTime > b.startTime ? a : b);
+      expect(rabo.startTime, _s(5));
+      expect(rabo.sourceOffset, _s(5));
+    });
+
+    test('a cabeca do corte nao mexe na fonte', () {
+      final r = liftRange([fala(0, 10)], _s(3), _s(5));
+      final cabeca = r.whereType<AudioLayer>().reduce(
+          (a, b) => a.startTime < b.startTime ? a : b);
+      expect(cabeca.sourceOffset, Duration.zero);
+      expect(cabeca.duration, _s(3));
+    });
+
+    test('soma ao ponto de entrada que ja existia', () {
+      final r = liftRange([fala(0, 10, off: _s(4))], _s(2), _s(6));
+      final rabo = r.whereType<AudioLayer>().reduce(
+          (a, b) => a.startTime > b.startTime ? a : b);
+      expect(rabo.sourceOffset, _s(10));
+    });
+
+    test('clipe que so comeca dentro do trecho tambem avanca', () {
+      final r = liftRange([fala(2, 8)], _s(0), _s(5));
+      final unico = r.whereType<AudioLayer>().single;
+      expect(unico.startTime, _s(5));
+      expect(unico.sourceOffset, _s(3));
+    });
+
+    test('video mantem o mesmo comportamento', () {
+      final v = VideoLayer(
+        name: 'tomada',
+        startTime: Duration.zero,
+        duration: _s(10),
+        sourcePath: 'a.mp4',
+        sourceOffset: _s(1),
+      );
+      final r = extractRange([v], _s(4), _s(6));
+      final rabo = r.whereType<VideoLayer>().reduce(
+          (a, b) => a.sourceOffset > b.sourceOffset ? a : b);
+      expect(rabo.sourceOffset, _s(7));
+      // Extrair fecha o buraco: o rabo encosta na cabeca.
+      expect(rabo.startTime, _s(4));
+    });
+
+    test('clipe fora do trecho nao e tocado', () {
+      final r = liftRange([fala(8, 2, off: _s(3))], _s(0), _s(5));
+      expect(r.whereType<AudioLayer>().single.sourceOffset, _s(3));
+    });
+  });
 }
