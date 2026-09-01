@@ -13,6 +13,7 @@ import '../../domain/layer.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
 import 'am_colors.dart';
+import 'audio_sheet.dart';
 import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
@@ -306,6 +307,15 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 });
               }),
             ],
+            if (layer is AudioLayer || layer is VideoLayer)
+              item(CupertinoIcons.speaker_2, 'Som', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showAudioSheet(context, ref, layer.id);
+                  }
+                });
+              }),
             // MONTAGEM: o que faz a linha do tempo se comportar como
             // fila, em vez de retangulos soltos.
             item(CupertinoIcons.delete_left, 'Excluir e fechar', () {

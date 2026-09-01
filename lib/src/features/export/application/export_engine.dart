@@ -162,11 +162,19 @@ class ExportEngine {
 
   // --------------------------------------------------------- audio
 
-  /// Camadas que carregam som.
+  /// Camadas que carregam som. Mudo sai da conta aqui — nao adianta
+  /// mixar uma faixa em volume zero e pagar por ela.
   List<Layer> get audioSources => [
         for (final l in project.layers)
-          if (l is AudioLayer || (l is VideoLayer && l.volume > 0.001)) l,
+          if (_specOf(l) != null && !_specOf(l)!.muted)
+            if (l is AudioLayer || (l is VideoLayer && l.volume > 0.001)) l,
       ];
+
+  static AudioSpec? _specOf(Layer l) => switch (l) {
+        AudioLayer a => a.audio,
+        VideoLayer v => v.audio,
+        _ => null,
+      };
 
   /// Monta as entradas e o grafo de mixagem. Cada faixa e cortada no
   /// trecho usado, atrasada ate a posicao dela na linha do tempo e
@@ -181,6 +189,8 @@ class ExportEngine {
     final inputs = <String>[];
     final chains = <String>[];
     final labels = <String>[];
+    final porCamada = <String, String>{};
+    final duckAlvo = <String, String?>{};
     var idx = firstInputIndex;
 
     for (final l in sources) {
@@ -197,15 +207,59 @@ class ExportEngine {
         '-i', path,
       ]);
 
+      final spec = _specOf(l) ?? const AudioSpec();
+      final ganho = (volume * spec.gain).clamp(0.0, 12.0);
+
+      // FADE de igual potencia: linear soa como buraco no meio, porque
+      // o ouvido responde a potencia.
+      final fades = <String>[];
+      if (spec.fadeIn > Duration.zero) {
+        final d = spec.fadeIn.inMilliseconds / 1000.0;
+        fades.add('afade=t=in:st=0:d=${d.toStringAsFixed(3)}:curve=qsin');
+      }
+      if (spec.fadeOut > Duration.zero) {
+        final d = spec.fadeOut.inMilliseconds / 1000.0;
+        final st = (dur - d).clamp(0.0, dur);
+        fades.add('afade=t=out:st=${st.toStringAsFixed(3)}'
+            ':d=${d.toStringAsFixed(3)}:curve=qsin');
+      }
+
       final label = 'a$idx';
       chains.add(
         '[$idx:a]aresample=44100,'
-        'volume=${volume.toStringAsFixed(3)},'
+        'volume=${ganho.toStringAsFixed(3)}'
+        '${fades.isEmpty ? '' : ',${fades.join(',')}'},'
         'adelay=$delayMs|$delayMs,'
         'apad=whole_dur=${_total.toStringAsFixed(3)}[$label]',
       );
       labels.add('[$label]');
+      porCamada[l.id] = label;
+      duckAlvo[l.id] = spec.duckAgainstId;
       idx++;
+    }
+
+    // ABAIXAR PELA VOZ. O compressor de cadeia lateral e a ferramenta
+    // certa: a musica desce quando a voz entra e volta quando ela para,
+    // sem ninguem desenhar envelope na mao.
+    for (final entry in duckAlvo.entries) {
+      final vozLabel = entry.value == null ? null : porCamada[entry.value];
+      final musicaLabel = porCamada[entry.key];
+      if (vozLabel == null || musicaLabel == null) continue;
+      final amt = _duckAmountOf(entry.key);
+      // A voz e usada como referencia SEM ser consumida: asplit deixa
+      // ela seguir para a mixagem tambem.
+      final ref = 'ref_${entry.key.hashCode.abs()}';
+      final saida = 'dk_${entry.key.hashCode.abs()}';
+      chains.add('[$vozLabel]asplit=2[$vozLabel~a][$ref]');
+      chains.add(
+        '[$musicaLabel][$ref]sidechaincompress='
+        'threshold=0.05:ratio=${(1 + amt * 19).toStringAsFixed(1)}'
+        ':attack=80:release=400[$saida]',
+      );
+      final i = labels.indexOf('[$musicaLabel]');
+      if (i >= 0) labels[i] = '[$saida]';
+      final j = labels.indexOf('[$vozLabel]');
+      if (j >= 0) labels[j] = '[$vozLabel~a]';
     }
 
     final mix = labels.length == 1
@@ -221,6 +275,14 @@ class ExportEngine {
   }
 
   double get _total => project.duration.inMicroseconds / 1000000.0;
+
+  double _duckAmountOf(String layerId) {
+    for (final l in project.layers) {
+      if (l.id != layerId) continue;
+      return (_specOf(l)?.duckAmount ?? 0.7).clamp(0.0, 1.0);
+    }
+    return 0.7;
+  }
 
   // ------------------------------------------------------ codificar
 

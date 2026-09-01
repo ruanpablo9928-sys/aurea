@@ -578,6 +578,30 @@ TextSelector _asSelector(Map<String, dynamic> m) => switch (m['kind']) {
 /// ANIMACAO DO CATALOGO (modelo AM). Guarda o id da animacao e os seis
 /// controles — o animador em si e recompilado na leitura, entao melhorar
 /// uma animacao do catalogo melhora os projetos ja salvos.
+Map<String, dynamic>? _audioSpec(AudioSpec a) => a.isNeutral
+    ? null
+    : {
+        'in': a.fadeIn.inMicroseconds,
+        'out': a.fadeOut.inMicroseconds,
+        'gain': a.gain,
+        'mute': a.muted,
+        if (a.duckAgainstId != null) 'duck': a.duckAgainstId,
+        'duckAmt': a.duckAmount,
+      };
+
+AudioSpec _asAudioSpec(Object? raw) {
+  if (raw is! Map) return const AudioSpec();
+  final m = raw.cast<String, dynamic>();
+  return AudioSpec(
+    fadeIn: Duration(microseconds: (m['in'] as num?)?.toInt() ?? 0),
+    fadeOut: Duration(microseconds: (m['out'] as num?)?.toInt() ?? 0),
+    gain: (m['gain'] as num?)?.toDouble() ?? 1.0,
+    muted: m['mute'] as bool? ?? false,
+    duckAgainstId: m['duck'] as String?,
+    duckAmount: (m['duckAmt'] as num?)?.toDouble() ?? 0.7,
+  );
+}
+
 Map<String, dynamic> _textAnim(TextAnim a) => {
       'id': a.id,
       'spec': a.specId,
@@ -714,6 +738,8 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['src'] = v.sourcePath;
       base['srcOffset'] = _dur(v.sourceOffset);
       base['volume'] = v.volume;
+      final va = _audioSpec(v.audio);
+      if (va != null) base['audio'] = va;
     case ImageLayer i:
       base['kind'] = 'image';
       base['src'] = i.sourcePath;
@@ -741,6 +767,8 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'audio';
       base['src'] = a.sourcePath;
       base['volume'] = a.volume;
+      final aa = _audioSpec(a.audio);
+      if (aa != null) base['audio'] = aa;
     case NullLayer nl:
       base['kind'] = 'null';
       if (nl.grid != null) base['grid'] = _rig(nl.grid!);
@@ -1022,6 +1050,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         sourcePath: m['src'] as String,
         sourceOffset: _asDur(m['srcOffset']),
         volume: (m['volume'] as num).toDouble(),
+        audio: _asAudioSpec(m['audio']),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
@@ -1104,6 +1133,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         id: id, name: name, startTime: start, duration: dur,
         sourcePath: m['src'] as String,
         volume: (m['volume'] as num).toDouble(),
+        audio: _asAudioSpec(m['audio']),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,

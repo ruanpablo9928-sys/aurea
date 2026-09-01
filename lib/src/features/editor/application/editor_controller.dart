@@ -18,6 +18,8 @@ import '../domain/layer.dart';
 import '../domain/layer_meta.dart';
 import '../domain/layout_ops.dart';
 import '../domain/measure.dart';
+import 'media_preview_service.dart';
+import '../domain/audio_ops.dart';
 import '../domain/mask.dart';
 import '../domain/nle_ops.dart';
 import '../domain/shape.dart';
@@ -1109,6 +1111,118 @@ class EditorController extends Notifier<VideoProject> {
     }
     ref.read(multiSelectProvider.notifier).state = const {};
   }
+
+  // ------------------------------------------------------- audio
+
+  AudioSpec? audioSpecOf(String id) => switch (_layer(id)) {
+        AudioLayer a => a.audio,
+        VideoLayer v => v.audio,
+        _ => null,
+      };
+
+  void updateAudioSpec(String id, AudioSpec Function(AudioSpec) fn) {
+    final layer = _layer(id);
+    if (layer is AudioLayer) {
+      _replace(layer.copyLayer(audio: fn(layer.audio)));
+    } else if (layer is VideoLayer) {
+      _replace(layer.copyLayer(audio: fn(layer.audio)));
+    }
+  }
+
+  /// NORMALIZAR: leva o pico da faixa ao alvo. Usa o percentil 99, entao
+  /// um estalo isolado nao decide o volume do resto.
+  ///
+  /// Devolve o ganho aplicado, ou null se a forma de onda ainda nao
+  /// esta pronta — quem chama avisa em vez de fingir que fez.
+  double? normalizeAudio(String id) {
+    final path = _audioPathOf(id);
+    if (path == null) return null;
+    final peaks = MediaPreviewService.instance.peaksOf(path);
+    if (peaks == null || peaks.isEmpty) return null;
+    final g = normalizeGain(peaks);
+    updateAudioSpec(id, (a) => a.copyWith(gain: g));
+    return g;
+  }
+
+  /// REMOVER SILENCIO: parte a camada nos trechos com som e joga fora as
+  /// pausas, encostando o que sobrou.
+  ///
+  /// Devolve quantos pedacos ficaram, ou null se ainda nao ha forma de
+  /// onda.
+  int? removeSilence(
+    String id, {
+    double threshold = 0.035,
+    Duration minSilence = const Duration(milliseconds: 350),
+  }) {
+    final layer = _layer(id);
+    if (layer == null) return null;
+    final path = _audioPathOf(id);
+    if (path == null) return null;
+    final peaks = MediaPreviewService.instance.peaksOf(path);
+    if (peaks == null || peaks.isEmpty) return null;
+
+    final offset =
+        layer is VideoLayer ? layer.sourceOffset : Duration.zero;
+    final fim = offset + layer.duration;
+
+    // Os trechos vem em tempo do ARQUIVO; interessa so o que cai dentro
+    // do pedaco que a camada usa.
+    final falas = mergeClose(detectSpeech(peaks,
+            threshold: threshold, minSilence: minSilence))
+        .map((r) => (
+              r.$1 < offset ? offset : r.$1,
+              r.$2 > fim ? fim : r.$2,
+            ))
+        .where((r) => r.$2 > r.$1)
+        .toList();
+    if (falas.isEmpty || falas.length == 1) return falas.length;
+
+    // Cada trecho vira uma camada, encostada na anterior.
+    final novas = <Layer>[];
+    var cursor = layer.startTime;
+    for (final f in falas) {
+      final dur = f.$2 - f.$1;
+      var copia = layer.duplicated().copyLayer(
+            startTime: cursor,
+            duration: dur,
+          );
+      if (copia is VideoLayer) {
+        copia = copia.copyLayer(sourceOffset: f.$1);
+      }
+      novas.add(copia);
+      cursor += dur;
+    }
+
+    // O que vinha depois anda para tras pelo tanto que encolheu.
+    final encolheu = layer.duration - (cursor - layer.startTime);
+    _mutate(state.copyWith(layers: [
+      for (final l in state.layers)
+        if (l.id == layer.id)
+          ...novas
+        else if (l.startTime >= layer.endTime)
+          l.copyLayer(startTime: l.startTime - encolheu)
+        else
+          l,
+    ]));
+    ref.read(selectedLayerProvider.notifier).state = novas.first.id;
+    return novas.length;
+  }
+
+  /// Marca as BATIDAS da faixa como tempos, para encaixar corte no
+  /// ritmo. Devolve null se a forma de onda ainda nao esta pronta.
+  List<Duration>? beatsOf(String id) {
+    final path = _audioPathOf(id);
+    if (path == null) return null;
+    final peaks = MediaPreviewService.instance.peaksOf(path);
+    if (peaks == null || peaks.isEmpty) return null;
+    return detectBeats(peaks);
+  }
+
+  String? _audioPathOf(String id) => switch (_layer(id)) {
+        AudioLayer a => a.sourcePath,
+        VideoLayer v => v.sourcePath,
+        _ => null,
+      };
 
   // ------------------------------------------ montagem (NLE)
 

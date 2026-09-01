@@ -199,6 +199,64 @@ sealed class Layer {
   Layer duplicated();
 }
 
+/// AJUSTES DE SOM de uma camada que carrega audio.
+///
+/// Vive fora da camada porque video e audio compartilham exatamente os
+/// mesmos controles — e porque assim o valor todo entra e sai numa
+/// atribuicao so, sem espalhar seis campos por dois lugares.
+class AudioSpec {
+  const AudioSpec({
+    this.fadeIn = Duration.zero,
+    this.fadeOut = Duration.zero,
+    this.gain = 1.0,
+    this.muted = false,
+    this.duckAgainstId,
+    this.duckAmount = 0.7,
+  });
+
+  /// Fade de entrada e de saida, em tempo de clipe.
+  final Duration fadeIn;
+  final Duration fadeOut;
+
+  /// Ganho aplicado por cima do volume (normalizar mexe aqui).
+  final double gain;
+
+  final bool muted;
+
+  /// ABAIXAR PELA VOZ: id da camada que manda nesta. A musica desce
+  /// quando a narracao fala, e volta quando ela para.
+  final String? duckAgainstId;
+
+  /// 0..1 — quanto desce no meio da voz.
+  final double duckAmount;
+
+  bool get isNeutral =>
+      fadeIn == Duration.zero &&
+      fadeOut == Duration.zero &&
+      gain == 1.0 &&
+      !muted &&
+      duckAgainstId == null;
+
+  AudioSpec copyWith({
+    Duration? fadeIn,
+    Duration? fadeOut,
+    double? gain,
+    bool? muted,
+    String? duckAgainstId,
+    bool clearDuck = false,
+    double? duckAmount,
+  }) =>
+      AudioSpec(
+        fadeIn: fadeIn ?? this.fadeIn,
+        fadeOut: fadeOut ?? this.fadeOut,
+        gain: gain ?? this.gain,
+        muted: muted ?? this.muted,
+        duckAgainstId:
+            clearDuck ? null : (duckAgainstId ?? this.duckAgainstId),
+        duckAmount: duckAmount ?? this.duckAmount,
+      );
+}
+
 class VideoLayer extends Layer {
   VideoLayer({
     super.id,
@@ -208,6 +266,7 @@ class VideoLayer extends Layer {
     required this.sourcePath,
     this.sourceOffset = Duration.zero,
     this.volume = 1.0,
+    this.audio = const AudioSpec(),
     super.position,
     super.scaleX,
     super.scaleY,
@@ -230,6 +289,9 @@ class VideoLayer extends Layer {
   final String sourcePath;
   final Duration sourceOffset;
   final double volume;
+
+  /// Fade, ganho, mudo e ducking do som deste clipe.
+  final AudioSpec audio;
 
   @override
   VideoLayer copyLayer({
@@ -254,6 +316,7 @@ class VideoLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     Duration? sourceOffset,
+    AudioSpec? audio,
     double? volume,
   }) {
     return VideoLayer(
@@ -264,6 +327,7 @@ class VideoLayer extends Layer {
       sourcePath: sourcePath,
       sourceOffset: sourceOffset ?? this.sourceOffset,
       volume: volume ?? this.volume,
+      audio: audio ?? this.audio,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -292,6 +356,7 @@ class VideoLayer extends Layer {
         sourcePath: sourcePath,
         sourceOffset: sourceOffset,
         volume: volume,
+        audio: audio,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,
@@ -949,6 +1014,7 @@ class AudioLayer extends Layer {
     required super.duration,
     required this.sourcePath,
     this.volume = 1.0,
+    this.audio = const AudioSpec(),
     super.position,
     super.scaleX,
     super.scaleY,
@@ -970,6 +1036,9 @@ class AudioLayer extends Layer {
 
   final String sourcePath;
   final double volume;
+
+  /// Fade, ganho, mudo e ducking desta trilha.
+  final AudioSpec audio;
 
   @override
   AudioLayer copyLayer({
@@ -994,6 +1063,7 @@ class AudioLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     double? volume,
+    AudioSpec? audio,
   }) {
     return AudioLayer(
       id: id,
@@ -1002,6 +1072,7 @@ class AudioLayer extends Layer {
       duration: duration ?? this.duration,
       sourcePath: sourcePath,
       volume: volume ?? this.volume,
+      audio: audio ?? this.audio,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -1029,6 +1100,7 @@ class AudioLayer extends Layer {
         duration: duration,
         sourcePath: sourcePath,
         volume: volume,
+        audio: audio,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,
