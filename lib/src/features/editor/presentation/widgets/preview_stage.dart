@@ -808,7 +808,31 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         }
       }
 
-      var w = _buildLayer(project, layer, t, resolveLinks, rig: rigMembers);
+      // FORCE MOTION BLUR (nivel 2): borra com MAIS amostras do que a
+      // composicao permite, e funciona sem keyframe de transform. Como o
+      // eco, ele precisa re-renderizar a camada em outros instantes —
+      // por isso mora aqui, e nao na pilha de efeitos, que so recebe o
+      // widget pronto.
+      EffectInstance? forceMb;
+      for (final e in layer.effects) {
+        if (e.enabled && e.type == EffectType.forceMotionBlur) forceMb = e;
+      }
+
+      var w = forceMb == null
+          ? _buildLayer(project, layer, t, resolveLinks, rig: rigMembers)
+          : _forceMotionBlur(
+              project, layer, t, forceMb, resolveLinks, rigMembers);
+
+      // MOTION BLUR DA COMPOSICAO (nivel 1): a camada e desenhada varias
+      // vezes ao longo da JANELA DE EXPOSICAO e as copias sao mediadas.
+      //
+      // A janela vem do angulo e da FASE do obturador. Fase -90 centra o
+      // borrao no quadro; fase 0 arrasta para frente — sao imagens
+      // visivelmente diferentes, e e por isso que a fase existe.
+      if (project.motionBlur.enabled &&
+          project.metaOf(layer.id).motionBlur) {
+        w = _comMotionBlur(project, layer, t, w, resolveLinks, rigMembers);
+      }
 
       // Matte: a fonte recorta esta camada, num grupo isolado.
       if (layer.matteMode != MatteMode.none &&
@@ -859,6 +883,118 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       children.add(w);
     }
     return children;
+  }
+
+
+
+  /// FORCE MOTION BLUR: borra a camada com as amostras que o efeito
+  /// pedir, independente do que a composicao permite.
+  ///
+  /// `Native Motion Blur` decide o que fazer com o borrao da composicao:
+  /// Off ignora, On soma os dois, Only usa so o da composicao (e ai este
+  /// efeito nao faz nada).
+  Widget _forceMotionBlur(
+    VideoProject project,
+    Layer layer,
+    Duration t,
+    EffectInstance fx,
+    bool resolveLinks,
+    Map<String, (NullLayer, GridRig, int, int)> rig,
+  ) {
+    final local = layer.localTime(t);
+    final nativo = fx.paramAt('native_motion_blur', local).round();
+    if (nativo == 2) {
+      // "Only": quem borra e a composicao.
+      return _buildLayer(project, layer, t, resolveLinks, rig: rig);
+    }
+
+    final n = fx.paramAt('samples', local).round().clamp(2, 64);
+    final angulo = fx.paramAt('shutter_angle', local).clamp(0.0, 720.0);
+    if (angulo < 0.5) {
+      return _buildLayer(project, layer, t, resolveLinks, rig: rig);
+    }
+
+    final fps = project.fps < 1 ? 30 : project.fps;
+    final quadroUs = 1000000 / fps;
+    // Centrado no quadro, como a fase -90 da composicao.
+    final metadeUs = angulo / 360 / 2 * quadroUs;
+
+    final copias = <Widget>[];
+    for (var i = 0; i < n; i++) {
+      final f = n == 1 ? 0.0 : (i / (n - 1)) * 2 - 1;
+      final ti =
+          t + Duration(microseconds: (f * metadeUs).round());
+      final amostra = ti < Duration.zero
+          ? _buildLayer(project, layer, t, resolveLinks, rig: rig)
+          : _buildLayer(project, layer, ti, resolveLinks, rig: rig);
+      // Media corrente: todas as amostras com o mesmo peso.
+      copias.add(Opacity(opacity: 1 / (i + 1), child: amostra));
+    }
+    return Stack(clipBehavior: Clip.none, children: copias);
+  }
+
+  /// Quanto a camada SE MOVE dentro da janela, em pixels aproximados.
+  ///
+  /// Serve para o limite adaptativo: camada parada nao gasta amostra
+  /// nenhuma, e camada que anda tres pixels nao precisa de dezesseis.
+  double _movimentoNaJanela(
+      VideoProject project, Layer layer, Duration a, Duration b) {
+    final ta = effectiveTransform(project, layer, a);
+    final tb = effectiveTransform(project, layer, b);
+    final d = (tb.pos - ta.pos).distance;
+    final giro = (tb.rot - ta.rot).abs();
+    final escala = (tb.scale - ta.scale).abs();
+    // Giro e escala viram pixel pelo tamanho aproximado da camada.
+    final tamanho = project.outputWidth * 0.5;
+    return d + giro / 90 * tamanho * 0.5 + escala * tamanho;
+  }
+
+  /// A camada borrada pelo movimento.
+  ///
+  /// As copias sao mediadas com opacidade 1/(i+1): isso e a MEDIA
+  /// CORRENTE, e da o mesmo peso a todas as amostras. Empilhar todas com
+  /// 1/N daria peso maior as ultimas, e o borrao sairia puxado para um
+  /// lado.
+  Widget _comMotionBlur(
+    VideoProject project,
+    Layer layer,
+    Duration t,
+    Widget nitida,
+    bool resolveLinks,
+    Map<String, (NullLayer, GridRig, int, int)> rig,
+  ) {
+    final mb = project.motionBlur;
+    final fps = project.fps < 1 ? 30 : project.fps;
+    final quadroUs = 1000000 / fps;
+    final (ini, fim) = mb.exposureWindow();
+    final janelaUs = (fim - ini) * quadroUs;
+    if (janelaUs.abs() < 1) return nitida;
+
+    final inicio = t + Duration(microseconds: (ini * quadroUs).round());
+    final termino = t + Duration(microseconds: (fim * quadroUs).round());
+
+    // LIMITE ADAPTATIVO: parada, a camada nao borra; andando pouco,
+    // poucas amostras bastam. Dezesseis amostras de uma camada parada
+    // seriam dezesseis renderizacoes identicas.
+    final movimento = _movimentoNaJanela(project, layer, inicio, termino);
+    if (movimento < 0.6) return nitida;
+
+    final pedidas = mb.samples.clamp(2, mb.adaptiveLimit);
+    final n = movimento < 3
+        ? 2
+        : (movimento < 12 ? 4 : pedidas).clamp(2, pedidas);
+
+    final copias = <Widget>[];
+    for (var i = 0; i < n; i++) {
+      final f = n == 1 ? 0.5 : i / (n - 1);
+      final ti = inicio +
+          Duration(microseconds: ((termino - inicio).inMicroseconds * f).round());
+      final amostra = ti < Duration.zero
+          ? nitida
+          : _buildLayer(project, layer, ti, resolveLinks, rig: rig);
+      copias.add(Opacity(opacity: 1 / (i + 1), child: amostra));
+    }
+    return Stack(clipBehavior: Clip.none, children: copias);
   }
 
   /// Converte a fonte do matte no canal certo e composita com dstIn.
@@ -2061,6 +2197,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         // O remapeamento de tempo nao pinta nada: ele ja mudou QUAL
         // instante da camada foi montado, la em cima.
         case EffectType.timeRemap:
+        // FORCE MOTION BLUR nao acontece aqui: ele precisa re-renderizar
+        // a camada em outros instantes, e a pilha de efeitos so recebe o
+        // widget ja pronto. Quem o aplica e o compositor.
+        case EffectType.forceMotionBlur:
           break;
 
         case EffectType.turbulentDisplace:
@@ -2128,14 +2268,16 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         case EffectType.motionTile:
           out = FxSnapshot(
             painter: MotionTilePainter(
-              tileW: effect.paramAt('largura', local),
-              tileH: effect.paramAt('altura', local),
-              outW: effect.paramAt('saidaLargura', local),
-              outH: effect.paramAt('saidaAltura', local),
-              offsetX: effect.paramAt('deslocX', local),
-              offsetY: effect.paramAt('deslocY', local),
-              mirror: effect.paramAt('espelhar', local) >= 0.5,
-              fade: effect.paramAt('desvanecer', local).clamp(0.0, 1.0),
+              tileW: effect.paramAt('tile_width', local),
+              tileH: effect.paramAt('tile_height', local),
+              outW: effect.paramAt('output_width', local),
+              outH: effect.paramAt('output_height', local),
+              centerX: effect.paramAt('tile_center', local),
+              centerY: effect.paramAt('tile_center_y', local),
+              mirror: effect.paramAt('mirror_edges', local) >= 0.5,
+              phase: effect.paramAt('phase', local),
+              horizontalPhase:
+                  effect.paramAt('horizontal_phase_shift', local) >= 0.5,
             ),
             child: out,
           );

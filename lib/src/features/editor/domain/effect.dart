@@ -47,6 +47,8 @@ enum EffectType {
   vhs,
   filmDamage,
   glitchify,
+  // --- lote 3 (AUREA-six-effects-english) ---
+  forceMotionBlur,
 }
 
 /// O tipo a partir do IDENTIFICADOR estavel.
@@ -626,15 +628,23 @@ const effectSpecs = <EffectType, EffectSpec>{
     synonyms: ['mosaico', 'movimento', 'motion tile', 'ladrilho', 'repetir', 'tile', 'espelhar'],
     cost: 2,
     params: {
-      'largura': EffectParam('Largura do bloco', 100.0, 10.0, 300.0),
-      'altura': EffectParam('Altura do bloco', 100.0, 10.0, 300.0),
-      'saidaLargura': EffectParam('Largura da saida', 200.0, 100.0, 600.0),
-      'saidaAltura': EffectParam('Altura da saida', 200.0, 100.0, 600.0),
-      'deslocX': EffectParam('Deslocar X', 0.0, -200.0, 200.0),
-      'deslocY': EffectParam('Deslocar Y', 0.0, -200.0, 200.0),
-      'espelhar': EffectParam('Espelhar bordas', 1.0, 0.0, 1.0,
+      // Todas as medidas sao % DAS DIMENSOES DA CAMADA DE ENTRADA, como
+      // no After Effects. Em pixel, o mesmo numero daria ladrilhos de
+      // tamanhos diferentes ao trocar a resolucao.
+      'tile_center': EffectParam('Tile Center X', 0.5, 0.0, 1.0,
+          kind: ParamKind.point, relative: true),
+      'tile_center_y': EffectParam('Tile Center Y', 0.5, 0.0, 1.0,
+          kind: ParamKind.point, relative: true),
+      'tile_width': EffectParam('Tile Width', 100.0, 1.0, 300.0),
+      'tile_height': EffectParam('Tile Height', 100.0, 1.0, 300.0),
+      'output_width': EffectParam('Output Width', 100.0, 1.0, 600.0),
+      'output_height': EffectParam('Output Height', 100.0, 1.0, 600.0),
+      'mirror_edges': EffectParam('Mirror Edges', 0.0, 0.0, 1.0,
           kind: ParamKind.toggle),
-      'desvanecer': EffectParam('Desvanecer', 0.0, 0.0, 1.0),
+      'phase': EffectParam('Phase', 0.0, -360.0, 360.0),
+      'horizontal_phase_shift':
+          EffectParam('Horizontal Phase Shift', 0.0, 0.0, 1.0,
+              kind: ParamKind.toggle),
     },
   ),
 
@@ -745,6 +755,28 @@ const effectSpecs = <EffectType, EffectSpec>{
           kind: ParamKind.seed),
     },
   ),
+
+  EffectType.forceMotionBlur: EffectSpec(
+    id: 'force_motion_blur',
+    name: 'Force Motion Blur',
+    category: 'Blur',
+    synonyms: [
+      'motion blur', 'borrao', 'movimento', 'forcar', 'obturador',
+      'shutter',
+    ],
+    cost: 3,
+    params: {
+      // Mais amostras do que a composicao permite, e funciona SEM
+      // keyframe de transform: pega tambem o movimento que veio de
+      // efeito, que o motion blur da composicao nao ve.
+      'samples': EffectParam('Motion Blur Samples', 16.0, 2.0, 64.0),
+      'shutter_angle': EffectParam('Shutter Angle', 180.0, 0.0, 720.0),
+      'native_motion_blur': EffectParam(
+          'Native Motion Blur', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice, options: ['Off', 'On', 'Only']),
+    },
+  ),
+
 };
 
 /// Categorias do catalogo, na ordem em que aparecem.

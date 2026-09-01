@@ -484,26 +484,43 @@ class ScatterizePainter extends _FxPainter {
 
 /// MOSAICO DE MOVIMENTO: repete a camada num tabuleiro, com espelho
 /// opcional nas bordas — o jeito de encher a tela com um elemento so.
+/// MOTION TILE — replica a imagem de origem atraves da imagem de saida.
+///
+/// A semantica e a do After Effects, e a parte que costuma sair errada e
+/// a unidade: largura e altura do ladrilho sao **% das dimensoes da
+/// camada de entrada**, nao pixels. A saida tambem.
+///
+/// `Phase` desloca as FILEIRAS alternadas — nao a grade inteira. E o que
+/// da o padrao de tijolo, e o que faz um fundo rolar quando animado.
 class MotionTilePainter extends _FxPainter {
   MotionTilePainter({
     required this.tileW,
     required this.tileH,
     required this.outW,
     required this.outH,
-    required this.offsetX,
-    required this.offsetY,
+    required this.centerX,
+    required this.centerY,
     required this.mirror,
-    required this.fade,
+    required this.phase,
+    required this.horizontalPhase,
   });
 
   final double tileW;
   final double tileH;
   final double outW;
   final double outH;
-  final double offsetX;
-  final double offsetY;
+
+  /// Centro do ladrilho principal, em 0..1 da camada.
+  final double centerX;
+  final double centerY;
+
   final bool mirror;
-  final double fade;
+
+  /// Em graus: 360 desloca uma fileira inteira.
+  final double phase;
+
+  /// Desloca na horizontal em vez de na vertical.
+  final bool horizontalPhase;
 
   @override
   void paintSnapshot(PaintingContext context, Offset offset, Size size,
@@ -518,35 +535,35 @@ class MotionTilePainter extends _FxPainter {
     final ow = size.width * (outW / 100).clamp(1.0, 6.0);
     final oh = size.height * (outH / 100).clamp(1.0, 6.0);
 
-    final cx = offset.dx + size.width / 2;
-    final cy = offset.dy + size.height / 2;
+    final cx = offset.dx + size.width * centerX;
+    final cy = offset.dy + size.height * centerY;
     final area = Rect.fromCenter(
         center: Offset(cx, cy), width: ow, height: oh);
 
     final nx = (ow / tw).ceil() + 2;
     final ny = (oh / th).ceil() + 2;
-    final ox = offsetX / 100 * tw;
-    final oy = offsetY / 100 * th;
+
+    // A fase desloca FILEIRAS ALTERNADAS — e o padrao de tijolo. Uma
+    // volta inteira (360) desloca a fileira em um ladrilho.
+    final desloc = phase / 360.0;
 
     canvas.save();
     canvas.clipRect(_dst(offset, size));
     for (var j = -ny ~/ 2; j <= ny ~/ 2; j++) {
       for (var i = -nx ~/ 2; i <= nx ~/ 2; i++) {
-        final x = cx - tw / 2 + i * tw + ox;
-        final y = cy - th / 2 + j * th + oy;
+        final shift = horizontalPhase
+            ? (j.isOdd ? desloc * tw : 0.0)
+            : (i.isOdd ? desloc * th : 0.0);
+        final x = cx - tw / 2 + i * tw + (horizontalPhase ? shift : 0);
+        final y = cy - th / 2 + j * th + (horizontalPhase ? 0 : shift);
         final flipX = mirror && i.isOdd;
         final flipY = mirror && j.isOdd;
 
-        // Desvanecer pelas bordas do tabuleiro.
-        var alpha = 1.0;
-        if (fade > 0.001) {
-          final d = math.max(
-            (x + tw / 2 - cx).abs() / (area.width / 2),
-            (y + th / 2 - cy).abs() / (area.height / 2),
-          );
-          alpha = (1 - d.clamp(0.0, 1.0) * fade).clamp(0.0, 1.0);
-        }
-        if (alpha <= 0.004) continue;
+        // Fora da area de saida o ladrilho nem e desenhado: a saida e
+        // uma janela, e desenhar por tras dela e trabalho jogado fora.
+        final quadro = Rect.fromCenter(
+            center: Offset(x + tw / 2, y + th / 2), width: tw, height: th);
+        if (!quadro.overlaps(area)) continue;
 
         canvas.save();
         canvas.translate(x + tw / 2, y + th / 2);
@@ -555,9 +572,7 @@ class MotionTilePainter extends _FxPainter {
           image,
           src,
           Rect.fromCenter(center: Offset.zero, width: tw, height: th),
-          Paint()
-            ..filterQuality = FilterQuality.low
-            ..color = Colors.white.withValues(alpha: alpha),
+          Paint()..filterQuality = FilterQuality.low,
         );
         canvas.restore();
       }
@@ -571,10 +586,11 @@ class MotionTilePainter extends _FxPainter {
       old.tileH != tileH ||
       old.outW != outW ||
       old.outH != outH ||
-      old.offsetX != offsetX ||
-      old.offsetY != offsetY ||
+      old.centerX != centerX ||
+      old.centerY != centerY ||
       old.mirror != mirror ||
-      old.fade != fade;
+      old.phase != phase ||
+      old.horizontalPhase != horizontalPhase;
 }
 
 // -------------------------------------------------------- CC Split
