@@ -312,9 +312,10 @@ List<EffectPreset> factoryPresets() => [
         tags: ['glow', 'sonho'],
         effects: [
           EffectInstance(type: EffectType.glowVol, params: {
-            'raio': AnimatedDouble(0.5),
-            'intensidade': AnimatedDouble(0.9),
-            'aberracao': AnimatedDouble(0.15),
+            'radius': AnimatedDouble(0.06),
+            'exposure': AnimatedDouble(0.9),
+            'red_radius_multiplier': AnimatedDouble(1.15),
+            'threshold': AnimatedDouble(0.7),
           }),
           EffectInstance(type: EffectType.vignette, params: {
             'quantidade': AnimatedDouble(0.35),

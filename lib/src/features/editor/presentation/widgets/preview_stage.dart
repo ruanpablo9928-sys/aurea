@@ -27,6 +27,7 @@ import 'animated_text.dart';
 import 'blend_mask.dart';
 import 'custom_blend.dart';
 import 'linear_light.dart';
+import '../../domain/bloom.dart';
 import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'element3d_painter.dart';
@@ -1564,76 +1565,139 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           );
 
         case EffectType.glowVol:
-          // Piramide de 3 niveis com pesos normalizados; aberracao = raio
-          // por canal RGB; tonalizacao opcional (PR-FX2 aproximado).
-          final intensity =
-              effect.paramAt('intensidade', local).clamp(0.0, 2.0);
-          if (intensity > 0.01) {
-            final r = effect.paramAt('raio', local).clamp(0.02, 1.0);
-            final aberr =
-                effect.paramAt('aberracao', local).clamp(0.0, 1.0);
-            final tintAmt =
-                effect.paramAt('tonalizar', local).clamp(0.0, 1.0);
-            // RAIO EM FRACAO DO MENOR LADO, nao em pixel absoluto.
-            //
-            // Raio "20" em pixel num projeto 4K e um quarto do raio "20"
-            // em 1080p: o mesmo numero dava glows diferentes so por
-            // trocar a resolucao. Metade da divergencia com o Alight
-            // Motion mora nessa unidade, e nao se descobre olhando o
-            // resultado.
-            final base = radiusToPixels(r * 0.09, fxWidth, fxHeight) + 6;
+          // DEEP GLOW: piramide de bloom com pesos NORMALIZADOS, em
+          // espaco linear. "Conservacao de energia" quer dizer isto: a
+          // soma dos pesos e 1, entao acrescentar nivel deixa o glow
+          // mais suave sem deixa-lo mais claro.
+          final exposure = effect.paramAt('exposure', local);
+          final ganho = exposureGain(exposure).clamp(0.0, 8.0);
+          if (ganho > 0.01) {
+            final r = effect.paramAt('radius', local).clamp(0.0, 1.0);
+            final raioPx =
+                radiusToPixels(r, fxWidth, fxHeight).clamp(1.0, 2000.0);
+            final quality =
+                effect.paramAt('quality', local).round().clamp(0, 2);
+            final niveis = bloomLevels(quality);
+            final pesos = bloomWeights(niveis);
+            final sigmas = bloomSigmas(raioPx, niveis);
 
-            Widget source = out;
-            if (tintAmt > 0.01) {
-              source = ColorFiltered(
+            final limiar = effect.paramAt('threshold', local);
+            final suavidade = effect.paramAt('threshold_softness', local);
+            final aspecto =
+                effect.paramAt('aspect_ratio', local).clamp(0.1, 10.0);
+            final satur =
+                effect.paramAt('glow_saturation', local) / 100.0;
+            final tintAmt = effect.paramAt('tint_amount', local);
+            final tintMode =
+                effect.paramAt('tint_mode', local).round().clamp(0, 3);
+            final multR =
+                effect.paramAt('red_radius_multiplier', local);
+            final multG =
+                effect.paramAt('green_radius_multiplier', local);
+            final multB =
+                effect.paramAt('blue_radius_multiplier', local);
+            final porCanal = (multR - multG).abs() > 0.01 ||
+                (multG - multB).abs() > 0.01;
+            final soGlow = effect.paramAt('glow_only', local) >= 0.5;
+            final blend =
+                effect.paramAt('blend_mode', local).round().clamp(0, 2);
+            final anguloOn = effect.paramAt('enable_angle', local) >= 0.5;
+            final anguloRad =
+                effect.paramAt('angle', local) * math.pi / 180;
+
+            // LIMIAR: so o que passa do valor vira glow. A rampa suave
+            // evita a linha reta onde o brilho cruza o limiar — com
+            // limiar duro, o glow "liga" de repente no meio do degrade.
+            Widget fonte = out;
+            if (limiar > 0.01) {
+              final corte = bloomThreshold(1.0, limiar, suavidade)
+                  .clamp(0.0, 1.0);
+              final escala = 1 / math.max(0.05, corte);
+              final desl = -limiar * (1 - suavidade * 0.5) * 255;
+              fonte = ColorFiltered(
+                colorFilter: ColorFilter.matrix(<double>[
+                  escala, 0, 0, 0, desl, //
+                  0, escala, 0, 0, desl,
+                  0, 0, escala, 0, desl,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: fonte,
+              );
+            }
+            if ((satur - 1).abs() > 0.01) {
+              fonte = ColorFiltered(
+                colorFilter: ColorFilter.matrix(_saturationMatrix(satur)),
+                child: fonte,
+              );
+            }
+            if (tintMode != 0 && tintAmt > 0.01) {
+              fonte = ColorFiltered(
                 colorFilter: ColorFilter.mode(
                     effect.color.withValues(alpha: tintAmt),
                     BlendMode.srcATop),
-                child: source,
+                child: fonte,
               );
             }
 
-            Widget level(double sigma, double weight) {
-              // EM ESPACO LINEAR: luz soma em linear. Borrar o valor
-              // corrigido para o olho e o que faz o glow sair
-              // acinzentado e fraco — a soma de dois meios-tons da menos
-              // luz do que deveria.
-              Widget blurred(Widget c, double s) => ImageFiltered(
-                    imageFilter: LinearLight.blur(
-                      sigmaX: s,
-                      sigmaY: s,
-                      size: Size(fxWidth.toDouble(), fxHeight.toDouble()),
-                    ),
-                    child: c,
-                  );
-              Widget w;
-              if (aberr > 0.01) {
-                w = Stack(clipBehavior: Clip.none, children: [
-                  blurred(_channelIso(source, 0), sigma * (1 - aberr * 0.35)),
-                  BlendMask(
-                      blendMode: BlendMode.plus,
-                      child: blurred(_channelIso(source, 1), sigma)),
-                  BlendMask(
-                      blendMode: BlendMode.plus,
-                      child: blurred(
-                          _channelIso(source, 2), sigma * (1 + aberr * 0.5))),
-                ]);
-              } else {
-                w = blurred(source, sigma);
+            Widget borra(Widget c, double sigma, double mult) {
+              // ASPECTO e ANGULO: um glow anamorfico se espalha mais num
+              // eixo. O angulo gira a fonte, borra e desgira.
+              final sx = sigma * mult * aspecto;
+              final sy = sigma * mult / aspecto;
+              Widget alvo = c;
+              if (anguloOn && anguloRad.abs() > 0.001) {
+                alvo = Transform.rotate(angle: -anguloRad, child: alvo);
               }
-              return Opacity(
-                  opacity: (weight * intensity).clamp(0.0, 1.0), child: w);
+              alvo = ImageFiltered(
+                imageFilter: LinearLight.blur(
+                    sigmaX: math.max(0.1, sx),
+                    sigmaY: math.max(0.1, sy),
+                    size: fxSize),
+                child: alvo,
+              );
+              if (anguloOn && anguloRad.abs() > 0.001) {
+                alvo = Transform.rotate(angle: anguloRad, child: alvo);
+              }
+              return alvo;
             }
 
-            // Pesos que SOMAM 1: sem normalizar, mudar o numero de
-            // niveis mudava o brilho junto, e "mais suave" virava
-            // "mais claro".
-            out = Stack(clipBehavior: Clip.none, children: [
-              level(base * 2.2, 0.20),
-              level(base, 0.33),
-              level(base * 0.45, 0.47),
-              out,
-            ]);
+            Widget nivel(double sigma, double peso) {
+              final w = porCanal
+                  ? Stack(clipBehavior: Clip.none, children: [
+                      borra(_channelIso(fonte, 0), sigma, multR),
+                      BlendMask(
+                          blendMode: BlendMode.plus,
+                          child: borra(_channelIso(fonte, 1), sigma, multG)),
+                      BlendMask(
+                          blendMode: BlendMode.plus,
+                          child: borra(_channelIso(fonte, 2), sigma, multB)),
+                    ])
+                  : borra(fonte, sigma, 1);
+              return Opacity(
+                  opacity: (peso * ganho).clamp(0.0, 1.0), child: w);
+            }
+
+            final camadas = <Widget>[
+              for (var k = 0; k < niveis; k++) nivel(sigmas[k], pesos[k]),
+            ];
+
+            // BLEND: Add e o padrao — luz soma. Screen e mais suave nas
+            // altas; Normal cobre.
+            final modo = switch (blend) {
+              1 => BlendMode.screen,
+              2 => BlendMode.srcOver,
+              _ => BlendMode.plus,
+            };
+
+            out = soGlow
+                // GLOW ONLY: so o brilho, sem a fonte. Serve para mandar
+                // o glow para outra camada e mesclar la.
+                ? Stack(clipBehavior: Clip.none, children: camadas)
+                : Stack(clipBehavior: Clip.none, children: [
+                    for (final c in camadas)
+                      BlendMask(blendMode: modo, child: c),
+                    out,
+                  ]);
           }
 
         case EffectType.tremor:

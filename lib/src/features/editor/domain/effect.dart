@@ -92,6 +92,12 @@ const effectParamAliases = <EffectType, Map<String, String>>{
     'fase': 'phase',
     'rgb': 'rgb_randomness',
   },
+  EffectType.glowVol: {
+    'raio': 'radius',
+    'intensidade': 'exposure',
+    'aberracao': 'red_radius_multiplier',
+    'tonalizar': 'tint_amount',
+  },
   EffectType.motionTile: {
     'largura': 'tile_width',
     'altura': 'tile_height',
@@ -236,13 +242,59 @@ const effectSpecs = <EffectType, EffectSpec>{
     id: 'deep_glow',
     name: 'Deep Glow',
     category: 'Light',
-    synonyms: ['glow', 'volumetrico', 'bloom', 'volumetric', 'brilho'],
+    synonyms: [
+      'glow', 'volumetrico', 'bloom', 'volumetric', 'brilho', 'deep glow',
+      'luz',
+    ],
     cost: 3,
     params: {
-      'raio': EffectParam('Raio', 0.35, 0.02, 1.0, relative: true),
-      'intensidade': EffectParam('Intensidade', 0.8, 0.0, 2.0),
-      'aberracao': EffectParam('Aberracao', 0.0, 0.0, 1.0),
-      'tonalizar': EffectParam('Tonalizar', 0.0, 0.0, 1.0),
+      // --- Core ---
+      // Raio em FRACAO do menor lado da composicao (0,04 ~ 80 px em
+      // 1080p). Em pixel absoluto, o mesmo numero daria glows de
+      // tamanhos diferentes so por trocar a resolucao.
+      'radius': EffectParam('Radius', 0.04, 0.0, 1.0, relative: true),
+      'exposure': EffectParam('Exposure', 1.0, -5.0, 5.0),
+      'threshold': EffectParam('Threshold', 1.0, 0.0, 4.0),
+      'threshold_mode': EffectParam('Threshold Mode', 0.0, 0.0, 1.0,
+          kind: ParamKind.choice,
+          options: ['Luminance', 'Chrominance']),
+      'threshold_softness':
+          EffectParam('Threshold Softness', 0.2, 0.0, 1.0),
+      'quality': EffectParam('Quality', 1.0, 0.0, 2.0,
+          kind: ParamKind.choice, options: ['Draft', 'Normal', 'High']),
+      'downsample': EffectParam('Downsample', 2.0, 1.0, 8.0),
+      'glow_mode': EffectParam('Glow Mode', 0.0, 0.0, 1.0,
+          kind: ParamKind.choice, options: ['Exponential', 'Iris']),
+
+      // --- Color ---
+      'red_radius_multiplier':
+          EffectParam('Red Radius Multiplier', 1.0, 0.5, 2.0),
+      'green_radius_multiplier':
+          EffectParam('Green Radius Multiplier', 1.0, 0.5, 2.0),
+      'blue_radius_multiplier':
+          EffectParam('Blue Radius Multiplier', 1.0, 0.5, 2.0),
+      'tint_mode': EffectParam('Tint Mode', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: ['None', 'Solid', 'Gradient', 'Image Based']),
+      'tint_amount': EffectParam('Tint Amount', 1.0, 0.0, 1.0),
+      'glow_saturation': EffectParam('Glow Saturation', 100.0, 0.0, 200.0),
+
+      // --- Look ---
+      'aspect_ratio': EffectParam('Aspect Ratio', 1.0, 0.1, 10.0),
+      'enable_angle': EffectParam('Enable Angle', 0.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'angle': EffectParam('Angle', 0.0, -360.0, 360.0),
+      'tonemapping': EffectParam('Tonemapping', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: ['ACES Filmic', 'Reinhard', 'Reinhard 2', 'Clamp']),
+      'lens_dirt_amount': EffectParam('Lens Dirt Amount', 50.0, 0.0, 200.0),
+      'noise_reduction': EffectParam('Noise Reduction', 0.0, 0.0, 100.0),
+
+      // --- Composite ---
+      'blend_mode': EffectParam('Blend Mode', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice, options: ['Add', 'Screen', 'Normal']),
+      'glow_only': EffectParam('Glow Only', 0.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
     },
     hasColor: true,
   ),
