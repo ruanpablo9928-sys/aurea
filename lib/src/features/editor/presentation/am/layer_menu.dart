@@ -20,6 +20,7 @@ import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'oficio_sheets.dart';
+import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
 import 'text_path_sheet.dart';
 import 'scene3d_studio.dart';
@@ -354,12 +355,21 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                     actionLabel: 'Desfazer', onAction: controller.undo);
               }
             }),
-            if (layer is GroupLayer)
+            if (layer is GroupLayer) ...[
+              item(CupertinoIcons.timer, 'Tempo da precomp', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showPrecompSheet(context, ref, layer.id, playback);
+                  }
+                });
+              }),
               item(CupertinoIcons.square_stack_3d_down_right,
                   'Desagrupar', () {
                 controller.ungroupLayer(layer.id);
                 Navigator.of(moreContext).pop();
-              })
+              }),
+            ]
             else
               item(CupertinoIcons.square_stack_3d_up, 'Precompor',
                   () {

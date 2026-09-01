@@ -2269,12 +2269,21 @@ class _LayerContent extends StatelessWidget {
           ),
         ),
       // Precomp: filhos compostos no tempo local do grupo.
+      // PRECOMP: tempo proprio (com remapeamento), quadro proprio e a
+      // opcao de colapsar — que e o que evita a forma vetorial pixelar
+      // quando a precomp e ampliada.
       GroupLayer l => SizedBox(
           width: compWidth,
           height: project.outputHeight.toDouble(),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: buildChildren(l.children, localTime),
+          child: ClipRect(
+            clipBehavior: l.clipToComp && !l.collapse
+                ? Clip.hardEdge
+                : Clip.none,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children:
+                  buildChildren(l.children, l.contentTimeAt(localTime)),
+            ),
           ),
         ),
       ImageLayer l => RepaintBoundary(

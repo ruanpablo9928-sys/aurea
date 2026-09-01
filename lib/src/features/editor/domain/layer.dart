@@ -807,6 +807,10 @@ class GroupLayer extends Layer {
     required super.startTime,
     required super.duration,
     List<Layer>? children,
+    this.sourceDuration,
+    this.timeRemap,
+    this.collapse = false,
+    this.clipToComp = true,
     super.position,
     super.scaleX,
     super.scaleY,
@@ -828,6 +832,41 @@ class GroupLayer extends Layer {
 
   /// Ordem: indice 0 e a camada mais acima (como na composicao raiz).
   final List<Layer> children;
+
+  /// PRECOMP — a duracao INTERNA, que pode ser diferente da barra na
+  /// linha do tempo de fora. Uma animacao de 10 s pode aparecer numa
+  /// barra de 3 s (e ai so os 3 primeiros segundos entram) ou de 30 s
+  /// (e o resto fica congelado no ultimo quadro).
+  final Duration? sourceDuration;
+
+  /// REMAPEAR TEMPO da precomp: anima QUAL instante do conteudo aparece
+  /// agora. Congelar, voltar de tras para frente, rampa de velocidade —
+  /// tudo com keyframe de tempo, como no After Effects.
+  final AnimatedDouble? timeRemap;
+
+  /// COLAPSAR TRANSFORMACOES: a precomp deixa de ter quadro proprio e os
+  /// filhos passam a compor direto com o pai. E o que evita a forma
+  /// vetorial pixelar quando a precomp e ampliada.
+  final bool collapse;
+
+  /// Recorta no tamanho da composicao. Desligado, o que passa da borda
+  /// continua aparecendo.
+  final bool clipToComp;
+
+  /// Duracao interna efetiva.
+  Duration get innerDuration => sourceDuration ?? duration;
+
+  /// Que instante do CONTEUDO aparece no instante local [local].
+  ///
+  /// Sem remapeamento e a identidade. Com remapeamento, o valor da
+  /// trilha em segundos — e nunca negativo, porque nao existe conteudo
+  /// antes do comeco.
+  Duration contentTimeAt(Duration local) {
+    final r = timeRemap;
+    if (r == null) return local;
+    final us = (r.valueAt(local) * 1000000).round();
+    return Duration(microseconds: us < 0 ? 0 : us);
+  }
 
   @override
   GroupLayer copyLayer({
@@ -852,6 +891,10 @@ class GroupLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     List<Layer>? children,
+    Duration? sourceDuration,
+    AnimatedDouble? timeRemap,
+    bool? collapse,
+    bool? clipToComp,
   }) {
     return GroupLayer(
       id: id,
@@ -859,6 +902,10 @@ class GroupLayer extends Layer {
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
       children: children ?? this.children,
+      sourceDuration: sourceDuration ?? this.sourceDuration,
+      timeRemap: timeRemap ?? this.timeRemap,
+      collapse: collapse ?? this.collapse,
+      clipToComp: clipToComp ?? this.clipToComp,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -885,6 +932,10 @@ class GroupLayer extends Layer {
         startTime: startTime,
         duration: duration,
         children: [for (final c in children) c.duplicated()],
+        sourceDuration: sourceDuration,
+        timeRemap: timeRemap,
+        collapse: collapse,
+        clipToComp: clipToComp,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,

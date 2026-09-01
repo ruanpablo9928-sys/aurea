@@ -868,6 +868,12 @@ Map<String, dynamic> layerToJson(Layer l) {
     case GroupLayer g:
       base['kind'] = 'group';
       base['children'] = [for (final c in g.children) layerToJson(c)];
+      if (g.sourceDuration != null) {
+        base['innerDur'] = g.sourceDuration!.inMicroseconds;
+      }
+      if (g.timeRemap != null) base['remap'] = _ad(g.timeRemap!);
+      if (g.collapse) base['collapse'] = true;
+      if (!g.clipToComp) base['noClip'] = true;
     case CaptionLayer c:
       base['kind'] = 'caption';
       base['cues'] = [for (final q in c.cues) _cue(q)];
@@ -1218,6 +1224,12 @@ Layer layerFromJson(Map<String, dynamic> m) {
           for (final c in (m['children'] as List))
             layerFromJson(c as Map<String, dynamic>),
         ],
+        sourceDuration: m['innerDur'] == null
+            ? null
+            : Duration(microseconds: (m['innerDur'] as num).toInt()),
+        timeRemap: m['remap'] == null ? null : _asAd(m['remap']),
+        collapse: m['collapse'] as bool? ?? false,
+        clipToComp: !(m['noClip'] as bool? ?? false),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,

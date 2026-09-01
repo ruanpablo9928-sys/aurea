@@ -2022,6 +2022,95 @@ class EditorController extends Notifier<VideoProject> {
         id, (l) => l.copyLayer(animators: preset.build()));
   }
 
+  /// PRECOMP: duracao interna, remapeamento de tempo, colapsar e
+  /// recortar.
+  void updatePrecomp(
+    String id, {
+    Duration? sourceDuration,
+    bool clearSourceDuration = false,
+    AnimatedDouble? timeRemap,
+    bool clearRemap = false,
+    bool? collapse,
+    bool? clipToComp,
+  }) {
+    final layer = _layer(id);
+    if (layer is! GroupLayer) return;
+    _replace(GroupLayer(
+      id: layer.id,
+      name: layer.name,
+      startTime: layer.startTime,
+      duration: layer.duration,
+      children: layer.children,
+      sourceDuration: clearSourceDuration
+          ? null
+          : (sourceDuration ?? layer.sourceDuration),
+      timeRemap: clearRemap ? null : (timeRemap ?? layer.timeRemap),
+      collapse: collapse ?? layer.collapse,
+      clipToComp: clipToComp ?? layer.clipToComp,
+      position: layer.position,
+      scaleX: layer.scaleX,
+      scaleY: layer.scaleY,
+      rotation: layer.rotation,
+      rotationX: layer.rotationX,
+      rotationY: layer.rotationY,
+      opacity: layer.opacity,
+      skewX: layer.skewX,
+      skewY: layer.skewY,
+      pivot: layer.pivot,
+      blendMode: layer.blendMode,
+      is3D: layer.is3D,
+      positionZ: layer.positionZ,
+      effects: layer.effects,
+      masks: layer.masks,
+      matteMode: layer.matteMode,
+      matteSourceId: layer.matteSourceId,
+    ));
+  }
+
+  /// Liga o remapeamento com dois keyframes que reproduzem normal — a
+  /// pessoa ajusta dali, em vez de comecar com a precomp congelada.
+  void enablePrecompTimeRemap(String id) {
+    final layer = _layer(id);
+    if (layer is! GroupLayer || layer.timeRemap != null) return;
+    final dur = layer.innerDuration.inMicroseconds / 1000000.0;
+    updatePrecomp(id,
+        timeRemap: AnimatedDouble(0)
+            .withKeyframe(Duration.zero, 0)
+            .withKeyframe(layer.duration, dur));
+  }
+
+  /// Qual instante do conteudo aparece AGORA. Com a trilha animada,
+  /// vira keyframe; sem, muda o valor fixo (congelado).
+  void setPrecompContentTime(
+      String id, Duration globalTime, double seconds) {
+    final layer = _layer(id);
+    if (layer is! GroupLayer) return;
+    final r = layer.timeRemap ?? AnimatedDouble(0);
+    final v = seconds < 0 ? 0.0 : seconds;
+    updatePrecomp(id,
+        timeRemap: r.edited(layer.localTime(globalTime), v));
+  }
+
+  /// Congela a precomp no instante que esta aparecendo agora.
+  void freezePrecompAt(String id, Duration globalTime) {
+    final layer = _layer(id);
+    if (layer is! GroupLayer) return;
+    final agora = layer.contentTimeAt(layer.localTime(globalTime));
+    updatePrecomp(id,
+        timeRemap: AnimatedDouble(agora.inMicroseconds / 1000000.0));
+  }
+
+  /// Roda a precomp de tras para frente, do fim ao comeco.
+  void reversePrecomp(String id) {
+    final layer = _layer(id);
+    if (layer is! GroupLayer) return;
+    final dur = layer.innerDuration.inMicroseconds / 1000000.0;
+    updatePrecomp(id,
+        timeRemap: AnimatedDouble(0)
+            .withKeyframe(Duration.zero, dur)
+            .withKeyframe(layer.duration, 0));
+  }
+
   /// TEXTO EM CAMINHO: selo circular, arco, ou seguindo outra forma.
   void updateTextPath(String id, TextPathSpec Function(TextPathSpec) fn) {
     _updateTextLayer(id, (l) => l.copyLayer(textPath: fn(l.textPath)));
