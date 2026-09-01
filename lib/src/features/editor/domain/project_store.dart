@@ -6,6 +6,7 @@ import 'effect.dart';
 import 'element3d.dart';
 import 'grid_rig.dart';
 import 'keyframe.dart';
+import 'blend_extra.dart';
 import 'layer.dart';
 import 'layer_meta.dart';
 import 'mask.dart';
@@ -173,6 +174,8 @@ Map<String, dynamic> _mask(LayerMask m) => {
       'inv': m.inverted,
       'path': _apath(m.path),
       'feather': _ad(m.feather),
+      // So sai no arquivo quando os eixos estao soltos.
+      if (m.featherY != null) 'featherY': _ad(m.featherY!),
       'op': _ad(m.opacity),
       'exp': _ad(m.expansion),
     };
@@ -184,6 +187,7 @@ LayerMask _asMask(Map<String, dynamic> m) => LayerMask(
       inverted: m['inv'] as bool,
       path: _asApath(m['path'] as Map<String, dynamic>),
       feather: _asAd(m['feather']),
+      featherY: m['featherY'] == null ? null : _asAd(m['featherY']),
       opacity: _asAd(m['op']),
       expansion: _asAd(m['exp']),
     );
@@ -832,6 +836,8 @@ Map<String, dynamic> layerToJson(Layer l) {
     'sky': _ad(l.skewY),
     'pivot': _ao(l.pivot),
     'blend': l.blendMode.index,
+    // So sai no arquivo quando a camada usa um modo proprio.
+    if (l.customBlend != null) 'blendX': l.customBlend!.index,
     'is3D': l.is3D,
     'z': _ad(l.positionZ),
     'effects': [for (final e in l.effects) _effect(e)],
@@ -1144,6 +1150,9 @@ Layer layerFromJson(Map<String, dynamic> m) {
   final sky = _asAd(m['sky']);
   final pivot = _asAo(m['pivot']);
   final blend = BlendMode.values[(m['blend'] as num).toInt()];
+  final blendX = m['blendX'] == null
+      ? null
+      : AureaBlend.values[(m['blendX'] as num).toInt()];
   final is3D = m['is3D'] as bool;
   final z = _asAd(m['z']);
   final effects = [
@@ -1170,6 +1179,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1180,6 +1190,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1202,6 +1213,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1215,6 +1227,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1234,6 +1247,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1248,6 +1262,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1261,6 +1276,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1270,6 +1286,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1282,6 +1299,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1305,6 +1323,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1318,6 +1337,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );
@@ -1331,6 +1351,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
+        customBlend: blendX,
         is3D: is3D, positionZ: z, effects: effects,
         masks: masks, matteMode: matte, matteSourceId: matteSrc,
       );

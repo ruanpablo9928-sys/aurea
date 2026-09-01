@@ -24,6 +24,7 @@ import '../../domain/shape.dart';
 import '../../domain/video_project.dart';
 import 'animated_text.dart';
 import 'blend_mask.dart';
+import 'custom_blend.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
@@ -593,6 +594,7 @@ class CompositionView extends ConsumerWidget {
                   inverted: m.inverted,
                   opacity: m.opacity.valueAt(local).clamp(0.0, 1.0),
                   feather: m.feather.valueAt(local),
+                  featherY: m.featherY?.valueAt(local),
                   expansion: m.expansion.valueAt(local),
                 ),
             ],
@@ -685,6 +687,29 @@ class CompositionView extends ConsumerWidget {
           );
         }
       }
+      // MESCLA PROPRIA: os modos que o Flutter nao tem precisam ver o
+      // que ja esta embaixo. A pilha se parte aqui — o acumulado vira o
+      // andar de baixo, esta camada o de cima — e o compositor devolve
+      // um widget so, sobre o qual as proximas continuam empilhando.
+      final custom = layer.customBlend;
+      if (custom != null && children.isNotEmpty) {
+        final base = Stack(
+          clipBehavior: Clip.none,
+          children: List<Widget>.of(children),
+        );
+        children
+          ..clear()
+          ..add(Positioned.fill(
+            child: CustomBlendBox(
+              mode: custom,
+              seed: (t.inMilliseconds % 4096).toDouble(),
+              base: base,
+              top: Stack(clipBehavior: Clip.none, children: [w]),
+            ),
+          ));
+        continue;
+      }
+
       children.add(w);
     }
     return children;
@@ -919,6 +944,7 @@ class CompositionView extends ConsumerWidget {
               inverted: m.inverted,
               opacity: m.opacity.valueAt(local).clamp(0.0, 1.0),
               feather: m.feather.valueAt(local),
+              featherY: m.featherY?.valueAt(local),
               expansion: m.expansion.valueAt(local),
             ),
         ],

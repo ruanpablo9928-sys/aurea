@@ -158,6 +158,40 @@ Layer _avancarFonte(Layer l, Duration quanto) => switch (l) {
       _ => l,
     };
 
+/// UM corte, em UMA camada. Devolve o que sobra: nada, um pedaco ou
+/// dois.
+///
+/// Sai daqui, e nao de dentro do laco, porque levantar e extrair fazem
+/// exatamente o mesmo recorte — a unica diferenca e se o que ficou
+/// depois anda para tras. Quando estavam duplicados, o pedaco nascido de
+/// uma divisao tinha id novo e escapava do filtro de "so estas camadas":
+/// o corte acontecia e o arrasto nao.
+List<Layer> _cortar1(Layer l, Duration from, Duration to) {
+  // Nem encosta no trecho.
+  if (l.endTime <= from || l.startTime >= to) return [l];
+  // Cabe inteira dentro: some.
+  if (l.startTime >= from && l.endTime <= to) return const [];
+  // So a ponta de tras foi cortada.
+  if (l.startTime < from && l.endTime <= to) {
+    return [l.copyLayer(duration: from - l.startTime)];
+  }
+  // So a ponta da frente foi cortada.
+  if (l.startTime >= from && l.endTime > to) {
+    return [
+      _avancarFonte(l, to - l.startTime)
+          .copyLayer(startTime: to, duration: l.endTime - to)
+    ];
+  }
+  // O trecho esta no meio: parte em dois.
+  return [
+    l.copyLayer(duration: from - l.startTime),
+    _avancarFonte(l.duplicated(), to - l.startTime).copyLayer(
+      startTime: to,
+      duration: l.endTime - to,
+    ),
+  ];
+}
+
 /// LEVANTAR (lift): tira o trecho e DEIXA o buraco. O oposto de
 /// [rippleDelete] — usado quando a sincronia com outra trilha importa
 /// mais do que fechar o vazio.
@@ -168,35 +202,10 @@ List<Layer> liftRange(
   Set<String>? only,
 }) {
   if (to <= from) return layers;
-  final out = <Layer>[];
-
-  for (final l in layers) {
-    if (only != null && !only.contains(l.id)) {
-      out.add(l);
-      continue;
-    }
-    if (l.endTime <= from || l.startTime >= to) {
-      out.add(l);
-      continue;
-    }
-    if (l.startTime >= from && l.endTime <= to) continue;
-
-    if (l.startTime < from && l.endTime <= to) {
-      out.add(l.copyLayer(duration: from - l.startTime));
-      continue;
-    }
-    if (l.startTime >= from && l.endTime > to) {
-      out.add(_avancarFonte(l, to - l.startTime)
-          .copyLayer(startTime: to, duration: l.endTime - to));
-      continue;
-    }
-    out.add(l.copyLayer(duration: from - l.startTime));
-    out.add(_avancarFonte(l.duplicated(), to - l.startTime).copyLayer(
-      startTime: to,
-      duration: l.endTime - to,
-    ));
-  }
-  return out;
+  return [
+    for (final l in layers)
+      if (only != null && !only.contains(l.id)) l else ..._cortar1(l, from, to),
+  ];
 }
 
 /// EXTRAIR (extract): tira o trecho E fecha o buraco.
@@ -208,15 +217,96 @@ List<Layer> extractRange(
 }) {
   if (to <= from) return layers;
   final vao = to - from;
-  final levantadas = liftRange(layers, from, to, only: only);
+  final out = <Layer>[];
+  for (final l in layers) {
+    if (only != null && !only.contains(l.id)) {
+      out.add(l);
+      continue;
+    }
+    for (final pedaco in _cortar1(l, from, to)) {
+      out.add(pedaco.startTime >= to
+          ? pedaco.copyLayer(startTime: pedaco.startTime - vao)
+          : pedaco);
+    }
+  }
+  return out;
+}
 
-  return [
-    for (final l in levantadas)
-      if (l.startTime >= to && (only == null || only.contains(l.id)))
-        l.copyLayer(startTime: l.startTime - vao)
-      else
-        l,
-  ];
+/// Tira VARIOS trechos de uma camada so — e a operacao da decupagem.
+///
+/// Os trechos vem em tempo da LINHA (nao do arquivo) e sao aplicados do
+/// ultimo para o primeiro: assim um corte nunca desloca outro que ainda
+/// nao foi feito. Com [ripple], cada corte encosta o que vinha depois;
+/// sem, deixa o buraco.
+///
+/// Cortar uma camada a parte em duas, e a segunda metade tambem pode
+/// ser cortada — por isso a "familia" cresce a cada passo: comeca com a
+/// camada original e recolhe todo pedaco nascido dos cortes.
+List<Layer> removeRangesFrom(
+  List<Layer> layers,
+  String id,
+  List<(Duration, Duration)> ranges, {
+  bool ripple = true,
+}) {
+  if (ranges.isEmpty) return layers;
+  final ordenados = [
+    for (final r in ranges)
+      if (r.$2 > r.$1) r
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
+  if (ordenados.isEmpty) return layers;
+
+  var familia = {id};
+  var atual = layers;
+  for (final (de, ate) in ordenados.reversed) {
+    final antes = {for (final l in atual) l.id};
+    atual = ripple
+        ? extractRange(atual, de, ate, only: familia)
+        : liftRange(atual, de, ate, only: familia);
+    final vivos = {for (final l in atual) l.id};
+    familia = {
+      for (final f in familia)
+        if (vivos.contains(f)) f,
+      for (final l in atual)
+        if (!antes.contains(l.id)) l.id,
+    };
+  }
+  return atual;
+}
+
+/// O contrario: fica so com [keep] e joga o resto fora.
+///
+/// A decupagem por silencio pensa assim — "mantenha onde tem fala" — e
+/// e mais facil de conferir de cabeca do que a lista de buracos.
+List<Layer> keepRangesOf(
+  List<Layer> layers,
+  String id,
+  List<(Duration, Duration)> keep, {
+  bool ripple = true,
+}) {
+  final alvo = layers.where((l) => l.id == id).firstOrNull;
+  if (alvo == null) return layers;
+  final dentro = [
+    for (final r in keep)
+      if (r.$2 > alvo.startTime && r.$1 < alvo.endTime)
+        (
+          r.$1 < alvo.startTime ? alvo.startTime : r.$1,
+          r.$2 > alvo.endTime ? alvo.endTime : r.$2,
+        )
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
+  // Nada a manter: a camada inteira e o trecho a tirar.
+  if (dentro.isEmpty) {
+    return removeRangesFrom(layers, id, [(alvo.startTime, alvo.endTime)],
+        ripple: ripple);
+  }
+
+  final fora = <(Duration, Duration)>[];
+  var cursor = alvo.startTime;
+  for (final r in dentro) {
+    if (r.$1 > cursor) fora.add((cursor, r.$1));
+    if (r.$2 > cursor) cursor = r.$2;
+  }
+  if (cursor < alvo.endTime) fora.add((cursor, alvo.endTime));
+  return removeRangesFrom(layers, id, fora, ripple: ripple);
 }
 
 /// Onde ha VAZIO na linha do tempo, entre [from] e o fim.

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../media/application/media_import_service.dart';
+import '../domain/blend_extra.dart';
 import '../domain/caption.dart';
 import '../domain/camera3d.dart';
 import '../domain/scene3d.dart';
@@ -1146,15 +1147,17 @@ class EditorController extends Notifier<VideoProject> {
     return g;
   }
 
-  /// REMOVER SILENCIO: parte a camada nos trechos com som e joga fora as
-  /// pausas, encostando o que sobrou.
+  /// ONDE ESTAO AS PAUSAS desta camada, ja em tempo da LINHA e aparadas
+  /// no pedaco que a camada usa.
   ///
-  /// Devolve quantos pedacos ficaram, ou null se ainda nao ha forma de
-  /// onda.
-  int? removeSilence(
+  /// Devolver a lista (em vez de ja cortar) e o que deixa a decupagem
+  /// MOSTRAR o corte antes de fazer: a pessoa mexe no limiar e ve as
+  /// faixas vermelhas aparecerem e sumirem.
+  List<(Duration, Duration)>? silenceRangesOf(
     String id, {
     double threshold = 0.035,
     Duration minSilence = const Duration(milliseconds: 350),
+    Duration padding = const Duration(milliseconds: 120),
   }) {
     final layer = _layer(id);
     if (layer == null) return null;
@@ -1164,51 +1167,62 @@ class EditorController extends Notifier<VideoProject> {
     if (peaks == null || peaks.isEmpty) return null;
 
     final offset = _sourceOffsetOf(layer);
-    final fim = offset + layer.duration;
+    final pausas = detectSilence(peaks,
+        threshold: threshold, minSilence: minSilence, padding: padding);
 
-    // Os trechos vem em tempo do ARQUIVO; interessa so o que cai dentro
-    // do pedaco que a camada usa.
-    final falas = mergeClose(detectSpeech(peaks,
-            threshold: threshold, minSilence: minSilence))
-        .map((r) => (
-              r.$1 < offset ? offset : r.$1,
-              r.$2 > fim ? fim : r.$2,
-            ))
-        .where((r) => r.$2 > r.$1)
-        .toList();
-    if (falas.isEmpty || falas.length == 1) return falas.length;
-
-    // Cada trecho vira uma camada, encostada na anterior.
-    final novas = <Layer>[];
-    var cursor = layer.startTime;
-    for (final f in falas) {
-      final dur = f.$2 - f.$1;
-      var copia = layer.duplicated().copyLayer(
-            startTime: cursor,
-            duration: dur,
-          );
-      if (copia is VideoLayer) {
-        copia = copia.copyLayer(sourceOffset: f.$1);
-      } else if (copia is AudioLayer) {
-        copia = copia.copyLayer(sourceOffset: f.$1);
-      }
-      novas.add(copia);
-      cursor += dur;
+    // Tempo do ARQUIVO -> tempo da LINHA, aparado na camada.
+    final out = <(Duration, Duration)>[];
+    for (final p in pausas) {
+      var de = layer.startTime + (p.$1 - offset);
+      var ate = layer.startTime + (p.$2 - offset);
+      if (de < layer.startTime) de = layer.startTime;
+      if (ate > layer.endTime) ate = layer.endTime;
+      if (ate > de) out.add((de, ate));
     }
+    return out;
+  }
 
-    // O que vinha depois anda para tras pelo tanto que encolheu.
-    final encolheu = layer.duration - (cursor - layer.startTime);
-    _mutate(state.copyWith(layers: [
-      for (final l in state.layers)
-        if (l.id == layer.id)
-          ...novas
-        else if (l.startTime >= layer.endTime)
-          l.copyLayer(startTime: l.startTime - encolheu)
-        else
-          l,
-    ]));
-    ref.read(selectedLayerProvider.notifier).state = novas.first.id;
-    return novas.length;
+  /// Tira os trechos marcados de UMA camada. Devolve quantos pedacos
+  /// sobraram (0 se a camada inteira saiu).
+  int cutRangesOf(
+    String id,
+    List<(Duration, Duration)> ranges, {
+    bool ripple = true,
+  }) {
+    if (ranges.isEmpty) return 1;
+    final antes = state.layers.length;
+    final novas = removeRangesFrom(state.layers, id, ranges, ripple: ripple);
+    final pedacos = novas.length - antes + 1;
+    _mutate(state.copyWith(layers: novas));
+    if (!novas.any((l) => l.id == id)) {
+      ref.read(selectedLayerProvider.notifier).state = null;
+    }
+    return pedacos < 0 ? 0 : pedacos;
+  }
+
+  /// REMOVER SILENCIO: joga fora as pausas e encosta o que sobrou.
+  ///
+  /// Devolve quantos pedacos ficaram, ou null se ainda nao ha forma de
+  /// onda.
+  int? removeSilence(
+    String id, {
+    double threshold = 0.035,
+    Duration minSilence = const Duration(milliseconds: 350),
+  }) {
+    final pausas = silenceRangesOf(id,
+        threshold: threshold, minSilence: minSilence);
+    if (pausas == null) return null;
+    if (pausas.isEmpty) return 1;
+    final antes = state.layers.length;
+    final novas =
+        removeRangesFrom(state.layers, id, pausas, ripple: true);
+    _mutate(state.copyWith(layers: novas));
+    final pedacos = novas.length - antes + 1;
+    final primeiro = novas.where((l) => l.id == id).firstOrNull;
+    if (primeiro != null) {
+      ref.read(selectedLayerProvider.notifier).state = primeiro.id;
+    }
+    return pedacos < 1 ? 1 : pedacos;
   }
 
   /// Marca as BATIDAS da faixa como tempos, para encaixar corte no
@@ -1499,10 +1513,23 @@ class EditorController extends Notifier<VideoProject> {
     ));
   }
 
+  /// Escolhe um dos modos PROPRIOS (Linear Burn, Vivid Light...), que
+  /// nao existem no Flutter e passam pelo compositor de dois andares.
+  void setCustomBlend(String id, AureaBlend? mode) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    _replace(layer.copyLayer(
+      blendMode: BlendMode.srcOver,
+      customBlend: mode,
+      clearCustomBlend: mode == null,
+    ));
+  }
+
   void setBlendMode(String id, BlendMode mode) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(blendMode: mode));
+    // Escolher um modo nativo desliga o proprio: so um manda.
+    _replace(layer.copyLayer(blendMode: mode, clearCustomBlend: true));
   }
 
   /// Reseta a propriedade: limpa keyframes e volta ao valor padrao.
@@ -1905,11 +1932,22 @@ class EditorController extends Notifier<VideoProject> {
     updateMask(layerId, maskId, (m) {
       return switch (param) {
         'feather' => m.copyWith(feather: m.feather.edited(local, value)),
+        'featherY' => m.copyWith(
+            featherY: m.featherVertical.edited(local, value)),
         'expansion' =>
           m.copyWith(expansion: m.expansion.edited(local, value)),
         'opacity' => m.copyWith(opacity: m.opacity.edited(local, value)),
         _ => m,
       };
+    });
+  }
+
+  /// Liga/solta os eixos do feather. Ao soltar, o eixo Y comeca no
+  /// valor que ja estava valendo — soltar nao pode mudar a imagem.
+  void toggleMaskFeatherAxes(String layerId, String maskId) {
+    updateMask(layerId, maskId, (m) {
+      if (m.featherLinked) return m.copyWith(featherY: m.feather);
+      return m.copyWith(linkFeather: true);
     });
   }
 

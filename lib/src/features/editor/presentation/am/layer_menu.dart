@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../domain/blend_extra.dart';
 import '../../domain/caption.dart';
 import '../../domain/element3d.dart';
 import '../../domain/grid_rig.dart';
@@ -19,6 +20,7 @@ import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
+import 'decupagem_screen.dart';
 import 'oficio_sheets.dart';
 import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
@@ -316,6 +318,15 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 Future.microtask(() {
                   if (context.mounted) {
                     showTextPathSheet(context, ref, layer.id);
+                  }
+                });
+              }),
+            if (layer is AudioLayer || layer is VideoLayer)
+              item(CupertinoIcons.scissors, 'Decupagem', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    openDecupagem(context, ref, layer.id);
                   }
                 });
               }),
@@ -1234,14 +1245,48 @@ Future<void> showMasksSheet(BuildContext context, WidgetRef ref,
                           ],
                         ),
                         const SizedBox(height: 6),
-                        ruler(
-                            'Feather',
-                            m.feather.valueAt(local),
-                            0,
-                            200,
-                            amNumber(m.feather.valueAt(local), 0),
-                            (v) => controller.editMaskParam(
-                                layerId, m.id, 'feather', t, v)),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ruler(
+                                  m.featherLinked ? 'Feather' : 'Feather X',
+                                  m.feather.valueAt(local),
+                                  0,
+                                  200,
+                                  amNumber(m.feather.valueAt(local), 0),
+                                  (v) => controller.editMaskParam(
+                                      layerId, m.id, 'feather', t, v)),
+                            ),
+                            // Soltar os eixos: borda dura dos lados e
+                            // macia em cima e embaixo — o degrade de
+                            // horizonte que o feather redondo nao faz.
+                            GestureDetector(
+                              onTap: () => controller.toggleMaskFeatherAxes(
+                                  layerId, m.id),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  m.featherLinked
+                                      ? CupertinoIcons.link
+                                      : CupertinoIcons.link_circle,
+                                  size: 16,
+                                  color: m.featherLinked
+                                      ? AmColors.muted
+                                      : AmColors.accent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (!m.featherLinked)
+                          ruler(
+                              'Feather Y',
+                              m.featherVertical.valueAt(local),
+                              0,
+                              200,
+                              amNumber(m.featherVertical.valueAt(local), 0),
+                              (v) => controller.editMaskParam(
+                                  layerId, m.id, 'featherY', t, v)),
                         ruler(
                             'Expansao',
                             m.expansion.valueAt(local),
@@ -2248,6 +2293,53 @@ const amBlendModes = <(String, BlendMode)>[
   ('Luminosidade', BlendMode.luminosity),
 ];
 
+/// Uma opcao de mescla na fileira.
+class _BlendChip extends StatelessWidget {
+  const _BlendChip({
+    required this.label,
+    required this.aceso,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool aceso;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 74,
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: AmColors.chip,
+            borderRadius: BorderRadius.circular(10),
+            border: aceso
+                ? Border.all(color: AmColors.accent, width: 2)
+                : null,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(CupertinoIcons.circle_lefthalf_fill,
+                  size: 18,
+                  color: aceso ? AmColors.accent : AmColors.muted),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  color: aceso ? AmColors.accent : AmColors.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
 /// Painel "Mesclagem e opacidade": blend mode + regua de opacidade.
 class BlendingPanel extends ConsumerWidget {
   const BlendingPanel({
@@ -2322,42 +2414,21 @@ class BlendingPanel extends ConsumerWidget {
                       scrollDirection: Axis.horizontal,
                       children: [
                         for (final (label, mode) in amBlendModes)
-                          GestureDetector(
+                          _BlendChip(
+                            label: label,
+                            aceso: layer.customBlend == null &&
+                                layer.blendMode == mode,
                             onTap: () => controller.setBlendMode(id, mode),
-                            child: Container(
-                              width: 74,
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: BoxDecoration(
-                                color: AmColors.chip,
-                                borderRadius: BorderRadius.circular(10),
-                                border: layer.blendMode == mode
-                                    ? Border.all(
-                                        color: AmColors.accent, width: 2)
-                                    : null,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(CupertinoIcons.circle_lefthalf_fill,
-                                      size: 18,
-                                      color: layer.blendMode == mode
-                                          ? AmColors.accent
-                                          : AmColors.muted),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      color: layer.blendMode == mode
-                                          ? AmColors.accent
-                                          : AmColors.text,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          ),
+                        // Os modos que o Flutter nao tem, no fim da
+                        // mesma fileira: para quem escolhe, e so mais um
+                        // modo — o custo maior fica escondido.
+                        for (final extra in AureaBlend.values)
+                          _BlendChip(
+                            label: aureaBlendLabel(extra),
+                            aceso: layer.customBlend == extra,
+                            onTap: () =>
+                                controller.setCustomBlend(id, extra),
                           ),
                       ],
                     ),

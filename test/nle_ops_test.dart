@@ -277,4 +277,128 @@ void main() {
       expect(r.whereType<AudioLayer>().single.sourceOffset, _s(3));
     });
   });
+
+  group('Decupagem — varios trechos de uma vez', () {
+    AudioLayer fala(num inicio, num dur) => AudioLayer(
+          name: 'fala',
+          startTime: _s(inicio),
+          duration: _s(dur),
+          sourcePath: 'fala.wav',
+        );
+
+    test('tres pausas viram quatro pedacos encostados', () {
+      final r = removeRangesFrom(
+        [fala(0, 20)],
+        'x',
+        const [],
+      );
+      expect(r.length, 1, reason: 'lista vazia nao mexe em nada');
+
+      final falas = [fala(0, 20)];
+      final id = falas.first.id;
+      final cortado = removeRangesFrom(falas, id, [
+        (_s(2), _s(3)),
+        (_s(7), _s(9)),
+        (_s(14), _s(15)),
+      ]);
+      expect(cortado.length, 4);
+      final linha = _linha(cortado);
+      // 20 s menos 4 s de pausa = 16 s, tudo colado.
+      expect(linha.first.$2, 0);
+      expect(linha.last.$3, closeTo(16, 0.01));
+      for (var i = 1; i < linha.length; i++) {
+        expect(linha[i].$2, closeTo(linha[i - 1].$3, 0.01),
+            reason: 'nao pode sobrar buraco entre os pedacos');
+      }
+    });
+
+    // A ordem de aplicacao e o que costuma quebrar: cortar de frente
+    // para tras desloca os trechos seguintes, que ainda usam o tempo
+    // antigo, e os cortes saem todos fora de lugar.
+    test('a ordem dos trechos na lista nao muda o resultado', () {
+      final base = fala(0, 20);
+      final a = removeRangesFrom([base], base.id, [
+        (_s(2), _s(3)),
+        (_s(7), _s(9)),
+      ]);
+      final b = removeRangesFrom([base], base.id, [
+        (_s(7), _s(9)),
+        (_s(2), _s(3)),
+      ]);
+      expect(_linha(a), _linha(b));
+    });
+
+    test('cada pedaco continua o audio de onde parou', () {
+      final base = fala(0, 20);
+      final r = removeRangesFrom([base], base.id, [
+        (_s(2), _s(3)),
+        (_s(7), _s(9)),
+      ]).whereType<AudioLayer>().toList()
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
+      expect(r[0].sourceOffset, Duration.zero);
+      expect(r[1].sourceOffset, _s(3));
+      expect(r[2].sourceOffset, _s(9));
+    });
+
+    test('sem arrasto, os buracos ficam', () {
+      final base = fala(0, 20);
+      final r = removeRangesFrom(
+          [base], base.id, [(_s(5), _s(8))],
+          ripple: false);
+      expect(gapsIn(r), hasLength(1));
+      expect(gapsIn(r).first.$1, _s(5));
+    });
+
+    test('outras camadas nao entram no corte', () {
+      final base = fala(0, 20);
+      final outra = _clip('titulo', 0, 20);
+      final r = removeRangesFrom([base, outra], base.id, [(_s(5), _s(8))]);
+      final t = r.whereType<TextLayer>().single;
+      expect(t.startTime, Duration.zero);
+      expect(t.duration, _s(20));
+    });
+  });
+
+  group('Decupagem — ficar so com o que interessa', () {
+    AudioLayer fala(num inicio, num dur) => AudioLayer(
+          name: 'fala',
+          startTime: _s(inicio),
+          duration: _s(dur),
+          sourcePath: 'fala.wav',
+        );
+
+    test('mantem os trechos pedidos e encosta um no outro', () {
+      final base = fala(0, 10);
+      final r = keepRangesOf([base], base.id, [
+        (_s(1), _s(3)),
+        (_s(6), _s(8)),
+      ]);
+      final linha = _linha(r);
+      expect(linha, hasLength(2));
+      expect(linha[0].$2, 0);
+      expect(linha[0].$3, closeTo(2, 0.01));
+      expect(linha[1].$2, closeTo(2, 0.01));
+      expect(linha[1].$3, closeTo(4, 0.01));
+    });
+
+    test('trecho que passa da borda e aparado', () {
+      final base = fala(2, 6);
+      final r = keepRangesOf([base], base.id, [(_s(0), _s(100))]);
+      final linha = _linha(r);
+      expect(linha, hasLength(1));
+      expect(linha.first.$2, 2);
+      expect(linha.first.$3, 8);
+    });
+
+    test('sem nada a manter, a camada some', () {
+      final base = fala(0, 10);
+      final r = keepRangesOf([base], base.id, const []);
+      expect(r.whereType<AudioLayer>(), isEmpty);
+    });
+
+    test('camada que nao existe nao faz nada', () {
+      final base = fala(0, 10);
+      expect(keepRangesOf([base], 'nao-existe', const []), hasLength(1));
+    });
+  });
 }

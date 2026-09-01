@@ -376,6 +376,7 @@ class LayerMask {
     this.inverted = false,
     AnimatedPath? path,
     AnimatedDouble? feather,
+    this.featherY,
     AnimatedDouble? opacity,
     AnimatedDouble? expansion,
   })  : id = id ?? const Uuid().v4(),
@@ -392,8 +393,22 @@ class LayerMask {
   /// Caminho ANIMAVEL (PR-M1 aplicado a mascara).
   final AnimatedPath path;
 
-  /// Feather com queda gaussiana, montado em cima da borda.
+  /// Feather com queda gaussiana, montado em cima da borda. Quando so
+  /// este existe, a suavidade e igual nos dois eixos.
   final AnimatedDouble feather;
+
+  /// Suavidade SO NA VERTICAL, quando os eixos estao soltos.
+  ///
+  /// E o que faz um degrade de horizonte: borda dura dos lados, macia em
+  /// cima e embaixo. Nulo = ligada ao eixo X (o caso comum, e o que
+  /// mantem o projeto antigo igual).
+  final AnimatedDouble? featherY;
+
+  /// Suavidade vertical efetiva — cai no eixo X quando estao ligados.
+  AnimatedDouble get featherVertical => featherY ?? feather;
+
+  bool get featherLinked => featherY == null;
+
   final AnimatedDouble opacity;
 
   /// Expande/contrai o alcance sem mexer nos vertices.
@@ -402,6 +417,7 @@ class LayerMask {
   bool get hasAnimation =>
       path.isAnimated ||
       feather.isAnimated ||
+      (featherY?.isAnimated ?? false) ||
       opacity.isAnimated ||
       expansion.isAnimated;
 
@@ -411,6 +427,8 @@ class LayerMask {
     bool? inverted,
     AnimatedPath? path,
     AnimatedDouble? feather,
+    AnimatedDouble? featherY,
+    bool linkFeather = false,
     AnimatedDouble? opacity,
     AnimatedDouble? expansion,
   }) {
@@ -421,6 +439,7 @@ class LayerMask {
       inverted: inverted ?? this.inverted,
       path: path ?? this.path,
       feather: feather ?? this.feather,
+      featherY: linkFeather ? null : (featherY ?? this.featherY),
       opacity: opacity ?? this.opacity,
       expansion: expansion ?? this.expansion,
     );

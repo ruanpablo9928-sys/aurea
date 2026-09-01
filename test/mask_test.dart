@@ -146,4 +146,51 @@ void main() {
       expect(mid.width, closeTo(midOrig.width, 1e-6));
     });
   });
+
+  group('Feather por eixo', () {
+    test('por padrao os eixos estao ligados', () {
+      final m = LayerMask(feather: AnimatedDouble(30));
+      expect(m.featherLinked, isTrue);
+      expect(m.featherY, isNull);
+      expect(m.featherVertical.valueAt(Duration.zero), 30);
+    });
+
+    // Soltar nao pode mudar a imagem: o eixo Y comeca no valor que ja
+    // estava valendo.
+    test('soltar comeca no valor que ja valia', () {
+      final m = LayerMask(feather: AnimatedDouble(30));
+      final solto = m.copyWith(featherY: m.feather);
+      expect(solto.featherLinked, isFalse);
+      expect(solto.featherVertical.valueAt(Duration.zero), 30);
+    });
+
+    test('solto, os eixos andam separados', () {
+      final m = LayerMask(
+        feather: AnimatedDouble(10),
+        featherY: AnimatedDouble(80),
+      );
+      expect(m.feather.valueAt(Duration.zero), 10);
+      expect(m.featherVertical.valueAt(Duration.zero), 80);
+    });
+
+    test('religar apaga o eixo Y', () {
+      final m = LayerMask(
+        feather: AnimatedDouble(10),
+        featherY: AnimatedDouble(80),
+      );
+      final ligado = m.copyWith(linkFeather: true);
+      expect(ligado.featherY, isNull);
+      expect(ligado.featherVertical.valueAt(Duration.zero), 10);
+    });
+
+    test('animar so o eixo Y ja conta como animacao', () {
+      final m = LayerMask(
+        feather: AnimatedDouble(10),
+        featherY: AnimatedDouble(0)
+            .withKeyframe(Duration.zero, 0)
+            .withKeyframe(const Duration(seconds: 1), 60),
+      );
+      expect(m.hasAnimation, isTrue);
+    });
+  });
 }

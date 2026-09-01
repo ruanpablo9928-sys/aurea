@@ -84,6 +84,7 @@ flutter:
   # Shader de saida: dithering que mata o banding.
   shaders:
     - shaders/dither.frag
+    - shaders/blend.frag
 
   # To add assets to your application, add an assets section, like this:
   # assets:

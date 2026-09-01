@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -13,7 +15,9 @@ class MaskSpec {
     required this.opacity,
     required this.feather,
     required this.expansion,
+    this.featherY,
   });
+
 
   final Path path;
   final MaskMode mode;
@@ -21,6 +25,11 @@ class MaskSpec {
   final double opacity;
   final double feather;
   final double expansion;
+
+  /// Suavidade vertical; nulo = igual a horizontal.
+  final double? featherY;
+
+  double get featherVertical => featherY ?? feather;
 }
 
 /// Aplica a pilha de mascaras ao alfa do filho (PR-M2):
@@ -104,13 +113,24 @@ class _RenderMaskedBox extends RenderProxyBox {
             PathOperation.difference, Path()..addRect(rect), g);
       }
 
-      final fill = Paint()..color = const Color(0xFFFFFFFF);
-      if (s.feather > 0.5) {
-        // Queda gaussiana montada sobre a borda (25 ~ 12,5 px por lado).
-        fill.maskFilter =
-            MaskFilter.blur(BlurStyle.normal, s.feather / 4);
+      // Feather por EIXO: o blur vai numa camada propria porque
+      // MaskFilter e redondo por definicao — nao ha como pedir 40 px em
+      // cima e 0 dos lados com ele. ImageFilter aceita os dois sigmas, e
+      // e o que permite o degrade de horizonte.
+      final borrar = s.feather > 0.5 || s.featherVertical > 0.5;
+      if (borrar) {
+        canvas.saveLayer(
+          rect,
+          Paint()
+            ..imageFilter = ui.ImageFilter.blur(
+              // 25 ~ 12,5 px por lado, como antes.
+              sigmaX: s.feather > 0.5 ? s.feather / 4 : 0.0001,
+              sigmaY: s.featherVertical > 0.5 ? s.featherVertical / 4 : 0.0001,
+            ),
+        );
       }
-      canvas.drawPath(g, fill);
+
+      canvas.drawPath(g, Paint()..color = const Color(0xFFFFFFFF));
 
       // Expansao: alarga ou contrai o alcance sem alterar o caminho.
       if (s.expansion.abs() > 0.5) {
@@ -119,10 +139,6 @@ class _RenderMaskedBox extends RenderProxyBox {
           ..strokeWidth = s.expansion.abs() * 2
           ..strokeJoin = StrokeJoin.round
           ..color = const Color(0xFFFFFFFF);
-        if (s.feather > 0.5) {
-          stroke.maskFilter =
-              MaskFilter.blur(BlurStyle.normal, s.feather / 4);
-        }
         if (s.expansion > 0) {
           canvas.drawPath(g, stroke);
         } else {
@@ -130,6 +146,8 @@ class _RenderMaskedBox extends RenderProxyBox {
           canvas.drawPath(g, stroke);
         }
       }
+
+      if (borrar) canvas.restore();
       canvas.restore();
     }
 
