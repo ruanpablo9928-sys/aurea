@@ -7,7 +7,9 @@ import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import '../../application/media_preview_service.dart';
 import 'am_colors.dart';
+import 'clip_preview_painters.dart';
 
 const double kAmRowHeight = 46;
 const double kAmBarHeight = 38;
@@ -566,7 +568,11 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                   selected && !compact ? onEditEnd : null,
               child: CustomPaint(
                 painter: _AmBarPainter(selected: selected),
-                child: Padding(
+                // FORMA DE ONDA e TIRA DE MINIATURAS dentro da barra:
+                // sem elas, achar o corte e tatear.
+                child: _ClipPreview(
+                  layer: layer,
+                  child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
@@ -592,6 +598,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                         const Icon(CupertinoIcons.line_horizontal_3,
                             size: 16, color: Colors.white70),
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -799,6 +806,136 @@ class _TrimHandle extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// PREVIA DENTRO DA BARRA: forma de onda para audio, tira de
+/// miniaturas para video.
+///
+/// As duas sao caras de calcular, entao sao pedidas uma vez e chegam
+/// depois — a barra aparece na hora e ganha a previa quando fica pronta,
+/// em vez de segurar a interface esperando o FFmpeg.
+class _ClipPreview extends StatefulWidget {
+  const _ClipPreview({required this.layer, required this.child});
+
+  final Layer layer;
+  final Widget child;
+
+  @override
+  State<_ClipPreview> createState() => _ClipPreviewState();
+}
+
+class _ClipPreviewState extends State<_ClipPreview> {
+  final _service = MediaPreviewService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _pedir();
+  }
+
+  @override
+  void didUpdateWidget(_ClipPreview old) {
+    super.didUpdateWidget(old);
+    if (old.layer.id != widget.layer.id) _pedir();
+  }
+
+  void _pedir() {
+    final l = widget.layer;
+    if (l is AudioLayer) {
+      _service.ensureWaveform(l.sourcePath);
+    } else if (l is VideoLayer) {
+      _service.ensureWaveform(l.sourcePath);
+      _service.ensureFilmstrip(
+          l.sourcePath, l.sourceOffset + l.duration);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = widget.layer;
+    if (l is! AudioLayer && l is! VideoLayer) return widget.child;
+
+    final path = l is AudioLayer
+        ? l.sourcePath
+        : (l as VideoLayer).sourcePath;
+    final inicio =
+        l is VideoLayer ? l.sourceOffset : Duration.zero;
+    final fim = inicio + l.duration;
+
+    return ValueListenableBuilder<int>(
+      valueListenable: _service.revision,
+      builder: (context, _, child) {
+        final peaks = _service.peaksOf(path);
+        final strip =
+            l is VideoLayer ? _service.stripOf(path) : null;
+
+        final temStrip = strip != null && strip.isNotEmpty;
+        final temOnda = peaks != null && peaks.isNotEmpty;
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              // MINIATURAS em cima da barra, opacas: meia opacidade
+              // sobre o violeta lava a imagem e ela deixa de informar.
+              if (temStrip)
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: FilmstripPainter(
+                      frames: strip,
+                      start: inicio,
+                      end: fim,
+                      sourceDuration: fim,
+                    ),
+                  ),
+                ),
+              // Veu escuro so onde o nome do clipe passa, para o texto
+              // continuar legivel sobre qualquer cena.
+              if (temStrip)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.62),
+                          Colors.black.withValues(alpha: 0.22),
+                        ],
+                        stops: const [0.0, 0.45],
+                      ),
+                    ),
+                  ),
+                ),
+              // Audio do proprio video: faixa fina embaixo, para nao
+              // brigar com a imagem.
+              if (temOnda)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: temStrip ? kAmBarHeight * 0.34 : null,
+                  top: temStrip ? null : 0,
+                  child: CustomPaint(
+                    painter: WaveformPainter(
+                      peaks: peaks,
+                      start: inicio,
+                      end: fim,
+                      color: temStrip
+                          ? AmColors.accent.withValues(alpha: 0.85)
+                          : Colors.white.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              child!,
+            ],
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }
