@@ -9,6 +9,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import 'panel_chrome.dart';
 
 enum TransformTool { position, rotation, scale, skew, pivot }
 
@@ -100,218 +101,99 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     bool hasKfHere,
     bool animated,
   ) {
-    return ColoredBox(
-      color: AmColors.panel,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Trilho esquerdo.
-          Column(
-            children: [
-              AmRailButton(
-                onTap: widget.onBack,
-                child: const Icon(CupertinoIcons.chevron_back,
-                    size: 24, color: AmColors.text),
-              ),
-              AmRailButton(
-                // Le o relogio NO TOQUE: o keyframe cai exatamente onde o
-                // playhead esta agora, nunca num tempo capturado antes.
-                onTap: () => controller.toggleKeyframe(
-                    id, widget.playback.time.value, _prop),
-                child: AmDiamondAdd(active: animated, filled: hasKfHere),
-              ),
-              AmRailButton(
-                onTap: animated ? () => widget.onOpenCurve(_prop) : null,
-                child: AmCurveIcon(
-                    color: animated ? AmColors.text : AmColors.muted),
-              ),
-            ],
-          ),
-          // Controle central + navegacao de keyframes.
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: switch (widget.tool) {
-                      TransformTool.position => _PositionControl(
-                          layer: layer, playback: widget.playback),
-                      TransformTool.rotation => _RotationControl(
-                          layer: layer, playback: widget.playback),
-                      TransformTool.scale => _ScaleControl(
-                          layer: layer,
-                          playback: widget.playback,
-                          linked: _scaleLinked,
-                          onToggleLink: () => setState(
-                              () => _scaleLinked = !_scaleLinked),
-                        ),
-                      TransformTool.skew => _SkewControl(
-                          layer: layer, playback: widget.playback),
-                      TransformTool.pivot => _PivotControl(
-                          layer: layer, playback: widget.playback),
-                    },
-                  ),
-                  // ‹◆  ◆›  ↺ — navegar entre keyframes e resetar.
-                  KeyframeNavRow(
-                    playback: widget.playback,
-                    layer: layer,
-                    prop: _prop,
-                    onReset: () => controller.resetProp(id, _prop),
-                  ),
-                ],
-              ),
+    return AmPanelChrome(
+      trilha: '${layer.name} \u00b7 Mover e transformar',
+      onBack: widget.onBack,
+      abas: [
+        ParamTab(
+            id: TransformTool.position.name,
+            label: 'Posicao',
+            animated: layer.position.isAnimated),
+        ParamTab(
+            id: TransformTool.rotation.name,
+            label: 'Rotacao',
+            animated: layer.rotation.isAnimated ||
+                layer.rotationX.isAnimated ||
+                layer.rotationY.isAnimated),
+        ParamTab(
+            id: TransformTool.scale.name,
+            label: 'Escala',
+            animated: layer.scaleX.isAnimated || layer.scaleY.isAnimated),
+        ParamTab(
+            id: TransformTool.skew.name,
+            label: 'Inclinar',
+            animated: layer.skewX.isAnimated || layer.skewY.isAnimated),
+        ParamTab(
+            id: TransformTool.pivot.name,
+            label: 'Pivo',
+            animated: layer.pivot.isAnimated),
+      ],
+      abaAtiva: widget.tool.name,
+      onAba: (nome) => widget.onToolChanged(
+          TransformTool.values.firstWhere((e) => e.name == nome)),
+      corpo: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
+        child: switch (widget.tool) {
+          TransformTool.position =>
+            _PositionControl(layer: layer, playback: widget.playback),
+          TransformTool.rotation =>
+            _RotationControl(layer: layer, playback: widget.playback),
+          TransformTool.scale => _ScaleControl(
+              layer: layer,
+              playback: widget.playback,
+              linked: _scaleLinked,
+              onToggleLink: () =>
+                  setState(() => _scaleLinked = !_scaleLinked),
             ),
-          ),
-          // Sub-ferramentas a direita.
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 2),
-                _ToolButton(
-                  tool: TransformTool.position,
-                  current: widget.tool,
-                  onTap: widget.onToolChanged,
-                  child: (c) => Icon(Icons.open_with, size: 24, color: c),
-                ),
-                _ToolButton(
-                  tool: TransformTool.rotation,
-                  current: widget.tool,
-                  onTap: widget.onToolChanged,
-                  child: (c) => Icon(Icons.crop_rotate, size: 22, color: c),
-                ),
-                _ToolButton(
-                  tool: TransformTool.scale,
-                  current: widget.tool,
-                  onTap: widget.onToolChanged,
-                  child: (c) => Icon(Icons.open_in_full, size: 22, color: c),
-                ),
-                _ToolButton(
-                  tool: TransformTool.skew,
-                  current: widget.tool,
-                  onTap: widget.onToolChanged,
-                  child: (c) => Transform(
-                    transform: Matrix4.skewX(-0.35),
-                    alignment: Alignment.center,
-                    child: Icon(Icons.crop_square, size: 22, color: c),
-                  ),
-                ),
-                _ToolButton(
-                  tool: TransformTool.pivot,
-                  current: widget.tool,
-                  onTap: widget.onToolChanged,
-                  child: (c) =>
-                      Icon(Icons.filter_center_focus, size: 22, color: c),
-                ),
-              ],
-            ),
-          ),
-        ],
+          TransformTool.skew =>
+            _SkewControl(layer: layer, playback: widget.playback),
+          TransformTool.pivot =>
+            _PivotControl(layer: layer, playback: widget.playback),
+        },
+      ),
+      acoes: AmKeyframeActions(
+        animado: animated,
+        temKfAqui: hasKfHere,
+        onAnterior: () => pularKeyframe(ref, widget.playback, layer, _prop, -1),
+        // Le o relogio NO TOQUE: o keyframe cai exatamente onde o
+        // cabecote esta agora, nunca num tempo capturado antes.
+        onCravar: () => controller.toggleKeyframe(
+            id, widget.playback.time.value, _prop),
+        onProximo: () => pularKeyframe(ref, widget.playback, layer, _prop, 1),
+        onCurva: () => widget.onOpenCurve(_prop),
+        onResetar: () => controller.resetProp(id, _prop),
       ),
     );
   }
 }
 
-class _ToolButton extends StatelessWidget {
-  const _ToolButton({
-    required this.tool,
-    required this.current,
-    required this.onTap,
-    required this.child,
-  });
-
-  final TransformTool tool;
-  final TransformTool current;
-  final ValueChanged<TransformTool> onTap;
-  final Widget Function(Color color) child;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = tool == current;
-    return AmRailButton(
-      selected: selected,
-      onTap: () => onTap(tool),
-      child: child(selected ? AmColors.accent : AmColors.text),
-    );
-  }
-}
-
-/// Fileira ‹◆ | ◆› | ↺ compartilhada pelos paineis de propriedade.
-class KeyframeNavRow extends ConsumerWidget {
-  const KeyframeNavRow({
-    super.key,
-    required this.playback,
-    required this.layer,
-    required this.prop,
-    required this.onReset,
-  });
-
-  final PlaybackController playback;
-  final Layer layer;
-  final LayerProp prop;
-  final VoidCallback onReset;
-
-  void _jump(WidgetRef ref, int dir) {
-    final controller = ref.read(editorControllerProvider.notifier);
-    final times = controller.propKeyframeTimes(layer, prop);
-    if (times.isEmpty) return;
-    final local = layer.localTime(playback.time.value);
-    Duration? target;
-    if (dir < 0) {
-      for (final kt in times) {
-        if (kt < local - const Duration(milliseconds: 8)) target = kt;
-      }
-    } else {
-      for (final kt in times.reversed) {
-        if (kt > local + const Duration(milliseconds: 8)) target = kt;
-      }
+/// Pula para o keyframe anterior (dir < 0) ou proximo (dir > 0) da
+/// propriedade. Pausa antes: mover o cabecote com o relogio andando e
+/// disputa, e quem perde e a pessoa.
+void pularKeyframe(
+  WidgetRef ref,
+  PlaybackController playback,
+  Layer layer,
+  LayerProp prop,
+  int dir,
+) {
+  final controller = ref.read(editorControllerProvider.notifier);
+  final times = controller.propKeyframeTimes(layer, prop);
+  if (times.isEmpty) return;
+  final local = layer.localTime(playback.time.value);
+  Duration? target;
+  if (dir < 0) {
+    for (final kt in times) {
+      if (kt < local - const Duration(milliseconds: 8)) target = kt;
     }
-    if (target != null) {
-      playback.pause();
-      playback.seek(layer.startTime + target);
+  } else {
+    for (final kt in times.reversed) {
+      if (kt > local + const Duration(milliseconds: 8)) target = kt;
     }
   }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return SizedBox(
-      height: 40,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            onPressed: () => _jump(ref, -1),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.chevron_left,
-                    size: 15, color: AmColors.muted),
-                Icon(CupertinoIcons.rhombus, size: 14, color: AmColors.muted),
-              ],
-            ),
-          ),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            onPressed: () => _jump(ref, 1),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.rhombus, size: 14, color: AmColors.muted),
-                Icon(CupertinoIcons.chevron_right,
-                    size: 15, color: AmColors.muted),
-              ],
-            ),
-          ),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            onPressed: onReset,
-            child: const Icon(CupertinoIcons.arrow_counterclockwise,
-                size: 17, color: AmColors.muted),
-          ),
-        ],
-      ),
-    );
+  if (target != null) {
+    playback.pause();
+    playback.seek(layer.startTime + target);
   }
 }
 

@@ -1478,6 +1478,126 @@ class EditorController extends Notifier<VideoProject> {
     return pedacos < 1 ? 1 : pedacos;
   }
 
+  /// ANALISA AS BATIDAS da trilha e poe a GRADE no projeto.
+  ///
+  /// O que fica guardado nao sao os ataques detectados: e a grade regular
+  /// que sai do andamento. Ataque treme alguns milissegundos, e corte
+  /// encaixado em ataque herda o tremor — soa fora do tempo mesmo estando
+  /// "no lugar certo". A grade e regular por construcao.
+  ///
+  /// Devolve quantas marcas entraram, ou null se nao deu para ler o
+  /// arquivo ou se nao havia ritmo discernivel.
+  Future<int?> detectBeatsInto(
+    String id, {
+    BeatBand band = BeatBand.grave,
+    double sensitivity = 50,
+    int denominador = 4,
+  }) async {
+    final path = _audioPathOf(id);
+    if (path == null) return null;
+    final env =
+        await MediaPreviewService.instance.bandEnvelopeOf(path, band);
+    if (env.isEmpty) return null;
+
+    // 0..100 na tela vira o multiplicador do detector, INVERTIDO: mais
+    // sensibilidade e limiar mais baixo.
+    final limiar = 1.05 + (100 - sensitivity.clamp(0, 100)) / 100 * 1.1;
+    final ataques = detectBeats(env, sensitivity: limiar);
+    if (ataques.length < 3) return null;
+
+    final bpm = estimateBpm(ataques);
+    if (bpm == null) return null;
+
+    final camada = _layer(id);
+    final ate = camada?.endTime ?? state.duration;
+    final grade = beatGrid(
+      first: camada == null ? ataques.first : camada.startTime + ataques.first,
+      bpm: bpm,
+      denominador: denominador,
+      until: ate,
+    );
+    if (grade.isEmpty) return null;
+    _mutate(state.copyWith(beats: grade, bpm: bpm));
+    return grade.length;
+  }
+
+  /// Corrige o andamento a mao e refaz a grade a partir da primeira
+  /// batida — quem edita musica muitas vezes SABE o BPM, e digitar e
+  /// mais rapido e mais certo que reanalisar.
+  void setBpm(double bpm, {int denominador = 4}) {
+    if (bpm <= 0) return;
+    final primeira =
+        state.beats.isEmpty ? Duration.zero : state.beats.first;
+    final grade = beatGrid(
+      first: primeira,
+      bpm: bpm,
+      denominador: denominador,
+      until: state.duration,
+    );
+    _mutate(state.copyWith(beats: grade, bpm: bpm));
+  }
+
+  void clearBeats() {
+    if (state.beats.isEmpty) return;
+    _mutate(state.copyWith(beats: const []));
+  }
+
+  /// CORTA TODAS AS CAMADAS em cada marcador. Devolve quantos cortes
+  /// aconteceram.
+  int cutAtMarkers({bool usarBatidas = false}) {
+    final tempos = usarBatidas
+        ? state.beats
+        : [for (final m in state.markers) m.time];
+    if (tempos.isEmpty) return 0;
+    var cortes = 0;
+    // De TRAS para a frente: cortar cedo desloca as bordas do que vem
+    // depois, e a lista de tempos ficaria falando de outro clipe.
+    for (final t in tempos.reversed) {
+      for (final l in [...state.layers]) {
+        if (!l.activeAt(t)) continue;
+        final antes = state.layers.length;
+        splitLayer(l.id, t);
+        if (state.layers.length > antes) cortes++;
+      }
+    }
+    return cortes;
+  }
+
+  /// DISTRIBUI as camadas selecionadas (ou todas) nos marcadores: a
+  /// primeira comeca na primeira marca, a segunda na segunda, e assim
+  /// por diante. E o atalho de "uma foto por batida".
+  int distributeAtMarkers({List<String>? only, bool usarBatidas = false}) {
+    final tempos = usarBatidas
+        ? state.beats
+        : [for (final m in state.markers) m.time];
+    if (tempos.length < 2) return 0;
+    final alvos = [
+      for (final l in state.layers)
+        if (only == null || only.contains(l.id)) l,
+    ];
+    if (alvos.isEmpty) return 0;
+
+    final novas = <Layer>[];
+    var i = 0;
+    for (final l in state.layers) {
+      final k = alvos.indexWhere((a) => a.id == l.id);
+      if (k < 0) {
+        novas.add(l);
+        continue;
+      }
+      final idx = i.clamp(0, tempos.length - 1);
+      final inicio = tempos[idx];
+      final fim = idx + 1 < tempos.length ? tempos[idx + 1] : null;
+      novas.add(l.copyLayer(
+        startTime: inicio,
+        duration: fim == null ? l.duration : fim - inicio,
+      ));
+      i++;
+    }
+    _mutate(state.copyWith(layers: novas));
+    return alvos.length;
+  }
+
   /// Marca as BATIDAS da faixa como tempos, para encaixar corte no
   /// ritmo. Devolve null se a forma de onda ainda nao esta pronta.
   List<Duration>? beatsOf(String id) {
@@ -1815,6 +1935,40 @@ class EditorController extends Notifier<VideoProject> {
     _mutate(state.copyWith(markers: [
       for (final m in state.markers)
         if (m.time == alvo.time) m.copyWith(label: label) else m,
+    ]));
+  }
+
+  /// Arrasta uma marca de [de] para [para].
+  void moveMarker(Duration de, Duration para) {
+    const tol = Duration(milliseconds: 120);
+    final alvo = state.markerNear(de, tol);
+    if (alvo == null) return;
+    final t = para < Duration.zero ? Duration.zero : para;
+    _mutate(state.copyWith(markers: [
+      for (final m in state.markers)
+        if (m.time == alvo.time) m.copyWith(time: t) else m,
+    ]));
+  }
+
+  /// Pinta a marca. Cor de marcador nao e enfeite: e como se separa
+  /// "corte" de "letra da musica" numa regua cheia.
+  void setMarkerColor(Duration t, Color cor) {
+    const tol = Duration(milliseconds: 120);
+    final alvo = state.markerNear(t, tol);
+    if (alvo == null) return;
+    _mutate(state.copyWith(markers: [
+      for (final m in state.markers)
+        if (m.time == alvo.time) m.copyWith(color: cor) else m,
+    ]));
+  }
+
+  void removeMarker(Duration t) {
+    const tol = Duration(milliseconds: 120);
+    final alvo = state.markerNear(t, tol);
+    if (alvo == null) return;
+    _mutate(state.copyWith(markers: [
+      for (final m in state.markers)
+        if (m.time != alvo.time) m,
     ]));
   }
 

@@ -42,6 +42,7 @@ class AmTimeline extends ConsumerStatefulWidget {
     this.onTapLayer,
     this.activeTimesUs,
     this.onScrub,
+    this.onForeignKeyframe,
   });
 
   final PlaybackController playback;
@@ -57,6 +58,11 @@ class AmTimeline extends ConsumerStatefulWidget {
   /// Tempos locais (em us) com keyframe da propriedade ATIVA: esses
   /// diamantes acendem; os demais aparecem apagados. null = todos acesos.
   final Set<int>? activeTimesUs;
+
+  /// Tocaram num diamante APAGADO — de outra propriedade que nao a que
+  /// esta em edicao. Quem recebe diz de quem e o keyframe e oferece o
+  /// caminho ate la.
+  final void Function(Duration kfTime)? onForeignKeyframe;
 
   @override
   ConsumerState<AmTimeline> createState() => _AmTimelineState();
@@ -98,6 +104,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 
   double _timeToPx(Duration t) => t.inMicroseconds / 1e6 * _pps;
+
+  /// Onde o dedo tocou na regua, para o segundo toque saber o lugar.
+  double _xDoDuploToque = 0;
 
   Duration _pxToTime(double px) =>
       Duration(microseconds: (px / _pps * 1e6).round());
@@ -186,14 +195,66 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                             SizedBox(
                               height: 20,
                               width: totalWidth,
-                              child: CustomPaint(
-                                painter: _AmRulerPainter(pps: _pps),
-                                // As marcas vivem NA REGUA: e onde a
-                                // pessoa olha para achar o instante.
-                                foregroundPainter: _MarkersPainter(
-                                  markers: project.markers,
-                                  pps: _pps,
-                                ),
+                              // As marcas vivem NA REGUA: e onde a pessoa
+                              // olha para achar o instante.
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Positioned.fill(
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      // TOQUE DUPLO cria a marca onde o
+                                      // dedo esta — nao no cabecote. Quem
+                                      // ouve a musica aponta o lugar; ter
+                                      // de levar o cabecote ate la antes
+                                      // e um passo a mais no meio do
+                                      // ritmo.
+                                      onDoubleTapDown: (d) =>
+                                          _xDoDuploToque = d.localPosition.dx,
+                                      onDoubleTap: () {
+                                        final t = Duration(
+                                            microseconds:
+                                                (_xDoDuploToque / _pps * 1e6)
+                                                    .round());
+                                        ref
+                                            .read(editorControllerProvider
+                                                .notifier)
+                                            .toggleMarker(t);
+                                        HapticFeedback.selectionClick();
+                                      },
+                                      child: CustomPaint(
+                                        painter: _AmRulerPainter(pps: _pps),
+                                        // BATIDAS: risquinhos finos, e nao
+                                        // bandeiras. Sao centenas contra
+                                        // as poucas marcas postas a mao —
+                                        // desenhadas iguais, apagariam
+                                        // justamente as que alguem
+                                        // escolheu.
+                                        foregroundPainter: _BeatsPainter(
+                                          beats: project.beats,
+                                          pps: _pps,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  for (final m in project.markers)
+                                    _MarcaNaRegua(
+                                      marca: m,
+                                      pps: _pps,
+                                      onMover: (dx) => ref
+                                          .read(editorControllerProvider
+                                              .notifier)
+                                          .moveMarker(
+                                              m.time,
+                                              m.time +
+                                                  Duration(
+                                                      microseconds:
+                                                          (dx / _pps * 1e6)
+                                                              .round())),
+                                      onMenu: () =>
+                                          _menuDaMarca(context, ref, m),
+                                    ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 30),
@@ -216,6 +277,8 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                         onTapLayer: widget.onTapLayer,
                                         activeTimesUs:
                                             widget.activeTimesUs,
+                                        onForeignKeyframe:
+                                            widget.onForeignKeyframe,
                                         onEditStart: () =>
                                             _editingBar = true,
                                         onEditEnd: () =>
@@ -396,42 +459,205 @@ class _AmLayerPill extends StatelessWidget {
   }
 }
 
-/// Marcas na regua: um triangulinho com o rotulo ao lado.
-class _MarkersPainter extends CustomPainter {
-  const _MarkersPainter({required this.markers, required this.pps});
+/// AS BATIDAS: risquinhos finos na base da regua.
+///
+/// Densidade e o ponto. Uma faixa de tres minutos a 120 bpm tem 360
+/// tempos; desenhados como bandeiras, viram uma parede. Risco fino de
+/// meia altura le-se como grade e nao disputa com a marca posta a mao.
+class _BeatsPainter extends CustomPainter {
+  const _BeatsPainter({required this.beats, required this.pps});
 
-  final List<proj.Marker> markers;
+  final List<Duration> beats;
   final double pps;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (markers.isEmpty) return;
-    for (final m in markers) {
-      final x = m.time.inMicroseconds / 1e6 * pps;
-      if (x < -20 || x > size.width + 20) continue;
-      final p = Path()
-        ..moveTo(x, size.height)
-        ..lineTo(x - 5, size.height - 9)
-        ..lineTo(x + 5, size.height - 9)
-        ..close();
-      canvas.drawPath(p, Paint()..color = m.color);
-      if (m.label.isEmpty) continue;
-      final tp = TextPainter(
-        text: TextSpan(
-          text: m.label,
-          style: TextStyle(fontSize: 9, color: m.color),
-        ),
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-        ellipsis: '…',
-      )..layout(maxWidth: 90);
-      tp.paint(canvas, Offset(x + 7, size.height - 12));
+    if (beats.isEmpty) return;
+    final p = Paint()
+      ..color = AmColors.teal.withValues(alpha: 0.55)
+      ..strokeWidth = 1;
+    for (final b in beats) {
+      final x = b.inMicroseconds / 1e6 * pps;
+      if (x < -2 || x > size.width + 2) continue;
+      canvas.drawLine(
+          Offset(x, size.height * 0.55), Offset(x, size.height), p);
     }
   }
 
   @override
-  bool shouldRepaint(_MarkersPainter old) =>
-      old.pps != pps || old.markers.length != markers.length;
+  bool shouldRepaint(_BeatsPainter old) =>
+      old.pps != pps || old.beats.length != beats.length;
+}
+
+/// Uma marca na regua: bandeirinha com rotulo, que se arrasta.
+///
+/// E um WIDGET, nao um desenho, de proposito: so quem toca a bandeira
+/// arrasta a marca. Se o gesto morasse na regua inteira, ele roubaria a
+/// rolagem — e rolar a linha do tempo e o gesto mais usado que existe
+/// aqui.
+class _MarcaNaRegua extends StatefulWidget {
+  const _MarcaNaRegua({
+    required this.marca,
+    required this.pps,
+    required this.onMover,
+    required this.onMenu,
+  });
+
+  final proj.Marker marca;
+  final double pps;
+  final ValueChanged<double> onMover;
+  final VoidCallback onMenu;
+
+  @override
+  State<_MarcaNaRegua> createState() => _MarcaNaReguaState();
+}
+
+class _MarcaNaReguaState extends State<_MarcaNaRegua> {
+  double _acumulado = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final x = widget.marca.time.inMicroseconds / 1e6 * widget.pps;
+    return Positioned(
+      left: x - 11,
+      top: 0,
+      width: 22,
+      height: 20,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: widget.onMenu,
+        onHorizontalDragStart: (_) => _acumulado = 0,
+        onHorizontalDragUpdate: (d) {
+          _acumulado += d.delta.dx;
+          widget.onMover(_acumulado);
+          _acumulado = 0;
+        },
+        child: CustomPaint(
+          painter: _UmaMarcaPainter(
+              color: widget.marca.color, label: widget.marca.label),
+        ),
+      ),
+    );
+  }
+}
+
+class _UmaMarcaPainter extends CustomPainter {
+  const _UmaMarcaPainter({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final p = Paint()..color = color;
+    final path = Path()
+      ..moveTo(cx - 5, 0)
+      ..lineTo(cx + 5, 0)
+      ..lineTo(cx, 9)
+      ..close();
+    canvas.drawPath(path, p);
+    if (label.isEmpty) return;
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(fontSize: 9, color: color),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    tp.paint(canvas, Offset(cx + 7, 0));
+  }
+
+  @override
+  bool shouldRepaint(_UmaMarcaPainter old) =>
+      old.color != color || old.label != label;
+}
+
+/// O menu da marca: nomear, pintar, apagar. Toque longo, como em tudo
+/// que e destrutivo por aqui.
+Future<void> _menuDaMarca(
+    BuildContext context, WidgetRef ref, proj.Marker m) async {
+  final controller = ref.read(editorControllerProvider.notifier);
+  const cores = [
+    Color(0xFFB8FF3D),
+    Color(0xFF7C62FF),
+    Color(0xFFFF6B6B),
+    Color(0xFFFFC53D),
+    Color(0xFF4DD0E1),
+  ];
+  final texto = TextEditingController(text: m.label);
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AmColors.panel,
+    isScrollControlled: true,
+    builder: (sheetContext) => Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+              child: TextField(
+                controller: texto,
+                autofocus: true,
+                style: const TextStyle(color: AmColors.text),
+                decoration: const InputDecoration(
+                  hintText: 'Nome da marca',
+                  hintStyle: TextStyle(color: AmColors.muted),
+                ),
+                onSubmitted: (v) {
+                  controller.renameMarker(m.time, v);
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  for (final c in cores)
+                    GestureDetector(
+                      onTap: () {
+                        controller.setMarkerColor(m.time, c);
+                        Navigator.of(sheetContext).pop();
+                      },
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        margin: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                          border: m.color == c
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(CupertinoIcons.delete,
+                  color: AmColors.pink, size: 20),
+              title: const Text('Apagar a marca',
+                  style: TextStyle(color: AmColors.pink, fontSize: 15)),
+              onTap: () {
+                controller.removeMarker(m.time);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            const SizedBox(height: 6),
+          ],
+        ),
+      ),
+    ),
+  );
+  controller.renameMarker(m.time, texto.text);
+  texto.dispose();
 }
 
 class _AmRulerPainter extends CustomPainter {
@@ -477,6 +703,7 @@ class _AmLayerRow extends ConsumerStatefulWidget {
     required this.onEditEnd,
     this.onTapLayer,
     this.activeTimesUs,
+    this.onForeignKeyframe,
   });
 
   final Layer layer;
@@ -491,6 +718,11 @@ class _AmLayerRow extends ConsumerStatefulWidget {
   final VoidCallback onEditEnd;
   final void Function(Layer layer)? onTapLayer;
   final Set<int>? activeTimesUs;
+
+  /// Tocaram num diamante APAGADO — de outra propriedade que nao a que
+  /// esta em edicao. Quem recebe diz de quem e o keyframe e oferece o
+  /// caminho ate la.
+  final void Function(Duration kfTime)? onForeignKeyframe;
 
   @override
   ConsumerState<_AmLayerRow> createState() => _AmLayerRowState();
@@ -507,6 +739,8 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
   VoidCallback get onEditEnd => widget.onEditEnd;
   void Function(Layer layer)? get onTapLayer => widget.onTapLayer;
   Set<int>? get activeTimesUs => widget.activeTimesUs;
+  void Function(Duration)? get onForeignKeyframe =>
+      widget.onForeignKeyframe;
 
   // Arrasto acumulado desde o inicio do gesto: o snap nao "prende" a
   // barra, porque a posicao desejada e recalculada do ponto de origem.
@@ -552,6 +786,29 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
       if (l.id == layer.id) continue;
       consider(l.startTime);
       consider(l.endTime);
+    }
+    // MARCAS E BATIDAS tambem prendem: e o que faz o corte cair NO
+    // tempo, em vez de perto dele.
+    for (final m in project.markers) {
+      consider(m.time);
+    }
+    // A grade pode ter milhares de marcas e isto roda a cada quadro de
+    // arrasto: busca binaria em vez de varrer a lista inteira.
+    final beats = project.beats;
+    if (beats.isNotEmpty) {
+      var lo = 0;
+      var hi = beats.length - 1;
+      while (lo < hi) {
+        final mid = (lo + hi) ~/ 2;
+        if (beats[mid] < v) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      for (var i = lo - 1; i <= lo + 1; i++) {
+        if (i >= 0 && i < beats.length) consider(beats[i]);
+      }
     }
     return best;
   }
@@ -724,32 +981,41 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
           // Diamantes de keyframe sobre a barra: acesos = propriedade
           // ativa; apagados e sem borda = de outra propriedade.
           for (final kf in layer.keyframeTimes)
-            Positioned(
-              left: left + (kf.inMicroseconds / 1e6 * pps) - 5,
-              top: kAmBarHeight / 2 - 5,
-              child: IgnorePointer(
-                child: Transform.rotate(
-                  angle: 0.785398,
-                  child: Builder(builder: (context) {
-                    final active = activeTimesUs == null ||
-                        activeTimesUs!.contains(kf.inMicroseconds);
-                    return Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: active
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.30),
-                        borderRadius: BorderRadius.circular(2),
-                        border: active
-                            ? Border.all(color: Colors.black38)
-                            : null,
-                      ),
-                    );
-                  }),
+            Builder(builder: (context) {
+              final active = activeTimesUs == null ||
+                  activeTimesUs!.contains(kf.inMicroseconds);
+              final diamante = Transform.rotate(
+                angle: 0.785398,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(2),
+                    border: active ? Border.all(color: Colors.black38) : null,
+                  ),
                 ),
-              ),
-            ),
+              );
+              return Positioned(
+                left: left + (kf.inMicroseconds / 1e6 * pps) - 11,
+                top: kAmBarHeight / 2 - 11,
+                width: 22,
+                height: 22,
+                // O APAGADO RESPONDE AO TOQUE. Diamante que se ve e nao
+                // se consegue tocar vira enigma: de quem e esse? So
+                // `onTap` — arrastar continua movendo o clipe, porque um
+                // reconhecedor de toque perde a arena para um de arrasto.
+                child: (active || onForeignKeyframe == null)
+                    ? IgnorePointer(child: Center(child: diamante))
+                    : GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onForeignKeyframe!(kf),
+                        child: Center(child: diamante),
+                      ),
+              );
+            }),
           // Setas de navegacao entre camadas (paginas de ferramenta).
           if (compact) ...[
             Positioned(

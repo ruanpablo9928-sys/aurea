@@ -8,6 +8,7 @@ import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../domain/audio_ops.dart';
 import '../domain/peak_pyramid.dart';
 
 /// FORMA DE ONDA e TIRA DE MINIATURAS.
@@ -170,6 +171,48 @@ class MediaPreviewService {
     } catch (_) {
       _peaks[path] = Float32List(0);
       revision.value++;
+    }
+  }
+
+  /// Envelopes por FAIXA DE FREQUENCIA, so quando alguem pede.
+  ///
+  /// A forma de onda guardada em disco e de banda inteira — filtrar
+  /// depois dela nao separaria nada, porque o pico ja misturou tudo. Por
+  /// isso aqui o arquivo e decodificado de novo. E caro, e roda uma vez,
+  /// sob comando explicito: analisar batidas.
+  final Map<String, Float32List> _bandas = {};
+
+  Future<Float32List> bandEnvelopeOf(String path, BeatBand band) async {
+    final k = '${band.name}:$path';
+    final pronto = _bandas[k];
+    if (pronto != null) return pronto;
+    try {
+      final tmp = await getTemporaryDirectory();
+      final raw = File('${tmp.path}/band_${path.hashCode}.pcm');
+      if (raw.existsSync()) raw.deleteSync();
+
+      final session = await FFmpegKit.executeWithArguments([
+        '-y',
+        '-i', path,
+        '-vn',
+        '-ac', '1',
+        '-ar', '16000',
+        '-f', 's16le',
+        '-acodec', 'pcm_s16le',
+        raw.path,
+      ]);
+      if (!ReturnCode.isSuccess(await session.getReturnCode()) ||
+          !raw.existsSync()) {
+        return _bandas[k] = Float32List(0);
+      }
+      final bytes = await raw.readAsBytes();
+      raw.deleteSync();
+      final samples = Int16List.view(
+          bytes.buffer, bytes.offsetInBytes, bytes.length ~/ 2);
+      return _bandas[k] =
+          bandEnvelope(samples, 16000, peaksPerSecond, band);
+    } catch (_) {
+      return _bandas[k] = Float32List(0);
     }
   }
 

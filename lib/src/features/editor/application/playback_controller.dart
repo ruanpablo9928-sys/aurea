@@ -39,10 +39,7 @@ class PlaybackController {
       pause();
       return;
     }
-    final fps = compositionFps < 1 ? 30 : compositionFps;
-    final frameUs = 1000000 ~/ fps;
-    final quantized = Duration(
-        microseconds: (t.inMicroseconds ~/ frameUs) * frameUs);
+    final quantized = _naGrade(t);
     if (quantized != time.value) {
       // Cadencia (marchas §6): a metrica de suavidade e a VARIANCIA do
       // intervalo entre ticks, nao a media de fps. FrameLog mede no
@@ -101,9 +98,26 @@ class PlaybackController {
 
   void toggle() => playing.value ? pause() : play();
 
+  /// Encaixa na grade de quadros da composicao.
+  ///
+  /// O tick ja fazia isso, e so ele — entao um seek caia entre dois
+  /// quadros e o primeiro tick seguinte "voltava" ate a grade. Alguns
+  /// microssegundos, invisiveis, mas um retrocesso do cabecote: quem
+  /// olha o valor ve o tempo andar para tras.
+  Duration _naGrade(Duration t) {
+    final f = compositionFps < 1 ? 30 : compositionFps;
+    // Pelo INDICE do quadro, nao pelo passo em microssegundos: a 30 fps
+    // o passo nao e inteiro (33333,33 us), e arredondar o passo erra
+    // 50 us a cada 150 quadros. Cinco segundos deixavam de cair em cinco
+    // segundos — pequeno demais para ver, grande o bastante para o
+    // relogio nao bater com o quadro exportado.
+    final quadro = (t.inMicroseconds * f) ~/ 1000000;
+    return Duration(microseconds: (quadro * 1000000) ~/ f);
+  }
+
   void seek(Duration t) {
     final end = durationOf();
-    var v = t;
+    var v = _naGrade(t);
     if (v < Duration.zero) v = Duration.zero;
     if (v > end) v = end;
     if (playing.value) {

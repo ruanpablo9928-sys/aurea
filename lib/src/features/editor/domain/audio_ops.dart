@@ -222,3 +222,149 @@ List<(Duration, Duration)> mergeClose(
   }
   return out;
 }
+
+// --------------------------------------------------- batidas por faixa
+
+/// A FAIXA DE FREQUENCIA que decide o que conta como batida.
+///
+/// Numa musica o bumbo e o chimbal atacam em instantes diferentes, e
+/// cortar no bumbo ou no chimbal da montagens diferentes. Detectar na
+/// mistura inteira acha "o mais alto", que costuma ser nenhum dos dois.
+enum BeatBand { grave, medio, agudo, tudo }
+
+/// Filtro passa-baixa de um polo. Simples de proposito: para SEPARAR
+/// bumbo de chimbal a inclinacao de 6 dB por oitava basta, e ela custa
+/// uma multiplicacao por amostra — cabe em audio longo no celular.
+Float32List _passaBaixa(Float32List x, int rate, double corte) {
+  if (x.isEmpty || rate <= 0) return x;
+  final a = 1 - math.exp(-2 * math.pi * corte / rate);
+  final out = Float32List(x.length);
+  var y = 0.0;
+  for (var i = 0; i < x.length; i++) {
+    y += a * (x[i] - y);
+    out[i] = y;
+  }
+  return out;
+}
+
+/// Passa-alta = o sinal menos a parte grave dele.
+Float32List _passaAlta(Float32List x, int rate, double corte) {
+  final grave = _passaBaixa(x, rate, corte);
+  final out = Float32List(x.length);
+  for (var i = 0; i < x.length; i++) {
+    out[i] = x[i] - grave[i];
+  }
+  return out;
+}
+
+/// ENVELOPE DE ENERGIA de uma faixa, na mesma resolucao dos picos.
+///
+/// Devolve o pico absoluto por balde, normalizado em 0..1 — a mesma
+/// forma que [computePeaks] entrega, para o detector de ataque nao
+/// precisar saber de onde veio.
+Float32List bandEnvelope(
+  Int16List samples,
+  int rate,
+  int perSecond,
+  BeatBand band,
+) {
+  if (samples.isEmpty || rate <= 0 || perSecond <= 0) {
+    return Float32List(0);
+  }
+  var x = Float32List(samples.length);
+  for (var i = 0; i < samples.length; i++) {
+    x[i] = samples[i] / 32768.0;
+  }
+  switch (band) {
+    case BeatBand.grave:
+      // Duas passadas: 12 dB por oitava separa bumbo de caixa.
+      x = _passaBaixa(_passaBaixa(x, rate, 150), rate, 150);
+    case BeatBand.agudo:
+      x = _passaAlta(x, rate, 4000);
+    case BeatBand.medio:
+      x = _passaAlta(_passaBaixa(x, rate, 4000), rate, 250);
+    case BeatBand.tudo:
+      break;
+  }
+
+  final perBucket = rate ~/ perSecond;
+  if (perBucket < 1) return Float32List(0);
+  final count = x.length ~/ perBucket;
+  final out = Float32List(count);
+  var maiorDeTodos = 0.0;
+  for (var i = 0; i < count; i++) {
+    final start = i * perBucket;
+    var pico = 0.0;
+    for (var j = 0; j < perBucket; j++) {
+      final v = x[start + j].abs();
+      if (v > pico) pico = v;
+    }
+    out[i] = pico;
+    if (pico > maiorDeTodos) maiorDeTodos = pico;
+  }
+  // Normaliza: filtrar tira energia, e um limiar relativo comparado com
+  // envelope encolhido acharia batida em tudo ou em nada.
+  if (maiorDeTodos > 0.0001) {
+    for (var i = 0; i < count; i++) {
+      out[i] = out[i] / maiorDeTodos;
+    }
+  }
+  return out;
+}
+
+/// O ANDAMENTO, em batidas por minuto, a partir dos ataques.
+///
+/// Usa a MEDIANA dos intervalos, nao a media: um ataque perdido dobra um
+/// intervalo, e a media inteira escorrega atras dele. Depois dobra ou
+/// divide ate cair na faixa que se usa para editar (60..180) — o mesmo
+/// pulso pode ser lido como 75 ou 150, e as duas leituras sao a mesma
+/// musica.
+double? estimateBpm(List<Duration> onsets) {
+  if (onsets.length < 3) return null;
+  final intervalos = <int>[];
+  for (var i = 1; i < onsets.length; i++) {
+    final d = (onsets[i] - onsets[i - 1]).inMicroseconds;
+    if (d > 60000) intervalos.add(d);
+  }
+  if (intervalos.isEmpty) return null;
+  intervalos.sort();
+  final mediana = intervalos[intervalos.length ~/ 2];
+  var bpm = 60000000 / mediana;
+  while (bpm < 60 && bpm > 0) {
+    bpm *= 2;
+  }
+  while (bpm > 180) {
+    bpm /= 2;
+  }
+  return bpm;
+}
+
+/// A GRADE do ritmo, a partir de um andamento.
+///
+/// Os ataques detectados tremem alguns milissegundos; encaixar corte
+/// neles herda o tremor. A grade e regular por construcao, entao o corte
+/// cai no tempo — que e o que se quer ouvir.
+///
+/// [denominador] e a figura em compasso 4/4: 1 marca por compasso, 2 a
+/// cada dois tempos, 4 em cada tempo (o comum), 8 duas vezes por tempo.
+List<Duration> beatGrid({
+  required Duration first,
+  required double bpm,
+  required int denominador,
+  required Duration until,
+}) {
+  if (bpm <= 0 || until <= first) return const [];
+  final d = denominador < 1 ? 4 : denominador;
+  final passoUs = (60000000 / bpm) * (4 / d);
+  if (passoUs < 1000) return const [];
+  final out = <Duration>[];
+  var t = first.inMicroseconds.toDouble();
+  final fim = until.inMicroseconds;
+  // Teto de seguranca: grade densa em faixa longa nao pode virar milhoes
+  // de marcas e travar o desenho da regua.
+  while (t <= fim && out.length < 4000) {
+    out.add(Duration(microseconds: t.round()));
+    t += passoUs;
+  }
+  return out;
+}

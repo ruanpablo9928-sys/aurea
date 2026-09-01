@@ -32,6 +32,17 @@ class CurvePanel extends ConsumerStatefulWidget {
 class _CurvePanelState extends ConsumerState<CurvePanel> {
   bool _overshoot = false;
 
+  /// O ULTIMO TRECHO MOSTRADO, em tempo local da camada.
+  ///
+  /// Fora dos keyframes nao existe trecho sob o cabecote. A saida ANTIGA
+  /// era arrastar o cabecote de volta para dentro — e isso brigava com a
+  /// reproducao: o relogio avancava, o painel puxava de volta, o relogio
+  /// avancava de novo. O cabecote ia e voltava sem parar.
+  ///
+  /// Agora ninguem move o cabecote. Fora de qualquer trecho o painel
+  /// segura o ultimo, esmaecido, com o rotulo dizendo qual e.
+  Duration? _lembrado;
+
   @override
   void initState() {
     super.initState();
@@ -47,8 +58,9 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
 
   void _onClock() {
     if (!mounted) return;
-    // O proprio build pode dar seek (auto-pulo para o primeiro segmento);
-    // nesse caso adia o setState para depois do frame.
+    // O clock pode bater DENTRO do frame (o ticker roda antes do build);
+    // nesse caso adia o setState para depois, senao e rebuild durante
+    // rebuild.
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,8 +117,11 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
       if (local >= times[i]) idx = i;
     }
     final target = (idx + dir).clamp(0, mids.length - 1);
+    // Trocar de trecho e ESCOLHA da pessoa, entao aqui mover o cabecote e
+    // legitimo — mas pausa antes, para nao disputar com o relogio.
+    widget.playback.pause();
     widget.playback.seek(layer.startTime + mids[target]);
-    setState(() {});
+    setState(() => _lembrado = times[target]);
   }
 
   @override
@@ -120,14 +135,36 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
 
     final controller = ref.read(editorControllerProvider.notifier);
     final local = layer.localTime(widget.playback.time.value);
-    var segment = _segmentAt(layer, local);
-    // Sem segmento sob o playhead: tenta pular para o primeiro.
-    if (segment == null && _kfTimes(layer).length >= 2) {
-      final times = _kfTimes(layer);
-      widget.playback.seek(
-          layer.startTime + times[0] + (times[1] - times[0]) ~/ 2);
-      segment = _segmentAt(layer, layer.localTime(widget.playback.time.value));
+    final times = _kfTimes(layer);
+
+    // O CABECOTE E DE QUEM O MOVE — do dedo e do relogio, de mais
+    // ninguem. Este painel nunca o desloca.
+    final sobCabecote = _segmentAt(layer, local);
+    if (sobCabecote != null) _lembrado = sobCabecote.$1;
+
+    // Fora de todo trecho: segura o ultimo. Se nem esse existe mais
+    // (keyframe apagado), cai no primeiro que houver — sem mover nada.
+    var segment = sobCabecote;
+    if (segment == null && times.length >= 2) {
+      final alvo = _lembrado;
+      var i = alvo == null ? -1 : times.indexOf(alvo);
+      if (i < 0 || i >= times.length - 1) i = 0;
+      segment = (times[i], times[i + 1]);
+      _lembrado = times[i];
     }
+    final foraDoTrecho = sobCabecote == null;
+
+    // Onde o cabecote esta DENTRO do trecho, 0..1 — o ponto que corre
+    // sobre a curva enquanto a animacao toca.
+    double? percorrido;
+    if (!foraDoTrecho && segment != null) {
+      final span = (segment.$2 - segment.$1).inMicroseconds;
+      if (span > 0) {
+        percorrido =
+            ((local - segment.$1).inMicroseconds / span).clamp(0.0, 1.0);
+      }
+    }
+
     final ease = segment == null ? null : _easeOf(layer, segment.$1);
 
     return ColoredBox(
@@ -195,11 +232,17 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                     children: [
                       const SizedBox(height: 10),
                       Expanded(
-                        child: _CurveGraph(
-                          ease: ease,
-                          overshootEnabled: _overshoot,
-                          onBezierChanged: (e) => controller.setSegmentEase(
-                              id, widget.prop, segment!.$1, e),
+                        child: Opacity(
+                          // Esmaecido diz "isto nao e o que esta sob o
+                          // cabecote agora" sem sumir com a curva.
+                          opacity: foraDoTrecho ? 0.45 : 1,
+                          child: _CurveGraph(
+                            ease: ease,
+                            overshootEnabled: _overshoot,
+                            percorrido: percorrido,
+                            onBezierChanged: (e) => controller.setSegmentEase(
+                                id, widget.prop, segment!.$1, e),
+                          ),
                         ),
                       ),
                       SizedBox(
@@ -214,10 +257,16 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                             ),
                             Expanded(
                               child: Text(
-                                'Efeito Ease de ${ease.label}',
+                                foraDoTrecho
+                                    ? 'Trecho ${times.indexOf(segment.$1) + 1}'
+                                        '\u2192${times.indexOf(segment.$1) + 2}'
+                                        ' \u00b7 ${ease.label}'
+                                        ' (cabecote fora)'
+                                    : 'Efeito Ease de ${ease.label}',
                                 textAlign: TextAlign.center,
+                                maxLines: 2,
                                 style: const TextStyle(
-                                    fontSize: 13, color: AmColors.muted),
+                                    fontSize: 12, color: AmColors.muted),
                               ),
                             ),
                             CupertinoButton(
@@ -539,11 +588,15 @@ class _CurveGraph extends StatelessWidget {
     required this.ease,
     required this.overshootEnabled,
     required this.onBezierChanged,
+    this.percorrido,
   });
 
   final Easing ease;
   final bool overshootEnabled;
   final ValueChanged<Easing> onBezierChanged;
+
+  /// 0..1: onde o cabecote esta dentro do trecho. Nulo = esta fora.
+  final double? percorrido;
 
   static const double _yMin = -0.5;
   static const double _yMax = 1.5;
@@ -588,7 +641,11 @@ class _CurveGraph extends StatelessWidget {
           onHorizontalDragUpdate: enabled ? drag : null,
           child: CustomPaint(
             size: size,
-            painter: _AmCurvePainter(ease: ease, yMin: _yMin, yMax: _yMax),
+            painter: _AmCurvePainter(
+                ease: ease,
+                yMin: _yMin,
+                yMax: _yMax,
+                percorrido: percorrido),
           ),
         );
       },
@@ -601,11 +658,15 @@ class _AmCurvePainter extends CustomPainter {
     required this.ease,
     required this.yMin,
     required this.yMax,
+    this.percorrido,
   });
 
   final Easing ease;
   final double yMin;
   final double yMax;
+
+  /// Onde o cabecote esta dentro do trecho, 0..1. Nulo = fora.
+  final double? percorrido;
 
   Offset _pt(Size size, double x, double y) => Offset(
         x * size.width,
@@ -675,6 +736,28 @@ class _AmCurvePainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
+    // O PONTO QUE CORRE, na posicao do instante atual.
+    //
+    // Ver a curva sendo percorrida enquanto a animacao toca e o que
+    // transforma o grafico em leitura: da para ver a aceleracao
+    // acontecendo, em vez de deduzi-la do desenho parado.
+    final andando = percorrido;
+    if (andando != null) {
+      final p = _pt(size, andando, ease.transform(andando));
+      final guia = Paint()
+        ..color = AmColors.pink.withValues(alpha: 0.35)
+        ..strokeWidth = 1;
+      canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height), guia);
+      canvas.drawCircle(p, 8, Paint()..color = AmColors.pink);
+      canvas.drawCircle(
+          p,
+          8,
+          Paint()
+            ..color = Colors.white
+            ..strokeWidth = 2
+            ..style = PaintingStyle.stroke);
+    }
+
     // Pontos das extremidades + alcas.
     final endDot = Paint()..color = AmColors.accent;
     canvas.drawCircle(_pt(size, 0, 0), 5, endDot);
@@ -687,7 +770,8 @@ class _AmCurvePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_AmCurvePainter old) => old.ease != ease;
+  bool shouldRepaint(_AmCurvePainter old) =>
+      old.ease != ease || old.percorrido != percorrido;
 }
 
 class _PresetTile extends StatelessWidget {

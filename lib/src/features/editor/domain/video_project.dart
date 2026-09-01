@@ -102,6 +102,8 @@ class VideoProject {
     this.data,
     List<DataBinding>? bindings,
     List<Marker>? markers,
+    List<Duration>? beats,
+    this.bpm,
     this.lottieMode = false,
   })  : id = id ?? const Uuid().v4(),
         layers = List.unmodifiable(layers ?? const <Layer>[]),
@@ -115,7 +117,9 @@ class VideoProject {
             List.unmodifiable(bindings ?? const <DataBinding>[]),
         markers = List.unmodifiable(
             [...(markers ?? const <Marker>[])]
-              ..sort((a, b) => a.time.compareTo(b.time)));
+              ..sort((a, b) => a.time.compareTo(b.time))),
+        beats = List.unmodifiable(
+            [...(beats ?? const <Duration>[])]..sort());
 
   final String id;
   final String name;
@@ -156,6 +160,17 @@ class VideoProject {
 
   /// Marcas na linha do tempo, sempre em ordem de tempo.
   final List<Marker> markers;
+
+  /// AS BATIDAS DA TRILHA, separadas dos marcadores de proposito.
+  ///
+  /// Marcador e decisao ("aqui vira a cena"); batida e medida ("aqui a
+  /// musica bate"). Sao centenas contra algumas, e por isso aparecem
+  /// como risquinhos finos, nao como bandeiras — misturar as duas
+  /// coisas apagaria as poucas que a pessoa colocou a mao.
+  final List<Duration> beats;
+
+  /// O andamento estimado (ou corrigido a mao). Nulo = nunca analisado.
+  final double? bpm;
 
   /// O marcador mais proximo de [t], dentro de [tolerance]. E o que faz
   /// o clipe grudar na marca ao ser arrastado.
@@ -297,6 +312,8 @@ class VideoProject {
     DataSource? data,
     List<DataBinding>? bindings,
     List<Marker>? markers,
+    List<Duration>? beats,
+    double? bpm,
     bool? lottieMode,
   }) {
     return VideoProject(
@@ -317,6 +334,8 @@ class VideoProject {
       data: data ?? this.data,
       bindings: bindings ?? this.bindings,
       markers: markers ?? this.markers,
+      beats: beats ?? this.beats,
+      bpm: bpm ?? this.bpm,
       lottieMode: lottieMode ?? this.lottieMode,
     );
   }

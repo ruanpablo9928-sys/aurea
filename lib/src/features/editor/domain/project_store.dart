@@ -1720,6 +1720,9 @@ Map<String, dynamic> projectToJson(VideoProject p) => {
               if (e.options.isNotEmpty) 'options': e.options,
             },
         ],
+      if (p.beats.isNotEmpty)
+        'beats': [for (final b in p.beats) b.inMicroseconds],
+      if (p.bpm != null) 'bpm': p.bpm,
       if (p.markers.isNotEmpty)
         'markers': [
           for (final m in p.markers)
@@ -1852,6 +1855,11 @@ VideoProject projectFromJson(Map<String, dynamic> m) => VideoProject(
             ],
           ),
       ],
+      beats: [
+        for (final v in (m['beats'] as List? ?? const []))
+          Duration(microseconds: (v as num).toInt()),
+      ],
+      bpm: (m['bpm'] as num?)?.toDouble(),
       markers: [
         for (final v in (m['markers'] as List? ?? const []))
           Marker(

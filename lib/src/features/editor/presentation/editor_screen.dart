@@ -116,6 +116,76 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         LayerProp.parent => const <int>{},
       };
 
+  /// De qual propriedade e o keyframe que esta em [t], e como se chama.
+  (LayerProp, String)? _donoDoKeyframe(Layer layer, Duration t) {
+    final us = t.inMicroseconds;
+    const nomes = {
+      LayerProp.position: 'Posicao',
+      LayerProp.rotation: 'Rotacao',
+      LayerProp.scale: 'Escala',
+      LayerProp.skew: 'Inclinar',
+      LayerProp.pivot: 'Pivo',
+      LayerProp.opacity: 'Opacidade',
+    };
+    for (final entrada in nomes.entries) {
+      if (_timesForProp(layer, entrada.key).contains(us)) {
+        return (entrada.key, entrada.value);
+      }
+    }
+    if (layer.effectTimesUs.contains(us)) return (LayerProp.parent, 'Efeitos');
+    if (layer.maskTimesUs.contains(us)) return (LayerProp.parent, 'Mascaras');
+    return null;
+  }
+
+  /// TOCARAM NUM DIAMANTE APAGADO.
+  ///
+  /// A timeline mostra os keyframes da propriedade em EDICAO acesos e os
+  /// outros apagados — e ate aqui a AM chega. O que falta la e dizer de
+  /// quem sao os apagados: a pessoa ve a marca, sabe que fez alguma coisa
+  /// naquele instante, e nao tem como descobrir o que. Aqui o toque
+  /// responde, e leva.
+  void _onForeignKeyframe(Duration t) {
+    final id = ref.read(selectedLayerProvider);
+    final layer =
+        id == null ? null : ref.read(editorControllerProvider).layerById(id);
+    if (layer == null) return;
+    final dono = _donoDoKeyframe(layer, t);
+    if (dono == null) return;
+    final (prop, nome) = dono;
+
+    final tool = switch (prop) {
+      LayerProp.position => TransformTool.position,
+      LayerProp.rotation => TransformTool.rotation,
+      LayerProp.scale => TransformTool.scale,
+      LayerProp.skew => TransformTool.skew,
+      LayerProp.pivot => TransformTool.pivot,
+      _ => null,
+    };
+    final podeIr = tool != null || prop == LayerProp.opacity || nome == 'Efeitos';
+
+    AureaSnack.show(
+      context,
+      'Este keyframe e de $nome.',
+      actionLabel: podeIr ? 'Ir' : null,
+      onAction: podeIr
+          ? () {
+              _playback.pause();
+              _playback.seek(layer.startTime + t);
+              setState(() {
+                if (tool != null) {
+                  _tool = tool;
+                  _mode = _Mode.transform;
+                } else if (prop == LayerProp.opacity) {
+                  _mode = _Mode.blending;
+                } else {
+                  _mode = _Mode.effects;
+                }
+              });
+            }
+          : null,
+    );
+  }
+
   void _openCurve(LayerProp prop) {
     setState(() {
       _curveProp = prop;
@@ -267,16 +337,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     onTapLayer: _onTapLayer,
                     onScrub: _videos.scrub,
                     activeTimesUs: activeTimesUs,
+                    onForeignKeyframe:
+                        _mode == _Mode.main ? null : _onForeignKeyframe,
                   ),
                 ),
-                // Altura ADAPTATIVA (jamais cobrir/espremer o preview):
-                // o painel nunca passa de 40% da tela — em iPhone e
-                // telas baixas ele encolhe (todos tem scroll interno) e
-                // o palco continua visivel.
+                // ALTURA CONSTANTE, a mesma para todo painel.
+                //
+                // Antes cada painel pedia a sua: o de animadores de texto
+                // era bem mais alto que o de transformacao. Trocar de
+                // secao redimensionava o preview, e o enquadramento
+                // pulava debaixo do dedo bem no momento de conferir o
+                // enquadramento. O teto de 40% da tela continua, para o
+                // palco nunca sumir em aparelho baixo; todo painel tem
+                // rolagem interna.
                 if (panel != null)
                   SizedBox(
-                      height: math.min(
-                          _mode == _Mode.animators ? 500.0 : 372.0,
+                      height: math.min(372.0,
                           MediaQuery.sizeOf(context).height * 0.40),
                       child: RepaintBoundary(child: panel)),
               ],
@@ -295,6 +371,102 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       ),
     );
   }
+}
+
+/// O QUE AS MARCAS DESTRAVAM.
+///
+/// Marcar e barato; o valor esta no que se faz com as marcas depois.
+/// Cortar em todas de uma vez e distribuir as camadas nelas sao as duas
+/// coisas que, feitas a mao, consomem a tarde inteira.
+Future<void> _menuDasMarcas(
+    BuildContext context, WidgetRef ref, PlaybackController playback) async {
+  final controller = ref.read(editorControllerProvider.notifier);
+  final project = ref.read(editorControllerProvider);
+  final quantas = project.markers.length;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AmColors.panel,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Row(
+              children: [
+                Text('$quantas marca${quantas == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text)),
+                const Spacer(),
+                if (project.bpm != null)
+                  Text('${project.bpm!.toStringAsFixed(0)} bpm',
+                      style: const TextStyle(
+                          fontSize: 12, color: AmColors.muted)),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(CupertinoIcons.chevron_right_2,
+                size: 19, color: AmColors.text),
+            title: const Text('Ir para a proxima marca',
+                style: TextStyle(color: AmColors.text, fontSize: 15)),
+            enabled: quantas > 0,
+            onTap: () {
+              final t = playback.time.value;
+              final proximo = controller.markerAfter(t) ??
+                  (project.markers.isEmpty
+                      ? null
+                      : project.markers.first.time);
+              if (proximo != null) playback.seek(proximo);
+              Navigator.of(sheetContext).pop();
+            },
+          ),
+          ListTile(
+            leading: const Icon(CupertinoIcons.scissors,
+                size: 19, color: AmColors.text),
+            title: const Text('Cortar em todas as marcas',
+                style: TextStyle(color: AmColors.text, fontSize: 15)),
+            enabled: quantas > 0,
+            onTap: () {
+              final n = controller.cutAtMarkers();
+              Navigator.of(sheetContext).pop();
+              AureaSnack.show(context, '$n corte${n == 1 ? '' : 's'}');
+            },
+          ),
+          ListTile(
+            leading: const Icon(CupertinoIcons.square_grid_2x2,
+                size: 19, color: AmColors.text),
+            title: const Text('Distribuir as camadas nas marcas',
+                style: TextStyle(color: AmColors.text, fontSize: 15)),
+            subtitle: const Text(
+                'Uma camada por marca, na ordem em que estao',
+                style: TextStyle(color: AmColors.muted, fontSize: 11.5)),
+            enabled: quantas > 1,
+            onTap: () {
+              final n = controller.distributeAtMarkers();
+              Navigator.of(sheetContext).pop();
+              AureaSnack.show(context, '$n camadas distribuidas');
+            },
+          ),
+          ListTile(
+            leading: const Icon(CupertinoIcons.delete,
+                size: 19, color: AmColors.pink),
+            title: const Text('Limpar as marcas',
+                style: TextStyle(color: AmColors.pink, fontSize: 15)),
+            enabled: quantas > 0,
+            onTap: () {
+              controller.clearMarkers();
+              Navigator.of(sheetContext).pop();
+            },
+          ),
+          const SizedBox(height: 6),
+        ],
+      ),
+    ),
+  );
 }
 
 class _TopBar extends ConsumerWidget {
@@ -580,22 +752,17 @@ class _ActionBar extends ConsumerWidget {
               },
             );
           }),
-          // MARCADOR: o mesmo botao poe e tira. Toque longo pula para a
-          // marca seguinte — ouvir a locucao marcando e depois montar
-          // em cima das marcas e mais rapido que procurar o instante.
+          // MARCADOR: o mesmo botao poe e tira, e funciona TOCANDO NO
+          // RITMO com a reproducao andando — e assim que se marca musica,
+          // e por isso ele nunca pausa nada. Toque longo abre o que as
+          // marcas destravam.
           Builder(builder: (context) {
             final t = playback.time.value;
             final tem = project.markerNear(
                     t, const Duration(milliseconds: 120)) !=
                 null;
             return GestureDetector(
-              onLongPress: () {
-                final proximo = controller.markerAfter(t) ??
-                    (project.markers.isEmpty
-                        ? null
-                        : project.markers.first.time);
-                if (proximo != null) playback.seek(proximo);
-              },
+              onLongPress: () => _menuDasMarcas(context, ref, playback),
               child: btn(
                 icon: tem
                     ? CupertinoIcons.bookmark_fill

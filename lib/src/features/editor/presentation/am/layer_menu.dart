@@ -16,6 +16,7 @@ import '../../domain/shape.dart';
 import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import 'audio_sheet.dart';
+import 'beats_sheet.dart';
 import 'beat_pulse_sheet.dart';
 import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
@@ -403,6 +404,15 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 Future.microtask(() {
                   if (context.mounted) {
                     showAudioSheet(context, ref, layer.id);
+                  }
+                });
+              }),
+            if (layer is AudioLayer || layer is VideoLayer)
+              item(CupertinoIcons.metronome, 'Batidas', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showBeatsSheet(context, ref, layer.id);
                   }
                 });
               }),
