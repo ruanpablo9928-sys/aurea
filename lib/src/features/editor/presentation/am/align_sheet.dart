@@ -17,6 +17,7 @@ Future<void> showAlignSheet(BuildContext context, WidgetRef ref,
 
   await showParamSheet(
     context,
+    title: 'Alinhar',
     heightFactor: 0.42,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

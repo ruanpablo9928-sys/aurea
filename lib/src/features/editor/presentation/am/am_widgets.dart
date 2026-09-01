@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../application/playback_controller.dart';
 import 'am_colors.dart';
+import 'param_sheet_shell.dart';
 
 /// Mini-transporte para dentro dos sheets de parametros: play/pause,
 /// voltar ao inicio e SCRUB — da para criar keyframes em tempos
@@ -119,11 +120,30 @@ Future<void> showParamSheet(
   BuildContext context, {
   required WidgetBuilder builder,
   double heightFactor = 0.45,
+  String? title,
 }) async {
   final host =
       paramSheetHostKey.currentState ?? Scaffold.maybeOf(context);
+  // A altura pedida vira a CHEIA; a casca oferece espiada e metade.
   final maxHeight = _sheetMaxHeight(context, heightFactor);
   paramSheetGeneration++;
+
+  // ATALHO PARA VOLTAR: em motion se alterna entre dois ou tres
+  // parametros, e reabrir o caminho inteiro toda vez e o que cansa.
+  if (title != null) {
+    RecentSheets.instance.push(
+      title,
+      () => showParamSheet(context,
+          builder: builder, heightFactor: heightFactor, title: title),
+    );
+  }
+
+  Widget embrulhado(BuildContext ctx) => ParamSheetShell(
+        maxHeight: maxHeight,
+        title: title,
+        child: Builder(builder: builder),
+      );
+
   if (host == null) {
     // Sem Scaffold hospedeiro: cai para modal transparente.
     await showModalBottomSheet<void>(
@@ -135,12 +155,12 @@ Future<void> showParamSheet(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: builder,
+      builder: embrulhado,
     );
     return;
   }
   final controller = host.showBottomSheet(
-    builder,
+    embrulhado,
     backgroundColor: AmColors.panel,
     constraints: BoxConstraints(maxHeight: maxHeight),
     shape: const RoundedRectangleBorder(

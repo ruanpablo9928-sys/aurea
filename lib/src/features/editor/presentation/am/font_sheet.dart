@@ -19,6 +19,7 @@ Future<void> showFontSheet(
     BuildContext context, WidgetRef ref, String layerId) async {
   await showParamSheet(
     context,
+    title: 'Fonte',
     heightFactor: 0.55,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

@@ -17,6 +17,7 @@ Future<void> showSpeedSheet(
     BuildContext context, WidgetRef ref, String layerId) async {
   await showParamSheet(
     context,
+    title: 'Velocidade',
     heightFactor: 0.42,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

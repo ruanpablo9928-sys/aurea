@@ -498,6 +498,15 @@ class _ActionBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
+          // A FILEIRA DE FERRAMENTAS ROLA. Ela cresce a cada recurso
+          // novo, e uma Row fixa estoura em tela estreita — que e
+          // exatamente o que aconteceu ao entrar o magnetico e o
+          // marcador. Rolando, cabe sempre, e o que mais se usa
+          // continua na esquerda.
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
           // [+] nunca depende de selecao.
           btn(
             icon: CupertinoIcons.plus,
@@ -607,7 +616,9 @@ class _ActionBar extends ConsumerWidget {
             onTap: () => showAlignSheet(
                 context, ref, targets.toList(), playback.time.value),
           ),
-          const Spacer(),
+              ],
+            ),
+          ),
           if (n > 1)
             Padding(
               padding: const EdgeInsets.only(right: 8),

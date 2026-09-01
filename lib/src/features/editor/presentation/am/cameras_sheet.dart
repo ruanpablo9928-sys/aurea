@@ -26,6 +26,7 @@ Future<void> showCamerasSheet(
 
   await showParamSheet(
     context,
+    title: 'Cameras',
     heightFactor: 0.6,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

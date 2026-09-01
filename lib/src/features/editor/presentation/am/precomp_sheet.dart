@@ -17,6 +17,7 @@ Future<void> showPrecompSheet(BuildContext context, WidgetRef ref,
     String layerId, PlaybackController playback) async {
   await showParamSheet(
     context,
+    title: 'Precomp',
     heightFactor: 0.56,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

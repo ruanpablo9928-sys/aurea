@@ -28,6 +28,7 @@ Future<void> showPathEditSheet(
 
   await showParamSheet(
     context,
+    title: 'Editar nos',
     heightFactor: 0.34,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

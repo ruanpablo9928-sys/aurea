@@ -33,6 +33,7 @@ Future<void> showScene3DSheet(
 
   await showParamSheet(
     context,
+    title: 'Cena 3D',
     heightFactor: 0.55,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

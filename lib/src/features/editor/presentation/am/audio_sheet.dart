@@ -16,6 +16,7 @@ Future<void> showAudioSheet(
     BuildContext context, WidgetRef ref, String layerId) async {
   await showParamSheet(
     context,
+    title: 'Som',
     heightFactor: 0.52,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

@@ -13,6 +13,7 @@ Future<void> showTextPathSheet(
     BuildContext context, WidgetRef ref, String layerId) async {
   await showParamSheet(
     context,
+    title: 'Texto em caminho',
     heightFactor: 0.5,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

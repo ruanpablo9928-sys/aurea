@@ -20,6 +20,7 @@ Future<void> showBeatPulseSheet(
 
   await showParamSheet(
     context,
+    title: 'Pulsar na batida',
     heightFactor: 0.5,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {

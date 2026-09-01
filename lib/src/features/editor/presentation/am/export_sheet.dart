@@ -85,6 +85,7 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
 
   await showParamSheet(
     context,
+    title: 'Exportar',
     heightFactor: 0.55,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {
