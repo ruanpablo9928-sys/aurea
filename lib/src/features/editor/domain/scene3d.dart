@@ -530,22 +530,46 @@ SceneFrame renderScene(
         cz[i] = rel.dot(basis.forward);
       }
 
+      final isTransparent = node.material.isTransparent;
+
       for (final face in mesh.faces) {
         // Normal em espaco de MUNDO (Newell), para a iluminacao.
         var nx = 0.0, ny = 0.0, nz = 0.0;
+        var fcx = 0.0, fcy = 0.0, fcz = 0.0;
         for (var i = 0; i < face.length; i++) {
           final a = face[i];
           final b = face[(i + 1) % face.length];
           nx += (wy[a] - wy[b]) * (wz[a] + wz[b]);
           ny += (wz[a] - wz[b]) * (wx[a] + wx[b]);
           nz += (wx[a] - wx[b]) * (wy[a] + wy[b]);
+          fcx += wx[a];
+          fcy += wy[a];
+          fcz += wz[a];
         }
-        final normal = Vec3(nx, ny, nz).normalized;
-        final faceCenter = Vec3(
-          face.map((i) => wx[i]).reduce((a, b) => a + b) / face.length,
-          face.map((i) => wy[i]).reduce((a, b) => a + b) / face.length,
-          face.map((i) => wz[i]).reduce((a, b) => a + b) / face.length,
-        );
+        final inv = 1.0 / face.length;
+        final faceCenter = Vec3(fcx * inv, fcy * inv, fcz * inv);
+
+        // NORMAL PARA FORA, independente do sentido em que a face foi
+        // escrita na malha. Sem isto, uma face com sentido invertido
+        // recebe luz pelo lado errado — e escapa do descarte de costas,
+        // que e onde mora metade do custo.
+        var normal = Vec3(nx, ny, nz).normalized;
+        final outward = faceCenter - origin;
+        if (normal.dot(outward) < 0) {
+          normal = Vec3(-normal.x, -normal.y, -normal.z);
+        }
+
+        // DESCARTE DE COSTAS: num solido fechado, a face virada para o
+        // outro lado esta sempre escondida por outra. Deixar de emitir
+        // corta perto da metade dos triangulos — some do emit, da
+        // ordenacao e do desenho de uma vez.
+        //
+        // Material transparente NAO entra: ali se ve o fundo por dentro.
+        if (!isTransparent) {
+          final toFace = faceCenter - cam.position;
+          if (normal.dot(toFace) >= 0) continue;
+        }
+
         final color = shadeFace(
           scene: scene,
           material: node.material,
@@ -564,25 +588,51 @@ SceneFrame renderScene(
               cz[ic] <= cam.near) {
             continue;
           }
-          Offset project(int idx) {
-            if (cam.orthographic) {
-              final k = cam.orthoScale;
-              return Offset(halfW + cx[idx] * k, halfH - cy[idx] * k);
-            }
-            final k = focalPx / cz[idx];
-            return Offset(halfW + cx[idx] * k, halfH - cy[idx] * k);
+
+          final Offset pa, pb, pc;
+          if (cam.orthographic) {
+            final k = cam.orthoScale;
+            pa = Offset(halfW + cx[ia] * k, halfH - cy[ia] * k);
+            pb = Offset(halfW + cx[ib] * k, halfH - cy[ib] * k);
+            pc = Offset(halfW + cx[ic] * k, halfH - cy[ic] * k);
+          } else {
+            final ka = focalPx / cz[ia];
+            final kb = focalPx / cz[ib];
+            final kc = focalPx / cz[ic];
+            pa = Offset(halfW + cx[ia] * ka, halfH - cy[ia] * ka);
+            pb = Offset(halfW + cx[ib] * kb, halfH - cy[ib] * kb);
+            pc = Offset(halfW + cx[ic] * kc, halfH - cy[ic] * kc);
           }
 
+          // FORA DA TELA: um triangulo inteiramente para la da borda nao
+          // pinta nada, mas pagaria ordenacao e chamada de desenho.
+          final minX = pa.dx < pb.dx
+              ? (pa.dx < pc.dx ? pa.dx : pc.dx)
+              : (pb.dx < pc.dx ? pb.dx : pc.dx);
+          if (minX > viewport.width) continue;
+          final maxX = pa.dx > pb.dx
+              ? (pa.dx > pc.dx ? pa.dx : pc.dx)
+              : (pb.dx > pc.dx ? pb.dx : pc.dx);
+          if (maxX < 0) continue;
+          final minY = pa.dy < pb.dy
+              ? (pa.dy < pc.dy ? pa.dy : pc.dy)
+              : (pb.dy < pc.dy ? pb.dy : pc.dy);
+          if (minY > viewport.height) continue;
+          final maxY = pa.dy > pb.dy
+              ? (pa.dy > pc.dy ? pa.dy : pc.dy)
+              : (pb.dy > pc.dy ? pb.dy : pc.dy);
+          if (maxY < 0) continue;
+
           final tri = RenderTri(
-            a: project(ia),
-            b: project(ib),
-            c: project(ic),
+            a: pa,
+            b: pb,
+            c: pc,
             depth: (cz[ia] + cz[ib] + cz[ic]) / 3,
             color: color,
-            transparent: node.material.isTransparent,
+            transparent: isTransparent,
             nodeId: node.id,
           );
-          if (tri.transparent) {
+          if (isTransparent) {
             transparent.add(tri);
           } else {
             opaque.add(tri);
@@ -595,13 +645,15 @@ SceneFrame renderScene(
     if (nodeEmitted) drawCalls++;
   }
 
-  // OPACOS: do mais proximo ao mais distante seria o ideal numa GPU com
-  // rejeicao antecipada; aqui, sem Z-buffer, a ordem correta e a
-  // inversa — do mais distante ao mais proximo, POR TRIANGULO. E a
-  // ordenacao por triangulo (nao por objeto) que resolve
-  // interpenetracao.
-  opaque.sort((a, b) => b.depth.compareTo(a.depth));
-  transparent.sort((a, b) => b.depth.compareTo(a.depth));
+  // Sem Z-buffer, a ordem correta e a do pintor: do mais distante ao
+  // mais proximo, POR TRIANGULO. E a ordenacao por triangulo (nao por
+  // objeto) que resolve interpenetracao.
+  //
+  // Ordenar por comparacao custa n log n com uma chamada de funcao por
+  // comparacao — com dezenas de milhares de triangulos vira o gargalo.
+  // [depthSort] faz numa passada por balde.
+  depthSort(opaque);
+  depthSort(transparent);
 
   return (
     opaque: opaque,
@@ -610,6 +662,59 @@ SceneFrame renderScene(
     triangles: triangles,
     culled: culled,
   );
+}
+
+/// ORDENACAO POR BALDE, do mais distante ao mais proximo.
+///
+/// Ordenar por comparacao custa n log n e uma chamada de funcao por
+/// comparacao — em Dart isso pesa. Aqui a profundidade e um numero num
+/// intervalo conhecido, entao da para jogar cada triangulo direto no
+/// balde dele e concatenar: uma passada so.
+///
+/// A resolucao dos baldes acompanha a quantidade de triangulos, entao
+/// dois triangulos so caem no mesmo balde quando estao mais perto um do
+/// outro do que o olho distingue naquela cena.
+void depthSort(List<RenderTri> tris) {
+  final n = tris.length;
+  if (n < 64) {
+    tris.sort((a, b) => b.depth.compareTo(a.depth));
+    return;
+  }
+
+  var lo = double.infinity, hi = -double.infinity;
+  for (var i = 0; i < n; i++) {
+    final d = tris[i].depth;
+    if (d < lo) lo = d;
+    if (d > hi) hi = d;
+  }
+  final span = hi - lo;
+  if (!span.isFinite || span <= 1e-9) return;
+
+  final buckets = (n * 4).clamp(256, 65536);
+  final scale = (buckets - 1) / span;
+
+  // Contagem por balde, deslocamento, distribuicao — o "counting sort",
+  // que e o que torna isto linear.
+  final count = Int32List(buckets);
+  final slot = Int32List(n);
+  for (var i = 0; i < n; i++) {
+    // Invertido: o balde 0 recebe o MAIS DISTANTE.
+    final b = buckets - 1 - ((tris[i].depth - lo) * scale).floor();
+    final bb = b < 0 ? 0 : (b >= buckets ? buckets - 1 : b);
+    slot[i] = bb;
+    count[bb]++;
+  }
+  var running = 0;
+  for (var b = 0; b < buckets; b++) {
+    final c = count[b];
+    count[b] = running;
+    running += c;
+  }
+  final out = List<RenderTri>.filled(n, tris[0]);
+  for (var i = 0; i < n; i++) {
+    out[count[slot[i]]++] = tris[i];
+  }
+  tris.setAll(0, out);
 }
 
 /// ILUMINACAO DIRETA com poucas luzes (§5) — nada de diferida, que

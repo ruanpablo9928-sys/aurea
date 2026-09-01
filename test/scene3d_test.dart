@@ -37,12 +37,17 @@ void main() {
     // objeto inteiro, entao um sempre ficava todo na frente do outro.
     test('dois cubos cruzados se intercalam — interpenetracao correta',
         () {
+      // Girados: de frente, um cubo mostra UMA face e o descarte de
+      // costas some com as outras cinco. Girado, mostra tres — que e o
+      // caso em que a intercalacao pode ser observada.
       final a = SceneNode(
         name: 'A',
         kind: Element3DKind.cube,
         size: 140,
         x: AnimatedDouble(-60),
         z: AnimatedDouble(-60),
+        rotY: AnimatedDouble(35),
+        rotX: AnimatedDouble(20),
         material: const Material3D(baseColor: Color(0xFF7C62FF)),
       );
       final b = SceneNode(
@@ -51,6 +56,8 @@ void main() {
         size: 140,
         x: AnimatedDouble(60),
         z: AnimatedDouble(60),
+        rotY: AnimatedDouble(-25),
+        rotX: AnimatedDouble(15),
         material: const Material3D(baseColor: Color(0xFFB8FF3D)),
       );
       final f = _render(Scene3D(nodes: [a, b], lights: [Light3D()]));
@@ -93,8 +100,125 @@ void main() {
       );
       final f = _render(Scene3D(nodes: [node], lights: [Light3D()]));
       expect(f.drawCalls, 1);
-      // Uma chamada, mas os triangulos de todas as instancias.
-      expect(f.triangles, greaterThan(200 * 6));
+      // Uma chamada, mas os triangulos de todas as instancias. Com o
+      // descarte de costas cada cubo entrega as faces viradas para a
+      // camera — ao menos uma, ou seja dois triangulos por instancia.
+      expect(f.triangles, greaterThanOrEqualTo(200 * 2));
+    });
+
+    // DESCARTE DE COSTAS: num solido fechado, a face virada para o outro
+    // lado esta sempre escondida por outra do mesmo solido. Nao emitir
+    // corta perto da metade dos triangulos.
+    test('cubo de frente entrega UMA face, nao seis', () {
+      final f = _render(Scene3D(nodes: [
+        SceneNode(name: 'Cubo', size: 100),
+      ], lights: [
+        Light3D()
+      ]));
+      // Uma face = dois triangulos. Sem o descarte seriam doze.
+      expect(f.opaque.length, 2);
+      expect(f.triangles, 2);
+    });
+
+    test('cubo girado entrega tres faces', () {
+      final f = _render(Scene3D(nodes: [
+        SceneNode(
+          name: 'Cubo',
+          size: 100,
+          rotY: AnimatedDouble(35),
+          rotX: AnimatedDouble(25),
+        ),
+      ], lights: [
+        Light3D()
+      ]));
+      expect(f.opaque.length, 6);
+    });
+
+    test('vidro NAO descarta as costas — se ve o fundo por dentro', () {
+      final f = _render(Scene3D(nodes: [
+        SceneNode(
+          name: 'Vidro',
+          size: 100,
+          material: const Material3D(opacity: 0.4),
+        ),
+      ], lights: [
+        Light3D()
+      ]));
+      // As seis faces do cubo continuam ali.
+      expect(f.transparent.length, 12);
+    });
+
+    test('triangulo inteiramente fora da tela nao entra no quadro', () {
+      // Perto da camera e muito para o lado: o volume envolvente ainda
+      // passa, mas os triangulos caem fora da borda.
+      final dentro = _render(Scene3D(nodes: [
+        SceneNode(name: 'Centro', size: 60),
+      ], lights: [
+        Light3D()
+      ]));
+      final fora = _render(Scene3D(nodes: [
+        SceneNode(name: 'Centro', size: 60),
+        SceneNode(name: 'Beirada', size: 60, x: AnimatedDouble(2400)),
+      ], lights: [
+        Light3D()
+      ]));
+      expect(fora.triangles, dentro.triangles);
+    });
+
+    // A ordenacao por balde precisa dar a MESMA ordem de profundidade
+    // que a ordenacao por comparacao — senao trocou correcao por
+    // velocidade, que nao e negocio.
+    test('ordenacao por balde ordena igual a por comparacao', () {
+      final tris = <RenderTri>[
+        for (var i = 0; i < 500; i++)
+          RenderTri(
+            a: Offset.zero,
+            b: Offset.zero,
+            c: Offset.zero,
+            depth: ((i * 7919) % 1000) + (i % 13) * 0.001,
+            color: const Color(0xFFFFFFFF),
+            transparent: false,
+          ),
+      ];
+      final esperado = [...tris]
+        ..sort((x, y) => y.depth.compareTo(x.depth));
+      final obtido = [...tris];
+      depthSort(obtido);
+      for (var i = 0; i < tris.length; i++) {
+        expect(obtido[i].depth, closeTo(esperado[i].depth, 1e-9),
+            reason: 'posicao $i');
+      }
+    });
+
+    test('ordenacao por balde aguenta lista curta e profundidade igual',
+        () {
+      final iguais = <RenderTri>[
+        for (var i = 0; i < 200; i++)
+          RenderTri(
+            a: Offset.zero,
+            b: Offset.zero,
+            c: Offset.zero,
+            depth: 42,
+            color: const Color(0xFFFFFFFF),
+            transparent: false,
+          ),
+      ];
+      depthSort(iguais);
+      expect(iguais.length, 200);
+
+      final curta = <RenderTri>[
+        for (final d in [5.0, 1.0, 3.0])
+          RenderTri(
+            a: Offset.zero,
+            b: Offset.zero,
+            c: Offset.zero,
+            depth: d,
+            color: const Color(0xFFFFFFFF),
+            transparent: false,
+          ),
+      ];
+      depthSort(curta);
+      expect(curta.map((t) => t.depth).toList(), [5.0, 3.0, 1.0]);
     });
 
     test('objeto fora do frustum e descartado por volume envolvente', () {
