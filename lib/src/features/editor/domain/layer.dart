@@ -1872,6 +1872,7 @@ class Scene3DLayer extends Layer {
     Camera3D? camera,
     List<Camera3D>? extraCameras,
     List<CameraShot>? shots,
+    this.cameraParentLayerId,
     this.view = SceneView.camera,
     this.showHelpers = true,
     super.position,
@@ -1911,12 +1912,49 @@ class Scene3DLayer extends Layer {
   /// Quando cada camera entra no ar. Vazio = so a principal.
   final List<CameraShot> shots;
 
+  /// NULO DA COMPOSICAO que dirige a camera desta cena.
+  ///
+  /// A ponte entre as duas hierarquias. Todo rig de camera depende
+  /// disto: orbita, tripe, dolly, camera na mao e dolly zoom sao todos
+  /// "camera parenteada a um nulo".
+  final String? cameraParentLayerId;
+
   /// Todas as cameras, com a principal na frente.
   List<Camera3D> get allCameras => [camera, ...extraCameras];
 
-  /// A camera de render em [local], ja resolvendo corte e transicao.
-  RenderCamera cameraAt(Duration local) =>
-      resolveCamera(allCameras, shots, local, camera);
+  /// De qual NULO DA COMPOSICAO esta camada de cena e a camera seguem.
+  ///
+  /// Duas hierarquias que nao conversavam: a arvore de camadas da
+  /// composicao e o grafo interno da cena. Esta e a ponte — o transform
+  /// do nulo chega pronto de quem monta a composicao (so ele conhece a
+  /// cadeia de parenting de fora) e entra como pai externo.
+  ///
+  /// A camera herda posicao, rotacao e orientacao — nunca ESCALA.
+  /// Camera nao tem escala, e herdar e o bug que faz o enquadramento
+  /// explodir quando alguem escala o nulo.
+  RenderCamera cameraAt(Duration local,
+      {NodeTransform external = NodeTransform.identity}) {
+    final base = resolveCamera(allCameras, shots, local, camera);
+
+    // Pai DENTRO da cena (nulo 3D), se houver.
+    final pid = scene.cameraParentId;
+    final noPai = pid == null ? null : scene.nodeById(pid);
+    final dentro = noPai == null
+        ? external
+        : resolveNodeTransform(scene, noPai, local, external: external);
+
+    if (identical(dentro, NodeTransform.identity)) return base;
+    // A escala do pai NAO vai para a camera.
+    return applyParentToCamera(
+      base,
+      NodeTransform(
+        position: dentro.position,
+        rotX: dentro.rotX,
+        rotY: dentro.rotY,
+        rotZ: dentro.rotZ,
+      ),
+    );
+  }
 
   final SceneView view;
 
@@ -1932,6 +1970,8 @@ class Scene3DLayer extends Layer {
     Camera3D? camera,
     List<Camera3D>? extraCameras,
     List<CameraShot>? shots,
+    String? cameraParentLayerId,
+    bool clearCameraParent = false,
     SceneView? view,
     bool? showHelpers,
   }) =>
@@ -1944,6 +1984,9 @@ class Scene3DLayer extends Layer {
         camera: camera ?? this.camera,
         extraCameras: extraCameras ?? this.extraCameras,
         shots: shots ?? this.shots,
+        cameraParentLayerId: clearCameraParent
+            ? null
+            : (cameraParentLayerId ?? this.cameraParentLayerId),
         view: view ?? this.view,
         showHelpers: showHelpers ?? this.showHelpers,
         position: position,
@@ -2057,6 +2100,7 @@ class Scene3DLayer extends Layer {
         camera: camera,
         extraCameras: extraCameras,
         shots: shots,
+        cameraParentLayerId: cameraParentLayerId,
         view: view,
         showHelpers: showHelpers,
         position: position,

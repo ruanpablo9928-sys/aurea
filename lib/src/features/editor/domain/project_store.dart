@@ -928,6 +928,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       if (s.extraCameras.isNotEmpty) {
         base['cams'] = [for (final c in s.extraCameras) _camera(c)];
       }
+      if (s.cameraParentLayerId != null) {
+        base['camPai'] = s.cameraParentLayerId;
+      }
       if (s.shots.isNotEmpty) {
         base['shots'] = [
           for (final t in s.shots)
@@ -1005,6 +1008,8 @@ Map<String, dynamic> _scene(Scene3D s) => {
               'inst': [for (final i in n.instances) _vec(i)],
             // O CONTORNO basta: a malha se refaz na leitura, e o arquivo
             // nao carrega milhares de vertices que saem em milissegundos.
+            if (n.parentId != null) 'parent': n.parentId,
+            if (n.isNull) 'null3d': true,
             if (n.outline != null) ...{
               'outline': [
                 for (final p in n.outline!) [p.dx, p.dy]
@@ -1026,6 +1031,7 @@ Map<String, dynamic> _scene(Scene3D s) => {
             'shadow': l.castsShadow,
           },
       ],
+      if (s.cameraParentId != null) 'camParent': s.cameraParentId,
       if (s.savedViews.isNotEmpty)
         'views': [
           for (final v in s.savedViews)
@@ -1042,6 +1048,7 @@ List<Offset>? _asOutline(dynamic v) => v == null
       ];
 
 Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
+      cameraParentId: m['camParent'] as String?,
       ambient: (m['ambient'] as num?)?.toDouble() ?? 0.28,
       background: m['bg'] == null ? null : _asCol(m['bg']),
       showFloorGrid: m['grid'] as bool? ?? true,
@@ -1067,6 +1074,8 @@ Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
               for (final i in (n['inst'] as List? ?? const []))
                 _asVec(i),
             ],
+            parentId: n['parent'] as String?,
+            isNull: n['null3d'] as bool? ?? false,
             outline: _asOutline(n['outline']),
             extrudeDepth: (n['depth'] as num?)?.toDouble() ?? 40.0,
             mesh: _asOutline(n['outline']) == null
@@ -1377,6 +1386,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
           for (final c in (m['cams'] as List? ?? const []))
             _asCamera(c as Map<String, dynamic>),
         ],
+        cameraParentLayerId: m['camPai'] as String?,
         shots: [
           for (final t in (m['shots'] as List? ?? const []))
             CameraShot(

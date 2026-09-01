@@ -20,6 +20,7 @@ import '../../domain/grid_rig.dart';
 import '../../domain/layer.dart';
 import '../../domain/layer_meta.dart';
 import '../../domain/mask.dart';
+import '../../domain/scene3d.dart';
 import '../../domain/shape.dart';
 import '../../domain/video_project.dart';
 import 'animated_text.dart';
@@ -2390,6 +2391,47 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   }
 }
 
+/// A camera de uma Cena 3D com o nulo da COMPOSICAO ja aplicado.
+///
+/// A ponte entre as duas hierarquias: a arvore de camadas da composicao
+/// e o grafo interno da cena. Quem conhece a cadeia de parenting de fora
+/// e o compositor, entao o transform do nulo chega pronto aqui.
+///
+/// Devolve null quando nao ha nada a resolver — assim o pintor segue
+/// pelo caminho barato de sempre.
+RenderCamera? cameraDaCena(
+  VideoProject project,
+  Scene3DLayer l,
+  Duration local,
+  Duration global,
+) {
+  final paiId = l.cameraParentLayerId;
+  if (paiId == null) {
+    return l.shots.isEmpty && l.scene.cameraParentId == null
+        ? null
+        : l.cameraAt(local);
+  }
+  final pai = project.layerById(paiId);
+  if (pai == null) return l.cameraAt(local);
+
+  // O transform EFETIVO do nulo (com a cadeia dele ja resolvida).
+  final eff = effectiveTransform(project, pai, global);
+  final centro = Offset(project.outputWidth / 2, project.outputHeight / 2);
+
+  // Posicao da composicao (canto superior esquerdo) para a cena (origem
+  // no centro). A ESCALA nao entra: camera nao tem escala, e herdar e o
+  // bug que faz o enquadramento explodir.
+  return l.cameraAt(
+    local,
+    external: NodeTransform(
+      position: Vec3(eff.pos.dx - centro.dx, eff.pos.dy - centro.dy, eff.z),
+      rotX: eff.rotX,
+      rotY: eff.rotY,
+      rotZ: eff.rot,
+    ),
+  );
+}
+
 class _LayerContent extends StatelessWidget {
   const _LayerContent({
     this.exportFrames,
@@ -2464,8 +2506,12 @@ class _LayerContent extends StatelessWidget {
             painter: Scene3DPainter(
               scene: l.scene,
               camera: l.camera,
+              // A PONTE ENTRE AS DUAS HIERARQUIAS: o nulo da composicao
+              // vira pai externo da camera da cena. Quem conhece a
+              // cadeia de parenting de fora e o compositor, entao o
+              // transform chega pronto aqui.
               resolvedCamera:
-                  l.shots.isEmpty ? null : l.cameraAt(localTime),
+                  cameraDaCena(project, l, localTime, layer.startTime + localTime),
               view: l.view,
               time: localTime,
               // Ajudas NUNCA entram na exportacao — so no preview.

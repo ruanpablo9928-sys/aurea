@@ -258,6 +258,96 @@ class _ObjectsTab extends StatelessWidget {
           );
         }),
 
+        // NULO 3D e o rig que ele destrava. Sem nulo dentro da cena nao
+        // ha rigging la dentro: nao da para girar um conjunto junto,
+        // nem orbitar a camera interna.
+        Row(
+          children: [
+            Expanded(
+              child: _AcaoLarga(
+                rotulo: 'Nulo 3D',
+                onTap: () {
+                  final id = controller.addSceneNull(layer.id);
+                  if (id.isNotEmpty) onSelect(id);
+                  onChanged();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AcaoLarga(
+                rotulo: 'Rig de orbita',
+                onTap: () {
+                  controller.addOrbitRig(layer.id);
+                  onChanged();
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        // PAI de cada no, e de quem a camera interna segue.
+        if (node != null) ...[
+          _Chips(
+            label: 'Pai de "${node.name}"',
+            options: [
+              'Nenhum',
+              for (final n in scene.nodes)
+                if (n.id != node.id) n.name,
+            ],
+            index: node.parentId == null
+                ? 0
+                : (() {
+                    final outros = [
+                      for (final n in scene.nodes)
+                        if (n.id != node.id) n
+                    ];
+                    final i =
+                        outros.indexWhere((n) => n.id == node.parentId);
+                    return i < 0 ? 0 : i + 1;
+                  })(),
+            onChanged: (i) {
+              final outros = [
+                for (final n in scene.nodes)
+                  if (n.id != node.id) n
+              ];
+              controller.setSceneNodeParent(layer.id, node.id,
+                  i == 0 ? null : outros[i - 1].id);
+              onChanged();
+            },
+          ),
+          const _Hint(
+              'Girar o pai orbita o filho em torno do pivo dele. Um ciclo '
+              '(A pai de B e B pai de A) e recusado.'),
+          const SizedBox(height: 6),
+        ],
+
+        _Chips(
+          label: 'Camera segue',
+          options: [
+            'Nada',
+            for (final n in scene.nodes) n.name,
+          ],
+          index: scene.cameraParentId == null
+              ? 0
+              : (() {
+                  final i = scene.nodes
+                      .indexWhere((n) => n.id == scene.cameraParentId);
+                  return i < 0 ? 0 : i + 1;
+                })(),
+          onChanged: (i) {
+            controller.setSceneCameraParent(
+                layer.id, i == 0 ? null : scene.nodes[i - 1].id);
+            onChanged();
+          },
+        ),
+        const _Hint(
+            'A camera herda posicao e rotacao do pai — nunca escala. '
+            'Camera nao tem escala, e herdar e o que faz o enquadramento '
+            'explodir.'),
+        const SizedBox(height: 10),
+
         // MODELO PRONTO: modelar em celular ninguem vai fazer; baixar um
         // .glb, sim. Sem isso a cena 3D fica presa nos oito solidos.
         _AcaoLarga(

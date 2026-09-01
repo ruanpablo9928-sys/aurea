@@ -183,6 +183,8 @@ class SceneNode {
     this.mesh,
     this.outline,
     this.extrudeDepth = 40,
+    this.parentId,
+    this.isNull = false,
   })  : id = id ?? const Uuid().v4(),
         x = x ?? AnimatedDouble(0),
         y = y ?? AnimatedDouble(0),
@@ -221,6 +223,13 @@ class SceneNode {
 
   final double extrudeDepth;
 
+  /// PAI DENTRO DA CENA. Sem isto nao ha rigging la dentro: nao da para
+  /// girar um conjunto de objetos junto, nem orbitar a camera interna.
+  final String? parentId;
+
+  /// NULO 3D: so transforma, nao desenha. E o pivo dos rigs.
+  final bool isNull;
+
   Vec3 positionAt(Duration t) =>
       Vec3(x.valueAt(t), y.valueAt(t), z.valueAt(t));
 
@@ -241,6 +250,9 @@ class SceneNode {
     Element3DMesh? mesh,
     List<Offset>? outline,
     double? extrudeDepth,
+    String? parentId,
+    bool clearParent = false,
+    bool? isNull,
   }) =>
       SceneNode(
         id: id,
@@ -260,6 +272,8 @@ class SceneNode {
         mesh: mesh ?? this.mesh,
         outline: outline ?? this.outline,
         extrudeDepth: extrudeDepth ?? this.extrudeDepth,
+        parentId: clearParent ? null : (parentId ?? this.parentId),
+        isNull: isNull ?? this.isNull,
       );
 }
 
@@ -288,9 +302,25 @@ class Scene3D {
     this.showFloorGrid = true,
     this.msaa = true,
     this.draftMode = false,
+    this.cameraParentId,
   });
 
   final List<SceneNode> nodes;
+
+  /// De qual NO da cena a camera interna e filha. Nulo = solta.
+  ///
+  /// E o que permite orbitar a camera de dentro: um nulo girando em Y
+  /// com a camera deslocada em Z.
+  final String? cameraParentId;
+
+  /// O no de [id], ou null.
+  SceneNode? nodeById(String id) {
+    for (final n in nodes) {
+      if (n.id == id) return n;
+    }
+    return null;
+  }
+
   final List<Light3D> lights;
   final List<SavedView> savedViews;
   final double ambient;
@@ -314,6 +344,8 @@ class Scene3D {
     bool? showFloorGrid,
     bool? msaa,
     bool? draftMode,
+    String? cameraParentId,
+    bool clearCameraParent = false,
   }) =>
       Scene3D(
         nodes: nodes ?? this.nodes,
@@ -324,6 +356,9 @@ class Scene3D {
         showFloorGrid: showFloorGrid ?? this.showFloorGrid,
         msaa: msaa ?? this.msaa,
         draftMode: draftMode ?? this.draftMode,
+        cameraParentId: clearCameraParent
+            ? null
+            : (cameraParentId ?? this.cameraParentId),
       );
 
   static Scene3D get demo => Scene3D(
@@ -472,6 +507,107 @@ Vec3 _rotate(Vec3 v, double rx, double ry, double rz) {
 ///      interpenetracao, que o algoritmo do pintor por camada nao faz
 ///   5. transparentes depois, do mais distante ao mais proximo, e
 ///      nunca "escrevem profundidade" (nao entram na ordenacao opaca)
+/// Transform EFETIVO de um no, com a cadeia de pais ja resolvida.
+class NodeTransform {
+  const NodeTransform({
+    this.position = Vec3.zero,
+    this.rotX = 0,
+    this.rotY = 0,
+    this.rotZ = 0,
+    this.scale = 1,
+  });
+
+  /// Em GRAUS, como no resto do aplicativo.
+  final Vec3 position;
+  final double rotX;
+  final double rotY;
+  final double rotZ;
+  final double scale;
+
+  static const identity = NodeTransform();
+}
+
+/// Resolve a cadeia de pais de [node].
+///
+/// A posicao do filho e GIRADA pelo pai antes de somar — e isso que faz
+/// o rig de orbita funcionar: um nulo girando em Y com o objeto deslocado
+/// em Z faz o objeto dar a volta, em vez de girar no proprio eixo.
+///
+/// A profundidade e limitada: um ciclo de parentesco (A pai de B, B pai
+/// de A) travaria o quadro em vez de desenhar errado.
+NodeTransform resolveNodeTransform(
+  Scene3D scene,
+  SceneNode node,
+  Duration t, {
+  NodeTransform external = NodeTransform.identity,
+  int depth = 0,
+}) {
+  final local = NodeTransform(
+    position: node.positionAt(t),
+    rotX: node.rotX.valueAt(t),
+    rotY: node.rotY.valueAt(t),
+    rotZ: node.rotZ.valueAt(t),
+    scale: node.scale.valueAt(t),
+  );
+
+  final pid = node.parentId;
+  NodeTransform pai;
+  if (pid == null || depth >= 16) {
+    pai = external;
+  } else {
+    final parent = scene.nodeById(pid);
+    if (parent == null) {
+      pai = external;
+    } else {
+      pai = resolveNodeTransform(scene, parent, t,
+          external: external, depth: depth + 1);
+    }
+  }
+
+  return composeTransforms(pai, local);
+}
+
+/// Pai depois filho: a posicao do filho gira e escala com o pai.
+NodeTransform composeTransforms(NodeTransform pai, NodeTransform filho) {
+  final escalada = filho.position * pai.scale;
+  final girada = _rotate(
+      escalada,
+      pai.rotX * math.pi / 180,
+      pai.rotY * math.pi / 180,
+      pai.rotZ * math.pi / 180);
+  return NodeTransform(
+    position: pai.position + girada,
+    rotX: pai.rotX + filho.rotX,
+    rotY: pai.rotY + filho.rotY,
+    rotZ: pai.rotZ + filho.rotZ,
+    scale: pai.scale * filho.scale,
+  );
+}
+
+/// Aplica um transform de pai a uma camera.
+///
+/// A camera herda posicao, rotacao e orientacao — mas NAO herda escala.
+/// Camera nao tem escala, e herdar do pai e justamente o bug que faz o
+/// enquadramento explodir quando alguem escala o nulo.
+RenderCamera applyParentToCamera(RenderCamera cam, NodeTransform pai) {
+  Vec3 mover(Vec3 p) =>
+      pai.position +
+      _rotate(p, pai.rotX * math.pi / 180, pai.rotY * math.pi / 180,
+          pai.rotZ * math.pi / 180);
+  return RenderCamera(
+    position: mover(cam.position),
+    target: mover(cam.target),
+    up: _rotate(cam.up, pai.rotX * math.pi / 180,
+        pai.rotY * math.pi / 180, pai.rotZ * math.pi / 180),
+    focalLength: cam.focalLength,
+    filmWidth: cam.filmWidth,
+    orthographic: cam.orthographic,
+    orthoScale: cam.orthoScale,
+    near: cam.near,
+    far: cam.far,
+  );
+}
+
 SceneFrame renderScene(
   Scene3D scene,
   RenderCamera cam,
@@ -492,14 +628,18 @@ SceneFrame renderScene(
 
   for (final node in scene.nodes) {
     if (!node.visible) continue;
+    // NULO 3D so transforma os filhos; nao desenha nada.
+    if (node.isNull) continue;
     // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
     final mesh = node.mesh ?? element3DMesh(node.kind);
     if (mesh.verts.isEmpty) continue;
-    final s = node.size * node.scale.valueAt(t);
-    final base = node.positionAt(t);
-    final rx = node.rotX.valueAt(t) * math.pi / 180;
-    final ry = node.rotY.valueAt(t) * math.pi / 180;
-    final rz = node.rotZ.valueAt(t) * math.pi / 180;
+
+    final xf = resolveNodeTransform(scene, node, t);
+    final s = node.size * xf.scale;
+    final base = xf.position;
+    final rx = xf.rotX * math.pi / 180;
+    final ry = xf.rotY * math.pi / 180;
+    final rz = xf.rotZ * math.pi / 180;
 
     // Uma "chamada de desenho" por NO — as instancias entram na mesma,
     // que e o equivalente possivel de instanciacao aqui.

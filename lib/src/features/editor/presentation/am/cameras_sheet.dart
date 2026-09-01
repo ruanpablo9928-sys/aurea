@@ -121,7 +121,65 @@ Future<void> showCamerasSheet(
                       fontSize: 11, height: 1.35, color: AmColors.muted),
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
+                // A PONTE COM A COMPOSICAO: todo rig de camera e "camera
+                // parenteada a um nulo". Sem isto, orbita, tripe, dolly,
+                // camera na mao e dolly zoom estao todos quebrados.
+                const Text('Seguir um nulo da composicao',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AmColors.text)),
+                const SizedBox(height: 6),
+                Builder(builder: (context) {
+                  final nulos =
+                      project.layers.whereType<NullLayer>().toList();
+                  if (nulos.isEmpty) {
+                    return const Text(
+                      'Nao ha objeto nulo no projeto. Crie um e a camera '
+                      'pode segui-lo — girar o nulo orbita a cena.',
+                      style: TextStyle(
+                          fontSize: 11, height: 1.35, color: AmColors.muted),
+                    );
+                  }
+                  return Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          controller.setSceneCameraCompParent(layerId, null);
+                          setSheetState(() {});
+                        },
+                        child: _Pastilha(
+                          rotulo: 'Nenhum',
+                          aceso: layer.cameraParentLayerId == null,
+                        ),
+                      ),
+                      for (final n in nulos)
+                        GestureDetector(
+                          onTap: () {
+                            controller.setSceneCameraCompParent(
+                                layerId, n.id);
+                            setSheetState(() {});
+                          },
+                          child: _Pastilha(
+                            rotulo: n.name,
+                            aceso: layer.cameraParentLayerId == n.id,
+                          ),
+                        ),
+                    ],
+                  );
+                }),
+                const SizedBox(height: 4),
+                const Text(
+                  'A camera herda posicao e rotacao do nulo — nunca a '
+                  'escala. Camera nao tem escala.',
+                  style: TextStyle(
+                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                ),
+
+                const SizedBox(height: 14),
                 GestureDetector(
                   onTap: () {
                     controller.addScene3DCamera(layerId);
@@ -188,6 +246,27 @@ Future<void> showCamerasSheet(
       },
     ),
   );
+}
+
+class _Pastilha extends StatelessWidget {
+  const _Pastilha({required this.rotulo, required this.aceso});
+
+  final String rotulo;
+  final bool aceso;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: aceso ? AmColors.accentDim : AmColors.chip,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(rotulo,
+            style: TextStyle(
+                fontSize: 11,
+                color: aceso ? AmColors.accent : AmColors.muted)),
+      );
 }
 
 class _LinhaCamera extends StatelessWidget {

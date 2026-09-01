@@ -990,6 +990,94 @@ class EditorController extends Notifier<VideoProject> {
     return no.id;
   }
 
+  /// NULO 3D: um no que so transforma, nao desenha. E o pivo dos rigs.
+  String addSceneNull(String sceneId) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return '';
+    final no = SceneNode(
+      name: 'Nulo ${cena.scene.nodes.where((n) => n.isNull).length + 1}',
+      isNull: true,
+    );
+    _replace(cena.withScene(
+        cena.scene.copyWith(nodes: [...cena.scene.nodes, no])));
+    return no.id;
+  }
+
+  /// Parenteia um no da cena a outro. Passar null solta.
+  ///
+  /// Recusa o ciclo: A pai de B e B pai de A travaria o quadro.
+  void setSceneNodeParent(
+      String sceneId, String nodeId, String? parentId) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return;
+    if (parentId == nodeId) return;
+    if (parentId != null &&
+        _criaCiclo(cena.scene, nodeId, parentId)) {
+      return;
+    }
+    _replace(cena.withScene(cena.scene.copyWith(nodes: [
+      for (final n in cena.scene.nodes)
+        if (n.id == nodeId)
+          n.copyWith(parentId: parentId, clearParent: parentId == null)
+        else
+          n,
+    ])));
+  }
+
+  bool _criaCiclo(Scene3D cena, String nodeId, String parentId) {
+    var atual = cena.nodeById(parentId);
+    var passos = 0;
+    while (atual != null && passos++ < 32) {
+      if (atual.id == nodeId) return true;
+      final p = atual.parentId;
+      atual = p == null ? null : cena.nodeById(p);
+    }
+    return false;
+  }
+
+  /// De qual NO INTERNO a camera da cena e filha. Null solta.
+  void setSceneCameraParent(String sceneId, String? nodeId) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return;
+    _replace(cena.withScene(cena.scene.copyWith(
+      cameraParentId: nodeId,
+      clearCameraParent: nodeId == null,
+    )));
+  }
+
+  /// De qual NULO DA COMPOSICAO a camera da cena e filha. Null solta.
+  void setSceneCameraCompParent(String sceneId, String? layerId) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return;
+    _replace(cena.copyScene(
+      cameraParentLayerId: layerId,
+      clearCameraParent: layerId == null,
+    ));
+  }
+
+  /// RIG DE ORBITA EM UM TOQUE.
+  ///
+  /// Cria o nulo, parenteia a camera nele e anima uma volta inteira —
+  /// com keyframes de verdade, editaveis. Rig que nao vira keyframe e
+  /// caixa-preta: quando a pessoa quer mudar o ritmo, nao tem onde
+  /// mexer.
+  void addOrbitRig(String sceneId, {Duration? duration}) {
+    final cena = _layer(sceneId);
+    if (cena is! Scene3DLayer) return;
+    final dur = duration ?? cena.duration;
+    final no = SceneNode(
+      name: 'Orbita',
+      isNull: true,
+      rotY: AnimatedDouble(0)
+          .withKeyframe(Duration.zero, 0)
+          .withKeyframe(dur, 360),
+    );
+    _replace(cena.withScene(cena.scene.copyWith(
+      nodes: [...cena.scene.nodes, no],
+      cameraParentId: no.id,
+    )));
+  }
+
   /// TRAZ UM MODELO .glb para dentro da cena.
   ///
   /// Devolve o id do no criado. Erro de leitura sobe como [GlbException]
