@@ -274,6 +274,10 @@ GridRig _asRig(Map<String, dynamic> m) => GridRig(
 
 Map<String, dynamic> _effect(EffectInstance e) => {
       'id': e.id,
+      // O identificador ESTAVEL e o que manda na leitura; o indice do
+      // enum fica so para o aplicativo antigo continuar abrindo o
+      // arquivo novo.
+      'kind': effectIdOf(e.type),
       'type': e.type.index,
       'color': _col(e.color),
       'enabled': e.enabled,
@@ -282,7 +286,7 @@ Map<String, dynamic> _effect(EffectInstance e) => {
 
 EffectInstance _asEffect(Map<String, dynamic> m) => EffectInstance(
       id: m['id'] as String,
-      type: EffectType.values[(m['type'] as num).toInt()],
+      type: _tipoDoEfeito(m),
       color: _asCol(m['color']),
       enabled: m['enabled'] as bool,
       params: {
@@ -290,6 +294,21 @@ EffectInstance _asEffect(Map<String, dynamic> m) => EffectInstance(
           p.key: _asAd(p.value),
       },
     );
+
+/// O tipo do efeito: pelo id quando ha, pelo indice do enum quando o
+/// arquivo e antigo.
+EffectType _tipoDoEfeito(Map<String, dynamic> m) {
+  final kind = m['kind'] as String?;
+  if (kind != null) {
+    final t = effectTypeFromId(kind);
+    if (t != null) return t;
+  }
+  final idx = (m['type'] as num?)?.toInt() ?? 0;
+  if (idx >= 0 && idx < EffectType.values.length) {
+    return EffectType.values[idx];
+  }
+  return EffectType.gaussianBlur;
+}
 
 // --------------------------------------------------------------- formas
 

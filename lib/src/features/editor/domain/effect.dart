@@ -49,6 +49,36 @@ enum EffectType {
   glitchify,
 }
 
+/// O tipo a partir do IDENTIFICADOR estavel.
+///
+/// E o caminho de leitura do arquivo. Guardar o efeito pelo INDICE do
+/// enum era uma bomba-relogio: bastava alguem inserir um efeito no meio
+/// da lista para todo projeto salvo virar outro efeito. O id nunca muda.
+EffectType? effectTypeFromId(String id) {
+  for (final e in effectSpecs.entries) {
+    if (e.value.id == id) return e.key;
+  }
+  return _aliasesDeId[id];
+}
+
+/// NOMES ANTIGOS que ainda aparecem em arquivo. Renomear nao pode
+/// quebrar o que ja existe.
+const _aliasesDeId = <String, EffectType>{
+  'cc_split': EffectType.ccSplit,
+  'cc_scatterize': EffectType.ccScatterize,
+  'cc_semear': EffectType.ccScatterize,
+  'glow_vol': EffectType.glowVol,
+  'volumetric_glow': EffectType.glowVol,
+  'tremor': EffectType.tremor,
+  'light_glow': EffectType.lightGlow,
+  'radial_aberration': EffectType.radialAberration,
+  'spatial_echo': EffectType.spatialEcho,
+  'pixel_sort': EffectType.pixelSort,
+};
+
+/// O identificador de um tipo.
+String effectIdOf(EffectType t) => effectSpecs[t]!.id;
+
 /// TIPO do parametro (PR-C1). Sem isto, todo efeito que precisa de uma
 /// cor ou de um ponto fica morto na tela: a UI so sabia desenhar numero.
 enum ParamKind {
@@ -97,6 +127,7 @@ class EffectParam {
 
 class EffectSpec {
   const EffectSpec({
+    required this.id,
     required this.name,
     required this.params,
     this.hasColor = false,
@@ -106,7 +137,18 @@ class EffectSpec {
     this.procedural = false,
   });
 
+  /// IDENTIFICADOR ESTAVEL, em snake_case e em ingles.
+  ///
+  /// E o que vai no arquivo. O nome muda de idioma, a categoria muda de
+  /// arrumacao, a posicao no enum muda quando entra efeito novo — o id
+  /// nao muda nunca, e e por isso que projeto e preset salvos continuam
+  /// abrindo.
+  final String id;
+
+  /// Nome canonico, em INGLES. Onde o efeito existe no After Effects,
+  /// segue o vocabulario de la.
   final String name;
+
   final Map<String, EffectParam> params;
 
   /// Cor principal do efeito (alem dos parametros de cor).
@@ -128,17 +170,19 @@ class EffectSpec {
 
 const effectSpecs = <EffectType, EffectSpec>{
   EffectType.gaussianBlur: EffectSpec(
-    name: 'Desfoque gaussiano',
-    category: 'Desfoque',
-    synonyms: ['blur', 'gaussian', 'suavizar'],
+    id: 'gaussian_blur',
+    name: 'Gaussian Blur',
+    category: 'Blur',
+    synonyms: ['desfoque', 'gaussiano', 'blur', 'gaussian', 'suavizar'],
     params: {
       'amount': EffectParam('Intensidade', 0.25, 0.0, 1.0),
     },
   ),
   EffectType.lightGlow: EffectSpec(
-    name: 'Brilho de luz',
-    category: 'Luz',
-    synonyms: ['glow', 'bloom', 'brilho'],
+    id: 'glow',
+    name: 'Glow',
+    category: 'Light',
+    synonyms: ['brilho', 'luz', 'glow', 'bloom', 'brilho'],
     params: {
       'diffusion': EffectParam('Difusao', 0.25, 0.0, 1.0),
       'threshold': EffectParam('Limite', 0.70, 0.0, 1.0),
@@ -147,9 +191,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     hasColor: true,
   ),
   EffectType.tint: EffectSpec(
-    name: 'Tonalizar',
-    category: 'Cor',
-    synonyms: ['tint', 'colorir'],
+    id: 'tint',
+    name: 'Tint',
+    category: 'Color',
+    synonyms: ['tonalizar', 'tint', 'colorir'],
     params: {
       'strength': EffectParam('Forca', 0.5, 0.0, 1.0),
     },
@@ -158,9 +203,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // Glow com pirâmide de 3 niveis, aberracao RGB e tonalizacao opcional
   // (aproximacao do Glow Volumetrico; conservacao plena exige linear).
   EffectType.glowVol: EffectSpec(
-    name: 'Glow volumetrico',
-    category: 'Luz',
-    synonyms: ['bloom', 'volumetric', 'brilho'],
+    id: 'deep_glow',
+    name: 'Deep Glow',
+    category: 'Light',
+    synonyms: ['glow', 'volumetrico', 'bloom', 'volumetric', 'brilho'],
     cost: 3,
     params: {
       'raio': EffectParam('Raio', 0.35, 0.02, 1.0, relative: true),
@@ -173,9 +219,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // Tremor de camera: aleatorio e REPETIVEL, com fase integrada — animar
   // a frequencia acelera de verdade, sem salto.
   EffectType.tremor: EffectSpec(
-    name: 'Tremor',
-    category: 'Distorcao',
-    synonyms: ['shake', 'camera shake', 'tremer'],
+    id: 'shake',
+    name: 'Shake',
+    category: 'Distort',
+    synonyms: ['tremor', 'shake', 'camera shake', 'tremer'],
     procedural: true,
     params: {
       'amplitude':
@@ -194,9 +241,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // Seis operadores sincronizados por um modulador mestre (quantidade +
   // velocidade); tiques deterministicos e seekaveis.
   EffectType.glitch: EffectSpec(
-    name: 'Glitch modular',
+    id: 'glitch',
+    name: 'Glitch',
     category: 'Glitch',
-    synonyms: ['glitch', 'datamosh', 'erro'],
+    synonyms: ['glitch', 'modular', 'glitch', 'datamosh', 'erro'],
     cost: 2,
     procedural: true,
     params: {
@@ -214,9 +262,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.rgbSplit: EffectSpec(
-    name: 'Separacao RGB',
-    category: 'Lente',
-    synonyms: ['rgb split', 'chromatic', 'canal'],
+    id: 'rgb_split',
+    name: 'RGB Split',
+    category: 'Lens',
+    synonyms: ['separacao', 'rgb', 'rgb split', 'chromatic', 'canal'],
     params: {
       'deslocamento':
           EffectParam('Deslocamento', 20.0, 0.0, 100.0, relative: true),
@@ -227,9 +276,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // trilhas de movimento de keyframes/transform). Matiz > 0 = RASTRO
   // COLORIDO: cada copia ganha uma rotacao de matiz propria.
   EffectType.echo: EffectSpec(
-    name: 'Eco / rastro',
-    category: 'Desfoque',
-    synonyms: ['echo', 'trail', 'rastro', 'motion trail'],
+    id: 'echo',
+    name: 'Echo',
+    category: 'Blur',
+    synonyms: ['eco', 'rastro', 'echo', 'trail', 'rastro', 'motion trail'],
     cost: 3,
     params: {
       'ecos': EffectParam('Ecos', 3.0, 1.0, 8.0),
@@ -241,9 +291,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // Eco ESPACIAL (AUREA-2 §2 item 28): repeticao no espaco com
   // transformacao progressiva por copia.
   EffectType.spatialEcho: EffectSpec(
-    name: 'Eco espacial',
-    category: 'Estilizar',
-    synonyms: ['echo', 'repeat', 'repeticao'],
+    id: 'space_echo',
+    name: 'Space Echo',
+    category: 'Stylize',
+    synonyms: ['eco', 'espacial', 'echo', 'repeat', 'repeticao'],
     cost: 2,
     params: {
       'copias': EffectParam('Copias', 5.0, 1.0, 12.0),
@@ -258,9 +309,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // Aberracao cromatica RADIAL (item 14): cresce do centro para a
   // borda, como lente real — diferente do RGB Split.
   EffectType.radialAberration: EffectSpec(
-    name: 'Aberracao cromatica',
-    category: 'Lente',
-    synonyms: ['chromatic aberration', 'franja', 'lente'],
+    id: 'chromatic_aberration',
+    name: 'Chromatic Aberration',
+    category: 'Lens',
+    synonyms: ['aberracao', 'cromatica', 'chromatic aberration', 'franja', 'lente'],
     cost: 2,
     params: {
       'quantidade': EffectParam('Quantidade', 0.3, 0.0, 1.0),
@@ -270,9 +322,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   // ------------------------- catalogo, lote 1 -------------------------
 
   EffectType.levels: EffectSpec(
-    name: 'Niveis',
-    category: 'Cor',
-    synonyms: ['levels', 'contraste', 'gama', 'brilho'],
+    id: 'levels',
+    name: 'Levels',
+    category: 'Color',
+    synonyms: ['niveis', 'levels', 'contraste', 'gama', 'brilho'],
     params: {
       'entradaMin': EffectParam('Entrada min', 0.0, 0.0, 1.0),
       'entradaMax': EffectParam('Entrada max', 1.0, 0.0, 1.0),
@@ -282,9 +335,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.curves: EffectSpec(
-    name: 'Curvas',
-    category: 'Cor',
-    synonyms: ['curves', 'curva', 'contraste'],
+    id: 'curves',
+    name: 'Curves',
+    category: 'Color',
+    synonyms: ['curvas', 'curves', 'curva', 'contraste'],
     params: {
       'contraste': EffectParam('Contraste S', 0.0, -1.0, 1.0),
       'brilho': EffectParam('Brilho', 0.0, -1.0, 1.0),
@@ -293,9 +347,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.vibrance: EffectSpec(
-    name: 'Vibracao',
-    category: 'Cor',
-    synonyms: ['vibrance', 'saturacao', 'vivid'],
+    id: 'vibrance',
+    name: 'Vibrance',
+    category: 'Color',
+    synonyms: ['vibracao', 'vibrance', 'saturacao', 'vivid'],
     params: {
       'vibracao': EffectParam('Vibracao', 0.0, -1.0, 1.0),
       'saturacao': EffectParam('Saturacao', 0.0, -1.0, 1.0),
@@ -305,18 +360,20 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.whiteBalance: EffectSpec(
-    name: 'Balanco de branco',
-    category: 'Cor',
-    synonyms: ['white balance', 'temperatura', 'matiz', 'wb'],
+    id: 'white_balance',
+    name: 'White Balance',
+    category: 'Color',
+    synonyms: ['balanco', 'branco', 'white balance', 'temperatura', 'matiz', 'wb'],
     params: {
       'temperatura': EffectParam('Temperatura', 0.0, -1.0, 1.0),
       'matiz': EffectParam('Matiz', 0.0, -1.0, 1.0),
     },
   ),
   EffectType.colorWheels: EffectSpec(
-    name: 'Rodas de cor',
-    category: 'Cor',
-    synonyms: ['color wheels', 'lift gamma gain', 'gradacao'],
+    id: 'color_wheels',
+    name: 'Color Wheels',
+    category: 'Color',
+    synonyms: ['rodas', 'cor', 'color wheels', 'lift gamma gain', 'gradacao'],
     params: {
       'sombrasR': EffectParam('Sombras R', 0.0, -0.5, 0.5),
       'sombrasG': EffectParam('Sombras G', 0.0, -0.5, 0.5),
@@ -329,18 +386,20 @@ const effectSpecs = <EffectType, EffectSpec>{
   // O efeito mais subestimado da lista: fogo, fumaca, faisca e vazamento
   // de luz vem todos em video com fundo preto.
   EffectType.unmult: EffectSpec(
-    name: 'Unmult (tira o preto)',
-    category: 'Luz',
-    synonyms: ['unmult', 'screen', 'tirar fundo preto', 'overlay'],
+    id: 'unmult',
+    name: 'Unmult',
+    category: 'Light',
+    synonyms: ['unmult', 'tira', 'preto', 'unmult', 'screen', 'tirar fundo preto', 'overlay'],
     params: {
       'limiar': EffectParam('Limiar', 0.0, 0.0, 1.0),
       'suavidade': EffectParam('Suavidade', 0.5, 0.0, 1.0),
     },
   ),
   EffectType.vignette: EffectSpec(
-    name: 'Vinheta',
-    category: 'Lente',
-    synonyms: ['vignette', 'borda escura'],
+    id: 'vignette',
+    name: 'Vignette',
+    category: 'Lens',
+    synonyms: ['vinheta', 'vignette', 'borda escura'],
     params: {
       'quantidade': EffectParam('Quantidade', 0.5, 0.0, 1.0),
       'raio': EffectParam('Raio', 0.7, 0.1, 1.5, relative: true),
@@ -349,9 +408,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     hasColor: true,
   ),
   EffectType.directionalBlur: EffectSpec(
-    name: 'Desfoque direcional',
-    category: 'Desfoque',
-    synonyms: ['directional blur', 'motion blur', 'movimento'],
+    id: 'directional_blur',
+    name: 'Directional Blur',
+    category: 'Blur',
+    synonyms: ['desfoque', 'direcional', 'directional blur', 'motion blur', 'movimento'],
     cost: 2,
     params: {
       'comprimento':
@@ -360,9 +420,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.radialBlur: EffectSpec(
-    name: 'Desfoque radial',
-    category: 'Desfoque',
-    synonyms: ['radial blur', 'zoom blur', 'giro'],
+    id: 'radial_blur',
+    name: 'Radial Blur',
+    category: 'Blur',
+    synonyms: ['desfoque', 'radial', 'radial blur', 'zoom blur', 'giro'],
     cost: 3,
     params: {
       'quantidade': EffectParam('Quantidade', 0.3, 0.0, 1.0),
@@ -372,9 +433,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.lightRays: EffectSpec(
-    name: 'Raios volumetricos',
-    category: 'Luz',
-    synonyms: ['god rays', 'light rays', 'raios', 'deus'],
+    id: 'light_rays',
+    name: 'Light Rays',
+    category: 'Light',
+    synonyms: ['raios', 'volumetricos', 'god rays', 'light rays', 'raios', 'deus'],
     cost: 3,
     params: {
       'comprimento': EffectParam('Comprimento', 0.4, 0.0, 1.0),
@@ -388,17 +450,19 @@ const effectSpecs = <EffectType, EffectSpec>{
     hasColor: true,
   ),
   EffectType.mosaic: EffectSpec(
-    name: 'Mosaico',
-    category: 'Estilizar',
-    synonyms: ['mosaic', 'pixelate', 'pixel', 'censura'],
+    id: 'mosaic',
+    name: 'Mosaic',
+    category: 'Stylize',
+    synonyms: ['mosaico', 'mosaic', 'pixelate', 'pixel', 'censura'],
     params: {
       'blocos': EffectParam('Blocos', 24.0, 3.0, 160.0),
     },
   ),
   EffectType.filmGrain: EffectSpec(
-    name: 'Grao de filme',
-    category: 'Textura',
-    synonyms: ['grain', 'grao', 'ruido', 'filme'],
+    id: 'film_grain',
+    name: 'Film Grain',
+    category: 'Stylize',
+    synonyms: ['grao', 'filme', 'grain', 'grao', 'ruido', 'filme'],
     procedural: true,
     params: {
       'intensidade': EffectParam('Intensidade', 0.25, 0.0, 1.0),
@@ -408,9 +472,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.fractalNoise: EffectSpec(
-    name: 'Ruido fractal',
-    category: 'Textura',
-    synonyms: ['fractal noise', 'perlin', 'nuvem', 'fumaca'],
+    id: 'fractal_noise',
+    name: 'Fractal Noise',
+    category: 'Generate',
+    synonyms: ['ruido', 'fractal', 'fractal noise', 'perlin', 'nuvem', 'fumaca'],
     cost: 2,
     procedural: true,
     params: {
@@ -425,9 +490,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     hasColor: true,
   ),
   EffectType.digitalDamage: EffectSpec(
-    name: 'Dano digital',
+    id: 'digital_damage',
+    name: 'Digital Damage',
     category: 'Glitch',
-    synonyms: ['digital damage', 'blocos', 'corrupcao', 'datamosh'],
+    synonyms: ['dano', 'digital', 'digital damage', 'blocos', 'corrupcao', 'datamosh'],
     cost: 2,
     procedural: true,
     params: {
@@ -442,9 +508,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.zoomWarp: EffectSpec(
-    name: 'Zoom warp',
-    category: 'Distorcao',
-    synonyms: ['zoom warp', 'punch', 'impacto', 'dolly'],
+    id: 'zoom_warp',
+    name: 'Zoom Warp',
+    category: 'Distort',
+    synonyms: ['zoom', 'warp', 'zoom warp', 'punch', 'impacto', 'dolly'],
     cost: 2,
     params: {
       'quantidade': EffectParam('Quantidade', 0.2, -1.0, 1.0),
@@ -453,9 +520,10 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
   EffectType.posterize: EffectSpec(
-    name: 'Posterizar',
-    category: 'Estilizar',
-    synonyms: ['posterize', 'niveis', 'cartoon'],
+    id: 'posterize',
+    name: 'Posterize',
+    category: 'Stylize',
+    synonyms: ['posterizar', 'posterize', 'niveis', 'cartoon'],
     params: {
       'niveis': EffectParam('Niveis', 6.0, 2.0, 32.0),
     },
@@ -467,9 +535,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   /// na velocidade, voce anima QUAL INSTANTE da camada aparece agora.
   /// Congelar, voltar, acelerar no meio — tudo vira keyframe de tempo.
   EffectType.timeRemap: EffectSpec(
-    name: 'Remapear tempo',
-    category: 'Tempo',
-    synonyms: ['time remap', 'tempo', 'congelar', 'freeze', 'reverso',
+    id: 'time_remap',
+    name: 'Time Remap',
+    category: 'Time',
+    synonyms: ['remapear', 'tempo', 'time remap', 'tempo', 'congelar', 'freeze', 'reverso',
       'velocidade', 'speed ramp'],
     cost: 1,
     params: {
@@ -478,9 +547,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.pixelSort: EffectSpec(
-    name: 'Ordenar pixels',
-    category: 'Estilizar',
-    synonyms: ['pixel sort', 'sorting', 'databend', 'arrastar'],
+    id: 'pixel_sorter',
+    name: 'Pixel Sorter',
+    category: 'Stylize',
+    synonyms: ['ordenar', 'pixels', 'pixel sort', 'sorting', 'databend', 'arrastar'],
     cost: 3,
     params: {
       'limiar': EffectParam('Limiar', 0.55, 0.0, 1.0),
@@ -499,9 +569,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   /// grafico. Nao e visao computacional — sao alvos que voce posiciona e
   /// anima, que e para o que o efeito e usado em motion.
   EffectType.blobTracker: EffectSpec(
-    name: 'Rastreador de blobs',
-    category: 'Estilizar',
-    synonyms: ['blob tracker', 'tracking', 'alvo', 'hud', 'mira'],
+    id: 'blob_tracker',
+    name: 'Blob Tracker',
+    category: 'Stylize',
+    synonyms: ['rastreador', 'blobs', 'blob tracker', 'tracking', 'alvo', 'hud', 'mira'],
     hasColor: true,
     params: {
       'quantidade': EffectParam('Quantidade', 4.0, 1.0, 16.0),
@@ -517,9 +588,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.turbulentDisplace: EffectSpec(
-    name: 'Deslocar turbulento',
-    category: 'Distorcer',
-    synonyms: ['turbulent displace', 'turbulencia', 'ondular', 'liquido',
+    id: 'turbulent_displace',
+    name: 'Turbulent Displace',
+    category: 'Distort',
+    synonyms: ['deslocar', 'turbulento', 'turbulent displace', 'turbulencia', 'ondular', 'liquido',
       'warp'],
     cost: 3,
     params: {
@@ -536,9 +608,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   /// MASCARA DE NITIDEZ de verdade: original + quantidade * (original -
   /// borrado), com limiar para nao realcar ruido.
   EffectType.unsharpMask: EffectSpec(
-    name: 'Mascara de nitidez',
-    category: 'Lente',
-    synonyms: ['unsharp mask', 'nitidez', 'sharpen', 'foco'],
+    id: 'unsharp_mask',
+    name: 'Unsharp Mask',
+    category: 'Lens',
+    synonyms: ['mascara', 'nitidez', 'unsharp mask', 'nitidez', 'sharpen', 'foco'],
     params: {
       'quantidade': EffectParam('Quantidade', 0.8, 0.0, 3.0),
       'raio': EffectParam('Raio', 3.0, 0.5, 40.0, relative: true),
@@ -547,9 +620,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.motionTile: EffectSpec(
-    name: 'Mosaico de movimento',
-    category: 'Estilizar',
-    synonyms: ['motion tile', 'ladrilho', 'repetir', 'tile', 'espelhar'],
+    id: 'motion_tile',
+    name: 'Motion Tile',
+    category: 'Stylize',
+    synonyms: ['mosaico', 'movimento', 'motion tile', 'ladrilho', 'repetir', 'tile', 'espelhar'],
     cost: 2,
     params: {
       'largura': EffectParam('Largura do bloco', 100.0, 10.0, 300.0),
@@ -565,9 +639,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.bend: EffectSpec(
-    name: 'Entortar',
-    category: 'Distorcer',
-    synonyms: ['bend', 'curvar', 'arco', 'entortar', 'wave warp'],
+    id: 'bend',
+    name: 'Bend',
+    category: 'Distort',
+    synonyms: ['entortar', 'bend', 'curvar', 'arco', 'entortar', 'wave warp'],
     cost: 2,
     params: {
       'quantidade': EffectParam('Quantidade', 40.0, -300.0, 300.0,
@@ -581,9 +656,10 @@ const effectSpecs = <EffectType, EffectSpec>{
 
   /// CC SEMEAR (CC Scatterize): quebra a imagem em graos e espalha.
   EffectType.ccScatterize: EffectSpec(
-    name: 'CC Semear',
-    category: 'Estilizar',
-    synonyms: ['cc scatterize', 'semear', 'dispersar', 'scatter',
+    id: 'seed',
+    name: 'Seed',
+    category: 'Stylize',
+    synonyms: ['semear', 'cc scatterize', 'semear', 'dispersar', 'scatter',
       'desintegrar', 'particulas'],
     cost: 3,
     params: {
@@ -600,9 +676,10 @@ const effectSpecs = <EffectType, EffectSpec>{
 
   /// CC SPLIT: a imagem se abre em duas metades a partir de dois pontos.
   EffectType.ccSplit: EffectSpec(
-    name: 'CC Split',
-    category: 'Distorcer',
-    synonyms: ['cc split', 'dividir', 'rasgar', 'abrir', 'separar'],
+    id: 'split',
+    name: 'Split',
+    category: 'Distort',
+    synonyms: ['split', 'cc split', 'dividir', 'rasgar', 'abrir', 'separar'],
     cost: 2,
     params: {
       'divisao': EffectParam('Divisao', 40.0, 0.0, 400.0, relative: true),
@@ -613,9 +690,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.vhs: EffectSpec(
+    id: 'vhs',
     name: 'VHS',
-    category: 'Estilizar',
-    synonyms: ['vhs', 'fita', 'analogico', 'retro', 'tv', 'scanline'],
+    category: 'Stylize',
+    synonyms: ['vhs', 'vhs', 'fita', 'analogico', 'retro', 'tv', 'scanline'],
     cost: 2,
     params: {
       'intensidade': EffectParam('Intensidade', 0.6, 0.0, 1.0),
@@ -630,9 +708,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.filmDamage: EffectSpec(
-    name: 'Filme danificado',
-    category: 'Estilizar',
-    synonyms: ['film damage', 'filme', 'velho', 'riscos', 'poeira',
+    id: 'film_damage',
+    name: 'Film Damage',
+    category: 'Stylize',
+    synonyms: ['filme', 'danificado', 'film damage', 'filme', 'velho', 'riscos', 'poeira',
       'super 8', 'granulado'],
     cost: 2,
     params: {
@@ -648,9 +727,10 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
 
   EffectType.glitchify: EffectSpec(
+    id: 'glitchify',
     name: 'Glitchify',
-    category: 'Estilizar',
-    synonyms: ['glitch', 'glitchify', 'datamosh', 'erro', 'digital',
+    category: 'Glitch',
+    synonyms: ['glitchify', 'glitch', 'glitchify', 'datamosh', 'erro', 'digital',
       'corromper'],
     cost: 3,
     params: {
@@ -668,18 +748,36 @@ const effectSpecs = <EffectType, EffectSpec>{
 };
 
 /// Categorias do catalogo, na ordem em que aparecem.
+/// CATEGORIAS, em ingles como os nomes. A arrumacao do catalogo e a
+/// primeira coisa que a pessoa le, e misturar idioma ali confunde mais
+/// do que ajuda.
 const effectCategories = <String>[
-  'Cor',
-  'Luz',
-  'Lente',
-  'Desfoque',
+  'Color',
+  'Light',
+  'Lens',
+  'Blur',
+  'Distort',
+  'Stylize',
   'Glitch',
-  'Distorcao',
-  'Distorcer',
-  'Estilizar',
-  'Textura',
-  'Tempo',
+  'Time',
+  'Generate',
+  'Utility',
 ];
+
+/// A categoria escrita em portugues, para a busca aceitar os dois
+/// idiomas: quem digita "cor" acha os efeitos de Color.
+const _categoriaEmPortugues = <String, String>{
+  'Color': 'cor',
+  'Light': 'luz',
+  'Lens': 'lente',
+  'Blur': 'desfoque',
+  'Distort': 'distorcer distorcao',
+  'Stylize': 'estilizar',
+  'Glitch': 'glitch',
+  'Time': 'tempo',
+  'Generate': 'gerar textura',
+  'Utility': 'utilitario',
+};
 
 /// BUSCA (§5): nome, categoria e SINONIMOS. Quem digita "bloom" acha
 /// Glow; quem digita "pixelate" acha Mosaico.
@@ -689,7 +787,9 @@ List<EffectType> searchEffects(String query) {
   return [
     for (final e in effectSpecs.entries)
       if (e.value.name.toLowerCase().contains(q) ||
+          e.value.id.contains(q) ||
           e.value.category.toLowerCase().contains(q) ||
+          (_categoriaEmPortugues[e.value.category] ?? '').contains(q) ||
           e.value.synonyms.any((s) => s.contains(q)))
         e.key,
   ];
