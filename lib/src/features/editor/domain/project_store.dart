@@ -13,6 +13,7 @@ import 'scene3d.dart';
 import 'shape.dart';
 import 'shape_ops.dart';
 import 'text_anim.dart';
+import 'text_path.dart';
 import 'text_animator.dart';
 import 'video_project.dart';
 
@@ -652,6 +653,38 @@ TextSelector _asSelector(Map<String, dynamic> m) => switch (m['kind']) {
 /// ANIMACAO DO CATALOGO (modelo AM). Guarda o id da animacao e os seis
 /// controles — o animador em si e recompilado na leitura, entao melhorar
 /// uma animacao do catalogo melhora os projetos ja salvos.
+Map<String, dynamic>? _textPath(TextPathSpec t) => !t.active
+    ? null
+    : {
+        'kind': t.kind.index,
+        'r': t.radius,
+        'sweep': t.sweepDeg,
+        'start': t.startDeg,
+        if (t.shapeLayerId != null) 'shape': t.shapeLayerId,
+        'off': t.offset,
+        'sp': t.spacing,
+        'align': t.align.index,
+        'perp': t.perpendicular,
+        'rev': t.reverse,
+      };
+
+TextPathSpec _asTextPath(Object? raw) {
+  if (raw is! Map) return const TextPathSpec();
+  final m = raw.cast<String, dynamic>();
+  return TextPathSpec(
+    kind: TextPathKind.values[(m['kind'] as num?)?.toInt() ?? 0],
+    radius: (m['r'] as num?)?.toDouble() ?? 180,
+    sweepDeg: (m['sweep'] as num?)?.toDouble() ?? 180,
+    startDeg: (m['start'] as num?)?.toDouble() ?? -90,
+    shapeLayerId: m['shape'] as String?,
+    offset: (m['off'] as num?)?.toDouble() ?? 0,
+    spacing: (m['sp'] as num?)?.toDouble() ?? 0,
+    align: TextPathAlign.values[(m['align'] as num?)?.toInt() ?? 1],
+    perpendicular: m['perp'] as bool? ?? true,
+    reverse: m['rev'] as bool? ?? false,
+  );
+}
+
 Map<String, dynamic>? _audioSpec(AudioSpec a) => a.isNeutral
     ? null
     : {
@@ -827,6 +860,8 @@ Map<String, dynamic> layerToJson(Layer l) {
       if (t.anims.isNotEmpty) {
         base['anims'] = [for (final a in t.anims) _textAnim(a)];
       }
+      final tp = _textPath(t.textPath);
+      if (tp != null) base['textPath'] = tp;
     case ShapeLayer s:
       base['kind'] = 'shape';
       base['contents'] = [for (final i in s.contents) _shapeItem(i)];
@@ -1156,6 +1191,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
           for (final a in (m['anims'] as List? ?? const []))
             _asTextAnim(a as Map<String, dynamic>),
         ],
+        textPath: _asTextPath(m['textPath']),
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,

@@ -12,6 +12,7 @@ import 'mask.dart';
 import 'scene3d.dart';
 import 'shape.dart';
 import 'text_anim.dart';
+import 'text_path.dart';
 import 'text_animator.dart';
 
 /// Camada da composicao (compositor por camadas: tudo tem transform
@@ -490,6 +491,7 @@ class TextLayer extends Layer {
     this.fontSize = 120,
     this.color = const Color(0xFFFFFFFF),
     this.bold = true,
+    this.textPath = const TextPathSpec(),
     List<TextAnim>? anims,
     List<TextAnimator>? animators,
     super.position,
@@ -517,6 +519,9 @@ class TextLayer extends Layer {
   final Color color;
   final bool bold;
 
+  /// TEXTO EM CAMINHO: selo circular, arco, ou seguindo outra forma.
+  final TextPathSpec textPath;
+
   /// ANIMACOES do catalogo (modelo Alight Motion): escolhe-se a animacao
   /// e mexe-se em seis controles. E o caminho normal.
   final List<TextAnim> anims;
@@ -533,7 +538,10 @@ class TextLayer extends Layer {
         ...animators,
       ];
 
+  /// Quando o render precisa do pintor POR UNIDADE em vez do Text
+  /// simples: ha animacao, ou o texto segue um caminho.
   bool get hasTextAnimation =>
+      textPath.active ||
       anims.any((a) => a.enabled) ||
       animators.any((a) => a.enabled && a.properties.isNotEmpty);
 
@@ -563,6 +571,7 @@ class TextLayer extends Layer {
     double? fontSize,
     Color? color,
     bool? bold,
+    TextPathSpec? textPath,
     List<TextAnim>? anims,
     List<TextAnimator>? animators,
   }) {
@@ -575,6 +584,7 @@ class TextLayer extends Layer {
       fontSize: fontSize ?? this.fontSize,
       color: color ?? this.color,
       bold: bold ?? this.bold,
+      textPath: textPath ?? this.textPath,
       anims: anims ?? this.anims,
       animators: animators ?? this.animators,
       position: position ?? this.position,
@@ -606,6 +616,7 @@ class TextLayer extends Layer {
         fontSize: fontSize,
         color: color,
         bold: bold,
+        textPath: textPath,
         anims: anims,
         animators: animators,
         position: position,

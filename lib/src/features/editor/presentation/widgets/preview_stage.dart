@@ -2216,12 +2216,34 @@ class _LayerContent extends StatelessWidget {
   /// Recursao do precomp: constroi as camadas filhas no tempo local.
   final List<Widget> Function(List<Layer> layers, Duration t) buildChildren;
 
+  /// Caminho da camada de forma [id], ja avaliado no tempo — para o
+  /// texto que segue uma forma desenhada no proprio projeto.
+  static ui.Path? _pathOfShapeLayer(
+      VideoProject project, String? id, Duration t) {
+    if (id == null) return null;
+    final l = project.layerById(id);
+    if (l is! ShapeLayer) return null;
+    final draws = evaluateShape(l.contents, l.localTime(t));
+    if (draws.isEmpty) return null;
+    final out = ui.Path();
+    for (final d in draws) {
+      out.addPath(d.path, Offset.zero);
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget child = switch (layer) {
       // Caminho rapido sem animador ativo (I2: linha inteira, com kerning).
-      TextLayer l when l.hasTextAnimation =>
-        AnimatedTextView(layer: l, localTime: localTime),
+      TextLayer l when l.hasTextAnimation => AnimatedTextView(
+          layer: l,
+          localTime: localTime,
+          // Texto seguindo OUTRA camada: o widget nao sabe resolver id,
+          // entao o caminho chega pronto de quem monta a composicao.
+          pathOverride: _pathOfShapeLayer(
+              project, l.textPath.shapeLayerId, localTime),
+        ),
       TextLayer l => Text(
           l.text,
           textAlign: TextAlign.center,

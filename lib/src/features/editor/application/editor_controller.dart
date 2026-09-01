@@ -25,6 +25,7 @@ import '../domain/nle_ops.dart';
 import '../domain/shape.dart';
 import '../domain/shape_ops.dart';
 import '../domain/text_anim.dart';
+import '../domain/text_path.dart';
 import '../domain/text_animator.dart';
 import '../domain/text_presets.dart';
 import '../domain/video_project.dart';
@@ -2019,6 +2020,11 @@ class EditorController extends Notifier<VideoProject> {
   void applyTextPreset(String id, TextPreset preset) {
     _updateTextLayer(
         id, (l) => l.copyLayer(animators: preset.build()));
+  }
+
+  /// TEXTO EM CAMINHO: selo circular, arco, ou seguindo outra forma.
+  void updateTextPath(String id, TextPathSpec Function(TextPathSpec) fn) {
+    _updateTextLayer(id, (l) => l.copyLayer(textPath: fn(l.textPath)));
   }
 
   // ------------------------------- animacoes de texto (catalogo AM)

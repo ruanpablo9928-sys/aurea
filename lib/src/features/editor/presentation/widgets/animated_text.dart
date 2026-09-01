@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/layer.dart';
 import '../../domain/text_animator.dart';
+import '../../domain/text_path.dart';
 
 /// Render por unidade (PR-T2): segmenta em grapheme clusters, mede o
 /// avanco pela LINHA INTEIRA (getBoxesForRange no layout completo) e pinta
@@ -18,10 +19,16 @@ class AnimatedTextView extends StatelessWidget {
     super.key,
     required this.layer,
     required this.localTime,
+    this.pathOverride,
   });
 
   final TextLayer layer;
   final Duration localTime;
+
+  /// Caminho de outra camada de forma, quando o texto segue ela. O
+  /// widget nao sabe resolver id de camada — quem monta a composicao
+  /// sabe, e passa pronto.
+  final Path? pathOverride;
 
   static TextStyle styleFor(TextLayer l, {bool animated = false}) => TextStyle(
         color: l.color,
@@ -50,14 +57,23 @@ class AnimatedTextView extends StatelessWidget {
 
     final units = TextUnits.of(layer.text);
 
+    // TEXTO EM CAMINHO: o caminho decide o tamanho da area, nao a linha
+    // de texto — um selo circular ocupa um quadrado, nao uma tira.
+    final spec = layer.textPath;
+    final path = spec.active ? (pathOverride ?? buildTextPath(spec)) : null;
+    final size = path == null || path.getBounds().isEmpty
+        ? full.size
+        : path.getBounds().inflate(layer.fontSize).size;
+
     return CustomPaint(
-      size: full.size,
+      size: size,
       painter: _AnimatedTextPainter(
         layer: layer,
         style: style,
         full: full,
         units: units,
         localTime: localTime,
+        path: path,
       ),
     );
   }
@@ -70,6 +86,7 @@ class _AnimatedTextPainter extends CustomPainter {
     required this.full,
     required this.units,
     required this.localTime,
+    this.path,
   });
 
   final TextLayer layer;
@@ -77,6 +94,7 @@ class _AnimatedTextPainter extends CustomPainter {
   final TextPainter full;
   final TextUnits units;
   final Duration localTime;
+  final Path? path;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -164,7 +182,30 @@ class _AnimatedTextPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
 
-      final center = rect.center;
+      // Sobre o caminho, a posicao vem do AVANCO acumulado ao longo da
+      // curva, nao da caixa da linha — e a diferenca entre letras
+      // acompanhando a curva e letras enfileiradas em cima dela.
+      Offset center;
+      var pathAngle = 0.0;
+      if (path != null) {
+        final spec = layer.textPath;
+        // O avanco natural da letra na linha vira a distancia
+        // percorrida sobre a curva.
+        final d = rect.center.dx + spec.offset + spec.spacing * i;
+        final posto = placeOnPath(
+          path!,
+          d,
+          spec: spec,
+          glyphHeight: unitPainter.height,
+        );
+        if (posto == null) continue;
+        center = posto.position +
+            Offset(size.width / 2, size.height / 2);
+        pathAngle = posto.angleRad;
+      } else {
+        center = rect.center;
+      }
+
       canvas.save();
       // DESFOQUE POR UNIDADE: e o que faz "aparecer em desfoque" existir.
       // Sem isto so da para borrar a camada inteira, que e outra coisa.
@@ -179,6 +220,7 @@ class _AnimatedTextPainter extends CustomPainter {
         );
       }
       canvas.translate(center.dx + dx + trackingShift, center.dy + dy);
+      if (pathAngle != 0) canvas.rotate(pathAngle);
       if (rotation != 0) canvas.rotate(rotation * math.pi / 180);
       if (skew != 0) {
         canvas.transform(Float64List.fromList(<double>[

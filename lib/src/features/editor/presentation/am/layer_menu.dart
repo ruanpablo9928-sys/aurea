@@ -21,6 +21,7 @@ import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'oficio_sheets.dart';
 import 'scene3d_sheet.dart';
+import 'text_path_sheet.dart';
 import 'scene3d_studio.dart';
 
 /// Acao escolhida no menu da camada.
@@ -308,6 +309,15 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 });
               }),
             ],
+            if (layer is TextLayer)
+              item(CupertinoIcons.circle_grid_hex, 'Texto em caminho', () {
+                Navigator.of(moreContext).pop();
+                Future.microtask(() {
+                  if (context.mounted) {
+                    showTextPathSheet(context, ref, layer.id);
+                  }
+                });
+              }),
             if (layer is AudioLayer || layer is VideoLayer)
               item(CupertinoIcons.speaker_2, 'Som', () {
                 Navigator.of(moreContext).pop();
