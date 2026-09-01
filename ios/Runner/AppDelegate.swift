@@ -12,5 +12,10 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // Codificador da plataforma: substitui o x264 do FFmpeg.
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "VideoEncoderPlugin") {
+      VideoEncoderPlugin.register(with: registrar)
+    }
   }
 }

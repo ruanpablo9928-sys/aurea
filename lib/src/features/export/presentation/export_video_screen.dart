@@ -12,6 +12,7 @@ import '../../editor/application/editor_controller.dart';
 import '../../editor/application/video_layer_manager.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/presentation/am/am_colors.dart';
+import '../../editor/presentation/widgets/dither_layer.dart';
 import '../../editor/presentation/widgets/preview_stage.dart';
 import '../application/export_engine.dart';
 
@@ -54,7 +55,10 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _rodar());
+    // O shader precisa estar carregado antes do primeiro quadro.
+    DitherLayer.warmUp().then((_) {
+      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _rodar());
+    });
   }
 
   @override
@@ -89,6 +93,22 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       final total = engine.frameCount;
       if (total <= 0) {
         throw ExportException('A composicao tem duracao zero.');
+      }
+
+      // CORTE PURO: um clipe so, sem nada por cima. Copiar as trilhas em
+      // vez de redesenhar 150 quadros e a diferenca entre instantaneo e
+      // um minuto de espera.
+      _passo(_Fase.preparando, 0.1, 'Verificando se da para copiar...');
+      final atalho = await engine.tryPureCut();
+      if (atalho != null) {
+        if (!mounted) return;
+        setState(() {
+          _fase = _Fase.pronto;
+          _progresso = 1;
+          _saida = atalho;
+          _detalhe = 'Corte puro: copiado sem recodificar.';
+        });
+        return;
       }
 
       // 1. Quadros de cada camada de video.
@@ -136,11 +156,13 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       }
 
       // 3. Codifica com audio.
-      _passo(_Fase.codificando, 0.5,
-          'Codificando video e mixando audio...');
+      _passo(_Fase.codificando, 0.05,
+          'Codificando no codificador do aparelho...');
       final file = await engine.encode(
         framesDir: framesDir,
         quality: widget.quality,
+        onProgress: (p) => _passo(_Fase.codificando, p,
+            p < 0.9 ? 'Codificando video...' : 'Juntando o audio...'),
       );
       await engine.cleanup();
       if (!mounted) return;
@@ -238,12 +260,15 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                         height: h,
                         child: ColoredBox(
                           color: Colors.black,
-                          child: CompositionView(
-                            time: _time,
-                            videos: _videos,
-                            selectedId: null,
-                            exportFrames: _quadroAtual,
-                            exporting: true,
+                          child: DitherLayer(
+                            time: _time.value,
+                            child: CompositionView(
+                              time: _time,
+                              videos: _videos,
+                              selectedId: null,
+                              exportFrames: _quadroAtual,
+                              exporting: true,
+                            ),
                           ),
                         ),
                       ),
@@ -415,7 +440,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
-              value: _fase == _Fase.codificando ? null : _progresso,
+              value: _progresso,
               minHeight: 6,
               backgroundColor: AmColors.chip,
               valueColor:

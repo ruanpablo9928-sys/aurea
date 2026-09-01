@@ -26,6 +26,7 @@ import 'animated_text.dart';
 import 'blend_mask.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
+import 'dither_layer.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import 'scene3d_painter.dart';
@@ -190,10 +191,19 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          CompositionView(
-                            time: widget.playback.time,
-                            videos: widget.videos,
-                            selectedId: selectedId,
+                          // DITHERING na saida: sem ele, gradiente
+                          // escuro vira faixa em 8 bits.
+                          ValueListenableBuilder<Duration>(
+                            valueListenable: widget.playback.time,
+                            builder: (context, t, child) => DitherLayer(
+                              time: t,
+                              child: child!,
+                            ),
+                            child: CompositionView(
+                              time: widget.playback.time,
+                              videos: widget.videos,
+                              selectedId: selectedId,
+                            ),
                           ),
                           // GUIAS, GRADE, AREAS SEGURAS e mascara de
                           // enquadramento (PR-X3): vivem ACIMA da

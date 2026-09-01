@@ -39,7 +39,11 @@ dependencies:
   image_picker: ^1.2.3
   path_provider: ^2.1.6
   uuid: ^4.6.0
-  ffmpeg_kit_flutter_new: ^4.6.2
+  # SEM CODECS GPL. A variante "full" traz tudo menos x264/x265/xvid —
+  # que sao GPL e obrigariam a abrir o codigo do app inteiro. Quem
+  # codifica H.264 agora e o codificador do aparelho (MediaCodec /
+  # AVAssetWriter); o FFmpeg aqui so decodifica e junta audio.
+  ffmpeg_kit_flutter_new_full: ^2.5.2
   file_picker: ^10.3.3
   shared_preferences: ^2.5.5
   characters: ^1.4.1
@@ -76,6 +80,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Shader de saida: dithering que mata o banding.
+  shaders:
+    - shaders/dither.frag
 
   # To add assets to your application, add an assets section, like this:
   # assets:
