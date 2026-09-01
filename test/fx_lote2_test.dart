@@ -184,14 +184,23 @@ void main() {
 
     test('rastreador de blobs desenha sem estourar em tamanho zero', () {
       const p = BlobTrackerPainter(
-        count: 4,
-        boxSize: 90,
-        spread: 0.6,
-        speed: 0.4,
-        stroke: 2,
-        cornersOnly: true,
-        color: Color(0xFFB8FF3D),
+        track: null,
         time: Duration.zero,
+        color: Color(0xFFB8FF3D),
+        style: 1,
+        showCenter: true,
+        showLines: true,
+        lineType: 0,
+        lineStyle: 1,
+        palette: 1,
+        thickness: 2,
+        opacity: 100,
+        fill: 0,
+        cornerLength: 20,
+        showCaption: true,
+        captionContent: 1,
+        captionPosition: 0,
+        fontSize: 12,
         seed: 7,
       );
       final recorder = ui.PictureRecorder();

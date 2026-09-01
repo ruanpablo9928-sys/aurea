@@ -92,6 +92,22 @@ const effectParamAliases = <EffectType, Map<String, String>>{
     'fase': 'phase',
     'rgb': 'rgb_randomness',
   },
+  EffectType.blobTracker: {
+    'quantidade': 'max_blobs',
+    'tamanho': 'min_blob_size',
+    'espalhar': 'merge_distance',
+    'velocidade': 'smoothing',
+    'traco': 'thickness',
+    'cantos': 'style',
+    'semente': 'seed',
+  },
+  EffectType.pixelSort: {
+    'limiar': 'threshold',
+    'comprimento': 'radius_length',
+    'direcao': 'sort_angle',
+    'densidade': 'random_restart',
+    'semente': 'seed',
+  },
   EffectType.glowVol: {
     'raio': 'radius',
     'intensidade': 'exposure',
@@ -693,18 +709,65 @@ const effectSpecs = <EffectType, EffectSpec>{
     id: 'pixel_sorter',
     name: 'Pixel Sorter',
     category: 'Stylize',
-    synonyms: ['ordenar', 'pixels', 'pixel sort', 'sorting', 'databend', 'arrastar'],
+    synonyms: [
+      'ordenar', 'pixels', 'pixel sort', 'sorting', 'databend',
+      'arrastar', 'derreter',
+    ],
     cost: 3,
     params: {
-      'limiar': EffectParam('Limiar', 0.55, 0.0, 1.0),
-      'comprimento':
-          EffectParam('Comprimento', 60.0, 0.0, 400.0, relative: true),
-      'direcao': EffectParam('Direcao', 0.0, 0.0, 3.0,
+      'mode': EffectParam('Mode', 0.0, 0.0, 2.0,
           kind: ParamKind.choice,
-          options: ['Baixo', 'Cima', 'Direita', 'Esquerda']),
-      'densidade': EffectParam('Densidade', 0.5, 0.05, 1.0),
-      'semente': EffectParam('Semente', 1.0, 1.0, 999.0,
+          options: ['Linear', 'Radial', 'Circular']),
+
+      // --- General ---
+      'sort_angle': EffectParam('Sort Angle', 0.0, -360.0, 360.0),
+      'threshold': EffectParam('Threshold', 0.3, 0.0, 1.0),
+      'direction': EffectParam('Direction', 1.0, 0.0, 1.0,
+          kind: ParamKind.choice,
+          options: ['Below Threshold', 'Above Threshold']),
+      'reverse_sort': EffectParam('Reverse Sort', 0.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'sort_by': EffectParam('Sort By', 0.0, 0.0, 9.0,
+          kind: ParamKind.choice,
+          options: [
+            'Monochrome', 'Average', 'Minimum', 'Maximum', 'Red',
+            'Green', 'Blue', 'Hue', 'Saturation', 'Brightness',
+          ]),
+      'random_restart': EffectParam('Random Restart', 100.0, 0.0, 1000.0),
+      'blur_threshold_matte':
+          EffectParam('Blur Threshold Matte', 0.1, 0.0, 5.0),
+      'seed': EffectParam('Seed', 0.273, 0.0, 999.0,
           kind: ParamKind.seed),
+      'blend_with_original':
+          EffectParam('Blend With Original', 0.0, 0.0, 1.0),
+      // LIGADO por padrao: ordenacao e sequencial e e o efeito mais
+      // hostil a GPU da lista. Em 720 o resultado e o mesmo e o preview
+      // continua andando.
+      'downsample': EffectParam('Downsample', 1.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'sort_resolution': EffectParam('Sort Resolution', 720.0, 64.0, 4320.0),
+      'show': EffectParam('Show', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: [
+            'Result', 'Raw Values', 'Threshold Matte', 'Restart Noise',
+          ]),
+      'soft_edges': EffectParam('Soft Edges', 0.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+
+      // --- Radial ---
+      'center_x': EffectParam('Center X', 0.5, 0.0, 1.0,
+          kind: ParamKind.point, relative: true),
+      'center_y': EffectParam('Center Y', 0.5, 0.0, 1.0,
+          kind: ParamKind.point, relative: true),
+      'start_angle': EffectParam('Start Angle', 0.0, -360.0, 360.0),
+      'degrees_sorted': EffectParam('Degrees Sorted', 360.0, 0.0, 360.0),
+      'inner_radius': EffectParam('Inner Radius', 0.1, 0.0, 2.0),
+      'radius_length': EffectParam('Radius Length', 0.8, 0.0, 2.0),
+      'radius_variation': EffectParam('Radius Variation', 0.1, 0.0, 1.0),
+
+      // --- Circular ---
+      'start_variation': EffectParam('Start Variation', 0.15, 0.0, 1.0),
+      'thickness': EffectParam('Thickness', 1.1, 0.0, 4.0),
     },
   ),
 
@@ -715,18 +778,70 @@ const effectSpecs = <EffectType, EffectSpec>{
     id: 'blob_tracker',
     name: 'Blob Tracker',
     category: 'Stylize',
-    synonyms: ['rastreador', 'blobs', 'blob tracker', 'tracking', 'alvo', 'hud', 'mira'],
+    synonyms: [
+      'rastreador', 'blobs', 'blob tracker', 'tracking', 'alvo', 'hud',
+      'mira', 'visao de maquina', 'deteccao',
+    ],
     hasColor: true,
+    cost: 2,
     params: {
-      'quantidade': EffectParam('Quantidade', 4.0, 1.0, 16.0),
-      'tamanho': EffectParam('Tamanho', 90.0, 10.0, 400.0, relative: true),
-      'espalhar': EffectParam('Espalhar', 0.6, 0.0, 1.0),
-      'velocidade': EffectParam('Velocidade', 0.4, 0.0, 3.0),
-      'traco': EffectParam('Traco', 2.0, 0.5, 8.0),
-      'cantos': EffectParam('So os cantos', 1.0, 0.0, 1.0,
+      // --- Detection ---
+      'detect_by': EffectParam('Detect By', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: ['Motion', 'Brightness', 'Color Key', 'Edges']),
+      'threshold': EffectParam('Threshold', 35.0, 0.0, 100.0),
+      'sensitivity': EffectParam('Sensitivity', 50.0, 0.0, 100.0),
+      'min_blob_size': EffectParam('Min Blob Size', 400.0, 0.0, 20000.0),
+      'max_blob_size': EffectParam('Max Blob Size', 0.0, 0.0, 200000.0),
+      'max_blobs': EffectParam('Max Blobs', 20.0, 1.0, 100.0),
+      'merge_distance': EffectParam('Merge Distance', 20.0, 0.0, 200.0),
+      'persistence': EffectParam('Persistence', 8.0, 0.0, 60.0),
+      'smoothing': EffectParam('Smoothing', 40.0, 0.0, 100.0),
+
+      // --- Overlay ---
+      'style': EffectParam('Style', 0.0, 0.0, 4.0,
+          kind: ParamKind.choice,
+          options: [
+            'Full Box', 'Corner Box', 'Circle', 'Crosshair', 'None',
+          ]),
+      'show_center_marker':
+          EffectParam('Show Center Marker', 1.0, 0.0, 1.0,
+              kind: ParamKind.toggle),
+      'show_connecting_lines':
+          EffectParam('Show Connecting Lines', 0.0, 0.0, 1.0,
+              kind: ParamKind.toggle),
+      'line_type': EffectParam('Line Type', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Nearest', 'All Pairs', 'To Centroid']),
+      'line_style': EffectParam('Line Style', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Solid', 'Dashed', 'Dotted']),
+      'palette': EffectParam('Palette', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Single', 'Per-ID', 'Random']),
+      'thickness': EffectParam('Thickness', 2.0, 0.5, 12.0),
+      'opacity': EffectParam('Opacity', 100.0, 0.0, 100.0),
+      'fill': EffectParam('Fill', 0.0, 0.0, 100.0),
+      'corner_length': EffectParam('Corner Length', 20.0, 1.0, 50.0),
+
+      // --- Labels ---
+      'show_caption': EffectParam('Show Caption', 1.0, 0.0, 1.0,
           kind: ParamKind.toggle),
-      'semente': EffectParam('Semente', 7.0, 1.0, 999.0,
-          kind: ParamKind.seed),
+      'caption_content': EffectParam('Caption Content', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['ID', 'ID + Size', 'ID + Coordinates']),
+      'caption_position': EffectParam('Caption Position', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: ['Top Left', 'Top Right', 'Bottom', 'Inside']),
+      'font_size': EffectParam('Font Size', 12.0, 6.0, 48.0),
+
+      // --- Composite ---
+      'blend_mode': EffectParam('Blend Mode', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Normal', 'Add', 'Screen']),
+      'overlay_only': EffectParam('Overlay Only', 0.0, 0.0, 1.0,
+          kind: ParamKind.toggle),
+      'seed': EffectParam('Seed', 0.0, 0.0, 999.0, kind: ParamKind.seed),
     },
   ),
 

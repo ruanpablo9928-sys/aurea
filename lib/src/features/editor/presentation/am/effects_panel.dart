@@ -2,7 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../application/blob_track_service.dart';
+import '../../../../core/ui/snack.dart';
 import '../../application/editor_controller.dart';
+import '../../domain/layer.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/effect.dart';
 import '../../domain/effect_preset.dart';
@@ -309,6 +312,18 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                         onToggleEnabled: () =>
                             controller.toggleEffectEnabled(id, effect.id),
                       ),
+                    // ANALISAR: o Blob Tracker precisa varrer o video
+                    // uma vez antes de desenhar. Sem o comando, o efeito
+                    // so mostra o rastreio simulado — e a pessoa nao
+                    // teria como saber que falta um passo.
+                    for (final effect in layer.effects)
+                      if (effect.type == EffectType.blobTracker &&
+                          layer is VideoLayer)
+                        _BotaoAnalisar(
+                          effectId: effect.id,
+                          layerId: id,
+                          controller: controller,
+                        ),
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: () => _addEffect(context, id),
@@ -774,6 +789,103 @@ class _ColorRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// O comando de analise do Blob Tracker, com o estado do que ja rodou.
+class _BotaoAnalisar extends StatefulWidget {
+  const _BotaoAnalisar({
+    required this.effectId,
+    required this.layerId,
+    required this.controller,
+  });
+
+  final String effectId;
+  final String layerId;
+  final EditorController controller;
+
+  @override
+  State<_BotaoAnalisar> createState() => _BotaoAnalisarState();
+}
+
+class _BotaoAnalisarState extends State<_BotaoAnalisar> {
+  bool _rodando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Analise de outra sessao: le do disco em vez de refazer.
+    BlobTrackService.instance.load(widget.effectId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: BlobTrackService.instance.revision,
+      builder: (context, _, _) {
+        final dados = BlobTrackService.instance.dataFor(widget.effectId);
+        final temAnalise = dados != null && !dados.isEmpty;
+        return Padding(
+          padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: _rodando
+                    ? null
+                    : () async {
+                        setState(() => _rodando = true);
+                        final n = await widget.controller
+                            .analyzeBlobsFor(
+                                widget.layerId, widget.effectId);
+                        if (!context.mounted) return;
+                        setState(() => _rodando = false);
+                        AureaSnack.show(
+                          context,
+                          n == null
+                              ? 'Nao consegui ler esse video'
+                              : '$n quadros analisados',
+                        );
+                      },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: temAnalise
+                        ? AmColors.chip
+                        : AmColors.accentDim,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _rodando
+                        ? 'Analisando o video...'
+                        : (temAnalise
+                            ? 'Analisar de novo'
+                            : 'Analisar o video'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          temAnalise ? AmColors.text : AmColors.accent,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                temAnalise
+                    ? '${dados.frames.length} quadros com caixas gravadas. '
+                        'Desenhar virou consulta: o seek e instantaneo.'
+                    : 'Ainda nao analisado — o que aparece e um rastreio '
+                        'simulado, para ajustar a aparencia.',
+                style: const TextStyle(
+                    fontSize: 11, height: 1.35, color: AmColors.muted),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

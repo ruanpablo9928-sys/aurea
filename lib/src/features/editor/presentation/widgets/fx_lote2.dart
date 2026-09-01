@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+
+import '../../domain/blob_track.dart';
 import 'package:flutter/rendering.dart';
 
 /// EFEITOS DO LOTE 2.
@@ -297,89 +299,279 @@ class BendPainter extends _FxPainter {
 
 /// ORDENAR PIXELS: as faixas mais claras que o limiar sao esticadas na
 /// direcao escolhida, que e o rastro que o pixel sorting produz.
+/// PIXEL SORTER — arrasta os pixels ao longo de linhas.
+///
+/// O que esta implementado e o ARRASTO por faixa, em tres arrumacoes de
+/// linha: Linear (em qualquer angulo), Radial (raios saindo do centro) e
+/// Circular (aneis em volta do centro).
+///
+/// O que NAO esta: a ordenacao pixel a pixel de verdade. Ela e
+/// sequencial, precisa dos bytes da imagem, e em Dart no fio da
+/// interface derrubaria o preview. O caminho certo e o mesmo do Blob
+/// Tracker — analisar sob comando e guardar o resultado — e esta
+/// anotado como pendente, nao disfarcado.
 class PixelSortPainter extends _FxPainter {
   PixelSortPainter({
+    required this.mode,
+    required this.sortAngle,
     required this.threshold,
+    required this.aboveThreshold,
+    required this.reverse,
     required this.length,
-    required this.direction,
-    required this.density,
+    required this.randomRestart,
     required this.seed,
+    required this.blendWithOriginal,
+    required this.show,
+    required this.softEdges,
+    required this.centerX,
+    required this.centerY,
+    required this.startAngle,
+    required this.degreesSorted,
+    required this.innerRadius,
+    required this.radiusVariation,
+    required this.startVariation,
+    required this.thickness,
   });
 
-  /// 0 baixo, 1 cima, 2 direita, 3 esquerda.
-  final int direction;
+  /// 0 Linear, 1 Radial, 2 Circular.
+  final int mode;
+  final double sortAngle;
   final double threshold;
+  final bool aboveThreshold;
+  final bool reverse;
+
+  /// Comprimento do arrasto, em fracao do lado.
   final double length;
-  final double density;
+
+  /// Quantas linhas por mil pixels — quanto maior, mais faixas.
+  final double randomRestart;
   final int seed;
+  final double blendWithOriginal;
+
+  /// 0 Result, 1 Raw Values, 2 Threshold Matte, 3 Restart Noise.
+  final int show;
+  final bool softEdges;
+
+  final double centerX;
+  final double centerY;
+  final double startAngle;
+  final double degreesSorted;
+  final double innerRadius;
+  final double radiusVariation;
+  final double startVariation;
+  final double thickness;
 
   @override
   void paintSnapshot(PaintingContext context, Offset offset, Size size,
       ui.Image image, Size sourceSize, double pixelRatio) {
     final canvas = context.canvas;
+    if (size.isEmpty) return;
     final src = Rect.fromLTWH(
         0, 0, image.width.toDouble(), image.height.toDouble());
-    canvas.drawImageRect(image, src, _dst(offset, size),
-        Paint()..filterQuality = FilterQuality.low);
-    if (length < 1 || size.isEmpty) return;
+    final dst = _dst(offset, size);
 
-    final vertical = direction <= 1;
-    final negative = direction == 1 || direction == 3;
-    final span = vertical ? size.height : size.width;
-    final across = vertical ? size.width : size.height;
+    // DIAGNOSTICO: os modos de "Show" nao sao enfeite — sao como se
+    // descobre por que o efeito nao pegou onde devia.
+    if (show == 3) {
+      _mostrarRuido(canvas, dst, size);
+      return;
+    }
+    if (show == 2) {
+      _mostrarMatte(canvas, image, src, dst);
+      return;
+    }
 
-    // Uma faixa a cada N pixels: densidade alta = mais faixas.
-    final step = (10 - density.clamp(0.05, 1.0) * 8).clamp(2.0, 10.0);
-    final n = (across / step).floor().clamp(1, 400);
-    final sx = image.width / size.width;
-    final sy = image.height / size.height;
+    canvas.drawImageRect(
+        image, src, dst, Paint()..filterQuality = FilterQuality.low);
+    if (show == 1) return; // Raw Values: so a fonte, sem arrasto.
+
+    final ladoMenor = math.min(size.width, size.height);
+    final comprimento = length * ladoMenor;
+    if (comprimento < 1) return;
+
+    // Quantas linhas: Random Restart e "reinicios por mil pixels".
+    final linhas =
+        ((randomRestart / 1000) * ladoMenor).round().clamp(1, 400);
 
     canvas.save();
-    canvas.clipRect(_dst(offset, size));
-    for (var i = 0; i < n; i++) {
-      final r = fxNoise(i.toDouble(), 0, seed);
-      if (r < threshold) continue;
-      final r2 = fxNoise(i.toDouble(), 1, seed + 31);
-      final start = r2 * span * 0.8;
-      final len = length * (0.35 + r * 0.65);
+    canvas.clipRect(dst);
 
-      if (vertical) {
-        final x = i * step;
-        // Uma fatia fina da imagem, esticada ao longo do eixo.
-        final srcSlice = Rect.fromLTWH(
-            x * sx, start * sy, math.max(1, step * sx), math.max(1, sy));
-        final dstSlice = Rect.fromLTWH(
-          offset.dx + x,
-          offset.dy + (negative ? start - len : start),
-          step,
-          len,
-        );
-        canvas.drawImageRect(image, srcSlice, dstSlice,
-            Paint()..filterQuality = FilterQuality.none);
-      } else {
-        final y = i * step;
-        final srcSlice = Rect.fromLTWH(
-            start * sx, y * sy, math.max(1, sx), math.max(1, step * sy));
-        final dstSlice = Rect.fromLTWH(
-          offset.dx + (negative ? start - len : start),
-          offset.dy + y,
-          len,
-          step,
-        );
-        canvas.drawImageRect(image, srcSlice, dstSlice,
-            Paint()..filterQuality = FilterQuality.none);
+    final cx = offset.dx + size.width * centerX;
+    final cy = offset.dy + size.height * centerY;
+    final sx = image.width / size.width;
+    final sy = image.height / size.height;
+    final pintura = Paint()
+      ..filterQuality = softEdges ? FilterQuality.low : FilterQuality.none;
+
+    for (var i = 0; i < linhas; i++) {
+      // O LIMIAR decide quais linhas entram. "Above" pega as linhas de
+      // valor alto; "Below", as de valor baixo — sao imagens diferentes,
+      // e e por isso que a direcao existe.
+      final valor = fxNoise(i.toDouble(), 0, seed);
+      final passa = aboveThreshold ? valor >= threshold : valor <= threshold;
+      if (!passa) continue;
+
+      final variacao = fxNoise(i.toDouble(), 1, seed + 31);
+      final comp = comprimento *
+          (0.35 + variacao * 0.65) *
+          (1 + (radiusVariation) * (variacao - 0.5) * 2);
+      final sinal = reverse ? -1.0 : 1.0;
+
+      switch (mode) {
+        case 1:
+          // RADIAL: raios saindo do centro.
+          final fatia = degreesSorted / linhas;
+          final ang = (startAngle + i * fatia) * math.pi / 180;
+          final r0 = innerRadius * ladoMenor / 2;
+          final dirX = math.cos(ang), dirY = math.sin(ang);
+          final x0 = cx + dirX * r0;
+          final y0 = cy + dirY * r0;
+          canvas.save();
+          canvas.translate(x0, y0);
+          canvas.rotate(ang);
+          canvas.drawImageRect(
+            image,
+            Rect.fromLTWH((x0 - offset.dx) * sx, (y0 - offset.dy) * sy,
+                math.max(1, sx * 2), math.max(1, sy * 2)),
+            Rect.fromLTWH(0, -thickness, comp * sinal.abs(), thickness * 2),
+            pintura,
+          );
+          canvas.restore();
+        case 2:
+          // CIRCULAR: aneis em volta do centro.
+          final passoR = (ladoMenor / 2) / linhas;
+          final raio = innerRadius * ladoMenor / 2 +
+              i * passoR * (1 + startVariation * (variacao - 0.5));
+          final abertura = degreesSorted * math.pi / 180;
+          final ini = (startAngle +
+                  startVariation * variacao * 360) *
+              math.pi /
+              180;
+          final caminho = Path()
+            ..addArc(
+                Rect.fromCircle(center: Offset(cx, cy), radius: raio),
+                ini,
+                abertura * (comp / ladoMenor));
+          canvas.drawPath(
+            caminho,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = math.max(1, thickness)
+              ..shader = ui.ImageShader(
+                image,
+                TileMode.clamp,
+                TileMode.clamp,
+                (Matrix4.identity()
+                      ..translateByDouble(offset.dx, offset.dy, 0, 1)
+                      ..scaleByDouble(1 / sx, 1 / sy, 1, 1))
+                    .storage,
+              ),
+          );
+        default:
+          // LINEAR: faixas em qualquer angulo.
+          final ang = sortAngle * math.pi / 180;
+          final passo = ladoMenor / linhas;
+          final base = i * passo;
+          final inicio = fxNoise(i.toDouble(), 2, seed + 7) * ladoMenor;
+          canvas.save();
+          canvas.translate(offset.dx + size.width / 2,
+              offset.dy + size.height / 2);
+          canvas.rotate(ang);
+          final x = base - ladoMenor / 2;
+          final y = inicio - ladoMenor / 2;
+          canvas.drawImageRect(
+            image,
+            Rect.fromLTWH(
+                (base * sx).clamp(0, image.width - 1).toDouble(),
+                (inicio * sy).clamp(0, image.height - 1).toDouble(),
+                math.max(1, passo * sx),
+                math.max(1, sy)),
+            Rect.fromLTWH(x, sinal > 0 ? y : y - comp, passo, comp),
+            pintura,
+          );
+          canvas.restore();
       }
     }
+    canvas.restore();
+
+    // BLEND WITH ORIGINAL em 1 tem de devolver a imagem INTACTA — e o
+    // valor "desligado" da ficha, e a prova de neutralidade.
+    if (blendWithOriginal > 0.001) {
+      canvas.drawImageRect(
+        image,
+        src,
+        dst,
+        Paint()
+          ..filterQuality = FilterQuality.low
+          ..color = Colors.white
+              .withValues(alpha: blendWithOriginal.clamp(0.0, 1.0)),
+      );
+    }
+  }
+
+  /// O RUIDO DE REINICIO, desenhado: e onde cada linha comeca.
+  void _mostrarRuido(Canvas canvas, Rect dst, Size size) {
+    canvas.drawRect(dst, Paint()..color = const Color(0xFF000000));
+    final linhas =
+        ((randomRestart / 1000) * math.min(size.width, size.height))
+            .round()
+            .clamp(1, 400);
+    final passo = size.height / linhas;
+    for (var i = 0; i < linhas; i++) {
+      final v = fxNoise(i.toDouble(), 0, seed);
+      canvas.drawRect(
+        Rect.fromLTWH(dst.left, dst.top + i * passo, dst.width, passo),
+        Paint()..color = Color.fromRGBO(
+            (v * 255).round(), (v * 255).round(), (v * 255).round(), 1),
+      );
+    }
+  }
+
+  /// O MATTE DO LIMIAR: branco onde o efeito age, preto onde nao age.
+  void _mostrarMatte(
+      Canvas canvas, ui.Image image, Rect src, Rect dst) {
+    canvas.saveLayer(dst, Paint());
+    canvas.drawImageRect(
+        image, src, dst, Paint()..filterQuality = FilterQuality.low);
+    // Luminancia -> preto e branco, cortada no limiar.
+    final corte = (threshold * 255).round().clamp(0, 255).toDouble();
+    canvas.saveLayer(
+      dst,
+      Paint()
+        ..colorFilter = ColorFilter.matrix(<double>[
+          0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255,
+          0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255,
+          0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255,
+          0, 0, 0, 1, 0,
+        ]),
+    );
+    canvas.drawImageRect(
+        image, src, dst, Paint()..filterQuality = FilterQuality.low);
+    canvas.restore();
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant PixelSortPainter old) =>
+      old.mode != mode ||
+      old.sortAngle != sortAngle ||
       old.threshold != threshold ||
+      old.aboveThreshold != aboveThreshold ||
+      old.reverse != reverse ||
       old.length != length ||
-      old.direction != direction ||
-      old.density != density ||
-      old.seed != seed;
+      old.randomRestart != randomRestart ||
+      old.seed != seed ||
+      old.blendWithOriginal != blendWithOriginal ||
+      old.show != show ||
+      old.softEdges != softEdges ||
+      old.centerX != centerX ||
+      old.centerY != centerY ||
+      old.startAngle != startAngle ||
+      old.degreesSorted != degreesSorted ||
+      old.innerRadius != innerRadius ||
+      old.radiusVariation != radiusVariation ||
+      old.startVariation != startVariation ||
+      old.thickness != thickness;
 }
 
 // -------------------------------------------------------- CC Semear
@@ -1004,99 +1196,294 @@ class GlitchifyPainter extends _FxPainter {
 
 /// RASTREADOR DE BLOBS: os alvos de rastreio como elemento grafico —
 /// caixas com cantos, mira e rotulo, andando devagar pelo quadro.
+/// BLOB TRACKER — as sobreposicoes de rastreio.
+///
+/// O pintor NAO detecta nada: ele desenha o que a analise ja gravou.
+/// Rastreio depende do quadro anterior, e detectar aqui quebraria o seek
+/// instantaneo — pular para o segundo 40 exigiria processar os 1200
+/// quadros anteriores toda vez.
+///
+/// Sem analise, ele desenha um rastreio SIMULADO e deterministico, para
+/// a pessoa ver a aparencia e ajustar antes de gastar o processamento.
 class BlobTrackerPainter extends CustomPainter {
   const BlobTrackerPainter({
-    required this.count,
-    required this.boxSize,
-    required this.spread,
-    required this.speed,
-    required this.stroke,
-    required this.cornersOnly,
-    required this.color,
+    required this.track,
     required this.time,
+    required this.color,
+    required this.style,
+    required this.showCenter,
+    required this.showLines,
+    required this.lineType,
+    required this.lineStyle,
+    required this.palette,
+    required this.thickness,
+    required this.opacity,
+    required this.fill,
+    required this.cornerLength,
+    required this.showCaption,
+    required this.captionContent,
+    required this.captionPosition,
+    required this.fontSize,
     required this.seed,
+    this.simulatedCount = 4,
   });
 
-  final int count;
-  final double boxSize;
-  final double spread;
-  final double speed;
-  final double stroke;
-  final bool cornersOnly;
-  final Color color;
+  /// As caixas ja analisadas. Nulo = ainda nao analisou.
+  final BlobTrackData? track;
   final Duration time;
+  final Color color;
+
+  /// 0 Full Box, 1 Corner Box, 2 Circle, 3 Crosshair, 4 None.
+  final int style;
+  final bool showCenter;
+  final bool showLines;
+
+  /// 0 Nearest, 1 All Pairs, 2 To Centroid.
+  final int lineType;
+
+  /// 0 Solid, 1 Dashed, 2 Dotted.
+  final int lineStyle;
+
+  /// 0 Single, 1 Per-ID, 2 Random.
+  final int palette;
+  final double thickness;
+  final double opacity;
+  final double fill;
+  final double cornerLength;
+  final bool showCaption;
+
+  /// 0 ID, 1 ID + Size, 2 ID + Coordinates.
+  final int captionContent;
+
+  /// 0 Top Left, 1 Top Right, 2 Bottom, 3 Inside.
+  final int captionPosition;
+  final double fontSize;
   final int seed;
+  final int simulatedCount;
+
+  /// As caixas deste instante, ja na escala da tela.
+  List<Blob> _caixas(Size size) {
+    final t = track;
+    if (t != null && !t.isEmpty && t.width > 0 && t.height > 0) {
+      final ex = size.width / t.width;
+      final ey = size.height / t.height;
+      return [
+        for (final b in t.at(time))
+          Blob(
+            id: b.id,
+            area: b.area,
+            rect: Rect.fromLTRB(b.rect.left * ex, b.rect.top * ey,
+                b.rect.right * ex, b.rect.bottom * ey),
+          ),
+      ];
+    }
+
+    // SIMULADO: puro em (semente, indice, tempo) — o mesmo instante da
+    // sempre a mesma caixa, entao o preview nao pisca ao dar scrub.
+    final segundos = time.inMicroseconds / 1000000.0;
+    final lado = math.min(size.width, size.height) * 0.22;
+    return [
+      for (var i = 0; i < simulatedCount; i++)
+        () {
+          final fx = fxNoise(i.toDouble(), 0, seed);
+          final fy = fxNoise(i.toDouble(), 1, seed + 7);
+          final x = (0.5 + math.sin(segundos * 0.7 + fx * 6.28) * 0.28) *
+              (size.width - lado);
+          final y = (0.5 + math.cos(segundos * 0.5 + fy * 6.28) * 0.28) *
+              (size.height - lado);
+          return Blob(
+            id: i + 1,
+            rect: Rect.fromLTWH(x, y, lado, lado * 0.8),
+            area: (lado * lado * 0.8).round(),
+          );
+        }(),
+    ];
+  }
+
+  Color _corDe(int id) {
+    final a = (opacity.clamp(0.0, 100.0) / 100);
+    switch (palette) {
+      case 1:
+        // Per-ID: a cor identifica o objeto. Trocar de cor a cada quadro
+        // faria a cor deixar de significar alguma coisa.
+        final h = (id * 47) % 360;
+        return HSVColor.fromAHSV(a, h.toDouble(), 0.85, 1).toColor();
+      case 2:
+        final r = fxNoise(id.toDouble(), 3, seed);
+        return HSVColor.fromAHSV(a, r * 360, 0.8, 1).toColor();
+      default:
+        return color.withValues(alpha: a);
+    }
+  }
+
+  void _linha(Canvas canvas, Offset a, Offset b, Paint p) {
+    if (lineStyle == 0) {
+      canvas.drawLine(a, b, p);
+      return;
+    }
+    // Tracejada e pontilhada: pedacos ao longo da reta.
+    final d = (b - a).distance;
+    final passo = lineStyle == 1 ? 10.0 : 4.0;
+    final cheio = lineStyle == 1 ? 6.0 : 1.5;
+    if (d < 1) return;
+    final dir = (b - a) / d;
+    for (var x = 0.0; x < d; x += passo) {
+      final fim = math.min(x + cheio, d);
+      canvas.drawLine(a + dir * x, a + dir * fim, p);
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    final t = time.inMilliseconds / 1000.0 * speed;
-    final paint = Paint()
+    final caixas = _caixas(size);
+    if (caixas.isEmpty) return;
+
+    final traco = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..color = color
-      ..isAntiAlias = true;
+      ..strokeWidth = thickness;
 
-    for (var i = 0; i < count; i++) {
-      final fx = fxValueNoise(t + i * 13.7, i * 3.1, seed);
-      final fy = fxValueNoise(t + i * 7.3 + 50, i * 5.9, seed + 31);
-      final fs = fxNoise(i.toDouble(), 0, seed + 61);
+    // LINHAS DE CONEXAO, por tras das caixas.
+    if (showLines && caixas.length > 1) {
+      final p = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(0.5, thickness * 0.6)
+        ..color = _corDe(caixas.first.id).withValues(alpha: 0.45);
+      switch (lineType) {
+        case 1:
+          for (var i = 0; i < caixas.length; i++) {
+            for (var j = i + 1; j < caixas.length; j++) {
+              _linha(canvas, caixas[i].center, caixas[j].center, p);
+            }
+          }
+        case 2:
+          var cx = 0.0, cy = 0.0;
+          for (final b in caixas) {
+            cx += b.center.dx;
+            cy += b.center.dy;
+          }
+          final centro = Offset(cx / caixas.length, cy / caixas.length);
+          for (final b in caixas) {
+            _linha(canvas, b.center, centro, p);
+          }
+        default:
+          for (var i = 0; i < caixas.length; i++) {
+            var melhor = -1;
+            var melhorD = double.infinity;
+            for (var j = 0; j < caixas.length; j++) {
+              if (i == j) continue;
+              final d = (caixas[i].center - caixas[j].center).distance;
+              if (d < melhorD) {
+                melhorD = d;
+                melhor = j;
+              }
+            }
+            if (melhor >= 0) {
+              _linha(canvas, caixas[i].center, caixas[melhor].center, p);
+            }
+          }
+      }
+    }
 
-      final cx = size.width * (0.5 + (fx - 0.5) * spread);
-      final cy = size.height * (0.5 + (fy - 0.5) * spread);
-      final w = boxSize * (0.6 + fs * 0.8);
-      final h = w * (0.7 + fs * 0.6);
-      final rect = Rect.fromCenter(
-          center: Offset(cx, cy), width: w, height: h);
+    for (final b in caixas) {
+      final cor = _corDe(b.id);
+      traco.color = cor;
+      final r = b.rect;
 
-      if (cornersOnly) {
-        final c = math.min(w, h) * 0.28;
-        for (final corner in [
-          [rect.topLeft, Offset(c, 0), Offset(0, c)],
-          [rect.topRight, Offset(-c, 0), Offset(0, c)],
-          [rect.bottomLeft, Offset(c, 0), Offset(0, -c)],
-          [rect.bottomRight, Offset(-c, 0), Offset(0, -c)],
-        ]) {
-          final p = corner[0];
-          canvas.drawLine(p, p + corner[1], paint);
-          canvas.drawLine(p, p + corner[2], paint);
-        }
-      } else {
-        canvas.drawRect(rect, paint);
+      if (fill > 0.01) {
+        canvas.drawRect(
+            r,
+            Paint()
+              ..color = cor.withValues(
+                  alpha: (fill / 100).clamp(0.0, 1.0) *
+                      (opacity / 100).clamp(0.0, 1.0)));
       }
 
-      // Mira no centro.
-      final m = math.min(w, h) * 0.12;
-      canvas.drawLine(Offset(cx - m, cy), Offset(cx + m, cy), paint);
-      canvas.drawLine(Offset(cx, cy - m), Offset(cx, cy + m), paint);
+      switch (style) {
+        case 1:
+          // CANTOS: o comprimento e % da caixa, entao caixa pequena tem
+          // canto pequeno — em pixel fixo, o canto engoliria a caixa.
+          final cl = math.min(r.width, r.height) *
+              (cornerLength.clamp(1.0, 50.0) / 100);
+          for (final (px, py, sx, sy) in [
+            (r.left, r.top, 1.0, 1.0),
+            (r.right, r.top, -1.0, 1.0),
+            (r.left, r.bottom, 1.0, -1.0),
+            (r.right, r.bottom, -1.0, -1.0),
+          ]) {
+            canvas.drawLine(
+                Offset(px, py), Offset(px + cl * sx, py), traco);
+            canvas.drawLine(
+                Offset(px, py), Offset(px, py + cl * sy), traco);
+          }
+        case 2:
+          canvas.drawCircle(
+              r.center, math.min(r.width, r.height) / 2, traco);
+        case 3:
+          final c = r.center;
+          final l = math.min(r.width, r.height) / 2;
+          canvas.drawLine(
+              Offset(c.dx - l, c.dy), Offset(c.dx + l, c.dy), traco);
+          canvas.drawLine(
+              Offset(c.dx, c.dy - l), Offset(c.dx, c.dy + l), traco);
+        case 4:
+          break;
+        default:
+          canvas.drawRect(r, traco);
+      }
 
-      // Rotulo com a "confianca" — deterministico, nao inventado a cada
-      // quadro.
-      final conf = (60 + fs * 39).toStringAsFixed(0);
-      final tp = TextPainter(
-        text: TextSpan(
-          text: 'ID ${i + 1}  $conf%',
-          style: TextStyle(
-            fontSize: math.max(8, w * 0.11),
-            color: color,
-            fontWeight: FontWeight.w600,
+      if (showCenter) {
+        canvas.drawCircle(
+            r.center, math.max(1.5, thickness), Paint()..color = cor);
+      }
+
+      if (showCaption) {
+        final texto = switch (captionContent) {
+          1 => 'ID ${b.id} · ${b.area}px',
+          2 =>
+            'ID ${b.id} · ${r.left.round()},${r.top.round()}',
+          _ => 'ID ${b.id}',
+        };
+        final tp = TextPainter(
+          text: TextSpan(
+            text: texto,
+            style: TextStyle(
+              fontSize: fontSize,
+              color: cor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(rect.left, rect.top - tp.height - 3));
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final pos = switch (captionPosition) {
+          1 => Offset(r.right - tp.width, r.top - tp.height - 3),
+          2 => Offset(r.left, r.bottom + 3),
+          3 => Offset(r.left + 4, r.top + 4),
+          _ => Offset(r.left, r.top - tp.height - 3),
+        };
+        tp.paint(canvas, pos);
+      }
     }
   }
 
   @override
   bool shouldRepaint(BlobTrackerPainter old) =>
-      old.count != count ||
-      old.boxSize != boxSize ||
-      old.spread != spread ||
-      old.speed != speed ||
-      old.stroke != stroke ||
-      old.cornersOnly != cornersOnly ||
-      old.color != color ||
+      old.track != track ||
       old.time != time ||
+      old.color != color ||
+      old.style != style ||
+      old.showCenter != showCenter ||
+      old.showLines != showLines ||
+      old.lineType != lineType ||
+      old.lineStyle != lineStyle ||
+      old.palette != palette ||
+      old.thickness != thickness ||
+      old.opacity != opacity ||
+      old.fill != fill ||
+      old.cornerLength != cornerLength ||
+      old.showCaption != showCaption ||
+      old.captionContent != captionContent ||
+      old.captionPosition != captionPosition ||
+      old.fontSize != fontSize ||
       old.seed != seed;
 }

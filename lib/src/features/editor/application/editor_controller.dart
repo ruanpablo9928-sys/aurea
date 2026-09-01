@@ -6,6 +6,8 @@ import 'package:video_player/video_player.dart';
 
 import '../../media/application/media_import_service.dart';
 import '../domain/blend_extra.dart';
+import 'blob_track_service.dart';
+import '../domain/blob_track.dart';
 import '../domain/caption.dart';
 import '../domain/camera3d.dart';
 import '../domain/camera_cuts.dart';
@@ -1498,6 +1500,43 @@ class EditorController extends Notifier<VideoProject> {
         VideoLayer v => v.sourcePath,
         _ => null,
       };
+
+  // -------------------------------------------------- rastrear regioes
+
+  /// ANALISA as regioes de um clipe para o Blob Tracker.
+  ///
+  /// Roda uma vez e guarda as caixas por quadro. Rastreio depende do
+  /// quadro anterior, e detectar no desenho quebraria o seek: pular para
+  /// o segundo 40 exigiria processar os 1200 quadros anteriores.
+  ///
+  /// Devolve quantos quadros foram analisados, ou null se nao deu.
+  Future<int?> analyzeBlobsFor(String layerId, String effectId) async {
+    final layer = _layer(layerId);
+    if (layer is! VideoLayer) return null;
+    EffectInstance? fx;
+    for (final e in layer.effects) {
+      if (e.id == effectId) fx = e;
+    }
+    if (fx == null) return null;
+
+    const t0 = Duration.zero;
+    return BlobTrackService.instance.analyze(
+      effectId: effectId,
+      sourcePath: layer.sourcePath,
+      start: layer.sourceOffset,
+      duration: layer.sourceSpan,
+      by: BlobDetectBy
+          .values[fx.paramAt('detect_by', t0).round().clamp(0, 3)],
+      threshold: fx.paramAt('threshold', t0),
+      sensitivity: fx.paramAt('sensitivity', t0),
+      minBlobSize: fx.paramAt('min_blob_size', t0),
+      maxBlobSize: fx.paramAt('max_blob_size', t0),
+      maxBlobs: fx.paramAt('max_blobs', t0).round(),
+      mergeDistance: fx.paramAt('merge_distance', t0),
+      persistence: fx.paramAt('persistence', t0).round(),
+      smoothing: fx.paramAt('smoothing', t0) / 100,
+    );
+  }
 
   // ------------------------------------------------------- estabilizar
 

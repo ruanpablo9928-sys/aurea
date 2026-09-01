@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../application/blob_track_service.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../application/preview_stats.dart';
@@ -2387,16 +2388,34 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           }
 
         case EffectType.pixelSort:
-          final len = effect.paramAt('comprimento', local);
-          if (len > 1) {
+          // BLEND WITH ORIGINAL em 1 e o "desligado" da ficha: a saida
+          // tem de ser identica a entrada.
+          final mistura = effect.paramAt('blend_with_original', local);
+          final compr = effect.paramAt('radius_length', local);
+          if (compr > 0.001 && mistura < 0.999) {
             out = FxSnapshot(
               painter: PixelSortPainter(
-                threshold: effect.paramAt('limiar', local),
-                length: len,
-                direction:
-                    effect.paramAt('direcao', local).round().clamp(0, 3),
-                density: effect.paramAt('densidade', local),
-                seed: effect.paramAt('semente', local).round(),
+                mode: effect.paramAt('mode', local).round().clamp(0, 2),
+                sortAngle: effect.paramAt('sort_angle', local),
+                threshold: effect.paramAt('threshold', local),
+                aboveThreshold:
+                    effect.paramAt('direction', local) >= 0.5,
+                reverse: effect.paramAt('reverse_sort', local) >= 0.5,
+                length: compr,
+                randomRestart: effect.paramAt('random_restart', local),
+                seed: effect.paramAt('seed', local).round(),
+                blendWithOriginal: mistura,
+                show: effect.paramAt('show', local).round().clamp(0, 3),
+                softEdges: effect.paramAt('soft_edges', local) >= 0.5,
+                centerX: effect.paramAt('center_x', local),
+                centerY: effect.paramAt('center_y', local),
+                startAngle: effect.paramAt('start_angle', local),
+                degreesSorted: effect.paramAt('degrees_sorted', local),
+                innerRadius: effect.paramAt('inner_radius', local),
+                radiusVariation:
+                    effect.paramAt('radius_variation', local),
+                startVariation: effect.paramAt('start_variation', local),
+                thickness: effect.paramAt('thickness', local),
               ),
               child: out,
             );
@@ -2595,31 +2614,76 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           ]);
 
         case EffectType.blobTracker:
-          out = Stack(clipBehavior: Clip.none, children: [
-            out,
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: BlobTrackerPainter(
-                    count: effect
-                        .paramAt('quantidade', local)
-                        .round()
-                        .clamp(1, 16),
-                    boxSize: effect.paramAt('tamanho', local),
-                    spread:
-                        effect.paramAt('espalhar', local).clamp(0.0, 1.0),
-                    speed: effect.paramAt('velocidade', local),
-                    stroke: effect.paramAt('traco', local),
-                    cornersOnly:
-                        effect.paramAt('cantos', local) >= 0.5,
-                    color: effect.color,
-                    time: local,
-                    seed: effect.paramAt('semente', local).round(),
-                  ),
+          // As caixas vem da ANALISE ja gravada. Sem analise, o pintor
+          // simula — para a pessoa ajustar a aparencia antes de gastar
+          // o processamento.
+          final rastreio =
+              BlobTrackService.instance.dataFor(effect.id);
+          final sobreposicao = Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: BlobTrackerPainter(
+                  track: rastreio,
+                  time: local,
+                  color: effect.color,
+                  style:
+                      effect.paramAt('style', local).round().clamp(0, 4),
+                  showCenter:
+                      effect.paramAt('show_center_marker', local) >= 0.5,
+                  showLines: effect
+                          .paramAt('show_connecting_lines', local) >=
+                      0.5,
+                  lineType:
+                      effect.paramAt('line_type', local).round().clamp(0, 2),
+                  lineStyle: effect
+                      .paramAt('line_style', local)
+                      .round()
+                      .clamp(0, 2),
+                  palette:
+                      effect.paramAt('palette', local).round().clamp(0, 2),
+                  thickness: effect.paramAt('thickness', local),
+                  opacity: effect.paramAt('opacity', local),
+                  fill: effect.paramAt('fill', local),
+                  cornerLength: effect.paramAt('corner_length', local),
+                  showCaption:
+                      effect.paramAt('show_caption', local) >= 0.5,
+                  captionContent: effect
+                      .paramAt('caption_content', local)
+                      .round()
+                      .clamp(0, 2),
+                  captionPosition: effect
+                      .paramAt('caption_position', local)
+                      .round()
+                      .clamp(0, 3),
+                  fontSize: effect.paramAt('font_size', local),
+                  seed: effect.paramAt('seed', local).round(),
+                  simulatedCount: effect
+                      .paramAt('max_blobs', local)
+                      .round()
+                      .clamp(1, 16),
                 ),
               ),
             ),
-          ]);
+          );
+
+          // OVERLAY ONLY: so as sobreposicoes, fundo transparente —
+          // serve para levar o rastreio para outra camada.
+          final soSobreposicao =
+              effect.paramAt('overlay_only', local) >= 0.5;
+          final modoBlob =
+              effect.paramAt('blend_mode', local).round().clamp(0, 2);
+          final camadaBlob = switch (modoBlob) {
+            1 => BlendMask(blendMode: BlendMode.plus, child: sobreposicao),
+            2 => BlendMask(blendMode: BlendMode.screen, child: sobreposicao),
+            _ => sobreposicao,
+          };
+
+          out = soSobreposicao
+              ? Stack(clipBehavior: Clip.none, children: [camadaBlob])
+              : Stack(clipBehavior: Clip.none, children: [
+                  out,
+                  camadaBlob,
+                ]);
       }
     }
     return out;
