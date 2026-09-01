@@ -59,10 +59,23 @@ class FxSnapshot extends StatefulWidget {
     super.key,
     required this.painter,
     required this.child,
+    this.mode = SnapshotMode.permissive,
   });
 
   final SnapshotPainter painter;
   final Widget child;
+
+  /// PERMISSIVO, e nao FORCADO.
+  ///
+  /// O modo forcado tira a foto mesmo quando ha uma TEXTURA de plataforma
+  /// embaixo — e a textura simplesmente nao aparece na foto. O video sai
+  /// PRETO. Era o que apagava o video do preview inteiro, porque o passe
+  /// de dithering embrulha a composicao toda.
+  ///
+  /// No modo permissivo, havendo textura, o Flutter desenha o filho
+  /// direto e o efeito daquele quadro nao acontece. Perder o dithering e
+  /// pequeno; perder o video e o aplicativo nao funcionar.
+  final SnapshotMode mode;
 
   @override
   State<FxSnapshot> createState() => _FxSnapshotState();
@@ -82,7 +95,7 @@ class _FxSnapshotState extends State<FxSnapshot> {
   @override
   Widget build(BuildContext context) => SnapshotWidget(
         controller: _controller,
-        mode: SnapshotMode.forced,
+        mode: widget.mode,
         painter: widget.painter,
         child: widget.child,
       );

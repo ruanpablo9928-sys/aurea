@@ -163,6 +163,7 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     final project = ref.watch(editorControllerProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final onion = ref.watch(onionSkinProvider);
+    final temVideo = project.layers.any((l) => l is VideoLayer);
     final compW = project.outputWidth.toDouble();
     final compH = project.outputHeight.toDouble();
 
@@ -199,6 +200,20 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                           ValueListenableBuilder<Duration>(
                             valueListenable: widget.playback.time,
                             builder: (context, t, child) => DitherLayer(
+                              // COM VIDEO NA CENA, NAO TIRA A FOTO.
+                              //
+                              // O dithering rasteriza a composicao para
+                              // rodar o shader em cima. Textura de video
+                              // nao entra em `toImage` — ela vira um
+                              // buraco PRETO na foto, e o preview inteiro
+                              // fica sem o video. Era isto que fazia "o
+                              // preview nao funcionar".
+                              //
+                              // Perder o dithering numa cena com video e
+                              // pequeno: o video ja traz ruido proprio, e
+                              // e justamente em degrade liso que a faixa
+                              // aparece.
+                              enabled: !temVideo,
                               time: t,
                               child: child!,
                             ),
@@ -487,6 +502,13 @@ class _GuidesPainter extends CustomPainter {
 /// Estado do portao de recomposicao — um por app (ha um preview). Vive
 /// fora do widget porque _CompositionView e recriado a cada build do
 /// pai; widgets sao configuracoes imutaveis e reusa-los e valido.
+/// Portao de recomposicao — UM POR VISTA.
+///
+/// Ele ja foi global, e isso era um defeito serio: o preview, a tela de
+/// exportacao e cada quadro fantasma da casca de cebola sao vistas
+/// DIFERENTES, com projeto e instante proprios, e todas liam e escreviam
+/// o mesmo cache. Uma via a arvore da outra — o sintoma era o preview
+/// mostrando o projeto anterior, ou nao mostrando o video.
 class _CompositionGate {
   VideoProject? project;
   GearDecision? decision;
@@ -495,8 +517,6 @@ class _CompositionGate {
   String? selectedId;
   List<Widget>? kids;
 }
-
-final _gate = _CompositionGate();
 
 /// Reconstroi por tick do clock; midia isolada em RepaintBoundary.
 /// A COMPOSICAO em si — as camadas empilhadas no tempo [time]. E a
@@ -567,7 +587,7 @@ class _FantasmaState extends State<_Fantasma> {
   }
 }
 
-class CompositionView extends ConsumerWidget {
+class CompositionView extends ConsumerStatefulWidget {
   const CompositionView({
     super.key,
     required this.time,
@@ -591,7 +611,20 @@ class CompositionView extends ConsumerWidget {
   final bool exporting;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CompositionView> createState() => _CompositionViewState();
+}
+
+class _CompositionViewState extends ConsumerState<CompositionView> {
+  final _gate = _CompositionGate();
+
+  ValueListenable<Duration> get time => widget.time;
+  VideoLayerManager get videos => widget.videos;
+  String? get selectedId => widget.selectedId;
+  Map<String, ui.Image>? get exportFrames => widget.exportFrames;
+  bool get exporting => widget.exporting;
+
+  @override
+  Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
 
     return ValueListenableBuilder<Duration>(

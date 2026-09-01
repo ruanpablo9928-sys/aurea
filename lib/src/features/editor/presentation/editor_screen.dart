@@ -55,6 +55,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     );
     _playback.time.addListener(_syncVideos);
     _playback.playing.addListener(_syncVideos);
+
+    // ABRIR UM PROJETO precisa montar os tocadores AGORA.
+    //
+    // O sync so acontecia quando o relogio andava ou quando o projeto
+    // mudava — e abrir um projeto salvo nao e nenhum dos dois: o
+    // openProject roda ANTES desta tela existir, e o relogio fica parado
+    // no zero. Resultado: preview preto com o icone de filme ate a
+    // pessoa apertar play. Uma linha de sync no primeiro quadro resolve.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncVideos();
+    });
   }
 
   void _syncVideos() {
