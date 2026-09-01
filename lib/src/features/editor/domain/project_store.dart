@@ -1630,6 +1630,15 @@ Map<String, dynamic> projectToJson(VideoProject p) => {
               if (e.options.isNotEmpty) 'options': e.options,
             },
         ],
+      if (p.markers.isNotEmpty)
+        'markers': [
+          for (final m in p.markers)
+            {
+              'us': m.time.inMicroseconds,
+              if (m.label.isNotEmpty) 'label': m.label,
+              'color': _col(m.color),
+            }
+        ],
       'guides': {
         'v': p.guides.vertical,
         'h': p.guides.horizontal,
@@ -1751,6 +1760,15 @@ VideoProject projectFromJson(Map<String, dynamic> m) => VideoProject(
               for (final o in (e['options'] as List? ?? const []))
                 o as String,
             ],
+          ),
+      ],
+      markers: [
+        for (final v in (m['markers'] as List? ?? const []))
+          Marker(
+            time: Duration(
+                microseconds: ((v as Map)['us'] as num).toInt()),
+            label: (v['label'] as String?) ?? '',
+            color: _asCol(v['color']),
           ),
       ],
       guides: m['guides'] == null

@@ -537,6 +537,33 @@ class _ActionBar extends ConsumerWidget {
               }
             },
           ),
+          // MARCADOR: o mesmo botao poe e tira. Toque longo pula para a
+          // marca seguinte — ouvir a locucao marcando e depois montar
+          // em cima das marcas e mais rapido que procurar o instante.
+          Builder(builder: (context) {
+            final t = playback.time.value;
+            final tem = project.markerNear(
+                    t, const Duration(milliseconds: 120)) !=
+                null;
+            return GestureDetector(
+              onLongPress: () {
+                final proximo = controller.markerAfter(t) ??
+                    (project.markers.isEmpty
+                        ? null
+                        : project.markers.first.time);
+                if (proximo != null) playback.seek(proximo);
+              },
+              child: btn(
+                icon: tem
+                    ? CupertinoIcons.bookmark_fill
+                    : CupertinoIcons.bookmark,
+                enabled: true,
+                reason: '',
+                color: tem ? AmColors.accent : AmColors.text,
+                onTap: () => controller.toggleMarker(t),
+              ),
+            );
+          }),
           // ALINHAR E DISTRIBUIR (PR-X1): exato ao pixel, o que no dedo
           // nunca fica.
           btn(
@@ -642,6 +669,20 @@ class _TransportBar extends ConsumerWidget {
                 color:
                     selectedId == null ? AmColors.muted : AmColors.text),
           ),
+          // CASCA DE CEBOLA: toque cicla 0 -> 1 -> 2 -> 0. Animar a mao
+          // sem ver o quadro anterior e desenhar no escuro.
+          Builder(builder: (context) {
+            final onion = ref.watch(onionSkinProvider);
+            return GestureDetector(
+              onTap: () => ref.read(onionSkinProvider.notifier).state =
+                  (onion + 1) % 3,
+              child: Icon(
+                CupertinoIcons.square_stack_3d_down_dottedline,
+                size: 22,
+                color: onion > 0 ? AmColors.accent : AmColors.text,
+              ),
+            );
+          }),
           const Icon(Icons.fullscreen, size: 24, color: AmColors.text),
         ],
       ),

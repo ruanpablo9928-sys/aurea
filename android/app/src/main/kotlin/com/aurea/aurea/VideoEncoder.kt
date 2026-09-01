@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import java.io.File
@@ -42,7 +43,23 @@ class VideoEncoder {
     /** Buffer de bitmap reaproveitado: alocar por quadro derruba a taxa. */
     private var argb: IntArray? = null
 
-    fun start(path: String, w: Int, h: Int, frameRate: Int, bitRate: Int) {
+    /** Se o aparelho sabe codificar este formato. */
+    private fun hasEncoder(mime: String): Boolean = try {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS)
+            .codecInfos
+            .any { it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, true) } }
+    } catch (e: Exception) {
+        false
+    }
+
+    fun start(
+        path: String,
+        w: Int,
+        h: Int,
+        frameRate: Int,
+        bitRate: Int,
+        hevc: Boolean = false
+    ) {
         stop(discard = true)
 
         // O H.264 exige dimensao par.
@@ -50,9 +67,16 @@ class VideoEncoder {
         height = if (h % 2 == 0) h else h + 1
         fps = if (frameRate < 1) 30 else frameRate
 
-        val format = MediaFormat.createVideoFormat(
-            MediaFormat.MIMETYPE_VIDEO_AVC, width, height
-        ).apply {
+        // HEVC quando pedido E quando o aparelho tem: sem codificador de
+        // H.265 a exportacao nao pode simplesmente falhar — cai no H.264,
+        // que todo aparelho tem.
+        val mime = if (hevc && hasEncoder(MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+            MediaFormat.MIMETYPE_VIDEO_HEVC
+        } else {
+            MediaFormat.MIMETYPE_VIDEO_AVC
+        }
+
+        val format = MediaFormat.createVideoFormat(mime, width, height).apply {
             setInteger(
                 MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
@@ -64,7 +88,7 @@ class VideoEncoder {
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
 
-        val c = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+        val c = MediaCodec.createEncoderByType(mime)
         c.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         c.start()
         codec = c

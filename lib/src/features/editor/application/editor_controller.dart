@@ -1248,6 +1248,57 @@ class EditorController extends Notifier<VideoProject> {
         _ => null,
       };
 
+  // ------------------------------------------------------- marcadores
+
+  /// Marca o instante atual. Marcar duas vezes no mesmo lugar TIRA a
+  /// marca — e o mesmo gesto, e ninguem precisa procurar como apagar.
+  void toggleMarker(Duration t, {String label = ''}) {
+    const tol = Duration(milliseconds: 120);
+    final existente = state.markerNear(t, tol);
+    if (existente != null) {
+      _mutate(state.copyWith(markers: [
+        for (final m in state.markers)
+          if (m.time != existente.time) m,
+      ]));
+      return;
+    }
+    _mutate(state.copyWith(
+        markers: [...state.markers, Marker(time: t, label: label)]));
+  }
+
+  /// Renomeia a marca em [t] (a mais proxima).
+  void renameMarker(Duration t, String label) {
+    const tol = Duration(milliseconds: 120);
+    final alvo = state.markerNear(t, tol);
+    if (alvo == null) return;
+    _mutate(state.copyWith(markers: [
+      for (final m in state.markers)
+        if (m.time == alvo.time) m.copyWith(label: label) else m,
+    ]));
+  }
+
+  void clearMarkers() {
+    if (state.markers.isEmpty) return;
+    _mutate(state.copyWith(markers: const []));
+  }
+
+  /// A marca seguinte (ou anterior) a [t] — para pular de marca em
+  /// marca em vez de arrastar o playhead no olho.
+  Duration? markerAfter(Duration t) {
+    for (final m in state.markers) {
+      if (m.time > t + const Duration(milliseconds: 20)) return m.time;
+    }
+    return null;
+  }
+
+  Duration? markerBefore(Duration t) {
+    Duration? achado;
+    for (final m in state.markers) {
+      if (m.time < t - const Duration(milliseconds: 20)) achado = m.time;
+    }
+    return achado;
+  }
+
   // ------------------------------------------ montagem (NLE)
 
   /// EXCLUSAO COM ARRASTO: tira a camada e puxa para tras o que vinha

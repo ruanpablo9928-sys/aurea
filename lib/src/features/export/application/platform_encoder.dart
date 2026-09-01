@@ -40,6 +40,7 @@ class PlatformEncoder {
     required int height,
     required int fps,
     required int bitrate,
+    bool hevc = false,
   }) async {
     await _channel.invokeMethod<bool>('start', {
       'path': path,
@@ -47,6 +48,7 @@ class PlatformEncoder {
       'height': height,
       'fps': fps,
       'bitrate': bitrate,
+      'hevc': hevc,
     });
   }
 

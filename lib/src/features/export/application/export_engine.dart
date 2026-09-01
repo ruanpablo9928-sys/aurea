@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/domain/mask.dart';
 import '../../editor/domain/video_project.dart';
+import '../domain/export_settings.dart';
 import 'platform_encoder.dart';
 
 /// EXPORTACAO DE VIDEO — as partes que nao dependem da tela.
@@ -27,9 +28,10 @@ import 'platform_encoder.dart';
 /// o x264: e hardware, e nao arrasta a GPL para dentro do aplicativo. O
 /// FFmpeg segue no app so para DECODIFICAR e para juntar o audio.
 class ExportEngine {
-  ExportEngine(this.project);
+  ExportEngine(this.project, [this.settings = const ExportSettings()]);
 
   final VideoProject project;
+  final ExportSettings settings;
 
   Directory? _work;
   bool _cancelled = false;
@@ -41,12 +43,14 @@ class ExportEngine {
 
   bool get cancelled => _cancelled;
 
-  int get fps => project.fps < 1 ? 30 : project.fps;
-  int get width => _even(project.outputWidth);
-  int get height => _even(project.outputHeight);
+  int get fps => settings.resolveFps(project.fps);
 
-  /// O H.264 exige dimensao par.
-  static int _even(int v) => v.isOdd ? v + 1 : v;
+  /// Tamanho de SAIDA (pode ser diferente do projeto). A composicao
+  /// continua sendo desenhada no tamanho dela; quem redimensiona e o
+  /// codificador, com a proporcao preservada.
+  int get width => settings.resolve(project.outputWidth, project.outputHeight).$1;
+  int get height =>
+      settings.resolve(project.outputWidth, project.outputHeight).$2;
 
   /// Quantos quadros a composicao inteira tem.
   int get frameCount {
@@ -300,6 +304,34 @@ class ExportEngine {
     return file;
   }
 
+  /// SEQUENCIA PNG: leva os quadros para uma pasta que a pessoa acha.
+  ///
+  /// E o unico caminho com TRANSPARENCIA de verdade — MP4 com alfa so
+  /// toca em um punhado de programas. Serve para levar a arte pronta
+  /// para outro editor sem perder nada.
+  Future<Directory> saveSequence(Directory framesDir) async {
+    final base = await getApplicationDocumentsDirectory();
+    final stamp = project.name.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final destino = Directory('${base.path}/exports/${stamp}_png');
+    if (destino.existsSync()) destino.deleteSync(recursive: true);
+    destino.createSync(recursive: true);
+
+    final frames = framesDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.png'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    if (frames.isEmpty) {
+      throw ExportException('Nenhum quadro foi desenhado.');
+    }
+    for (var i = 0; i < frames.length; i++) {
+      final nome = i.toString().padLeft(6, '0');
+      frames[i].copySync('${destino.path}/$nome.png');
+    }
+    return destino;
+  }
+
   /// Codifica a sequencia de quadros com o CODIFICADOR DA PLATAFORMA e,
   /// se houver som, junta o audio depois sem tocar no video.
   Future<File> encode({
@@ -319,7 +351,11 @@ class ExportEngine {
       throw ExportException('Nenhum quadro foi desenhado.');
     }
 
-    final bitrate = PlatformEncoder.bitrateFor(width, height, fps, quality);
+    final bitrate = settings.bitrateMbps != null ||
+            settings.codec == ExportCodec.hevc ||
+            settings.size != ExportSize.original
+        ? settings.bitrateFor(width, height, fps)
+        : PlatformEncoder.bitrateFor(width, height, fps, quality);
     final silent = File('${framesDir.parent.path}/mudo.mp4');
 
     if (await PlatformEncoder.available) {
@@ -329,6 +365,7 @@ class ExportEngine {
         height: height,
         fps: fps,
         bitrate: bitrate,
+        hevc: settings.codec == ExportCodec.hevc,
       );
       // Em lotes: atravessar a ponte por quadro custa mais que codificar.
       const batch = 12;

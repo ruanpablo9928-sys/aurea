@@ -1,4 +1,5 @@
 import AVFoundation
+import VideoToolbox
 import Flutter
 import UIKit
 
@@ -57,7 +58,8 @@ final class VideoEncoderPlugin: NSObject {
                 w: args["width"] as! Int,
                 h: args["height"] as! Int,
                 fps: args["fps"] as! Int,
-                bitrate: args["bitrate"] as! Int
+                bitrate: args["bitrate"] as! Int,
+                hevc: (args["hevc"] as? Bool) ?? false
             )
             return true
 
@@ -91,7 +93,9 @@ final class VideoEncoderPlugin: NSObject {
         }
     }
 
-    private func start(path: String, w: Int, h: Int, fps: Int, bitrate: Int) throws {
+    private func start(
+        path: String, w: Int, h: Int, fps: Int, bitrate: Int, hevc: Bool = false
+    ) throws {
         reset()
         // O H.264 exige dimensao par.
         width = w % 2 == 0 ? w : w + 1
@@ -105,16 +109,23 @@ final class VideoEncoderPlugin: NSObject {
             withIntermediateDirectories: true)
 
         let w = try AVAssetWriter(outputURL: url, fileType: .mp4)
+
+        // HEVC so quando o aparelho tem: sem codificador de H.265 a
+        // exportacao nao pode falhar — cai no H.264, que todo aparelho tem.
+        let usaHevc = hevc && VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
+        var compressao: [String: Any] = [
+            AVVideoAverageBitRateKey: bitrate,
+            // Um quadro-chave por segundo: buscar no arquivo fica rapido.
+            AVVideoMaxKeyFrameIntervalKey: Int(self.fps),
+        ]
+        if !usaHevc {
+            compressao[AVVideoProfileLevelKey] = AVVideoProfileLevelH264HighAutoLevel
+        }
         let settings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoCodecKey: usaHevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: bitrate,
-                // Um quadro-chave por segundo: buscar no arquivo fica rapido.
-                AVVideoMaxKeyFrameIntervalKey: Int(self.fps),
-                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-            ],
+            AVVideoCompressionPropertiesKey: compressao,
         ]
         let inp = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         inp.expectsMediaDataInRealTime = false

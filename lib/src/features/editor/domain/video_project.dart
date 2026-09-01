@@ -57,6 +57,30 @@ class PropertyLink {
   final double baseZ;
 }
 
+/// MARCADOR na linha do tempo.
+///
+/// Ouvir a locucao uma vez marcando "aqui entra o titulo", "aqui vira a
+/// cena", e depois montar em cima das marcas, e mais rapido e mais
+/// preciso que ficar procurando o mesmo instante toda vez que se volta
+/// para ele.
+class Marker {
+  const Marker({
+    required this.time,
+    this.label = '',
+    this.color = const Color(0xFFB8FF3D),
+  });
+
+  final Duration time;
+  final String label;
+  final Color color;
+
+  Marker copyWith({Duration? time, String? label, Color? color}) => Marker(
+        time: time ?? this.time,
+        label: label ?? this.label,
+        color: color ?? this.color,
+      );
+}
+
 /// Projeto = composicao: pilha de camadas + configuracoes de saida.
 /// Ordem da lista: indice 0 e a camada MAIS ACIMA (painel de camadas).
 class VideoProject {
@@ -77,6 +101,7 @@ class VideoProject {
     this.motionBlur = const MotionBlurSpec(),
     this.data,
     List<DataBinding>? bindings,
+    List<Marker>? markers,
     this.lottieMode = false,
   })  : id = id ?? const Uuid().v4(),
         layers = List.unmodifiable(layers ?? const <Layer>[]),
@@ -87,7 +112,10 @@ class VideoProject {
         exposed =
             List.unmodifiable(exposed ?? const <ExposedProperty>[]),
         bindings =
-            List.unmodifiable(bindings ?? const <DataBinding>[]);
+            List.unmodifiable(bindings ?? const <DataBinding>[]),
+        markers = List.unmodifiable(
+            [...(markers ?? const <Marker>[])]
+              ..sort((a, b) => a.time.compareTo(b.time)));
 
   final String id;
   final String name;
@@ -125,6 +153,24 @@ class VideoProject {
   /// Fonte de dados e vinculos (PR-X21).
   final DataSource? data;
   final List<DataBinding> bindings;
+
+  /// Marcas na linha do tempo, sempre em ordem de tempo.
+  final List<Marker> markers;
+
+  /// O marcador mais proximo de [t], dentro de [tolerance]. E o que faz
+  /// o clipe grudar na marca ao ser arrastado.
+  Marker? markerNear(Duration t, Duration tolerance) {
+    Marker? melhor;
+    var melhorD = tolerance.inMicroseconds;
+    for (final m in markers) {
+      final d = (m.time - t).inMicroseconds.abs();
+      if (d <= melhorD) {
+        melhorD = d;
+        melhor = m;
+      }
+    }
+    return melhor;
+  }
 
   /// Modo "compativel com Lottie" (PR-X23): recursos nao suportados
   /// aparecem esmaecidos desde o comeco, em vez de surpreender no fim.
@@ -225,6 +271,7 @@ class VideoProject {
     MotionBlurSpec? motionBlur,
     DataSource? data,
     List<DataBinding>? bindings,
+    List<Marker>? markers,
     bool? lottieMode,
   }) {
     return VideoProject(
@@ -244,6 +291,7 @@ class VideoProject {
       motionBlur: motionBlur ?? this.motionBlur,
       data: data ?? this.data,
       bindings: bindings ?? this.bindings,
+      markers: markers ?? this.markers,
       lottieMode: lottieMode ?? this.lottieMode,
     );
   }

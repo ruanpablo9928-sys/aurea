@@ -7,6 +7,7 @@ import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import '../../domain/video_project.dart' as proj;
 import '../../application/media_preview_service.dart';
 import '../../application/proxy_service.dart';
 import 'am_colors.dart';
@@ -169,6 +170,12 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                               width: totalWidth,
                               child: CustomPaint(
                                 painter: _AmRulerPainter(pps: _pps),
+                                // As marcas vivem NA REGUA: e onde a
+                                // pessoa olha para achar o instante.
+                                foregroundPainter: _MarkersPainter(
+                                  markers: project.markers,
+                                  pps: _pps,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 30),
@@ -369,6 +376,44 @@ class _AmLayerPill extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Marcas na regua: um triangulinho com o rotulo ao lado.
+class _MarkersPainter extends CustomPainter {
+  const _MarkersPainter({required this.markers, required this.pps});
+
+  final List<proj.Marker> markers;
+  final double pps;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (markers.isEmpty) return;
+    for (final m in markers) {
+      final x = m.time.inMicroseconds / 1e6 * pps;
+      if (x < -20 || x > size.width + 20) continue;
+      final p = Path()
+        ..moveTo(x, size.height)
+        ..lineTo(x - 5, size.height - 9)
+        ..lineTo(x + 5, size.height - 9)
+        ..close();
+      canvas.drawPath(p, Paint()..color = m.color);
+      if (m.label.isEmpty) continue;
+      final tp = TextPainter(
+        text: TextSpan(
+          text: m.label,
+          style: TextStyle(fontSize: 9, color: m.color),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: 90);
+      tp.paint(canvas, Offset(x + 7, size.height - 12));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MarkersPainter old) =>
+      old.pps != pps || old.markers.length != markers.length;
 }
 
 class _AmRulerPainter extends CustomPainter {

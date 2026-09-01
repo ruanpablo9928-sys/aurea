@@ -15,6 +15,7 @@ import '../../editor/presentation/am/am_colors.dart';
 import '../../editor/presentation/widgets/dither_layer.dart';
 import '../../editor/presentation/widgets/preview_stage.dart';
 import '../application/export_engine.dart';
+import '../domain/export_settings.dart';
 
 /// EXPORTAR VIDEO.
 ///
@@ -23,9 +24,14 @@ import '../application/export_engine.dart';
 /// "gravar a tela": cada quadro sai na resolucao do projeto, mesmo que
 /// o aparelho mostre bem menor.
 class ExportVideoScreen extends ConsumerStatefulWidget {
-  const ExportVideoScreen({super.key, this.quality = 'media'});
+  const ExportVideoScreen({
+    super.key,
+    this.quality = 'media',
+    this.settings = const ExportSettings(),
+  });
 
   final String quality;
+  final ExportSettings settings;
 
   @override
   ConsumerState<ExportVideoScreen> createState() =>
@@ -83,7 +89,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
 
   Future<void> _rodar() async {
     final project = ref.read(editorControllerProvider);
-    final engine = ExportEngine(project);
+    final engine = ExportEngine(project, widget.settings);
     _engine = engine;
 
     try {
@@ -98,8 +104,15 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       // CORTE PURO: um clipe so, sem nada por cima. Copiar as trilhas em
       // vez de redesenhar 150 quadros e a diferenca entre instantaneo e
       // um minuto de espera.
+      // O atalho de copiar so vale quando a saida e igual a entrada:
+      // pedir 720p, HEVC ou sequencia PNG e pedir para RENDERIZAR.
+      final podeCopiar = widget.settings.format == ExportFormat.mp4 &&
+          widget.settings.size == ExportSize.original &&
+          widget.settings.codec == ExportCodec.h264 &&
+          widget.settings.fps == null &&
+          widget.settings.bitrateMbps == null;
       _passo(_Fase.preparando, 0.1, 'Verificando se da para copiar...');
-      final atalho = await engine.tryPureCut();
+      final atalho = podeCopiar ? await engine.tryPureCut() : null;
       if (atalho != null) {
         if (!mounted) return;
         setState(() {
@@ -155,7 +168,22 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
             'Quadro ${i + 1} de $total');
       }
 
-      // 3. Codifica com audio.
+      // 3. Sequencia PNG para quando termina aqui: nao ha o que
+      // codificar, so onde guardar.
+      if (widget.settings.format == ExportFormat.pngSequence) {
+        _passo(_Fase.codificando, 0.5, 'Salvando a sequencia...');
+        final pasta = await engine.saveSequence(framesDir);
+        await engine.cleanup();
+        if (!mounted) return;
+        setState(() {
+          _fase = _Fase.pronto;
+          _progresso = 1;
+          _saida = File('${pasta.path}/000000.png');
+          _detalhe = '$total imagens em ${pasta.path}';
+        });
+        return;
+      }
+
       _passo(_Fase.codificando, 0.05,
           'Codificando no codificador do aparelho...');
       final file = await engine.encode(

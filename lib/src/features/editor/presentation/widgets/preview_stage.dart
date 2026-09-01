@@ -162,6 +162,7 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
   Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
     final selectedId = ref.watch(selectedLayerProvider);
+    final onion = ref.watch(onionSkinProvider);
     final compW = project.outputWidth.toDouble();
     final compH = project.outputHeight.toDouble();
 
@@ -207,6 +208,39 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                               selectedId: selectedId,
                             ),
                           ),
+                          // CASCA DE CEBOLA: os quadros vizinhos,
+                          // fantasmas, ATRAS do quadro atual. Passado
+                          // puxado para o vermelho, futuro para o
+                          // verde — e como se sabe de que lado esta.
+                          if (onion > 0)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: ValueListenableBuilder<Duration>(
+                                  valueListenable: widget.playback.time,
+                                  builder: (context, t, _) {
+                                    final passo = Duration(
+                                        microseconds: 1000000 ~/
+                                            (project.fps < 1
+                                                ? 30
+                                                : project.fps));
+                                    return Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        for (var k = onion; k >= 1; k--)
+                                          for (final lado in const [-1, 1])
+                                            _Fantasma(
+                                              time: t + passo * (k * lado),
+                                              videos: widget.videos,
+                                              opacity:
+                                                  0.34 / k,
+                                              futuro: lado > 0,
+                                            ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
                           // GUIAS, GRADE, AREAS SEGURAS e mascara de
                           // enquadramento (PR-X3): vivem ACIMA da
                           // composicao e nunca entram no render final.
@@ -468,6 +502,71 @@ final _gate = _CompositionGate();
 /// A COMPOSICAO em si — as camadas empilhadas no tempo [time]. E a
 /// mesma arvore usada no preview e na EXPORTACAO: exportar renderiza
 /// exatamente o que se ve, porque e o mesmo codigo.
+/// CASCA DE CEBOLA: quantos quadros fantasma aparecem de cada lado.
+/// Zero = desligada.
+///
+/// Animar a mao sem ver o quadro anterior e desenhar no escuro: o
+/// espacamento entre poses e o que da o ritmo, e ele so se enxerga
+/// vendo os quadros vizinhos ao mesmo tempo.
+final onionSkinProvider = StateProvider<int>((ref) => 0);
+
+/// Um quadro vizinho, esmaecido e tingido.
+class _Fantasma extends StatefulWidget {
+  const _Fantasma({
+    required this.time,
+    required this.videos,
+    required this.opacity,
+    required this.futuro,
+  });
+
+  final Duration time;
+  final VideoLayerManager videos;
+  final double opacity;
+  final bool futuro;
+
+  @override
+  State<_Fantasma> createState() => _FantasmaState();
+}
+
+class _FantasmaState extends State<_Fantasma> {
+  late final ValueNotifier<Duration> _t = ValueNotifier(widget.time);
+
+  @override
+  void didUpdateWidget(_Fantasma old) {
+    super.didUpdateWidget(old);
+    _t.value = widget.time;
+  }
+
+  @override
+  void dispose() {
+    _t.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.time < Duration.zero) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: Opacity(
+        opacity: widget.opacity.clamp(0.05, 0.6),
+        child: ColorFiltered(
+          colorFilter: ColorFilter.mode(
+            widget.futuro
+                ? const Color(0x666BFF8A)
+                : const Color(0x66FF6B6B),
+            BlendMode.modulate,
+          ),
+          child: CompositionView(
+            time: _t,
+            videos: widget.videos,
+            selectedId: null,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class CompositionView extends ConsumerWidget {
   const CompositionView({
     super.key,

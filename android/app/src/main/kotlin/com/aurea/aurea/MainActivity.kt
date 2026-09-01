@@ -45,7 +45,8 @@ class MainActivity : FlutterActivity() {
                     call.argument<Int>("width")!!,
                     call.argument<Int>("height")!!,
                     call.argument<Int>("fps")!!,
-                    call.argument<Int>("bitrate")!!
+                    call.argument<Int>("bitrate")!!,
+                    call.argument<Boolean>("hevc") ?: false
                 )
                 true
             }
