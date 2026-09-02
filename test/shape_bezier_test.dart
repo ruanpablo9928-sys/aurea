@@ -131,6 +131,35 @@ void main() {
       expect(b.center.dy, closeTo(0, 1e-6));
     });
 
+    test('geometria parametrica vira nos exatos, nao amostras', () {
+      final rect = bezierOfShapeItem(
+          ShapeParametric(
+              kind: ParamShapeKind.rect,
+              sizeX: AnimatedDouble(120),
+              sizeY: AnimatedDouble(60)),
+          Duration.zero)!;
+      expect(rect.vertices.length, 4);
+      expect(rect.build().getBounds().width, closeTo(120, 1e-6));
+
+      final elipse = bezierOfShapeItem(
+          ShapeParametric(kind: ParamShapeKind.ellipse), Duration.zero)!;
+      expect(elipse.vertices.length, 4);
+      expect(elipse.vertices.every((v) => !v.corner), isTrue);
+
+      final estrela = bezierOfShapeItem(
+          ShapeParametric(
+              kind: ParamShapeKind.star, points: AnimatedDouble(5)),
+          Duration.zero)!;
+      expect(estrela.vertices.length, 10);
+
+      // Arredondado nao tem formula fechada em nos: amostra.
+      final arredondado = bezierOfShapeItem(
+          ShapeParametric(
+              kind: ParamShapeKind.rect, roundness: AnimatedDouble(20)),
+          Duration.zero)!;
+      expect(arredondado.vertices.length, greaterThan(4));
+    });
+
     test('pintura nao e geometria', () {
       expect(
           bezierOfShapeItem(

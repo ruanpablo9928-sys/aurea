@@ -806,7 +806,54 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
           return sampleBezier(p.build());
       }
     case ShapeParametric p:
-      return sampleBezier(p.buildAt(t), n: 48);
+      // Nos EXATOS onde a formula e fechada: um retangulo tem quatro
+      // cantos, nao 48 amostras — editar 48 nos para mexer num canto e
+      // o oposto do que o editor de nos promete.
+      final sx = math.max(0.0, p.sizeX.valueAt(t));
+      final sy = math.max(0.0, p.sizeY.valueAt(t));
+      final n = p.points.valueAt(t).clamp(2.0, 100.0).round();
+      final rOut = math.max(0.0, p.outerRadius.valueAt(t));
+      final rIn = math.max(0.0, p.innerRadius.valueAt(t));
+      final rot = p.shapeRotation.valueAt(t) * math.pi / 180;
+      final semArredondar = p.roundness.valueAt(t).abs() < 1e-6;
+      final pontasRetas = p.outerRoundness.valueAt(t).abs() < 1e-6 &&
+          p.innerRoundness.valueAt(t).abs() < 1e-6;
+
+      BezierPath girado(BezierPath b) {
+        if (rot.abs() < 1e-9) return b;
+        final c = math.cos(rot), sn = math.sin(rot);
+        Offset g(Offset o) =>
+            Offset(o.dx * c - o.dy * sn, o.dx * sn + o.dy * c);
+        return BezierPath(
+          closed: b.closed,
+          vertices: [
+            for (final v in b.vertices)
+              PathVertex(
+                  p: g(v.p), inT: g(v.inT), outT: g(v.outT), corner: v.corner),
+          ],
+        );
+      }
+
+      switch (p.kind) {
+        case ParamShapeKind.rect when semArredondar:
+          return BezierPath.rect(sx, sy);
+        case ParamShapeKind.ellipse:
+          return BezierPath.ellipse(sx, sy);
+        case ParamShapeKind.polygon when pontasRetas:
+          return girado(BezierPath(vertices: [
+            for (var i = 0; i < n; i++)
+              PathVertex(
+                p: Offset(
+                  math.cos(-math.pi / 2 + i * 2 * math.pi / n) * rOut,
+                  math.sin(-math.pi / 2 + i * 2 * math.pi / n) * rOut,
+                ),
+              ),
+          ]));
+        case ParamShapeKind.star when pontasRetas:
+          return girado(BezierPath.star(n, rOut, rIn));
+        default:
+          return sampleBezier(p.buildAt(t), n: 48);
+      }
     case ShapeSvgPath p:
       return _fitBezierToBox(svgPathToBezier(p.pathData), p.size);
     case ShapeMorph m:
