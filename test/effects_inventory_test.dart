@@ -194,15 +194,12 @@ void main() {
       // visivel, e qualquer controle morto NOVO quebra o teste em vez de
       // se juntar a estes sem ninguem notar.
       const divida = {
-        // Deep Glow: o joelho macio e o tonemap existem em bloom.dart e
-        // ainda nao foram ligados ao efeito; brilho sujo de lente
-        // depende de um seletor de imagem que nao existe.
-        'glowVol expoe "threshold_mode" e nunca le',
+        // Deep Glow: o tonemap precisa de uma curva por pixel, e curva
+        // por pixel aqui so com shader — fica para quando houver um
+        // aparelho na mao para conferir. Brilho sujo de lente depende de
+        // um seletor de imagem que nao existe.
         'glowVol expoe "tonemapping" e nunca le',
-        'glowVol expoe "glow_mode" e nunca le',
-        'glowVol expoe "downsample" e nunca le',
         'glowVol expoe "lens_dirt_amount" e nunca le',
-        'glowVol expoe "noise_reduction" e nunca le',
         // Pixel Sorter: ordenar por matiz/saturacao e resolver em outra
         // resolucao exigem mexer no pintor, nao so passar o valor.
         'pixelSort expoe "sort_by" e nunca le',

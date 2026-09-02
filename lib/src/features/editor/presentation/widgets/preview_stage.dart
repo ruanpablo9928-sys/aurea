@@ -1548,10 +1548,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 Opacity(
                   opacity: intensity,
                   child: ImageFiltered(
-                    imageFilter: ui.ImageFilter.blur(
-                        sigmaX: sigma,
-                        sigmaY: sigma,
-                        tileMode: TileMode.decal),
+                    // EM ESPACO LINEAR. Glow SOMA luz, e soma de luz em
+                    // sRGB da o cinza de sempre: a curva de exibicao
+                    // pesa o escuro mais do que deveria, entao o halo
+                    // sai lavado e com uma borda escura onde encontra o
+                    // fundo. Em linear a conta e a que a luz faz.
+                    imageFilter: LinearLight.blur(
+                        sigmaX: sigma, sigmaY: sigma, size: fxSize),
                     child: ColorFiltered(
                       colorFilter:
                           ColorFilter.mode(effect.color, BlendMode.srcATop),
@@ -1618,23 +1621,89 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             final anguloOn = effect.paramAt('enable_angle', local) >= 0.5;
             final anguloRad =
                 effect.paramAt('angle', local) * math.pi / 180;
+            // 0 = Luminance, 1 = Chrominance.
+            final modoLimiar =
+                effect.paramAt('threshold_mode', local).round().clamp(0, 1);
+            // 0 = Exponential, 1 = Iris.
+            final modoGlow =
+                effect.paramAt('glow_mode', local).round().clamp(0, 1);
+            final reducaoRuido =
+                effect.paramAt('noise_reduction', local).clamp(0.0, 100.0);
+            final reducao =
+                effect.paramAt('downsample', local).clamp(1.0, 8.0);
 
             // LIMIAR: so o que passa do valor vira glow. A rampa suave
             // evita a linha reta onde o brilho cruza o limiar — com
             // limiar duro, o glow "liga" de repente no meio do degrade.
             Widget fonte = out;
+
+            // REDUCAO DE RUIDO, antes do limiar.
+            //
+            // Granulacao de sensor tem pixels isolados acima do limiar, e
+            // cada um vira uma estrelinha cintilando de quadro em quadro.
+            // Um desfoque minimo antes do corte tira o pixel solto e
+            // deixa passar o que e area clara de verdade.
+            if (reducaoRuido > 0.5) {
+              final sr = reducaoRuido / 100 * 3.0;
+              fonte = ImageFiltered(
+                imageFilter: LinearLight.blur(
+                    sigmaX: sr, sigmaY: sr, size: fxSize),
+                child: fonte,
+              );
+            }
+
             if (limiar > 0.01) {
               final corte = bloomThreshold(1.0, limiar, suavidade)
                   .clamp(0.0, 1.0);
               final escala = 1 / math.max(0.05, corte);
               final desl = -limiar * (1 - suavidade * 0.5) * 255;
+              // O QUE O LIMIAR MEDE.
+              //
+              // Luminancia: passa o que e CLARO — o caso comum, e o que
+              // faz o glow morar nos realces.
+              // Crominancia: passa o que e COLORIDO, subtraindo o cinza
+              // de cada canal. Um neon saturado sobre fundo claro nao
+              // ganha glow por luminancia (o fundo e tao claro quanto);
+              // por crominancia, so o neon brilha.
               fonte = ColorFiltered(
-                colorFilter: ColorFilter.matrix(<double>[
-                  escala, 0, 0, 0, desl, //
-                  0, escala, 0, 0, desl,
-                  0, 0, escala, 0, desl,
-                  0, 0, 0, 1, 0,
-                ]),
+                colorFilter: ColorFilter.matrix(modoLimiar == 1
+                    ? <double>[
+                        escala * (1 - 0.2126), -escala * 0.7152,
+                        -escala * 0.0722, 0, desl, //
+                        -escala * 0.2126, escala * (1 - 0.7152),
+                        -escala * 0.0722, 0, desl,
+                        -escala * 0.2126, -escala * 0.7152,
+                        escala * (1 - 0.0722), 0, desl,
+                        0, 0, 0, 1, 0,
+                      ]
+                    : <double>[
+                        escala, 0, 0, 0, desl, //
+                        0, escala, 0, 0, desl,
+                        0, 0, escala, 0, desl,
+                        0, 0, 0, 1, 0,
+                      ]),
+                child: fonte,
+              );
+            }
+
+            // DOWNSAMPLE: quanto detalhe o halo guarda.
+            //
+            // Encolher e devolver ao tamanho apaga o detalhe fino do
+            // halo — que e o mesmo resultado de calcular o glow numa
+            // resolucao menor, que e o que o nome promete. Em 1 nao
+            // acontece nada.
+            if (reducao > 1.01) {
+              fonte = ImageFiltered(
+                imageFilter: ui.ImageFilter.compose(
+                  outer: ui.ImageFilter.matrix(
+                      Matrix4.diagonal3Values(reducao, reducao, 1).storage,
+                      filterQuality: FilterQuality.low),
+                  inner: ui.ImageFilter.matrix(
+                      Matrix4.diagonal3Values(
+                              1 / reducao, 1 / reducao, 1)
+                          .storage,
+                      filterQuality: FilterQuality.low),
+                ),
                 child: fonte,
               );
             }
@@ -1662,13 +1731,43 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               if (anguloOn && anguloRad.abs() > 0.001) {
                 alvo = Transform.rotate(angle: -anguloRad, child: alvo);
               }
-              alvo = ImageFiltered(
-                imageFilter: LinearLight.blur(
-                    sigmaX: math.max(0.1, sx),
-                    sigmaY: math.max(0.1, sy),
-                    size: fxSize),
-                child: alvo,
-              );
+              if (modoGlow == 1) {
+                // IRIS: o halo ganha as PONTAS da abertura da lente.
+                //
+                // Bloom exponencial e redondo por construcao — e o que
+                // uma gaussiana faz. A estrela que se ve em foto vem das
+                // laminas do diafragma, e se reproduz somando desfoques
+                // muito alongados em direcoes diferentes. Tres eixos ja
+                // dao a leitura de seis pontas.
+                Widget lamina(double giro) {
+                  final r = ImageFiltered(
+                    imageFilter: LinearLight.blur(
+                        sigmaX: math.max(0.1, sx * 2.2),
+                        sigmaY: math.max(0.1, sy * 0.18),
+                        size: fxSize),
+                    child: Transform.rotate(angle: -giro, child: alvo),
+                  );
+                  return Transform.rotate(angle: giro, child: r);
+                }
+
+                alvo = Stack(clipBehavior: Clip.none, children: [
+                  lamina(0),
+                  BlendMask(
+                      blendMode: BlendMode.plus,
+                      child: lamina(math.pi / 3)),
+                  BlendMask(
+                      blendMode: BlendMode.plus,
+                      child: lamina(2 * math.pi / 3)),
+                ]);
+              } else {
+                alvo = ImageFiltered(
+                  imageFilter: LinearLight.blur(
+                      sigmaX: math.max(0.1, sx),
+                      sigmaY: math.max(0.1, sy),
+                      size: fxSize),
+                  child: alvo,
+                );
+              }
               if (anguloOn && anguloRad.abs() > 0.001) {
                 alvo = Transform.rotate(angle: anguloRad, child: alvo);
               }
@@ -2168,10 +2267,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             out = Transform.rotate(
               angle: -ang,
               child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(
-                    sigmaX: len / 3,
-                    sigmaY: 0.01,
-                    tileMode: TileMode.decal),
+                // Tambem em linear: e desfoque, e desfoque em sRGB
+                // escurece a media entre claro e escuro — a franja
+                // suja na borda do movimento vem daí.
+                imageFilter: LinearLight.blur(
+                    sigmaX: len / 3, sigmaY: 0.01, size: fxSize),
                 child: Transform.rotate(angle: ang, child: out),
               ),
             );
