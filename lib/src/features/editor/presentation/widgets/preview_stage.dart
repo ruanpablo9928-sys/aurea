@@ -1377,6 +1377,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
 
     // Selecao desenhada DEPOIS dos efeitos: blur/glow nao pegam a borda.
     // Copias de eco (opacityMul < 1) nao ganham borda de selecao.
+    final contentSemSelecao = content;
     if (layer.id == selectedId && opacityMul == 1) {
       content = Stack(
         clipBehavior: Clip.none,
@@ -1449,8 +1450,34 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             passos: passos,
             passo: extrude / passos,
           ),
-          child: content,
+          child: contentSemSelecao,
         );
+        if (!identical(content, contentSemSelecao)) {
+          // A borda de selecao fica so na frente, sem virar caixa 3D.
+          composed = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              composed,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Transform(
+                    transform: pm,
+                    alignment: Alignment.center,
+                    child: Transform(
+                      transform: m,
+                      alignment: Alignment.center,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white, width: 4),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
       } else {
         composed = Transform(
           transform: pm,

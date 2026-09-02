@@ -30,7 +30,10 @@ void main() {
       fontSize: 140,
       color: const Color(0xFFFFFFFF),
       position: AnimatedOffset(const Offset(300, 300)),
-      rotationY: AnimatedDouble(50),
+      // A mesma configuracao vista no aparelho: Z, X e Y girados.
+      rotation: AnimatedDouble(-57),
+      rotationX: AnimatedDouble(21),
+      rotationY: AnimatedDouble(45),
       is3D: true,
     ) : ShapeLayer(
       name: 'quadrado',
