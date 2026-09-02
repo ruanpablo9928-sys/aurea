@@ -993,6 +993,10 @@ VideoProject buildNotesMotionTemplate() {
   final pill = camadas.firstWhere((l) => l.id == 'b_pill');
   camadas.remove(pill);
   camadas.insert(camadas.indexWhere((l) => l.id == 'b_cursor') + 1, pill);
+  // O menu de contexto abre POR CIMA da lista.
+  final menu = camadas.firstWhere((l) => l.id == 'd_menu');
+  camadas.remove(menu);
+  camadas.insert(camadas.indexWhere((l) => l.id == 'c_lista'), menu);
 
   return VideoProject(
     name: 'Notes (modelo)',
