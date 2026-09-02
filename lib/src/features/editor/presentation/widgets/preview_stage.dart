@@ -34,6 +34,7 @@ import '../../domain/bloom.dart';
 import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'world3d_painter.dart';
+import 'extrude_painter.dart';
 import '../../application/mesh_cache.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
@@ -1429,36 +1430,34 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       // escurecidas — a espessura aparece quando a camada inclina. Video
       // e particulas ficam de fora (textura e simulacao nao se repetem).
       final extrude = project.metaOf(layer.id).extrude;
-      Widget miolo = composed;
       if (extrude > 0.5 &&
           layer is! VideoLayer &&
           layer is! ParticlesLayer &&
           layer is! Element3DLayer) {
-        final passos = (extrude / 5).ceil().clamp(2, 30);
-        final passo = extrude / passos;
-        miolo = Stack(
-          clipBehavior: Clip.none,
+        // Uma FOTO da camada, desenhada N vezes recuando em Z num canvas
+        // so (sem camadas do compositor — ver ExtrudeSnapshotPainter).
+        // Fatias a ~1,5 px na tela: quanto mais de lado a camada esta,
+        // mais fatias, senao a lateral sai listrada.
+        final inclinacao = math.max(math.sin(rx).abs(), math.sin(ry).abs());
+        final passos =
+            (extrude * math.max(inclinacao, 0.15) / 1.5).ceil().clamp(2, 120);
+        composed = FxSnapshot(
+          painter: ExtrudeSnapshotPainter(
+            perspective: pm,
+            transform2d: m,
+            opacity: opacity,
+            passos: passos,
+            passo: extrude / passos,
+          ),
+          child: content,
+        );
+      } else {
+        composed = Transform(
+          transform: pm,
           alignment: Alignment.center,
-          children: [
-            for (var i = passos; i >= 1; i--)
-              Transform(
-                transform: Matrix4.translationValues(0, 0, i * passo),
-                alignment: Alignment.center,
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.matrix(_scaleShiftMatrix(
-                      0.42 + 0.22 * (1 - i / passos), 0)),
-                  child: composed,
-                ),
-              ),
-            composed,
-          ],
+          child: composed,
         );
       }
-      composed = Transform(
-        transform: pm,
-        alignment: Alignment.center,
-        child: miolo,
-      );
     }
 
     if (layer.blendMode != BlendMode.srcOver) {

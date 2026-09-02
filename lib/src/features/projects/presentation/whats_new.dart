@@ -16,6 +16,51 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.cube_box_fill,
+    'Mundo 3D de verdade: um solido entra no outro',
+    'Elementos 3D vizinhos na pilha agora viram uma cena so, com a '
+        'profundidade compartilhada: um cubo atravessa a esfera, o vidro '
+        'deixa ver o que esta atras. Entraram os materiais brilhante (o '
+        'degrade roxo/azul/rosa das referencias), vidro, metal e fosco, '
+        'sombreamento liso, e modelos importados em OBJ e FBX (com aviso '
+        'quando o modelo e pesado demais para celular fraco).',
+  ),
+  NewsItem(
+    CupertinoIcons.sparkles,
+    'Particulas do jeito do Particular',
+    'Emissor em caixa, ponto, esfera ou anel; saida em cone, todas as '
+        'direcoes ou para fora; vento, resistencia do ar e turbulencia '
+        '3D; tamanho, opacidade e cor ao longo da vida; formas (esfera, '
+        'estrela, risco, nuvem, quadrado, anel), giro, brilho e rastro. '
+        'Tudo em simulacao pura: arrastar a regua da o mesmo quadro.',
+  ),
+  NewsItem(
+    CupertinoIcons.textformat_abc,
+    'Texto 3D, Liquid Glass, Correcoes, Flicker e degrade de 4 cores',
+    'O animador de texto ganhou Rotacao X, Rotacao Y e Posicao Z por '
+        'letra, palavra ou frase. Efeitos novos: Liquid Glass (vidro com '
+        'desfoque, lente, brilho na borda e sombra), Correcoes (exposicao, '
+        'contraste, altas, sombras, temperatura, saturacao, gama), Flicker '
+        'e Gradiente de 4 cores.',
+  ),
+  NewsItem(
+    CupertinoIcons.cube,
+    'Extrude 3D em qualquer camada',
+    'Texto, forma, imagem ou grupo ganham espessura: ligue o 3D da '
+        'camada, gire em X ou Y e a lateral aparece. Botoes novos na '
+        'fileira da camada: Ligar 3D, Motion blur (o de verdade, por '
+        'amostras) e Extrude 3D.',
+  ),
+  NewsItem(
+    CupertinoIcons.house,
+    'Tela inicial nova e preset do Alight Motion',
+    'A inicial mostra a miniatura real de cada projeto, os modelos com '
+        'um quadro renderizado e os formatos como pilulas. Da para importar '
+        'um preset do Alight Motion em XML: o app le o que reconhece e diz '
+        'o que ficou de fora. Marcadores no transporte (avancar e voltar '
+        'caem neles), timeline mais compacta e abas alinhadas.',
+  ),
+  NewsItem(
     CupertinoIcons.eye,
     'O preview voltou a mostrar video',
     'Eram tres defeitos somados. Abrir um projeto salvo nunca montava '

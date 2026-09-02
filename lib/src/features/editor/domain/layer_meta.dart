@@ -953,7 +953,8 @@ class LayerMeta {
       counter == null &&
       colorRef == null &&
       textStyleRef == null &&
-      !motionBlur;
+      !motionBlur &&
+      extrude <= 0;
 
   LayerMeta copyWith({
     LayerLabel? label,

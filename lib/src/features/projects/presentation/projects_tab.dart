@@ -14,6 +14,7 @@ import '../../editor/domain/video_project.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../application/projects_controller.dart';
 import '../application/thumbnail_service.dart';
+import '../domain/alight_xml_import.dart';
 import '../domain/notes_motion_template.dart';
 import '../domain/project_presets.dart';
 import 'new_project_sheet.dart';
@@ -88,6 +89,92 @@ class ProjectsTab extends ConsumerWidget {
       MaterialPageRoute(builder: (_) => const EditorScreen()),
     );
   }
+
+  /// PRESET DO ALIGHT MOTION (XML): le o que reconhece, mostra o balanco
+  /// (camadas, keyframes, o que ficou de fora) e abre como projeto novo.
+  Future<void> _importarAlight(BuildContext context, WidgetRef ref) async {
+    final r = await FilePicker.platform.pickFiles(type: FileType.any);
+    final caminho = r?.files.single.path;
+    if (caminho == null || !context.mounted) return;
+    final nomeArquivo = caminho.split(RegExp(r'[\\/]')).last;
+    AlightImportResult resultado;
+    try {
+      final texto = await File(caminho).readAsString();
+      resultado = importAlightXml(texto,
+          nome: nomeArquivo.replaceAll(
+              RegExp(r'\.xml$', caseSensitive: false), ''));
+    } on AlightImportException catch (e) {
+      if (!context.mounted) return;
+      await _aviso(context, 'Nao deu para importar', e.message);
+      return;
+    } catch (e) {
+      if (!context.mounted) return;
+      await _aviso(context, 'Nao deu para importar', 'Arquivo ilegivel: $e');
+      return;
+    }
+    if (!context.mounted) return;
+    final abrir = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (c) => CupertinoAlertDialog(
+        title: const Text('Preset do Alight'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            _resumoDaImportacao(resultado),
+            textAlign: TextAlign.left,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Cancelar')),
+          CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(c).pop(true),
+              child: const Text('Abrir')),
+        ],
+      ),
+    );
+    if (abrir != true || !context.mounted) return;
+    final novo = resultado.project;
+    ref.read(projectsControllerProvider.notifier).add(novo);
+    ref.read(editorControllerProvider.notifier).openProject(novo);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const EditorScreen()),
+    );
+  }
+
+  static String _resumoDaImportacao(AlightImportResult r) {
+    final b = StringBuffer()
+      ..write('${r.layersImported} camadas e ')
+      ..write('${r.keyframesImported} keyframes reconhecidos.');
+    if (r.ignored.isNotEmpty) {
+      b.write('\n\nFicou de fora:');
+      for (final item in r.ignored.take(6)) {
+        b.write('\n- $item');
+      }
+      if (r.ignored.length > 6) {
+        b.write('\n- e mais ${r.ignored.length - 6}');
+      }
+    }
+    return b.toString();
+  }
+
+  Future<void> _aviso(BuildContext context, String titulo, String texto) =>
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (c) => CupertinoAlertDialog(
+          title: Text(titulo),
+          content: Padding(
+              padding: const EdgeInsets.only(top: 8), child: Text(texto)),
+          actions: [
+            CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.of(c).pop(),
+                child: const Text('OK')),
+          ],
+        ),
+      );
 
   void _openProject(BuildContext context, WidgetRef ref, VideoProject project) {
     ref.read(editorControllerProvider.notifier).openProject(project);
@@ -165,6 +252,12 @@ class ProjectsTab extends ConsumerWidget {
                   icon: CupertinoIcons.doc_on_doc,
                   tooltip: 'Abrir template',
                   onTap: () => _openTemplate(context, ref),
+                ),
+                const SizedBox(width: 10),
+                _IconeQuadrado(
+                  icon: CupertinoIcons.arrow_down_doc,
+                  tooltip: 'Importar preset do Alight (XML)',
+                  onTap: () => _importarAlight(context, ref),
                 ),
               ],
             ),
