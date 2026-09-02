@@ -1481,6 +1481,24 @@ class ParticlesLayer extends Layer {
     this.twinkle = true,
     this.color = const Color(0xFFFF3B52),
     this.star = true,
+    this.emitter = 0,
+    this.emitMode = 0,
+    this.windX = 0,
+    this.windY = 0,
+    this.drag = 0,
+    this.turbulence = 0,
+    this.turbulenceScale = 300,
+    this.turbulenceSpeed = 1,
+    this.sizeOverLife = 0,
+    this.sizeRandom = 0.5,
+    this.opacityOverLife = 0,
+    this.opacityRandom = 0,
+    this.colorEnd,
+    int? shape,
+    this.spin = 0,
+    this.trail = 0,
+    this.lifeRandom = 0,
+    this.glow = 0.25,
     super.position,
     super.scaleX,
     super.scaleY,
@@ -1499,7 +1517,7 @@ class ParticlesLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
-  });
+  }) : shape = shape ?? (star ? 1 : 0);
 
   /// Numero de particulas vivas por ciclo.
   final int count;
@@ -1534,6 +1552,59 @@ class ParticlesLayer extends Layer {
   /// true = sparkles de 4 pontas; false = pontos.
   final bool star;
 
+  // ---- Particular-like (V1.1): emissor, fisica, vida e aparencia.
+
+  /// Emissor: 0 caixa (area X/Y + fundo Z), 1 ponto, 2 esfera (raio =
+  /// area X / 2), 3 anel (raio = area X / 2, no plano XY).
+  final int emitter;
+
+  /// Direcao de saida: 0 cone (direcao + abertura), 1 todas as direcoes
+  /// (esfera), 2 para fora do centro do emissor.
+  final int emitMode;
+
+  /// Vento (px/s): deriva constante somada ao movimento.
+  final double windX;
+  final double windY;
+
+  /// Resistencia do ar (1/s): a velocidade inicial decai; com gravidade,
+  /// a particula atinge velocidade terminal.
+  final double drag;
+
+  /// Turbulencia: amplitude (px), tamanho do detalhe (px) e velocidade
+  /// de evolucao do campo (ciclos/s).
+  final double turbulence;
+  final double turbulenceScale;
+  final double turbulenceSpeed;
+
+  /// Tamanho ao longo da vida: 0 fixo, 1 cresce, 2 encolhe, 3 sobe e
+  /// desce. [sizeRandom] 0..1 espalha o tamanho entre particulas.
+  final int sizeOverLife;
+  final double sizeRandom;
+
+  /// Opacidade ao longo da vida: 0 entra e sai, 1 some, 2 aparece,
+  /// 3 fixa. [opacityRandom] 0..1 espalha a opacidade.
+  final int opacityOverLife;
+  final double opacityRandom;
+
+  /// Cor no fim da vida (null = cor fixa).
+  final Color? colorEnd;
+
+  /// Forma: 0 esfera, 1 estrela, 2 risco (streak), 3 nuvem, 4 quadrado,
+  /// 5 anel. Sem valor salvo, vem de [star].
+  final int shape;
+
+  /// Giro proprio (graus/s) — visivel nas formas com orientacao.
+  final double spin;
+
+  /// Rastro 0..1: copias fantasmas em idades anteriores (cauda).
+  final double trail;
+
+  /// Vida aleatoria 0..1: encurta a vida de parte das particulas.
+  final double lifeRandom;
+
+  /// Brilho (halo) 0..1.
+  final double glow;
+
   ParticlesLayer copyParticles({
     int? count,
     int? seed,
@@ -1549,6 +1620,25 @@ class ParticlesLayer extends Layer {
     bool? twinkle,
     Color? color,
     bool? star,
+    int? emitter,
+    int? emitMode,
+    double? windX,
+    double? windY,
+    double? drag,
+    double? turbulence,
+    double? turbulenceScale,
+    double? turbulenceSpeed,
+    int? sizeOverLife,
+    double? sizeRandom,
+    int? opacityOverLife,
+    double? opacityRandom,
+    Color? colorEnd,
+    bool clearColorEnd = false,
+    int? shape,
+    double? spin,
+    double? trail,
+    double? lifeRandom,
+    double? glow,
   }) {
     return ParticlesLayer(
       id: id,
@@ -1569,6 +1659,24 @@ class ParticlesLayer extends Layer {
       twinkle: twinkle ?? this.twinkle,
       color: color ?? this.color,
       star: star ?? this.star,
+      emitter: emitter ?? this.emitter,
+      emitMode: emitMode ?? this.emitMode,
+      windX: windX ?? this.windX,
+      windY: windY ?? this.windY,
+      drag: drag ?? this.drag,
+      turbulence: turbulence ?? this.turbulence,
+      turbulenceScale: turbulenceScale ?? this.turbulenceScale,
+      turbulenceSpeed: turbulenceSpeed ?? this.turbulenceSpeed,
+      sizeOverLife: sizeOverLife ?? this.sizeOverLife,
+      sizeRandom: sizeRandom ?? this.sizeRandom,
+      opacityOverLife: opacityOverLife ?? this.opacityOverLife,
+      opacityRandom: opacityRandom ?? this.opacityRandom,
+      colorEnd: clearColorEnd ? null : (colorEnd ?? this.colorEnd),
+      shape: shape ?? this.shape,
+      spin: spin ?? this.spin,
+      trail: trail ?? this.trail,
+      lifeRandom: lifeRandom ?? this.lifeRandom,
+      glow: glow ?? this.glow,
       position: position,
       scaleX: scaleX,
       scaleY: scaleY,
@@ -1630,6 +1738,24 @@ class ParticlesLayer extends Layer {
       twinkle: twinkle,
       color: color,
       star: star,
+      emitter: emitter,
+      emitMode: emitMode,
+      windX: windX,
+      windY: windY,
+      drag: drag,
+      turbulence: turbulence,
+      turbulenceScale: turbulenceScale,
+      turbulenceSpeed: turbulenceSpeed,
+      sizeOverLife: sizeOverLife,
+      sizeRandom: sizeRandom,
+      opacityOverLife: opacityOverLife,
+      opacityRandom: opacityRandom,
+      colorEnd: colorEnd,
+      shape: shape,
+      spin: spin,
+      trail: trail,
+      lifeRandom: lifeRandom,
+      glow: glow,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -1671,6 +1797,24 @@ class ParticlesLayer extends Layer {
         twinkle: twinkle,
         color: color,
         star: star,
+      emitter: emitter,
+      emitMode: emitMode,
+      windX: windX,
+      windY: windY,
+      drag: drag,
+      turbulence: turbulence,
+      turbulenceScale: turbulenceScale,
+      turbulenceSpeed: turbulenceSpeed,
+      sizeOverLife: sizeOverLife,
+      sizeRandom: sizeRandom,
+      opacityOverLife: opacityOverLife,
+      opacityRandom: opacityRandom,
+      colorEnd: colorEnd,
+      shape: shape,
+      spin: spin,
+      trail: trail,
+      lifeRandom: lifeRandom,
+      glow: glow,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,

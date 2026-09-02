@@ -749,6 +749,11 @@ class _PreviewPainter extends CustomPainter {
             sat = p.apply(sat, time, c);
           case TextAnimProp.brightness:
             bri = p.apply(bri, time, c);
+          case TextAnimProp.rotationX:
+          case TextAnimProp.rotationY:
+          case TextAnimProp.positionZ:
+            // A miniatura do painel e 2D; o 3D aparece no preview.
+            break;
         }
       }
 

@@ -955,6 +955,24 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['twinkle'] = p.twinkle;
       base['color'] = _col(p.color);
       base['star'] = p.star;
+      base['emitter'] = p.emitter;
+      base['emitMode'] = p.emitMode;
+      base['windX'] = p.windX;
+      base['windY'] = p.windY;
+      base['drag'] = p.drag;
+      base['turb'] = p.turbulence;
+      base['turbScale'] = p.turbulenceScale;
+      base['turbSpeed'] = p.turbulenceSpeed;
+      base['sizeLife'] = p.sizeOverLife;
+      base['sizeRnd'] = p.sizeRandom;
+      base['opLife'] = p.opacityOverLife;
+      base['opRnd'] = p.opacityRandom;
+      if (p.colorEnd != null) base['colorEnd'] = _col(p.colorEnd!);
+      base['shape'] = p.shape;
+      base['spin'] = p.spin;
+      base['trail'] = p.trail;
+      base['lifeRnd'] = p.lifeRandom;
+      base['glow'] = p.glow;
     case Element3DLayer e:
       base['kind'] = 'el3d';
       base['el'] = e.kind.index;
@@ -1423,6 +1441,24 @@ Layer layerFromJson(Map<String, dynamic> m) {
         twinkle: m['twinkle'] as bool? ?? false,
         color: _asCol(m['color']),
         star: m['star'] as bool,
+        emitter: (m['emitter'] as num?)?.toInt() ?? 0,
+        emitMode: (m['emitMode'] as num?)?.toInt() ?? 0,
+        windX: (m['windX'] as num?)?.toDouble() ?? 0,
+        windY: (m['windY'] as num?)?.toDouble() ?? 0,
+        drag: (m['drag'] as num?)?.toDouble() ?? 0,
+        turbulence: (m['turb'] as num?)?.toDouble() ?? 0,
+        turbulenceScale: (m['turbScale'] as num?)?.toDouble() ?? 300,
+        turbulenceSpeed: (m['turbSpeed'] as num?)?.toDouble() ?? 1,
+        sizeOverLife: (m['sizeLife'] as num?)?.toInt() ?? 0,
+        sizeRandom: (m['sizeRnd'] as num?)?.toDouble() ?? 0.5,
+        opacityOverLife: (m['opLife'] as num?)?.toInt() ?? 0,
+        opacityRandom: (m['opRnd'] as num?)?.toDouble() ?? 0,
+        colorEnd: m['colorEnd'] == null ? null : _asCol(m['colorEnd']),
+        shape: (m['shape'] as num?)?.toInt(),
+        spin: (m['spin'] as num?)?.toDouble() ?? 0,
+        trail: (m['trail'] as num?)?.toDouble() ?? 0,
+        lifeRandom: (m['lifeRnd'] as num?)?.toDouble() ?? 0,
+        glow: (m['glow'] as num?)?.toDouble() ?? 0.25,
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,

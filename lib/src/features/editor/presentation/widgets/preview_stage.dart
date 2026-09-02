@@ -1700,6 +1700,105 @@ sigmaX: sigma, sigmaY: sigma, size: fxSize,
             ]);
           }
 
+        case EffectType.liquidGlass:
+          // LIQUID GLASS: a camada vira uma placa de vidro sobre o que
+          // esta atras — desfoque do fundo, leve LENTE (o fundo cresce
+          // um pouco por baixo do vidro), tingimento, brilho especular
+          // correndo pela borda de cima e sombra por baixo. A camada em
+          // si (texto, icone) fica por cima, nitida.
+          final blurLG = effect.paramAt('blur', local).clamp(0.0, 40.0);
+          final refr = effect.paramAt('refraction', local).clamp(0.0, 1.0);
+          final rimLG = effect.paramAt('rim', local).clamp(0.0, 1.0);
+          final tintLG = effect.paramAt('tint', local).clamp(0.0, 1.0);
+          final raioLG = effect.paramAt('radius', local).clamp(0.0, 200.0);
+          final sombraLG = effect.paramAt('shadow', local).clamp(0.0, 1.0);
+          final folgaLG = effect.paramAt('padding', local).clamp(0.0, 120.0);
+          final bordaLG = BorderRadius.circular(raioLG);
+          out = Stack(clipBehavior: Clip.none, children: [
+            Positioned(
+              left: -folgaLG,
+              top: -folgaLG,
+              right: -folgaLG,
+              bottom: -folgaLG,
+              child: IgnorePointer(
+                child: LayoutBuilder(builder: (context, c) {
+                  final w = c.maxWidth, h = c.maxHeight;
+                  final k = 1 + refr * 0.12;
+                  // Lente: escala o fundo em torno do centro da placa.
+                  final lente = Matrix4.identity()
+                    ..translateByDouble(w / 2, h / 2, 0, 1)
+                    ..scaleByDouble(k, k, 1, 1)
+                    ..translateByDouble(-w / 2, -h / 2, 0, 1);
+                  return Stack(children: [
+                    if (sombraLG > 0.01)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: bordaLG,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black
+                                    .withValues(alpha: 0.45 * sombraLG),
+                                blurRadius: 28,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: bordaLG,
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.compose(
+                            outer: ui.ImageFilter.blur(
+                                sigmaX: blurLG,
+                                sigmaY: blurLG,
+                                tileMode: TileMode.mirror),
+                            inner: ui.ImageFilter.matrix(lente.storage,
+                                filterQuality: FilterQuality.medium),
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: bordaLG,
+                              color: effect.color.withValues(alpha: tintLG),
+                              border: Border.all(
+                                color: Colors.white
+                                    .withValues(alpha: 0.55 * rimLG),
+                                width: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // O reflexo especular: claro em cima e a esquerda,
+                    // um fio claro embaixo — a luz passando pela curva.
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: bordaLG,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.white.withValues(alpha: 0.38 * rimLG),
+                              Colors.white.withValues(alpha: 0.06 * rimLG),
+                              Colors.transparent,
+                              Colors.white.withValues(alpha: 0.14 * rimLG),
+                            ],
+                            stops: const [0, 0.3, 0.7, 1],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]);
+                }),
+              ),
+            ),
+            out,
+          ]);
+
         case EffectType.tint:
           final forcaTint =
               effect.paramAt('strength', local).clamp(0.0, 1.0);
@@ -2325,6 +2424,69 @@ sigmaX: math.max(0.1, sx),
           // Gama por aproximacao: uma segunda passada de ganho.
           if ((gamma - 1).abs() > 0.01) {
             final g = 1 / gamma;
+            out = ColorFiltered(
+              colorFilter:
+                  ColorFilter.matrix(_scaleShiftMatrix(g, (1 - g) * 0.18)),
+              child: out,
+            );
+          }
+
+        case EffectType.corrections:
+          // CORRECOES (o "basico" do Lumetri): exposicao e contraste numa
+          // matriz, sombras/altas como pe e topo da curva, temperatura e
+          // verde/magenta como ganho por canal, saturacao e gama.
+          final ev = effect.paramAt('exposicao', local);
+          final ctr = effect.paramAt('contraste', local).clamp(-1.0, 1.0);
+          final altas = effect.paramAt('altas', local).clamp(-1.0, 1.0);
+          final sombras = effect.paramAt('sombras', local).clamp(-1.0, 1.0);
+          final temp = effect.paramAt('temperatura', local).clamp(-1.0, 1.0);
+          final verdeMag = effect.paramAt('matiz', local).clamp(-1.0, 1.0);
+          final satC = effect.paramAt('saturacao', local).clamp(-1.0, 1.0);
+          final gamaC = effect.paramAt('gama', local).clamp(0.3, 3.0);
+          final ganho = math.pow(2.0, ev).toDouble();
+          final cC = 1 + ctr * 0.9;
+          final escala = ganho * cC;
+          final desloc = (1 - cC) * 0.5 * ganho;
+          if ((escala - 1).abs() > 1e-4 || desloc.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter:
+                  ColorFilter.matrix(_scaleShiftMatrix(escala, desloc)),
+              child: out,
+            );
+          }
+          // Sombras levantam o preto (branco fica); altas esticam ou
+          // comprimem o topo (preto fica).
+          final pe = sombras * 0.22;
+          final topo = altas * 0.22;
+          if (pe.abs() > 1e-4 || topo.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(
+                  _scaleShiftMatrix((1 - pe) * (1 + topo), pe)),
+              child: out,
+            );
+          }
+          if (temp.abs() > 1e-4 || verdeMag.abs() > 1e-4) {
+            final rG = (1 + temp * 0.18) * (1 + verdeMag * 0.05);
+            final gG = 1 - verdeMag * 0.14;
+            final bG = (1 - temp * 0.18) * (1 + verdeMag * 0.05);
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(<double>[
+                rG, 0, 0, 0, 0, //
+                0, gG, 0, 0, 0,
+                0, 0, bG, 0, 0,
+                0, 0, 0, 1, 0,
+              ]),
+              child: out,
+            );
+          }
+          if (satC.abs() > 1e-4) {
+            out = ColorFiltered(
+              colorFilter: ColorFilter.matrix(_saturationMatrix(1 + satC)),
+              child: out,
+            );
+          }
+          if ((gamaC - 1).abs() > 0.01) {
+            final g = 1 / gamaC;
             out = ColorFiltered(
               colorFilter:
                   ColorFilter.matrix(_scaleShiftMatrix(g, (1 - g) * 0.18)),

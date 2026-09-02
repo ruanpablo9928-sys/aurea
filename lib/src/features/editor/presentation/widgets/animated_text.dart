@@ -117,6 +117,7 @@ class _AnimatedTextPainter extends CustomPainter {
       // Acumula o transform desta unidade pelos animadores em pilha.
       var dx = 0.0, dy = 0.0, rotation = 0.0, tracking = 0.0;
       var blur = 0.0, skew = 0.0, hue = 0.0;
+      var rotX = 0.0, rotY = 0.0, dz = 0.0;
       var scaleP = 100.0, opacityP = 100.0;
       var scaleXP = 100.0, scaleYP = 100.0;
       var satP = 100.0, brightP = 100.0;
@@ -151,6 +152,12 @@ class _AnimatedTextPainter extends CustomPainter {
               satP = p.apply(satP, t, c);
             case TextAnimProp.brightness:
               brightP = p.apply(brightP, t, c);
+            case TextAnimProp.rotationX:
+              rotX = p.apply(rotX, t, c);
+            case TextAnimProp.rotationY:
+              rotY = p.apply(rotY, t, c);
+            case TextAnimProp.positionZ:
+              dz = p.apply(dz, t, c);
           }
         }
       }
@@ -226,6 +233,20 @@ class _AnimatedTextPainter extends CustomPainter {
       canvas.translate(center.dx + dx + trackingShift, center.dy + dy);
       if (pathAngle != 0) canvas.rotate(pathAngle);
       if (rotation != 0) canvas.rotate(rotation * math.pi / 180);
+      // 3D DA UNIDADE: perspectiva com a focal do app (1200), a mesma
+      // dos solidos e das particulas. Z positivo afasta (encolhe).
+      if (rotX != 0 || rotY != 0 || dz != 0) {
+        const focal = 1200.0;
+        final m = Matrix4.identity()
+          ..setEntry(3, 2, -1 / focal);
+        if (dz != 0) {
+          final k = (focal / (focal + dz)).clamp(0.05, 8.0);
+          m.scaleByDouble(k, k, 1, 1);
+        }
+        if (rotX != 0) m.rotateX(rotX * math.pi / 180);
+        if (rotY != 0) m.rotateY(rotY * math.pi / 180);
+        canvas.transform(m.storage);
+      }
       if (skew != 0) {
         canvas.transform(Float64List.fromList(<double>[
           1, 0, 0, 0, //

@@ -51,6 +51,8 @@ enum EffectType {
   forceMotionBlur,
   flicker,
   gradient4,
+  liquidGlass,
+  corrections,
 }
 
 /// O tipo a partir do IDENTIFICADOR estavel.
@@ -1061,6 +1063,49 @@ const effectSpecs = <EffectType, EffectSpec>{
           kind: ParamKind.choice,
           options: ['Normal', 'Multiplicar', 'Tela', 'Sobrepor']),
       'angle': EffectParam('Giro', 0.0, -180.0, 180.0),
+    },
+  ),
+
+  EffectType.liquidGlass: EffectSpec(
+    id: 'liquid_glass',
+    name: 'Liquid Glass',
+    category: 'Stylize',
+    synonyms: [
+      'vidro', 'glass', 'liquid glass', 'ios 26', 'glassmorphism',
+      'blur atras', 'lente',
+    ],
+    cost: 2,
+    hasColor: true,
+    params: {
+      'blur': EffectParam('Desfoque', 18.0, 0.0, 40.0),
+      'refraction': EffectParam('Refracao', 0.35, 0.0, 1.0),
+      'rim': EffectParam('Brilho da borda', 0.7, 0.0, 1.0),
+      'tint': EffectParam('Tingir', 0.12, 0.0, 1.0),
+      'radius': EffectParam('Cantos', 28.0, 0.0, 200.0),
+      'shadow': EffectParam('Sombra', 0.35, 0.0, 1.0),
+      'padding': EffectParam('Folga', 24.0, 0.0, 120.0),
+    },
+  ),
+
+  EffectType.corrections: EffectSpec(
+    id: 'corrections',
+    name: 'Correcoes',
+    category: 'Color',
+    synonyms: [
+      'correcao', 'correção', 'exposicao', 'exposure', 'contraste',
+      'altas', 'sombras', 'temperatura', 'lumetri', 'basico', 'ajustes',
+      'highlights', 'shadows',
+    ],
+    cost: 1,
+    params: {
+      'exposicao': EffectParam('Exposicao', 0.0, -3.0, 3.0),
+      'contraste': EffectParam('Contraste', 0.0, -1.0, 1.0),
+      'altas': EffectParam('Altas luzes', 0.0, -1.0, 1.0),
+      'sombras': EffectParam('Sombras', 0.0, -1.0, 1.0),
+      'temperatura': EffectParam('Temperatura', 0.0, -1.0, 1.0),
+      'matiz': EffectParam('Verde / magenta', 0.0, -1.0, 1.0),
+      'saturacao': EffectParam('Saturacao', 0.0, -1.0, 1.0),
+      'gama': EffectParam('Gama', 1.0, 0.3, 3.0),
     },
   ),
 

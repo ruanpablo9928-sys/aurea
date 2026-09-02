@@ -1652,6 +1652,67 @@ Future<void> showParticlesSheet(
           );
         }
 
+        Widget chips(String label, List<String> nomes, int atual,
+            ValueChanged<int> onPick) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                    width: 86,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(label,
+                          style: const TextStyle(
+                              fontSize: 13, color: AmColors.muted)),
+                    )),
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (var i = 0; i < nomes.length; i++)
+                        GestureDetector(
+                          onTap: () {
+                            onPick(i);
+                            setSheetState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 11, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: atual == i
+                                  ? AmColors.accentDim
+                                  : AmColors.chip,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Text(nomes[i],
+                                style: const TextStyle(
+                                    fontSize: 12, color: AmColors.accent)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget titulo(String t) => Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 8),
+              child: Text(t,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: AmColors.muted)),
+            );
+
+        void up(ParticlesLayer Function(ParticlesLayer) f) =>
+            controller.updateParticles(layerId, f);
+
         return SafeArea(
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(18, 14, 18,
@@ -1666,7 +1727,7 @@ Future<void> showParticlesSheet(
                         fontWeight: FontWeight.w700,
                         color: AmColors.text)),
                 const SizedBox(height: 14),
-                row('Quantidade', layer.count.toDouble(), 1, 800, 1.2,
+                row('Quantidade', layer.count.toDouble(), 1, 2000, 3,
                     '${layer.count}',
                     (v) => controller.updateParticles(layerId,
                         (p) => p.copyParticles(count: v.round()))),
@@ -1696,6 +1757,13 @@ Future<void> showParticlesSheet(
                         layerId,
                         (p) => p.copyParticles(
                             lifetimeMs: (v * 1000).round()))),
+                titulo('EMISSOR'),
+                chips('Emissor', const ['Caixa', 'Ponto', 'Esfera', 'Anel'],
+                    layer.emitter,
+                    (i) => up((p) => p.copyParticles(emitter: i))),
+                chips('Saida', const ['Cone', 'Todas', 'Para fora'],
+                    layer.emitMode,
+                    (i) => up((p) => p.copyParticles(emitMode: i))),
                 row('3D (Z)', layer.depth, 0, 3000, 5,
                     amNumber(layer.depth, 0),
                     (v) => controller.updateParticles(
@@ -1708,25 +1776,127 @@ Future<void> showParticlesSheet(
                     amNumber(layer.emitH, 0),
                     (v) => controller.updateParticles(
                         layerId, (p) => p.copyParticles(emitH: v))),
+                titulo('FISICA'),
+                row('Vento X', layer.windX, -1500, 1500, 3,
+                    amNumber(layer.windX, 0),
+                    (v) => up((p) => p.copyParticles(windX: v))),
+                row('Vento Y', layer.windY, -1500, 1500, 3,
+                    amNumber(layer.windY, 0),
+                    (v) => up((p) => p.copyParticles(windY: v))),
+                row('Ar', layer.drag, 0, 8, 0.02, amNumber(layer.drag, 2),
+                    (v) => up((p) => p.copyParticles(drag: v))),
+                row('Turbulencia', layer.turbulence, 0, 600, 1.2,
+                    amNumber(layer.turbulence, 0),
+                    (v) => up((p) => p.copyParticles(turbulence: v))),
+                row('Detalhe', layer.turbulenceScale, 20, 1200, 2,
+                    amNumber(layer.turbulenceScale, 0),
+                    (v) => up((p) => p.copyParticles(turbulenceScale: v))),
+                row('Evolucao', layer.turbulenceSpeed, 0, 5, 0.01,
+                    amNumber(layer.turbulenceSpeed, 2),
+                    (v) => up((p) => p.copyParticles(turbulenceSpeed: v))),
+                row('Giro', layer.spin, -720, 720, 2,
+                    '${amNumber(layer.spin, 0)}°/s',
+                    (v) => up((p) => p.copyParticles(spin: v))),
+                titulo('VIDA'),
+                chips('Tamanho',
+                    const ['Fixo', 'Cresce', 'Encolhe', 'Sobe e desce'],
+                    layer.sizeOverLife,
+                    (i) => up((p) => p.copyParticles(sizeOverLife: i))),
+                chips('Opacidade',
+                    const ['Entra e sai', 'Some', 'Aparece', 'Fixa'],
+                    layer.opacityOverLife,
+                    (i) => up((p) => p.copyParticles(opacityOverLife: i))),
+                row('Vida aleat.', layer.lifeRandom, 0, 1, 0.003,
+                    amNumber(layer.lifeRandom * 100, 0),
+                    (v) => up((p) => p.copyParticles(lifeRandom: v))),
+                row('Tam. aleat.', layer.sizeRandom, 0, 1, 0.003,
+                    amNumber(layer.sizeRandom * 100, 0),
+                    (v) => up((p) => p.copyParticles(sizeRandom: v))),
+                row('Opac. aleat.', layer.opacityRandom, 0, 1, 0.003,
+                    amNumber(layer.opacityRandom * 100, 0),
+                    (v) => up((p) => p.copyParticles(opacityRandom: v))),
+                titulo('APARENCIA'),
+                chips(
+                    'Forma',
+                    const [
+                      'Esfera',
+                      'Estrela',
+                      'Risco',
+                      'Nuvem',
+                      'Quadrado',
+                      'Anel'
+                    ],
+                    layer.shape,
+                    (i) => up((p) => p.copyParticles(shape: i))),
+                row('Brilho', layer.glow, 0, 1, 0.003,
+                    amNumber(layer.glow * 100, 0),
+                    (v) => up((p) => p.copyParticles(glow: v))),
+                row('Rastro', layer.trail, 0, 1, 0.003,
+                    amNumber(layer.trail * 100, 0),
+                    (v) => up((p) => p.copyParticles(trail: v))),
+                // COR FINAL: a particula muda de cor ao longo da vida.
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                          width: 86,
+                          child: Text('Cor final',
+                              style: TextStyle(
+                                  fontSize: 13, color: AmColors.muted))),
+                      GestureDetector(
+                        onTap: () {
+                          up((p) => p.copyParticles(clearColorEnd: true));
+                          setSheetState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 11, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: layer.colorEnd == null
+                                ? AmColors.accentDim
+                                : AmColors.chip,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Text('Nenhuma',
+                              style: TextStyle(
+                                  fontSize: 12, color: AmColors.accent)),
+                        ),
+                      ),
+                      const Spacer(),
+                      for (final c in const [
+                        Color(0xFFFF3B52),
+                        Color(0xFFB8FF3D),
+                        Color(0xFF7C62FF),
+                        Color(0xFFFFFFFF),
+                        Color(0xFFFFB020),
+                        Color(0xFF35C4E7),
+                      ])
+                        GestureDetector(
+                          onTap: () {
+                            up((p) => p.copyParticles(colorEnd: c));
+                            setSheetState(() {});
+                          },
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            margin: const EdgeInsets.only(left: 7),
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: layer.colorEnd == c
+                                  ? Border.all(
+                                      color: Colors.white, width: 2.5)
+                                  : null,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Text('Estrelas',
-                        style: TextStyle(
-                            fontSize: 13, color: AmColors.muted)),
-                    Transform.scale(
-                      scale: 0.72,
-                      child: CupertinoSwitch(
-                        value: layer.star,
-                        activeTrackColor: AmColors.accent,
-                        onChanged: (v) {
-                          controller.updateParticles(layerId,
-                              (p) => p.copyParticles(star: v));
-                          setSheetState(() {});
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     const Text('Cintilar',
                         style: TextStyle(
                             fontSize: 13, color: AmColors.muted)),

@@ -547,6 +547,13 @@ enum TextAnimProp {
   hue, // graus; aditivo
   saturation, // %; multiplicativa
   brightness, // %; multiplicativa
+
+  // 3D POR UNIDADE: cada letra, palavra ou frase gira no espaco e se
+  // afasta/aproxima da camera. E o "texto 3D" de motion — a palavra
+  // que vira como uma porta, a frase que vem de longe.
+  rotationX, // graus; aditivo
+  rotationY, // graus; aditivo
+  positionZ, // px; aditivo (positivo = longe)
 }
 
 String textAnimPropLabel(TextAnimProp p) => switch (p) {
@@ -563,6 +570,9 @@ String textAnimPropLabel(TextAnimProp p) => switch (p) {
       TextAnimProp.hue => 'Matiz',
       TextAnimProp.saturation => 'Saturacao',
       TextAnimProp.brightness => 'Brilho',
+      TextAnimProp.rotationX => 'Rotacao X (3D)',
+      TextAnimProp.rotationY => 'Rotacao Y (3D)',
+      TextAnimProp.positionZ => 'Posicao Z (3D)',
     };
 
 class AnimatorProperty {
