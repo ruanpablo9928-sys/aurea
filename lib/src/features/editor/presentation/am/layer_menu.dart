@@ -223,6 +223,32 @@ Future<LayerMenuAction?> showLayerMenu(
                                   },
                                 ),
                               ],
+                              // 3D DA CAMADA e MOTION BLUR na mesma fileira
+                              // em que se acha a mascara: o botao existe
+                              // onde a pessoa procura, nao num submenu.
+                              _UtilIcon(
+                                icon: layer.is3D
+                                    ? CupertinoIcons.cube_fill
+                                    : CupertinoIcons.cube,
+                                label: layer.is3D ? '3D ligado' : 'Ligar 3D',
+                                aceso: layer.is3D,
+                                onTap: () {
+                                  controller.toggle3D(layer.id);
+                                  setSheetState(() {});
+                                },
+                              ),
+                              _UtilIcon(
+                                icon: CupertinoIcons.speedometer,
+                                label: 'Motion blur',
+                                aceso: ref
+                                    .read(editorControllerProvider)
+                                    .metaOf(layer.id)
+                                    .motionBlur,
+                                onTap: () {
+                                  controller.toggleLayerMotionBlurReal(layer.id);
+                                  setSheetState(() {});
+                                },
+                              ),
                               if (layer is! NullLayer)
                                 _UtilIcon(
                                   icon: CupertinoIcons.scope,

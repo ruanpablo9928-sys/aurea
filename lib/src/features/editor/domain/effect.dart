@@ -49,6 +49,8 @@ enum EffectType {
   glitchify,
   // --- lote 3 (AUREA-six-effects-english) ---
   forceMotionBlur,
+  flicker,
+  gradient4,
 }
 
 /// O tipo a partir do IDENTIFICADOR estavel.
@@ -183,6 +185,7 @@ class EffectSpec {
     required this.name,
     required this.params,
     this.hasColor = false,
+    this.extraColors = 0,
     this.category = 'Estilizar',
     this.synonyms = const [],
     this.cost = 1,
@@ -205,6 +208,10 @@ class EffectSpec {
 
   /// Cor principal do efeito (alem dos parametros de cor).
   final bool hasColor;
+
+  /// Quantas cores ALEM da principal o efeito pede (gradiente de
+  /// quatro cores pede tres).
+  final int extraColors;
 
   /// Categoria do catalogo.
   final String category;
@@ -1019,6 +1026,44 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
   ),
 
+  EffectType.flicker: EffectSpec(
+    id: 'flicker',
+    name: 'Flicker',
+    category: 'Stylize',
+    synonyms: ['piscar', 'flicker', 'cintilar', 'strobe', 'tremular', 'luz'],
+    cost: 1,
+    params: {
+      'amount': EffectParam('Intensidade', 0.6, 0.0, 1.0),
+      'frequency': EffectParam('Frequencia', 12.0, 0.5, 60.0),
+      'style': EffectParam('Estilo', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Aleatorio', 'Strobe', 'Senoide']),
+      'target': EffectParam('Age em', 0.0, 0.0, 1.0,
+          kind: ParamKind.choice, options: ['Opacidade', 'Brilho']),
+      'seed': EffectParam('Seed', 0.0, 0.0, 100.0, kind: ParamKind.seed),
+    },
+  ),
+
+  EffectType.gradient4: EffectSpec(
+    id: 'gradient4',
+    name: 'Gradiente 4 cores',
+    category: 'Color',
+    synonyms: [
+      'gradiente', 'degrade', 'quatro cores', '4 cores', 'gradient',
+      'cantos',
+    ],
+    cost: 1,
+    hasColor: true,
+    extraColors: 3,
+    params: {
+      'opacity': EffectParam('Opacidade', 1.0, 0.0, 1.0),
+      'blend': EffectParam('Mescla', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice,
+          options: ['Normal', 'Multiplicar', 'Tela', 'Sobrepor']),
+      'angle': EffectParam('Giro', 0.0, -180.0, 180.0),
+    },
+  ),
+
   EffectType.forceMotionBlur: EffectSpec(
     id: 'force_motion_blur',
     name: 'Force Motion Blur',
@@ -1104,7 +1149,11 @@ class EffectInstance {
     Map<String, AnimatedDouble>? params,
     this.color = const Color(0xFFFF5566),
     this.enabled = true,
+    List<Color>? extraColors,
   })  : id = id ?? const Uuid().v4(),
+        extraColors = List.unmodifiable(extraColors ??
+            List<Color>.generate(effectSpecs[type]!.extraColors,
+                (i) => _coresExtrasPadrao[i % _coresExtrasPadrao.length])),
         params = Map.unmodifiable(params ??
             {
               for (final e in effectSpecs[type]!.params.entries)
@@ -1116,6 +1165,28 @@ class EffectInstance {
   final Map<String, AnimatedDouble> params;
   final Color color;
   final bool enabled;
+
+  /// Cores alem da principal, na ordem da ficha ([EffectSpec.extraColors]).
+  final List<Color> extraColors;
+
+  static const _coresExtrasPadrao = [
+    Color(0xFF7C62FF),
+    Color(0xFF35C4E7),
+    Color(0xFFFFB020),
+  ];
+
+  Color extraColor(int i) => i < extraColors.length
+      ? extraColors[i]
+      : _coresExtrasPadrao[i % _coresExtrasPadrao.length];
+
+  EffectInstance withExtraColor(int i, Color c) {
+    final lista = [...extraColors];
+    while (lista.length <= i) {
+      lista.add(_coresExtrasPadrao[lista.length % _coresExtrasPadrao.length]);
+    }
+    lista[i] = c;
+    return copyWith(extraColors: lista);
+  }
 
   EffectSpec get spec => effectSpecs[type]!;
 
@@ -1129,6 +1200,7 @@ class EffectInstance {
     Map<String, AnimatedDouble>? params,
     Color? color,
     bool? enabled,
+    List<Color>? extraColors,
   }) {
     return EffectInstance(
       id: id,
@@ -1136,6 +1208,7 @@ class EffectInstance {
       params: params ?? this.params,
       color: color ?? this.color,
       enabled: enabled ?? this.enabled,
+      extraColors: extraColors ?? this.extraColors,
     );
   }
 
@@ -1206,6 +1279,10 @@ class EffectInstance {
 
   bool get hasAnimation => params.values.any((t) => t.isAnimated);
 
-  EffectInstance duplicated() =>
-      EffectInstance(type: type, params: params, color: color, enabled: enabled);
+  EffectInstance duplicated() => EffectInstance(
+      type: type,
+      params: params,
+      color: color,
+      enabled: enabled,
+      extraColors: extraColors);
 }

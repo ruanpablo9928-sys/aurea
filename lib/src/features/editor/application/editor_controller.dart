@@ -3797,6 +3797,29 @@ class EditorController extends Notifier<VideoProject> {
         children.isEmpty ? null : children.first.id;
   }
 
+  /// MOTION BLUR REAL na camada: liga a amostragem por quadro desta
+  /// camada E o interruptor da composicao — sem os dois juntos o botao
+  /// parecia nao fazer nada.
+  void toggleLayerMotionBlurReal(String id) {
+    final ligado = state.metaOf(id).motionBlur;
+    _updateMeta(id, (m) => m.copyWith(motionBlur: !ligado));
+    if (!ligado && !state.motionBlur.enabled) {
+      _mutate(state.copyWith(
+          motionBlur: state.motionBlur.copyWith(enabled: true)));
+    }
+  }
+
+  /// Cor EXTRA de um efeito (gradiente de quatro cores e afins).
+  void setEffectExtraColor(
+      String layerId, String effectId, int index, Color color) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    _replace(layer.copyLayer(effects: [
+      for (final e in layer.effects)
+        e.id == effectId ? e.withExtraColor(index, color) : e,
+    ]));
+  }
+
   void toggle3D(String id) {
     final layer = _layer(id);
     if (layer == null) return;

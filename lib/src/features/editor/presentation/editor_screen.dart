@@ -1077,8 +1077,17 @@ class _TransportBar extends ConsumerWidget {
                 color:
                     controller.canRedo ? AmColors.text : AmColors.muted),
           ),
+          // COM MARCAS, os botoes de ponta andam DE MARCA EM MARCA: e o
+          // jeito de navegar uma musica marcada. Sem marca, inicio/fim.
           GestureDetector(
-            onTap: () => playback.seek(Duration.zero),
+            onTap: () {
+              final t = playback.time.value;
+              final temMarcas =
+                  ref.read(editorControllerProvider).markers.isNotEmpty;
+              playback.seek(temMarcas
+                  ? (controller.markerBefore(t) ?? Duration.zero)
+                  : Duration.zero);
+            },
             child: const Icon(CupertinoIcons.backward_end,
                 size: 22, color: AmColors.text),
           ),
@@ -1096,7 +1105,13 @@ class _TransportBar extends ConsumerWidget {
             ),
           ),
           GestureDetector(
-            onTap: () => playback.seek(duration),
+            onTap: () {
+              final t = playback.time.value;
+              final temMarcas =
+                  ref.read(editorControllerProvider).markers.isNotEmpty;
+              playback.seek(
+                  temMarcas ? (controller.markerAfter(t) ?? duration) : duration);
+            },
             child: const Icon(CupertinoIcons.forward_end,
                 size: 22, color: AmColors.text),
           ),

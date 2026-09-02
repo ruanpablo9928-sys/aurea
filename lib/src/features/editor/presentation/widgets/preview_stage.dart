@@ -27,6 +27,7 @@ import '../../domain/shape.dart';
 import '../../domain/video_project.dart';
 import 'animated_text.dart';
 import 'blend_mask.dart';
+import 'gradient4_painter.dart';
 import 'custom_blend.dart';
 import 'linear_light.dart';
 import '../../domain/bloom.dart';
@@ -1605,6 +1606,100 @@ sigmaX: sigma, sigmaY: sigma, size: fxSize,
               ],
             );
           }
+        case EffectType.flicker:
+          // FLICKER: a camada pisca. Aleatorio e a lampada ruim; strobe e
+          // a balada; senoide e a respiracao. Age na opacidade ou no
+          // brilho — no brilho a camada nao some, so escurece.
+          final amt = effect.paramAt('amount', local).clamp(0.0, 1.0);
+          if (amt > 0.004) {
+            final freq = effect.paramAt('frequency', local).clamp(0.5, 60.0);
+            final estilo = effect.paramAt('style', local).round().clamp(0, 2);
+            final alvo = effect.paramAt('target', local).round().clamp(0, 1);
+            final seedF = effect.paramAt('seed', local).round();
+            final x = local.inMicroseconds / 1e6 * freq;
+            final onda = switch (estilo) {
+              1 => (x - x.floor()) < 0.5 ? 1.0 : -1.0,
+              2 => math.sin(x * 2 * math.pi),
+              _ => fxNoiseSigned(seedF + 7, 3, x),
+            };
+            // 0..1: quanto da camada FICA neste instante.
+            final k = (1 - amt * (0.5 - 0.5 * onda)).clamp(0.0, 1.0);
+            if (alvo == 0) {
+              out = Opacity(opacity: k, child: out);
+            } else {
+              out = ColorFiltered(
+                colorFilter: ColorFilter.matrix(<double>[
+                  k, 0, 0, 0, 0, //
+                  0, k, 0, 0, 0,
+                  0, 0, k, 0, 0,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: out,
+              );
+            }
+          }
+
+        case EffectType.gradient4:
+          // GRADIENTE DE QUATRO CORES sobre a camada, preso ao alfa dela
+          // (srcATop): cada canto uma cor. Girar troca os cantos de lugar.
+          final opG = effect.paramAt('opacity', local).clamp(0.0, 1.0);
+          if (opG > 0.004) {
+            final mescla = effect.paramAt('blend', local).round().clamp(0, 3);
+            final giro = effect.paramAt('angle', local) * math.pi / 180;
+            final cores = [
+              effect.color,
+              effect.extraColor(0),
+              effect.extraColor(2),
+              effect.extraColor(1),
+            ];
+            final modoG = switch (mescla) {
+              1 => BlendMode.multiply,
+              2 => BlendMode.screen,
+              3 => BlendMode.overlay,
+              _ => BlendMode.srcATop,
+            };
+            out = Stack(clipBehavior: Clip.none, children: [
+              out,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: BlendMask(
+                    blendMode: mescla == 0 ? BlendMode.srcATop : modoG,
+                    child: mescla == 0
+                        ? Transform.rotate(
+                            angle: giro,
+                            child: CustomPaint(
+                              painter: Gradient4Painter(
+                                topLeft: cores[0],
+                                topRight: cores[1],
+                                bottomLeft: cores[2],
+                                bottomRight: cores[3],
+                                opacity: opG,
+                              ),
+                            ),
+                          )
+                        // Com mescla, o gradiente ainda fica preso ao alfa
+                        // da camada: srcATop por dentro, mescla por fora.
+                        : BlendMask(
+                            blendMode: BlendMode.srcATop,
+                            child: Transform.rotate(
+                              angle: giro,
+                              child: CustomPaint(
+                                painter: Gradient4Painter(
+                                  topLeft: cores[0],
+                                  topRight: cores[1],
+                                  bottomLeft: cores[2],
+                                  bottomRight: cores[3],
+                                  opacity: opG,
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ]);
+          }
+
         case EffectType.tint:
           final forcaTint =
               effect.paramAt('strength', local).clamp(0.0, 1.0);

@@ -280,6 +280,8 @@ Map<String, dynamic> _effect(EffectInstance e) => {
       'kind': effectIdOf(e.type),
       'type': e.type.index,
       'color': _col(e.color),
+      if (e.extraColors.isNotEmpty)
+        'colors': [for (final c in e.extraColors) _col(c)],
       'enabled': e.enabled,
       'params': {for (final p in e.params.entries) p.key: _ad(p.value)},
     };
@@ -290,6 +292,9 @@ EffectInstance _asEffect(Map<String, dynamic> m) {
     id: m['id'] as String,
     type: tipo,
     color: _asCol(m['color']),
+    extraColors: m['colors'] == null
+        ? null
+        : [for (final c in (m['colors'] as List)) _asCol(c)],
     enabled: m['enabled'] as bool,
     // A chave passa pela tabela de alias: parametro renomeado nao pode
     // fazer o efeito voltar ao padrao sem aviso.

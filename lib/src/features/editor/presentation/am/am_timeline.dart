@@ -15,8 +15,10 @@ import 'am_colors.dart';
 import 'layer_look.dart';
 import 'clip_preview_painters.dart';
 
-const double kAmRowHeight = 46;
-const double kAmBarHeight = 38;
+// Mais baixas do que eram (46/38): num celular, tres camadas ja
+// tomavam a tela; e o que se le numa barra e nome e keyframe.
+const double kAmRowHeight = 38;
+const double kAmBarHeight = 30;
 
 /// TIMELINE MAGNETICA — ligada por padrao.
 ///
@@ -961,7 +963,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                       Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: Icon(layerTypeIcon(layer),
-                            size: 13,
+                            size: 11,
                             color: Colors.white.withValues(alpha: 0.85)),
                       ),
                       Flexible(
@@ -970,7 +972,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 12.5,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
@@ -984,7 +986,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                       const Spacer(),
                       if (!compact && width > 90)
                         const Icon(CupertinoIcons.line_horizontal_3,
-                            size: 16, color: Colors.white70),
+                            size: 14, color: Colors.white70),
                     ],
                   ),
                   ),

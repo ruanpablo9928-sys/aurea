@@ -222,30 +222,61 @@ class _AmParamTabsState extends State<AmParamTabs> {
     }
   }
 
+  /// Largura que uma aba pede: o texto mais o respiro do chip.
+  static double _larguraDe(ParamTab aba) =>
+      aba.label.length * 8.2 + 34 + (aba.animated ? 10 : 0);
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 42,
-      child: Stack(
-        children: [
-          ListView(
-            controller: _scroll,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            children: [
-              for (final aba in widget.abas)
-                _Aba(
-                  aba: aba,
-                  selecionada: aba.id == widget.ativa,
-                  onTap: () => widget.onAba(aba.id),
+    // ABAS QUE CABEM DIVIDEM A LINHA POR IGUAL. Antes eram chips de
+    // largura propria numa lista rolavel: a ultima saia cortada na borda
+    // e as alturas variavam — a fileira parecia torta, e o dedo errava
+    // o alvo. Se nao couberem, ai sim rolam, com as pontas indicando.
+    return LayoutBuilder(builder: (context, c) {
+      final pedido = widget.abas.fold<double>(
+          16, (acc, a) => acc + _larguraDe(a) + 6);
+      final cabem = pedido <= c.maxWidth;
+      return SizedBox(
+        height: 48,
+        child: cabem
+            ? Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    for (final aba in widget.abas)
+                      Expanded(
+                        child: _Aba(
+                          aba: aba,
+                          selecionada: aba.id == widget.ativa,
+                          onTap: () => widget.onAba(aba.id),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
-          if (_temEsquerda) const _Ponta(esquerda: true),
-          if (_temDireita) const _Ponta(esquerda: false),
-        ],
-      ),
-    );
+              )
+            : Stack(
+                children: [
+                  ListView(
+                    controller: _scroll,
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 6),
+                    children: [
+                      for (final aba in widget.abas)
+                        _Aba(
+                          aba: aba,
+                          selecionada: aba.id == widget.ativa,
+                          onTap: () => widget.onAba(aba.id),
+                        ),
+                    ],
+                  ),
+                  if (_temEsquerda) const _Ponta(esquerda: true),
+                  if (_temDireita) const _Ponta(esquerda: false),
+                ],
+              ),
+      );
+    });
   }
 }
 
@@ -295,8 +326,8 @@ class _Aba extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        constraints: const BoxConstraints(minWidth: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        constraints: const BoxConstraints(minWidth: 64, minHeight: 36),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selecionada ? AmColors.accentDim : AmColors.chip,

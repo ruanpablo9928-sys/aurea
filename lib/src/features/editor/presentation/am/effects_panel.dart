@@ -645,6 +645,8 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                             .toggleEffectEnabled(id, layer.effects[i].id),
                         onColor: (c) => controller.setEffectColor(
                             id, layer.effects[i].id, c),
+                        onExtraColor: (k, c) => controller.setEffectExtraColor(
+                            id, layer.effects[i].id, k, c),
                         onRemove: () =>
                             controller.removeEffect(id, layer.effects[i].id),
                       ),
@@ -673,6 +675,7 @@ class _EffectCard extends StatelessWidget {
     required this.onParam,
     required this.onParamKeyframe,
     required this.onColor,
+    required this.onExtraColor,
     required this.onRemove,
     required this.onToggleEnabled,
   });
@@ -690,6 +693,7 @@ class _EffectCard extends StatelessWidget {
   final void Function(String key, double value) onParam;
   final void Function(String key) onParamKeyframe;
   final ValueChanged<Color> onColor;
+  final void Function(int index, Color color) onExtraColor;
   final VoidCallback onRemove;
   final VoidCallback onToggleEnabled;
 
@@ -869,6 +873,13 @@ class _EffectCard extends StatelessWidget {
               ..._linhas(),
               if (effect.spec.hasColor)
                 _ColorRow(effect: effect, onColor: onColor),
+              for (var i = 0; i < effect.spec.extraColors; i++)
+                _ColorRow(
+                  effect: effect,
+                  label: 'Cor ${i + 2}',
+                  color: effect.extraColor(i),
+                  onColor: (c) => onExtraColor(i, c),
+                ),
             ],
           ],
         ),
@@ -1306,10 +1317,19 @@ class _ToggleRow extends StatelessWidget {
 }
 
 class _ColorRow extends StatelessWidget {
-  const _ColorRow({required this.effect, required this.onColor});
+  const _ColorRow({
+    required this.effect,
+    required this.onColor,
+    this.label = 'Cor',
+    this.color,
+  });
 
   final EffectInstance effect;
   final ValueChanged<Color> onColor;
+  final String label;
+
+  /// Nula = a cor principal do efeito.
+  final Color? color;
 
   static const _swatches = [
     Color(0xFFFF5566),
@@ -1322,18 +1342,18 @@ class _ColorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = effect.color;
+    final c = color ?? effect.color;
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
         children: [
           // Mesma coluna do nome das linhas com regua (ponto + 88).
           const SizedBox(width: 12),
-          const SizedBox(
+          SizedBox(
             width: 88,
             child: Text(
-              'Cor',
-              style: TextStyle(fontSize: 13, color: AmColors.muted),
+              label,
+              style: const TextStyle(fontSize: 13, color: AmColors.muted),
             ),
           ),
           const Spacer(),

@@ -47,22 +47,73 @@ class MaskedBox extends SingleChildRenderObjectWidget {
   final List<MaskSpec> specs;
 
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderMaskedBox(specs);
+  RenderObject createRenderObject(BuildContext context) => _RenderMaskedBox(
+      specs, MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0);
 
   @override
   void updateRenderObject(BuildContext context, RenderObject renderObject) {
-    (renderObject as _RenderMaskedBox).specs = specs;
+    (renderObject as _RenderMaskedBox)
+      ..specs = specs
+      ..pixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
   }
 }
 
 class _RenderMaskedBox extends RenderProxyBox {
-  _RenderMaskedBox(this._specs);
+  _RenderMaskedBox(this._specs, this._pixelRatio);
 
   List<MaskSpec> _specs;
   set specs(List<MaskSpec> v) {
     _specs = v;
     markNeedsPaint();
+  }
+
+  double _pixelRatio;
+  set pixelRatio(double v) {
+    if (v == _pixelRatio) return;
+    _pixelRatio = v;
+    markNeedsPaint();
+  }
+
+  static bool _temTextura(RenderObject r) {
+    if (r is TextureBox) return true;
+    var achou = false;
+    r.visitChildren((c) {
+      if (!achou && _temTextura(c)) achou = true;
+    });
+    return achou;
+  }
+
+  /// PINTA O FILHO DENTRO DO saveLayer — de verdade.
+  ///
+  /// Um filho com camadas proprias do motor (video, Opacity, efeito com
+  /// ImageFiltered, grupo) escapa do saveLayer: o conteudo dele sai
+  /// numa camada separada, pintada DEPOIS do restore, e a mascara nao
+  /// o alcanca. Era "a mascara nao funciona em toda camada". Esses
+  /// filhos sao fotografados (com folga para halo de efeito) e a foto
+  /// entra no saveLayer, onde a cobertura da mascara os corta.
+  void _pintarFilho(PaintingContext context, Offset offset, double folga) {
+    final filho = child!;
+    if (!filho.needsCompositing || _temTextura(filho)) {
+      context.paintChild(filho, offset);
+      return;
+    }
+    final limites = Rect.fromLTWH(
+        -folga, -folga, size.width + 2 * folga, size.height + 2 * folga);
+    final camada = OffsetLayer();
+    final ctx = PaintingContext(camada, limites);
+    ctx.paintChild(filho, Offset.zero);
+    // ignore: invalid_use_of_protected_member
+    ctx.stopRecordingIfNeeded();
+    final foto = camada.toImageSync(limites, pixelRatio: _pixelRatio);
+    camada.dispose();
+    final canvas = context.canvas;
+    canvas.save();
+    canvas.translate(offset.dx - folga, offset.dy - folga);
+    canvas.scale(1 / _pixelRatio);
+    canvas.drawImage(foto, Offset.zero,
+        Paint()..filterQuality = FilterQuality.low);
+    canvas.restore();
+    foto.dispose();
   }
 
   @override
@@ -81,7 +132,13 @@ class _RenderMaskedBox extends RenderProxyBox {
     // O conteudo da camada pode desenhar alem do size; folga generosa.
     final rect = (offset & size).inflate(1400);
     canvas.saveLayer(rect, Paint());
-    context.paintChild(child!, offset);
+    // Folga da foto: o halo de um glow e a expansao da mascara cabem.
+    var folga = 160.0;
+    for (final s in active) {
+      final alcance = s.feather * 3 + s.featherVertical * 3 + s.expansion.abs();
+      if (alcance + 40 > folga) folga = alcance + 40;
+    }
+    _pintarFilho(context, offset, folga.clamp(160.0, 720.0));
 
     // Cobertura das mascaras multiplica o alfa do conteudo.
     canvas.saveLayer(rect, Paint()..blendMode = BlendMode.dstIn);
