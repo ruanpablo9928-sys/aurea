@@ -36,16 +36,7 @@ Element3DMesh element3DMesh(Element3DKind kind) =>
 Element3DMesh _build(Element3DKind kind) {
   switch (kind) {
     case Element3DKind.cube:
-      return Element3DMesh(
-        [
-          [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
-          [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
-        ],
-        [
-          [0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4],
-          [2, 3, 7, 6], [0, 3, 7, 4], [1, 2, 6, 5],
-        ],
-      );
+      return _cuboChanfrado();
 
     case Element3DKind.pyramid:
       return Element3DMesh(
@@ -240,3 +231,106 @@ String element3DLabel(Element3DKind kind) => switch (kind) {
       Element3DKind.torus => 'Anel 3D',
       Element3DKind.star => 'Estrela 3D',
     };
+
+
+/// CUBO COM CHANFRO nas arestas.
+///
+/// Objeto real nao tem canto infinitamente afiado: sempre ha uma faixa
+/// estreita na aresta, e e a luz batendo NELA que a gente le como
+/// volume. Um cubo de canto perfeito perde essa faixa, e o resultado
+/// parece um desenho de cubo, nao um cubo.
+///
+/// Custa doze faces de aresta e oito de canto — nada perto do que
+/// entrega. O chanfro e pequeno de proposito: grande demais vira
+/// almofada.
+Element3DMesh _cuboChanfrado({double chanfro = 0.075}) {
+  const a = 1.0;
+  final c = 1 - chanfro.clamp(0.01, 0.4);
+
+  // Para cada um dos oito cantos, tres vertices: o canto recuado em X,
+  // em Y e em Z. E o que abre espaco para a faixa da aresta.
+  final verts = <List<double>>[];
+  final idx = <String, int>{};
+  for (final sx in const [-1.0, 1.0]) {
+    for (final sy in const [-1.0, 1.0]) {
+      for (final sz in const [-1.0, 1.0]) {
+        for (var eixo = 0; eixo < 3; eixo++) {
+          final v = [sx * a, sy * a, sz * a];
+          v[eixo] = v[eixo] / a * c;
+          idx['$sx|$sy|$sz|$eixo'] = verts.length;
+          verts.add(v);
+        }
+      }
+    }
+  }
+  int em(double sx, double sy, double sz, int eixo) =>
+      idx['$sx|$sy|$sz|$eixo']!;
+
+  final faces = <List<int>>[];
+
+  // AS SEIS FACES viraram octogonos: os cantos foram cortados.
+  for (var eixo = 0; eixo < 3; eixo++) {
+    final u = (eixo + 1) % 3;
+    final w = (eixo + 2) % 3;
+    for (final sinal in const [-1.0, 1.0]) {
+      final pontos = <(double, int)>[];
+      for (final su in const [-1.0, 1.0]) {
+        for (final sw in const [-1.0, 1.0]) {
+          final sig = List<double>.filled(3, 0);
+          sig[eixo] = sinal;
+          sig[u] = su;
+          sig[w] = sw;
+          // Os dois vertices deste canto que ficam NESTA face sao os
+          // recuados nos outros dois eixos.
+          for (final recuo in [u, w]) {
+            final i = em(sig[0], sig[1], sig[2], recuo);
+            final v = verts[i];
+            pontos.add((math.atan2(v[w], v[u]), i));
+          }
+        }
+      }
+      // Ordenar pelo angulo garante poligono convexo sem depender de
+      // acertar a volta na mao.
+      pontos.sort((p1, p2) => p1.$1.compareTo(p2.$1));
+      faces.add([for (final ponto in pontos) ponto.$2]);
+    }
+  }
+
+  // AS DOZE FAIXAS DE ARESTA: onde duas faces se encontram.
+  for (var i = 0; i < 3; i++) {
+    for (var j = i + 1; j < 3; j++) {
+      final k = 3 - i - j;
+      for (final si in const [-1.0, 1.0]) {
+        for (final sj in const [-1.0, 1.0]) {
+          final s0 = List<double>.filled(3, 0);
+          s0[i] = si;
+          s0[j] = sj;
+          s0[k] = -1;
+          final s1 = List<double>.from(s0);
+          s1[k] = 1;
+          faces.add([
+            em(s0[0], s0[1], s0[2], i),
+            em(s0[0], s0[1], s0[2], j),
+            em(s1[0], s1[1], s1[2], j),
+            em(s1[0], s1[1], s1[2], i),
+          ]);
+        }
+      }
+    }
+  }
+
+  // OS OITO CANTOS: o triangulinho que sobra.
+  for (final sx in const [-1.0, 1.0]) {
+    for (final sy in const [-1.0, 1.0]) {
+      for (final sz in const [-1.0, 1.0]) {
+        faces.add([
+          em(sx, sy, sz, 0),
+          em(sx, sy, sz, 1),
+          em(sx, sy, sz, 2),
+        ]);
+      }
+    }
+  }
+
+  return Element3DMesh(verts, faces);
+}

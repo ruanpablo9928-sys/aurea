@@ -14,6 +14,22 @@ const _cam = RenderCamera(position: Vec3(0, 0, 900));
 SceneFrame _render(Scene3D scene, {RenderCamera cam = _cam}) =>
     renderScene(scene, cam, _viewport, Duration.zero);
 
+/// Quantos triangulos a malha do cubo tem, tirado DA MALHA.
+///
+/// Os testes de descarte comparavam com numeros escritos a mao (2, 6,
+/// 12), que eram a topologia do cubo de oito vertices. Numero a mao
+/// nesses testes nao verifica descarte: verifica que ninguem mexeu na
+/// malha — e o dia em que a malha muda de proposito (chanfro), eles
+/// quebram sem que nada esteja errado.
+int get _triangulosDoCubo {
+  final malha = element3DMesh(Element3DKind.cube);
+  var total = 0;
+  for (final face in malha.faces) {
+    total += face.length - 2;
+  }
+  return total;
+}
+
 void main() {
   group('Cena 3D — conteiner', () {
     test('cena vazia nao desenha nada (fundo transparente)', () {
@@ -109,19 +125,27 @@ void main() {
     // DESCARTE DE COSTAS: num solido fechado, a face virada para o outro
     // lado esta sempre escondida por outra do mesmo solido. Nao emitir
     // corta perto da metade dos triangulos.
-    test('cubo de frente entrega UMA face, nao seis', () {
+    test('cubo de frente descarta o que esta de costas', () {
       final f = _render(Scene3D(nodes: [
         SceneNode(name: 'Cubo', size: 100),
       ], lights: [
         Light3D()
       ]));
-      // Uma face = dois triangulos. Sem o descarte seriam doze.
-      expect(f.opaque.length, 2);
-      expect(f.triangles, 2);
+      // De frente so se ve a frente: bem menos que a malha inteira, e
+      // mais que nada. A fracao e o que o descarte promete; o numero
+      // exato e topologia, e topologia pode mudar.
+      expect(f.opaque, isNotEmpty);
+      expect(f.opaque.length, lessThan(_triangulosDoCubo * 0.45));
+      expect(f.triangles, f.opaque.length);
     });
 
-    test('cubo girado entrega tres faces', () {
-      final f = _render(Scene3D(nodes: [
+    test('cubo girado mostra mais lados que de frente', () {
+      final frente = _render(Scene3D(nodes: [
+        SceneNode(name: 'Cubo', size: 100),
+      ], lights: [
+        Light3D()
+      ]));
+      final girado = _render(Scene3D(nodes: [
         SceneNode(
           name: 'Cubo',
           size: 100,
@@ -131,7 +155,10 @@ void main() {
       ], lights: [
         Light3D()
       ]));
-      expect(f.opaque.length, 6);
+      // Girado em dois eixos aparecem tres lados; de frente, um. O que
+      // se verifica e essa relacao, nao a contagem.
+      expect(girado.opaque.length, greaterThan(frente.opaque.length));
+      expect(girado.opaque.length, lessThan(_triangulosDoCubo));
     });
 
     test('vidro NAO descarta as costas — se ve o fundo por dentro', () {
@@ -144,8 +171,8 @@ void main() {
       ], lights: [
         Light3D()
       ]));
-      // As seis faces do cubo continuam ali.
-      expect(f.transparent.length, 12);
+      // A malha INTEIRA continua ali — nada foi descartado.
+      expect(f.transparent.length, _triangulosDoCubo);
     });
 
     test('triangulo inteiramente fora da tela nao entra no quadro', () {
@@ -686,9 +713,13 @@ void main() {
       ]);
       const frame200 = Duration(microseconds: 200 * 1000000 ~/ 30);
 
-      final direto = _render(scene);
+      // NAO comparar o quadro 200 com o quadro 0: sao instantes
+      // diferentes de uma coisa que gira e anda, e nao ha razao nenhuma
+      // para terem a mesma contagem de triangulos. A igualdade que
+      // existia era coincidencia da malha antiga, e o teste passava por
+      // acidente. O determinismo se verifica abaixo, comparando o
+      // quadro 200 com ele mesmo.
       final alvo = renderScene(scene, _cam, _viewport, frame200);
-      expect(direto.triangles, alvo.triangles);
 
       for (var i = 0; i < 200; i++) {
         renderScene(scene, _cam, _viewport,
