@@ -78,6 +78,17 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   bool _syncingScroll = false;
   bool _editingBar = false;
 
+  /// O DEDO (ou a inercia dele) esta no comando da rolagem.
+  ///
+  /// Enquanto isso for verdade o relogio NAO puxa a rolagem de volta.
+  /// O seek cai na grade de quadros, e a grade nao coincide com o pixel
+  /// onde o dedo esta: a 80 px/s e 30 fps um quadro tem 2,7 px, entao
+  /// quase todo evento de rolagem gerava um jumpTo de ate 1,3 px na
+  /// direcao contraria. jumpTo mata a inercia e desalinha o arrasto — a
+  /// timeline "travava" a cada deslize. Quando a rolagem para, uma
+  /// unica acomodacao na grade, e pronto.
+  bool _rolagemDoDedo = false;
+
   @override
   void initState() {
     super.initState();
@@ -96,7 +107,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 
   void _onClock() {
-    if (!_scroll.hasClients || _editingBar) return;
+    if (!_scroll.hasClients || _editingBar || _rolagemDoDedo) return;
     final target = _timeToPx(widget.playback.time.value);
     if ((target - _scroll.offset).abs() < 0.5) return;
     _syncingScroll = true;
@@ -114,6 +125,13 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
 
   bool _onScroll(ScrollNotification n) {
     if (_syncingScroll || _editingBar) return false;
+    if (n is ScrollStartNotification) {
+      _rolagemDoDedo = true;
+    } else if (n is ScrollEndNotification) {
+      _rolagemDoDedo = false;
+      // Parou: acomoda o conteudo no quadro em que o relogio caiu.
+      _onClock();
+    }
     if (n is ScrollUpdateNotification) {
       if (n.dragDetails != null && widget.playback.playing.value) {
         widget.playback.pause();
