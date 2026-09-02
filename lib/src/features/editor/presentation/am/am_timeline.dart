@@ -134,6 +134,27 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   Duration _pxToTime(double px) =>
       Duration(microseconds: (px / _pps * 1e6).round());
 
+  /// Com o magnetico ligado, o cabecote solto a menos de 10 px de uma
+  /// marca vai para a marca.
+  void _encaixarNasMarcas() {
+    if (!ref.read(magneticProvider)) return;
+    if (widget.playback.playing.value) return;
+    final project = ref.read(editorControllerProvider);
+    if (project.markers.isEmpty) return;
+    final t = widget.playback.time.value;
+    final tolUs = (_pxToTime(10) - _pxToTime(0)).inMicroseconds.abs();
+    Duration? melhor;
+    var melhorD = tolUs + 1;
+    for (final m in project.markers) {
+      final d = (m.time - t).inMicroseconds.abs();
+      if (d < melhorD) {
+        melhorD = d;
+        melhor = m.time;
+      }
+    }
+    if (melhor != null && melhor != t) widget.playback.seek(melhor);
+  }
+
   bool _onScroll(ScrollNotification n) {
     if (_syncingScroll) return false;
     // SO A ROLAGEM HORIZONTAL e tempo. A lista de camadas rola na
@@ -145,6 +166,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       _rolagemDoDedo = true;
     } else if (n is ScrollEndNotification) {
       _rolagemDoDedo = false;
+      // ENCAIXE DO CABECOTE: soltou perto de uma marca, cai nela — e o
+      // keyframe cravado em seguida cai exatamente na batida.
+      _encaixarNasMarcas();
       // Parou: acomoda o conteudo no quadro em que o relogio caiu.
       _onClock();
       return false;

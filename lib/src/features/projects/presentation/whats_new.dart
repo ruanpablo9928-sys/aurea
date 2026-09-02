@@ -16,6 +16,17 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.square_grid_2x2,
+    'De volta ao nucleo',
+    'O app abre no NUCLEO: projeto, video, imagem e audio, cortes com '
+        'ripple, juntar, marcadores (tocando no ritmo, com encaixe de '
+        'clipe e de cabecote), keyframes em posicao, escala, rotacao e '
+        'opacidade, loop e exportar. Todo o estudio — efeitos, texto, '
+        'formas, 3D, particulas e o resto — continua no app, atras de '
+        'um interruptor: Ajustes > Modo > Estudio completo. Cada '
+        'ferramenta volta ao nucleo quando passar na propria prova.',
+  ),
+  NewsItem(
     CupertinoIcons.cube_box_fill,
     'Mundo 3D de verdade: um solido entra no outro',
     'Elementos 3D vizinhos na pilha agora viram uma cena so, com a '

@@ -132,6 +132,8 @@ Future<LayerMenuAction?> showLayerMenu(
                 // controle visivel pode ser inerte. Comandos estruturais
                 // (dividir/duplicar/agrupar/excluir) vivem na barra de
                 // acoes, nao aqui.
+                // NUCLEO: a fileira so existe se tem algo nela (som).
+                if (completo || temSom)
                 SizedBox(
                   height: 40,
                   child: Row(
@@ -142,19 +144,20 @@ Future<LayerMenuAction?> showLayerMenu(
                           child: Row(
                             children: [
                               if (temSom) ...[
+                                if (completo)
                                 _UtilIcon(
                                   icon: CupertinoIcons.speedometer,
                                   label: 'Velocidade',
                                   onTap: () => abrirDepois(() =>
                                       showSpeedSheet(context, ref, layer.id)),
                                 ),
+                                if (completo)
                                 _UtilIcon(
                                   icon: CupertinoIcons.scissors,
                                   label: 'Cortes',
                                   onTap: () => abrirDepois(() =>
                                       openDecupagem(context, ref, layer.id)),
                                 ),
-                                if (completo)
                                 // Mudo e toggle no lugar (nao abre nada):
                                 // nao ha metodo de mudo no controller, e
                                 // composto com updateAudioSpec + copyWith.
