@@ -95,3 +95,42 @@ double tonemap(double x, int mode) {
       return ((v * (a * v + b)) / (v * (c * v + d) + e)).clamp(0.0, 1.0);
   }
 }
+
+/// O LIMIAR COMO MATRIZ DE COR: (escala, deslocamento em 0..255).
+///
+/// Matriz de cor e linear por definicao, entao o limiar vira um
+/// remapeamento: o valor do limiar cai em zero e o branco continua
+/// branco — `(x - limiar) / (1 - limiar)`. A suavidade nao cabe numa
+/// reta; ela entra puxando o ponto de corte para baixo, de modo que a
+/// rampa comece antes do limiar.
+///
+/// A conta anterior tirava a escala de [bloomThreshold] e chegava a
+/// multiplicar por vinte: com o limiar no padrao, um circulo de meia
+/// luminancia saturava em branco e brilhava — o oposto do que um limiar
+/// alto promete.
+/// A EXPOSICAO ENTRA AQUI, antes do limiar, e nao depois.
+///
+/// E o que o limiar de 1,0 — o padrao — quer dizer: no plugin de
+/// referencia a exposicao levanta a imagem para a escala HDR e o limiar
+/// corta o que passou de 1. Com uma parada de exposicao, meia
+/// luminancia vira 1,1 e brilha. Aplicando a exposicao DEPOIS, como
+/// estava, nada jamais passava de 1 e o efeito nascia invisivel.
+///
+/// A conta e `(x * ganho - limiar) / (ganho - limiar)`: o limiar cai em
+/// zero e o valor mais alto possivel depois do ganho continua no teto.
+(double, double) glowThresholdMatrix(
+    double threshold, double softness, double gain) {
+  final g = math.max(0.01, gain);
+  final efetivo = (threshold * (1 - softness.clamp(0.0, 1.0) * 0.5))
+      .clamp(0.0, g * 0.98);
+  final escala = g / math.max(0.02, g - efetivo);
+  return (escala, -efetivo * 255 * (escala / g));
+}
+
+/// O quanto de um pixel de luminancia [l] (0..1) sobra depois do ganho e
+/// do limiar, pela mesma conta que a matriz faz. So para teste.
+double glowAfterThreshold(double l, double threshold, double softness,
+        [double gain = 1]) {
+  final (escala, desl) = glowThresholdMatrix(threshold, softness, gain);
+  return ((l * 255 * escala + desl) / 255).clamp(0.0, 1.0);
+}

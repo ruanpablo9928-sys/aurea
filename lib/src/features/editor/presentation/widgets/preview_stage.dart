@@ -1653,10 +1653,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             }
 
             if (limiar > 0.01) {
-              final corte = bloomThreshold(1.0, limiar, suavidade)
-                  .clamp(0.0, 1.0);
-              final escala = 1 / math.max(0.05, corte);
-              final desl = -limiar * (1 - suavidade * 0.5) * 255;
+              // O limiar REMAPEIA (limiar -> 0, branco -> 1); a conta
+              // mora em bloom.dart, onde da para testa-la.
+              final (escala, desl) =
+                  glowThresholdMatrix(limiar, suavidade, ganho);
               // O QUE O LIMIAR MEDE.
               //
               // Luminancia: passa o que e CLARO — o caso comum, e o que
@@ -1786,8 +1786,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                           child: borra(_channelIso(fonte, 2), sigma, multB)),
                     ])
                   : borra(fonte, sigma, 1);
-              return Opacity(
-                  opacity: (peso * ganho).clamp(0.0, 1.0), child: w);
+              // O ganho ja entrou na FONTE, junto do limiar; aqui so
+              // o peso do nivel. Multiplicar de novo seria contar a
+              // exposicao duas vezes.
+              return Opacity(opacity: peso.clamp(0.0, 1.0), child: w);
             }
 
             final camadas = <Widget>[

@@ -129,4 +129,67 @@ void main() {
       expect(resolveParamKey(EffectType.glowVol, 'intensidade'), 'exposure');
     });
   });
+
+  group('Limiar como matriz de cor', () {
+    // POR QUE ESTE GRUPO EXISTE: a conta antiga amplificava por vinte, e
+    // com o limiar no maximo um meio-tom saturava em branco e brilhava —
+    // exatamente o oposto do que um limiar alto promete. Deu para ver no
+    // aparelho: um circulo marrom com halo branco.
+    test('sem ganho, o branco continua branco em qualquer limiar', () {
+      for (final t in [0.0, 0.3, 0.55, 0.9]) {
+        expect(glowAfterThreshold(1.0, t, 0), closeTo(1.0, 1e-9),
+            reason: 'limiar $t');
+      }
+    });
+
+    test('abaixo do limiar nao sobra nada', () {
+      expect(glowAfterThreshold(0.4, 0.55, 0), 0);
+      expect(glowAfterThreshold(0.7, 1.0, 0), 0);
+      expect(glowAfterThreshold(0.0, 0.0, 0), 0);
+    });
+
+    // O PADRAO DA FICHA: limiar 1,0 com uma parada de exposicao. E o do
+    // plugin de referencia, e so faz sentido com o ganho entrando ANTES
+    // do limiar — aplicado depois, nada jamais passa de 1 e o efeito
+    // nasce invisivel, que foi o que apareceu no aparelho.
+    test('no padrao da ficha, meio-tom brilha e sombra nao', () {
+      const ganho = 2.0; // exposicao 1 = uma parada
+      expect(glowAfterThreshold(0.7, 1.0, 0, ganho), greaterThan(0));
+      expect(glowAfterThreshold(0.3, 1.0, 0, ganho), 0);
+    });
+
+    test('mais exposicao faz mais coisa passar do limiar', () {
+      final pouca = glowAfterThreshold(0.6, 1.0, 0, 1.5);
+      final muita = glowAfterThreshold(0.6, 1.0, 0, 3.0);
+      expect(muita, greaterThan(pouca));
+    });
+
+    test('acima do limiar sobra a parte que passou', () {
+      // Meio caminho entre 0,5 e 1 devolve meio.
+      expect(glowAfterThreshold(0.75, 0.5, 0), closeTo(0.5, 0.01));
+    });
+
+    test('limiar maior deixa passar menos', () {
+      final baixo = glowAfterThreshold(0.8, 0.3, 0);
+      final alto = glowAfterThreshold(0.8, 0.6, 0);
+      expect(alto, lessThan(baixo));
+    });
+
+    test('a suavidade adianta a rampa, e nunca estoura', () {
+      final duro = glowAfterThreshold(0.6, 0.7, 0);
+      final macio = glowAfterThreshold(0.6, 0.7, 1);
+      expect(duro, 0);
+      expect(macio, greaterThan(0));
+      expect(macio, lessThanOrEqualTo(1));
+    });
+
+    test('sem ganho nunca amplifica: a saida nao passa a entrada', () {
+      for (var l = 0.0; l <= 1.0; l += 0.05) {
+        for (final t in [0.0, 0.2, 0.55, 0.9]) {
+          expect(glowAfterThreshold(l, t, 0.2), lessThanOrEqualTo(l + 1e-9),
+              reason: 'l=$l limiar=$t');
+        }
+      }
+    });
+  });
 }
