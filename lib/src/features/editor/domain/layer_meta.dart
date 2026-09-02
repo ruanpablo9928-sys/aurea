@@ -913,6 +913,7 @@ class LayerMeta {
     this.colorRef,
     this.textStyleRef,
     this.motionBlur = false,
+    this.extrude = 0,
   });
 
   final LayerLabel? label;
@@ -934,6 +935,10 @@ class LayerMeta {
 
   /// Motion blur por camada (PR-X9).
   final bool motionBlur;
+
+  /// EXTRUDE 3D: espessura (px) da camada quando inclinada em X/Y —
+  /// fatias empilhadas atras da frente. 0 = desligado.
+  final double extrude;
 
   bool get isEmpty =>
       label == null &&
@@ -964,6 +969,7 @@ class LayerMeta {
     String? colorRef,
     String? textStyleRef,
     bool? motionBlur,
+    double? extrude,
     bool clearLabel = false,
     bool clearContainer = false,
     bool clearStack = false,
@@ -984,6 +990,7 @@ class LayerMeta {
       colorRef: clearColorRef ? null : (colorRef ?? this.colorRef),
       textStyleRef: textStyleRef ?? this.textStyleRef,
       motionBlur: motionBlur ?? this.motionBlur,
+      extrude: extrude ?? this.extrude,
     );
   }
 

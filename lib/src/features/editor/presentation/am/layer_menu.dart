@@ -249,6 +249,21 @@ Future<LayerMenuAction?> showLayerMenu(
                                   setSheetState(() {});
                                 },
                               ),
+                              if (layer is! NullLayer &&
+                                  layer is! VideoLayer &&
+                                  layer is! ParticlesLayer &&
+                                  layer is! Element3DLayer)
+                                _UtilIcon(
+                                  icon: CupertinoIcons.cube,
+                                  label: 'Extrude 3D',
+                                  aceso: ref
+                                          .read(editorControllerProvider)
+                                          .metaOf(layer.id)
+                                          .extrude >
+                                      0,
+                                  onTap: () => abrirDepois(() =>
+                                      showExtrudeSheet(context, ref, layer.id)),
+                                ),
                               if (layer is! NullLayer)
                                 _UtilIcon(
                                   icon: CupertinoIcons.scope,
@@ -2157,6 +2172,135 @@ Future<void> showElement3DSheet(
                   ],
                 ),
                 const SizedBox(height: 12),
+                // MATERIAL: como a luz toca o solido.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(
+                        width: 86,
+                        child: Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text('Material',
+                              style: TextStyle(
+                                  fontSize: 13, color: AmColors.muted)),
+                        )),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final (i, nome) in const [
+                            'Solido',
+                            'Brilhante',
+                            'Vidro',
+                            'Metal',
+                            'Fosco',
+                          ].indexed)
+                            GestureDetector(
+                              onTap: () {
+                                controller.updateElement3D(layerId,
+                                    (e) => e.copyElement3D(material: i));
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 11, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: layer.material == i
+                                      ? AmColors.accentDim
+                                      : AmColors.chip,
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Text(nome,
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AmColors.accent)),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (layer.material == 1) ...[
+                  const SizedBox(height: 10),
+                  // DEGRADES do material brilhante.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(
+                          width: 86,
+                          child: Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text('Degrade',
+                                style: TextStyle(
+                                    fontSize: 13, color: AmColors.muted)),
+                          )),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final cores in kGlossyGradients)
+                              GestureDetector(
+                                onTap: () {
+                                  controller.updateElement3D(
+                                      layerId,
+                                      (e) => e.copyElement3D(
+                                          gradient: cores));
+                                  setSheetState(() {});
+                                },
+                                child: Container(
+                                  width: 54,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(colors: cores),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: _mesmasCores(
+                                            layer.gradient, cores)
+                                        ? Border.all(
+                                            color: Colors.white, width: 2.5)
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const SizedBox(
+                        width: 86,
+                        child: Text('Brilho',
+                            style: TextStyle(
+                                fontSize: 13, color: AmColors.muted))),
+                    Expanded(
+                      child: AmTickRuler(
+                        value: layer.shininess,
+                        min: 0,
+                        max: 1,
+                        unitsPerPixel: 0.003,
+                        height: 46,
+                        onChanged: (v) {
+                          controller.updateElement3D(layerId,
+                              (e) => e.copyElement3D(shininess: v));
+                          setSheetState(() {});
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                        width: 56,
+                        child: Text(amNumber(layer.shininess * 100, 0),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 14, color: AmColors.accent))),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 // IMAGEM NO SOLIDO: uma foto ou logo vestindo as faces.
                 Row(
                   children: [
@@ -4060,4 +4204,123 @@ class _ShapeOperators extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Degrades prontos do material brilhante (roxo/azul/rosa das
+/// referencias, por do sol, oceano, ouro, prata, neon).
+const kGlossyGradients = <List<Color>>[
+  [Color(0xFF7A3FF2), Color(0xFF2F7BFF), Color(0xFFFF4FD8)],
+  [Color(0xFFFF7A18), Color(0xFFFF2D95), Color(0xFF7A3FF2)],
+  [Color(0xFF00E5A8), Color(0xFF2F7BFF), Color(0xFF7A3FF2)],
+  [Color(0xFF7A4A00), Color(0xFFFFD36A), Color(0xFFFFF4C2)],
+  [Color(0xFF3A3F4A), Color(0xFFC9D1DC), Color(0xFFFFFFFF)],
+  [Color(0xFFB8FF3D), Color(0xFF35C4E7), Color(0xFFFF4FD8)],
+];
+
+bool _mesmasCores(List<Color> a, List<Color> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+/// Sheet do EXTRUDE 3D: a espessura da camada. Precisa de rotacao X ou Y
+/// para aparecer (de frente, a espessura fica escondida atras).
+Future<void> showExtrudeSheet(
+    BuildContext context, WidgetRef ref, String layerId) async {
+  final controller = ref.read(editorControllerProvider.notifier);
+  await showParamSheet(
+    context,
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext, setSheetState) {
+        final projeto = ref.read(editorControllerProvider);
+        final layer = projeto.layerById(layerId);
+        if (layer == null) return const SizedBox.shrink();
+        final atual = projeto.metaOf(layerId).extrude;
+        final inclinada = layer.rotationX.isAnimated ||
+            layer.rotationY.isAnimated ||
+            layer.rotationX.base != 0 ||
+            layer.rotationY.base != 0;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Extrude 3D',
+                    style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text)),
+                const SizedBox(height: 6),
+                Text(
+                  inclinada
+                      ? 'Espessura da camada. Gire em X ou Y para ver a lateral.'
+                      : 'A espessura so aparece com a camada girada em X ou Y (Mover e transf. > Rotacao 3D).',
+                  style: const TextStyle(fontSize: 12.5, color: AmColors.muted),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const SizedBox(
+                        width: 86,
+                        child: Text('Espessura',
+                            style: TextStyle(
+                                fontSize: 13, color: AmColors.muted))),
+                    Expanded(
+                      child: AmTickRuler(
+                        value: atual,
+                        min: 0,
+                        max: 400,
+                        unitsPerPixel: 1,
+                        height: 46,
+                        onChanged: (v) {
+                          controller.setLayerExtrude(layerId, v);
+                          setSheetState(() {});
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                        width: 56,
+                        child: Text(amNumber(atual, 0),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 14, color: AmColors.accent))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final v in const [0.0, 20.0, 40.0, 80.0, 160.0])
+                      GestureDetector(
+                        onTap: () {
+                          controller.setLayerExtrude(layerId, v);
+                          setSheetState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: (atual - v).abs() < 0.5
+                                ? AmColors.accentDim
+                                : AmColors.chip,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(v == 0 ? 'Desligado' : amNumber(v, 0),
+                              style: const TextStyle(
+                                  fontSize: 12, color: AmColors.accent)),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }

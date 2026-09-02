@@ -3809,6 +3809,10 @@ class EditorController extends Notifier<VideoProject> {
     }
   }
 
+  /// EXTRUDE 3D da camada: espessura em px (0 desliga).
+  void setLayerExtrude(String id, double depth) =>
+      _updateMeta(id, (m) => m.copyWith(extrude: depth.clamp(0.0, 400.0)));
+
   /// Cor EXTRA de um efeito (gradiente de quatro cores e afins).
   void setEffectExtraColor(
       String layerId, String effectId, int index, Color color) {

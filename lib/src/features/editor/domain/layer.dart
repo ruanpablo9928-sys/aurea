@@ -1853,6 +1853,13 @@ class Element3DLayer extends Layer {
     this.reflect = 0,
     this.environment = EnvironmentKind.estudio,
     this.imagePath,
+    this.material = 0,
+    this.gradient = const [
+      Color(0xFF7A3FF2),
+      Color(0xFF2F7BFF),
+      Color(0xFFFF4FD8),
+    ],
+    this.shininess = 0.5,
     super.position,
     super.scaleX,
     super.scaleY,
@@ -1890,6 +1897,16 @@ class Element3DLayer extends Layer {
   /// IMAGEM vestindo o solido (projecao de caixa), ou nula.
   final String? imagePath;
 
+  /// Material: 0 solido, 1 brilhante (degrade iridescente), 2 vidro,
+  /// 3 metal, 4 fosco.
+  final int material;
+
+  /// Cores do degrade do material brilhante (2 ou mais paradas).
+  final List<Color> gradient;
+
+  /// Brilho especular 0..1 (tamanho do ponto de luz).
+  final double shininess;
+
   Element3DLayer copyElement3D({
     Element3DKind? kind,
     double? size,
@@ -1899,6 +1916,9 @@ class Element3DLayer extends Layer {
     EnvironmentKind? environment,
     String? imagePath,
     bool clearImage = false,
+    int? material,
+    List<Color>? gradient,
+    double? shininess,
   }) {
     return Element3DLayer(
       id: id,
@@ -1912,6 +1932,9 @@ class Element3DLayer extends Layer {
       reflect: reflect ?? this.reflect,
       environment: environment ?? this.environment,
       imagePath: clearImage ? null : (imagePath ?? this.imagePath),
+      material: material ?? this.material,
+      gradient: gradient ?? this.gradient,
+      shininess: shininess ?? this.shininess,
       position: position,
       scaleX: scaleX,
       scaleY: scaleY,
@@ -1969,6 +1992,9 @@ class Element3DLayer extends Layer {
       reflect: reflect,
       environment: environment,
       imagePath: imagePath,
+      material: material,
+      gradient: gradient,
+      shininess: shininess,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -2003,6 +2029,9 @@ class Element3DLayer extends Layer {
       reflect: reflect,
       environment: environment,
       imagePath: imagePath,
+      material: material,
+      gradient: gradient,
+      shininess: shininess,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,

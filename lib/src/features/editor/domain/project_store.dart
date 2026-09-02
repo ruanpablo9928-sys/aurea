@@ -982,6 +982,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['reflect'] = e.reflect;
       base['env'] = e.environment.index;
       if (e.imagePath != null) base['img'] = e.imagePath;
+      base['mat'] = e.material;
+      base['grad'] = [for (final c in e.gradient) _col(c)];
+      base['shine'] = e.shininess;
     case Scene3DLayer s:
       base['kind'] = 'scene3d';
       if (s.extraCameras.isNotEmpty) {
@@ -1506,6 +1509,15 @@ Layer layerFromJson(Map<String, dynamic> m) {
         environment: EnvironmentKind.values[
             ((m['env'] as num?)?.toInt() ?? 0).clamp(0, EnvironmentKind.values.length - 1)],
         imagePath: m['img'] as String?,
+        material: (m['mat'] as num?)?.toInt() ?? 0,
+        gradient: m['grad'] is List && (m['grad'] as List).length >= 2
+            ? [for (final c in m['grad'] as List) _asCol(c)]
+            : const [
+                Color(0xFF7A3FF2),
+                Color(0xFF2F7BFF),
+                Color(0xFFFF4FD8),
+              ],
+        shininess: (m['shine'] as num?)?.toDouble() ?? 0.5,
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,
@@ -1661,6 +1673,7 @@ Map<String, dynamic> _meta(LayerMeta m) => {
       if (m.colorRef != null) 'colorRef': m.colorRef,
       if (m.textStyleRef != null) 'styleRef': m.textStyleRef,
       if (m.motionBlur) 'mb': true,
+      if (m.extrude > 0) 'ext': m.extrude,
     };
 
 Map<String, dynamic> _numFmt(NumberFormatSpec f) => {
@@ -1739,6 +1752,7 @@ LayerMeta _asMeta(Map<String, dynamic> m) => LayerMeta(
       colorRef: m['colorRef'] as String?,
       textStyleRef: m['styleRef'] as String?,
       motionBlur: m['mb'] as bool? ?? false,
+      extrude: (m['ext'] as num?)?.toDouble() ?? 0,
     );
 
 Map<String, dynamic> projectToJson(VideoProject p) => {

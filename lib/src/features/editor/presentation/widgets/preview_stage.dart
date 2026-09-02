@@ -33,7 +33,7 @@ import 'linear_light.dart';
 import '../../domain/bloom.dart';
 import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
-import 'element3d_painter.dart';
+import 'world3d_painter.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
 import 'preview_raster.dart';
@@ -711,6 +711,40 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     ];
     final sorted = depthSortPaintOrder(paintOrder, t);
 
+    // MUNDO 3D: solidos VIZINHOS na pilha viram uma cena so, com a
+    // profundidade compartilhada — um entra dentro do outro, passa por
+    // tras, o vidro deixa ver o que esta atras. So entra quem nao tem
+    // efeito, mascara, blend, estilo ou vinculo de propriedade; esses
+    // seguem pelo caminho normal, sozinhos.
+    final mundoInicio = <String, List<Element3DLayer>>{};
+    final mundoMembro = <String>{};
+    {
+      var i = 0;
+      while (i < sorted.length) {
+        final l = sorted[i];
+        if (l is Element3DLayer && _mundoElegivel(project, l)) {
+          var j = i + 1;
+          while (j < sorted.length &&
+              sorted[j] is Element3DLayer &&
+              _mundoElegivel(project, sorted[j] as Element3DLayer)) {
+            j++;
+          }
+          if (j - i >= 2) {
+            final fila = [
+              for (var k = i; k < j; k++) sorted[k] as Element3DLayer
+            ];
+            mundoInicio[l.id] = fila;
+            for (final f in fila) {
+              mundoMembro.add(f.id);
+            }
+          }
+          i = j;
+        } else {
+          i++;
+        }
+      }
+    }
+
     // Modulo Grid: mapeia assetId -> (nulo, rig, indice, total) neste
     // escopo de camadas (funciona tambem dentro de grupos).
     final rigMembers = <String, (NullLayer, GridRig, int, int)>{};
@@ -783,6 +817,14 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             ),
           ));
         }
+        continue;
+      }
+
+      if (mundoMembro.contains(layer.id)) {
+        final fila = mundoInicio[layer.id];
+        // Quem nao abre a fila ja foi pintado na cena do primeiro.
+        if (fila == null) continue;
+        children.add(_buildWorld3D(project, fila, t, resolveLinks));
         continue;
       }
 
@@ -1059,6 +1101,78 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     );
   }
 
+  /// Pode entrar no mundo 3D compartilhado? Sem efeito ligado, mascara,
+  /// blend, estilo, matte ou vinculo de propriedade (o vinculo de PAI e
+  /// aceito: a cadeia de nulos e resolvida pelo effectiveTransform).
+  bool _mundoElegivel(VideoProject project, Element3DLayer l) {
+    if (l.effects.any((e) => e.enabled)) return false;
+    if (l.masks.isNotEmpty) return false;
+    if (l.blendMode != BlendMode.srcOver || l.customBlend != null) {
+      return false;
+    }
+    if (l.matteMode != MatteMode.none) return false;
+    if (!project.metaOf(l.id).styles.isEmpty) return false;
+    for (final prop in [
+      LayerProp.position,
+      LayerProp.rotation,
+      LayerProp.opacity,
+      LayerProp.scale,
+    ]) {
+      if (project.linkFor(l.id, prop) != null) return false;
+    }
+    return true;
+  }
+
+  /// A cena unica de uma fila de solidos: cada um com seu transform
+  /// efetivo (posicao, Z, rotacoes, escala, opacidade), projetados pela
+  /// mesma camera no centro da composicao.
+  Widget _buildWorld3D(VideoProject project, List<Element3DLayer> fila,
+      Duration t, bool resolveLinks) {
+    final items = <World3DItem>[];
+    for (final l in fila) {
+      final local = l.localTime(t);
+      final eff = resolveLinks
+          ? effectiveTransform(project, l, t)
+          : LayerTransform(
+              pos: l.position.valueAt(local),
+              rot: l.rotation.valueAt(local),
+              rotX: l.rotationX.valueAt(local),
+              rotY: l.rotationY.valueAt(local),
+              scale: l.scaleX.valueAt(local),
+              z: l.positionZ.valueAt(local),
+            );
+      final rawSx = l.scaleX.valueAt(local);
+      final ratio = rawSx.abs() < 1e-6 ? 1.0 : eff.scale / rawSx;
+      final proprioZ = l.positionZ.valueAt(local);
+      final temZ = l.is3D || (eff.z - proprioZ).abs() > 1e-6;
+      items.add(World3DItem(
+        layer: l,
+        center: eff.pos,
+        z: temZ ? eff.z.clamp(-1100.0, 100000.0) : 0,
+        scaleX: eff.scale,
+        scaleY: l.scaleY.valueAt(local) * ratio,
+        rotXDeg: eff.rotX,
+        rotYDeg: eff.rotY,
+        rotZDeg: eff.rot,
+        opacity: l.opacity.valueAt(local).clamp(0.0, 1.0),
+        selected: l.id == selectedId,
+        material: l.material,
+        gradient: l.gradient,
+        shininess: l.shininess,
+      ));
+    }
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: ValueListenableBuilder<int>(
+          valueListenable: TextureCache.instance.revision,
+          builder: (_, _, _) => CustomPaint(
+            painter: World3DPainter(items: items),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildLayer(
       VideoProject project, Layer layer, Duration t, bool resolveLinks,
       {double opacityMul = 1,
@@ -1307,10 +1421,39 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         ..rotateZ(rotation)
         ..rotateY(ry)
         ..rotateX(rx);
+      // EXTRUDE 3D: fatias da camada empilhadas em Z atras da frente,
+      // escurecidas — a espessura aparece quando a camada inclina. Video
+      // e particulas ficam de fora (textura e simulacao nao se repetem).
+      final extrude = project.metaOf(layer.id).extrude;
+      Widget miolo = composed;
+      if (extrude > 0.5 &&
+          layer is! VideoLayer &&
+          layer is! ParticlesLayer &&
+          layer is! Element3DLayer) {
+        final passos = (extrude / 5).ceil().clamp(2, 30);
+        final passo = extrude / passos;
+        miolo = Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            for (var i = passos; i >= 1; i--)
+              Transform(
+                transform: Matrix4.translationValues(0, 0, i * passo),
+                alignment: Alignment.center,
+                child: ColorFiltered(
+                  colorFilter: ColorFilter.matrix(_scaleShiftMatrix(
+                      0.42 + 0.22 * (1 - i / passos), 0)),
+                  child: composed,
+                ),
+              ),
+            composed,
+          ],
+        );
+      }
       composed = Transform(
         transform: pm,
         alignment: Alignment.center,
-        child: composed,
+        child: miolo,
       );
     }
 
@@ -3477,11 +3620,17 @@ class _LayerContent extends StatelessWidget {
             valueListenable: TextureCache.instance.revision,
             builder: (_, _, _) => CustomPaint(
           size: const Size(620, 620),
-          painter: Element3DPainter(
-            layer: l,
-            rotXDeg: particlesRotX,
-            rotYDeg: particlesRotY,
-          ),
+          painter: World3DPainter(items: [
+            World3DItem(
+              layer: l,
+              center: const Offset(310, 310),
+              rotXDeg: particlesRotX,
+              rotYDeg: particlesRotY,
+              material: l.material,
+              gradient: l.gradient,
+              shininess: l.shininess,
+            ),
+          ]),
         )),
       CaptionLayer l => Builder(builder: (context) {
           final cue = l.cueAt(localTime);

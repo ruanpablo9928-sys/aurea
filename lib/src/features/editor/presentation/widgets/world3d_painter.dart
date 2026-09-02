@@ -31,9 +31,9 @@ class World3DItem {
     this.rotZDeg = 0,
     this.opacity = 1,
     this.selected = false,
-    this.material = 0,
-    this.gradient = kGlossyGradientDefault,
-    this.shininess = 0.5,
+    this._material,
+    this._gradient,
+    this._shininess,
   });
 
   final Element3DLayer layer;
@@ -47,10 +47,15 @@ class World3DItem {
   final double opacity;
   final bool selected;
 
-  /// 0 solido, 1 brilhante (degrade), 2 vidro, 3 metal, 4 fosco.
-  final int material;
-  final List<Color> gradient;
-  final double shininess;
+  final int? _material;
+  final List<Color>? _gradient;
+  final double? _shininess;
+
+  /// 0 solido, 1 brilhante (degrade), 2 vidro, 3 metal, 4 fosco. Sem
+  /// valor proprio, vem da camada.
+  int get material => _material ?? layer.material;
+  List<Color> get gradient => _gradient ?? layer.gradient;
+  double get shininess => _shininess ?? layer.shininess;
 }
 
 /// Um triangulo pronto para pintar: profundidade media (mundo), pontos
@@ -109,7 +114,7 @@ _MeshInfo _buildInfo(Element3DMesh mesh) {
       (adj[v] ??= []).add(f);
     }
   }
-  const cosVinco = 0.6; // ~53 graus
+  const cosVinco = 0.8; // ~37 graus: o chanfro de 45 fica nitido
   final smooth = <List<List<double>>>[];
   for (var f = 0; f < mesh.faces.length; f++) {
     final n0 = normals[f];
@@ -412,16 +417,22 @@ class World3DPainter extends CustomPainter {
       final it = items[t.item];
       final img = images[t.item];
       // Alarga 0.3px a partir do centro para nao aparecer a emenda entre
-      // triangulos vizinhos (anti-aliasing dos dois lados).
+      // triangulos vizinhos (anti-aliasing dos dois lados). No vidro
+      // (translucido) a sobreposicao acumularia alpha e desenharia a
+      // malha: ali vai sem alargar e sem anti-aliasing.
+      final translucido = t.colors.any((c) => c.a < 0.999);
       final c = (t.pts[0] + t.pts[1] + t.pts[2]) / 3;
-      final pts = [
-        for (final p in t.pts)
-          () {
-            final d = p - c;
-            final len = d.distance;
-            return len < 1e-6 ? p : p + d / len * 0.3;
-          }(),
-      ];
+      final pts = translucido
+          ? t.pts
+          : [
+              for (final p in t.pts)
+                () {
+                  final d = p - c;
+                  final len = d.distance;
+                  return len < 1e-6 ? p : p + d / len * 0.3;
+                }(),
+            ];
+      fill.isAntiAlias = !translucido;
       if (img != null && t.uv != null) {
         final shader = shaders[t.item] ??= ui.ImageShader(
             img, TileMode.clamp, TileMode.clamp, Matrix4.identity().storage);
