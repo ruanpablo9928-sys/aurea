@@ -23,13 +23,20 @@ Future<void> showAddLayerSheet(
   Duration playhead,
 ) {
   final controller = ref.read(editorControllerProvider.notifier);
+  // FORMA NA MESMA FOLHA. Criar um retangulo era "+", folha de tipos,
+  // OUTRA folha com quinze formas, toque — e a segunda folha subindo por
+  // cima da primeira era o que fazia parecer que o app tinha "camadas
+  // demais" para uma coisa simples. Agora "Forma" troca o conteudo da
+  // mesma folha por quatro formas basicas; o resto fica atras de "Mais".
+  var mostrarFormas = false;
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AmColors.panel,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (sheetContext) => SafeArea(
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext, setSheetState) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
         child: Column(
@@ -47,6 +54,16 @@ Future<void> showAddLayerSheet(
               ),
             ),
             const SizedBox(height: 14),
+            if (mostrarFormas)
+              _SecaoFormas(
+                onVoltar: () => setSheetState(() => mostrarFormas = false),
+                onEscolher: (build, nome) {
+                  Navigator.of(sheetContext).pop();
+                  controller.addShapeLayer(playhead,
+                      contents: build(), name: nome);
+                },
+              )
+            else ...[
             const Text('Adicionar camada',
                 style: TextStyle(
                     fontSize: 18,
@@ -82,10 +99,7 @@ Future<void> showAddLayerSheet(
                 _AddOption(
                   icon: CupertinoIcons.circle_fill,
                   label: 'Forma',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _showShapePresetSheet(context, ref, playhead);
-                  },
+                  onTap: () => setSheetState(() => mostrarFormas = true),
                 ),
                 _AddOption(
                   icon: CupertinoIcons.captions_bubble,
@@ -159,8 +173,10 @@ Future<void> showAddLayerSheet(
                 const Spacer(),
               ],
             ),
+            ],
           ],
         ),
+      ),
       ),
     ),
   );
@@ -249,104 +265,131 @@ Future<void> _showElement3DPickerSheet(
   );
 }
 
-/// Biblioteca de formas vetoriais.
-Future<void> _showShapePresetSheet(
-    BuildContext context, WidgetRef ref, Duration playhead) async {
-  final controller = ref.read(editorControllerProvider.notifier);
-  await showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AmColors.panel,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (sheetContext) {
-      Widget option(String label, IconData icon,
-          List<ShapeItem> Function() build, String name) {
-        return _AddOption(
-          icon: icon,
-          label: label,
-          onTap: () {
-            Navigator.of(sheetContext).pop();
-            controller.addShapeLayer(playhead,
-                contents: build(), name: name);
-          },
-        );
-      }
+/// FORMAS, na mesma folha: as quatro basicas na frente, o resto atras de
+/// "Mais formas". Um toque cria a camada e fecha.
+class _SecaoFormas extends StatefulWidget {
+  const _SecaoFormas({required this.onVoltar, required this.onEscolher});
 
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+  final VoidCallback onVoltar;
+  final void Function(List<ShapeItem> Function() build, String nome)
+      onEscolher;
+
+  @override
+  State<_SecaoFormas> createState() => _SecaoFormasState();
+}
+
+class _SecaoFormasState extends State<_SecaoFormas> {
+  bool _mais = false;
+
+  static final _basicas = <(String, IconData, List<ShapeItem> Function())>[
+    ('Retangulo', CupertinoIcons.square_fill, ShapePresets.paramRect),
+    ('Circulo', CupertinoIcons.circle_fill, ShapePresets.paramEllipse),
+    ('Poligono', CupertinoIcons.hexagon_fill, ShapePresets.paramPolygon),
+    ('Estrela', CupertinoIcons.star_fill, ShapePresets.paramStar),
+  ];
+
+  static final _outras = <(String, IconData, List<ShapeItem> Function())>[
+    ('Anel', CupertinoIcons.circle, ShapePresets.paramRing),
+    ('Setor', CupertinoIcons.moon, ShapePresets.paramSector),
+    ('Onda', CupertinoIcons.waveform_path, ShapePresets.wave),
+    ('Coracao', CupertinoIcons.heart_fill, ShapePresets.heart),
+    ('Engrenagem', CupertinoIcons.gear_alt_fill, ShapePresets.gear),
+    ('Seta', CupertinoIcons.arrow_right, ShapePresets.arrow),
+    ('Check', CupertinoIcons.checkmark, ShapePresets.check),
+    ('Faisca', CupertinoIcons.sparkles, ShapePresets.sparkle),
+    ('Gota', CupertinoIcons.drop_fill, ShapePresets.drop),
+    ('Flor', CupertinoIcons.smallcircle_circle, ShapePresets.flower),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            GestureDetector(
+              onTap: widget.onVoltar,
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.only(right: 10),
+                child: Icon(CupertinoIcons.chevron_back,
+                    size: 22, color: AmColors.text),
+              ),
+            ),
+            const Text('Forma',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            for (final (nome, icone, build) in _basicas)
+              _AddOption(
+                icon: icone,
+                label: nome,
+                onTap: () => widget.onEscolher(build, nome),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (!_mais)
+          GestureDetector(
+            onTap: () => setState(() => _mais = true),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Mais formas',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AmColors.accent)),
+                  SizedBox(width: 4),
+                  Icon(CupertinoIcons.chevron_down,
+                      size: 14, color: AmColors.accent),
+                ],
+              ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              const Text('Formas vetoriais',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text)),
-              const SizedBox(height: 16),
-              // Primitivas PARAMETRICAS: Tamanho/Arredondamento/Pontas
-              // animaveis no caminho (spec parametros-de-forma).
-              Row(
-                children: [
-                  option('Circulo', CupertinoIcons.circle_fill,
-                      ShapePresets.paramEllipse, 'Circulo'),
-                  option('Retangulo', CupertinoIcons.square_fill,
-                      ShapePresets.paramRect, 'Retangulo'),
-                  option('Estrela', CupertinoIcons.star_fill,
-                      ShapePresets.paramStar, 'Estrela'),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  option('Anel', CupertinoIcons.circle,
-                      ShapePresets.paramRing, 'Anel'),
-                  option('Setor', CupertinoIcons.moon,
-                      ShapePresets.paramSector, 'Setor'),
-                  option('Onda', CupertinoIcons.waveform_path,
-                      ShapePresets.wave, 'Onda'),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  option('Poligono', CupertinoIcons.hexagon_fill,
-                      ShapePresets.paramPolygon, 'Poligono'),
-                  option('Coracao', CupertinoIcons.heart_fill,
-                      ShapePresets.heart, 'Coracao'),
-                  option('Engrenagem', CupertinoIcons.gear_alt_fill,
-                      ShapePresets.gear, 'Engrenagem'),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  option('Seta', CupertinoIcons.arrow_right,
-                      ShapePresets.arrow, 'Seta'),
-                  option('Check', CupertinoIcons.checkmark,
-                      ShapePresets.check, 'Check'),
-                  option('Faisca', CupertinoIcons.sparkles,
-                      ShapePresets.sparkle, 'Faisca'),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  option('Gota', CupertinoIcons.drop_fill,
-                      ShapePresets.drop, 'Gota'),
-                  option('Flor', CupertinoIcons.smallcircle_circle,
-                      ShapePresets.flower, 'Flor'),
-                  const Spacer(),
-                ],
-              ),
+              for (final (nome, icone, build) in _outras)
+                GestureDetector(
+                  onTap: () => widget.onEscolher(build, nome),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AmColors.chip,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icone, size: 15, color: AmColors.accent),
+                        const SizedBox(width: 6),
+                        Text(nome,
+                            style: const TextStyle(
+                                fontSize: 13, color: AmColors.text)),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
-        ),
-      );
-    },
-  );
+      ],
+    );
+  }
 }
 
 /// Aba de ICONES (Iconify): busca com filtro de licenca; o icone entra na

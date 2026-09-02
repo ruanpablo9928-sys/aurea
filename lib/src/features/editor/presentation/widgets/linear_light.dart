@@ -1,4 +1,7 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
+
+import 'package:flutter/widgets.dart';
 
 /// A FAMILIA DE LUZ, EM ESPACO LINEAR.
 ///
@@ -31,9 +34,14 @@ class LinearLight {
     }
   }
 
+  /// Chave de diagnostico: `--dart-define=AUREA_LINEAR=false` desliga o
+  /// espaco linear inteiro, para comparar no aparelho.
+  static const bool _ligado =
+      bool.fromEnvironment('AUREA_LINEAR', defaultValue: true);
+
   /// Se da para trabalhar em linear neste aparelho.
   static bool get ready =>
-      _program != null && ui.ImageFilter.isShaderFilterSupported;
+      _ligado && _program != null && ui.ImageFilter.isShaderFilterSupported;
 
   static ui.ImageFilter? _curva(double mode, ui.Size size) {
     final p = _program;
@@ -84,4 +92,47 @@ class LinearLight {
             sigmaX: sigmaX, sigmaY: sigmaY, tileMode: tileMode),
         size,
       );
+
+  /// DESFOQUE EM LINEAR, JA EMBRULHADO NO WIDGET — e com MARGEM.
+  ///
+  /// O desfoque espalha a imagem para fora da caixa da fonte, e o filtro
+  /// de shader que vem depois (linear -> sRGB) recebe uma textura maior
+  /// que a fonte. O motor coloca a saida desse filtro no canto da FONTE,
+  /// nao no canto da textura: o halo saia deslocado para baixo e para a
+  /// direita, exatamente o tanto que o desfoque cresceu. A margem pintada
+  /// fora da caixa (um preto de 1/255 de alfa, invisivel) faz a textura
+  /// nascer ja do tamanho final: nada cresce, nada desloca.
+  static Widget blurred({
+    required Widget child,
+    required double sigmaX,
+    required double sigmaY,
+    required ui.Size size,
+    ui.TileMode tileMode = ui.TileMode.decal,
+  }) {
+    final filtro = blur(
+        sigmaX: sigmaX, sigmaY: sigmaY, size: size, tileMode: tileMode);
+    if (!ready) return ImageFiltered(imageFilter: filtro, child: child);
+    final margem = (3 * math.max(sigmaX, sigmaY) + 2).toDouble();
+    return ImageFiltered(
+      imageFilter: filtro,
+      child: CustomPaint(painter: _Margem(margem), child: child),
+    );
+  }
+}
+
+class _Margem extends CustomPainter {
+  const _Margem(this.pad);
+
+  final double pad;
+
+  @override
+  void paint(ui.Canvas canvas, ui.Size size) {
+    canvas.drawRect(
+      ui.Rect.fromLTWH(-pad, -pad, size.width + 2 * pad, size.height + 2 * pad),
+      ui.Paint()..color = const ui.Color(0x01000000),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Margem old) => old.pad != pad;
 }

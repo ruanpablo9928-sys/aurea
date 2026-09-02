@@ -1535,11 +1535,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           final sigma = radiusToPixels(
               effect.paramAt('amount', local) * 0.04, fxWidth, fxHeight);
           if (sigma > 0.01) {
-            out = ImageFiltered(
-              imageFilter: LinearLight.blur(
-                  sigmaX: sigma, sigmaY: sigma, size: fxSize),
-              child: out,
-            );
+            out = LinearLight.blurred(
+sigmaX: sigma, sigmaY: sigma, size: fxSize,
+ child: out,
+);
           }
         case EffectType.lightGlow:
           final sigma = 4 +
@@ -1576,27 +1575,33 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                     child: out,
                   );
 
+            // A FONTE EMBAIXO E O BRILHO SOMADO POR CIMA: glow e luz a
+            // mais, inclusive no miolo. Com a fonte por cima o solido
+            // cobria o brilho e sobrava so um contorno.
             out = Stack(
               clipBehavior: Clip.none,
               children: [
-                Opacity(
-                  opacity: intensity,
-                  child: ImageFiltered(
-                    // EM ESPACO LINEAR. Glow SOMA luz, e soma de luz em
-                    // sRGB da o cinza de sempre: a curva de exibicao
-                    // pesa o escuro mais do que deveria, entao o halo
-                    // sai lavado e com uma borda escura onde encontra o
-                    // fundo. Em linear a conta e a que a luz faz.
-                    imageFilter: LinearLight.blur(
-                        sigmaX: sigma, sigmaY: sigma, size: fxSize),
-                    child: ColorFiltered(
-                      colorFilter:
-                          ColorFilter.mode(effect.color, BlendMode.srcATop),
-                      child: acimaDoLimite,
+                out,
+                BlendMask(
+                  blendMode: BlendMode.plus,
+                  margem: 3 * sigma + 4,
+                  child: Opacity(
+                    opacity: intensity,
+                    child: LinearLight.blurred(
+                      // EM ESPACO LINEAR. Glow SOMA luz, e soma de luz em
+                      // sRGB da o cinza de sempre: a curva de exibicao
+                      // pesa o escuro mais do que deveria, entao o halo
+                      // sai lavado e com uma borda escura onde encontra o
+                      // fundo. Em linear a conta e a que a luz faz.
+                      sigmaX: sigma, sigmaY: sigma, size: fxSize,
+                      child: ColorFiltered(
+                        colorFilter:
+                            ColorFilter.mode(effect.color, BlendMode.srcATop),
+                        child: acimaDoLimite,
+                      ),
                     ),
                   ),
                 ),
-                out,
               ],
             );
           }
@@ -1679,11 +1684,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             // deixa passar o que e area clara de verdade.
             if (reducaoRuido > 0.5) {
               final sr = reducaoRuido / 100 * 3.0;
-              fonte = ImageFiltered(
-                imageFilter: LinearLight.blur(
-                    sigmaX: sr, sigmaY: sr, size: fxSize),
-                child: fonte,
-              );
+              fonte = LinearLight.blurred(
+sigmaX: sr, sigmaY: sr, size: fxSize,
+ child: fonte,
+);
             }
 
             if (limiar > 0.01) {
@@ -1774,38 +1778,47 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 // muito alongados em direcoes diferentes. Tres eixos ja
                 // dao a leitura de seis pontas.
                 Widget lamina(double giro) {
-                  final r = ImageFiltered(
-                    imageFilter: LinearLight.blur(
-                        sigmaX: math.max(0.1, sx * 2.2),
+                  final r = LinearLight.blurred(
+sigmaX: math.max(0.1, sx * 2.2),
                         sigmaY: math.max(0.1, sy * 0.18),
-                        size: fxSize),
-                    child: Transform.rotate(angle: -giro, child: alvo),
-                  );
+                        size: fxSize,
+ child: Transform.rotate(angle: -giro, child: alvo),
+);
                   return Transform.rotate(angle: giro, child: r);
                 }
 
+                final alcanceLamina = 3 * sx * 2.2 + 4;
                 alvo = Stack(clipBehavior: Clip.none, children: [
                   lamina(0),
                   BlendMask(
                       blendMode: BlendMode.plus,
+                      margem: alcanceLamina,
                       child: lamina(math.pi / 3)),
                   BlendMask(
                       blendMode: BlendMode.plus,
+                      margem: alcanceLamina,
                       child: lamina(2 * math.pi / 3)),
                 ]);
               } else {
-                alvo = ImageFiltered(
-                  imageFilter: LinearLight.blur(
-                      sigmaX: math.max(0.1, sx),
+                alvo = LinearLight.blurred(
+sigmaX: math.max(0.1, sx),
                       sigmaY: math.max(0.1, sy),
-                      size: fxSize),
-                  child: alvo,
-                );
+                      size: fxSize,
+ child: alvo,
+);
               }
               if (anguloOn && anguloRad.abs() > 0.001) {
                 alvo = Transform.rotate(angle: anguloRad, child: alvo);
               }
               return alvo;
+            }
+
+            // ALCANCE do halo de um nivel: ate onde o desfoque chega fora
+            // da caixa. E a margem que a foto da mescla precisa ter.
+            double alcance(double sigma) {
+              final mult = math.max(math.max(multR, multG), math.max(multB, 1.0));
+              final eixo = math.max(aspecto, 1 / aspecto);
+              return 3 * sigma * mult * eixo * (modoGlow == 1 ? 2.2 : 1.0) + 4;
             }
 
             Widget nivel(double sigma, double peso) {
@@ -1814,9 +1827,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                       borra(_channelIso(fonte, 0), sigma, multR),
                       BlendMask(
                           blendMode: BlendMode.plus,
+                          margem: alcance(sigma),
                           child: borra(_channelIso(fonte, 1), sigma, multG)),
                       BlendMask(
                           blendMode: BlendMode.plus,
+                          margem: alcance(sigma),
                           child: borra(_channelIso(fonte, 2), sigma, multB)),
                     ])
                   : borra(fonte, sigma, 1);
@@ -1826,8 +1841,9 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               return Opacity(opacity: peso.clamp(0.0, 1.0), child: w);
             }
 
-            final camadas = <Widget>[
-              for (var k = 0; k < niveis; k++) nivel(sigmas[k], pesos[k]),
+            final camadas = <(Widget, double)>[
+              for (var k = 0; k < niveis; k++)
+                (nivel(sigmas[k], pesos[k]), alcance(sigmas[k])),
             ];
 
             // BLEND: Add e o padrao — luz soma. Screen e mais suave nas
@@ -1840,8 +1856,14 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
 
             out = soGlow
                 // GLOW ONLY: so o brilho, sem a fonte. Serve para mandar
-                // o glow para outra camada e mesclar la.
-                ? Stack(clipBehavior: Clip.none, children: camadas)
+                // o glow para outra camada e mesclar la. Os niveis se
+                // somam entre si.
+                ? Stack(clipBehavior: Clip.none, children: [
+                    camadas.first.$1,
+                    for (final (c, a) in camadas.skip(1))
+                      BlendMask(
+                          blendMode: BlendMode.plus, margem: a, child: c),
+                  ])
                 // A FONTE EMBAIXO, O GLOW POR CIMA. Com a fonte por
                 // ultimo, o solido cobria o brilho e o glow so aparecia
                 // pela borda de fora — um contorno, nao um glow. O Deep
@@ -1849,8 +1871,8 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 // acende, e e isso que faz um texto branco "queimar".
                 : Stack(clipBehavior: Clip.none, children: [
                     out,
-                    for (final c in camadas)
-                      BlendMask(blendMode: modo, child: c),
+                    for (final (c, a) in camadas)
+                      BlendMask(blendMode: modo, margem: a, child: c),
                   ]);
           }
 
@@ -1965,14 +1987,19 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                     base.rotationDeg);
               }
 
+              // A margem da foto cobre ate onde o tremor pode levar o
+              // canal: um quinto do quadro e mais do que qualquer tremor.
+              final alcanceTremor = fxSize.longestSide * 0.2;
               out = comBorda(Stack(clipBehavior: Clip.none, children: [
                 shaken(canal('red_phase', ampR), _channelIso(out, 0)),
                 BlendMask(
                     blendMode: BlendMode.plus,
+                    margem: alcanceTremor,
                     child: shaken(
                         canal('green_phase', ampG), _channelIso(out, 1))),
                 BlendMask(
                     blendMode: BlendMode.plus,
+                    margem: alcanceTremor,
                     child: shaken(
                         canal('blue_phase', ampB), _channelIso(out, 2))),
               ]));
@@ -2057,9 +2084,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                   moved(-st.rgbSep, _channelIso(g, 0)),
                   BlendMask(
                       blendMode: BlendMode.plus,
+                      margem: st.rgbSep.abs() + 4,
                       child: moved(0, _channelIso(g, 1))),
                   BlendMask(
                       blendMode: BlendMode.plus,
+                      margem: st.rgbSep.abs() + 4,
                       child: moved(st.rgbSep, _channelIso(g, 2))),
                 ]);
               } else {
@@ -2083,9 +2112,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               Transform.translate(
                   offset: -off, child: _channelIso(out, 0)),
               BlendMask(
-                  blendMode: BlendMode.plus, child: _channelIso(out, 1)),
+                  blendMode: BlendMode.plus,
+                  margem: off.distance + 4,
+                  child: _channelIso(out, 1)),
               BlendMask(
                   blendMode: BlendMode.plus,
+                  margem: off.distance + 4,
                   child: Transform.translate(
                       offset: off, child: _channelIso(out, 2))),
             ]);
@@ -2152,9 +2184,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             out = Stack(clipBehavior: Clip.none, children: [
               scaled(1 - spread, 0),
               BlendMask(
-                  blendMode: BlendMode.plus, child: scaled(1.0, 1)),
+                  blendMode: BlendMode.plus,
+                  margem: fxSize.longestSide * spread + 4,
+                  child: scaled(1.0, 1)),
               BlendMask(
                   blendMode: BlendMode.plus,
+                  margem: fxSize.longestSide * spread + 4,
                   child: scaled(1 + spread, 2)),
             ]);
           }
@@ -2317,12 +2352,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             // Blur anisotropico girado: sigma no eixo do movimento.
             out = Transform.rotate(
               angle: -ang,
-              child: ImageFiltered(
+              child: LinearLight.blurred(
                 // Tambem em linear: e desfoque, e desfoque em sRGB
                 // escurece a media entre claro e escuro — a franja
                 // suja na borda do movimento vem daí.
-                imageFilter: LinearLight.blur(
-                    sigmaX: len / 3, sigmaY: 0.01, size: fxSize),
+                sigmaX: len / 3, sigmaY: 0.01, size: fxSize,
                 child: Transform.rotate(angle: ang, child: out),
               ),
             );
