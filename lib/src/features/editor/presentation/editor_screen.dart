@@ -27,6 +27,11 @@ import 'widgets/preview_stage.dart';
 
 enum _Mode { main, transform, blending, colorFill, effects, curve, animators }
 
+/// Os quatro estados do cabecalho (observados no Alight Motion). A mesma
+/// faixa, na mesma altura, muda o que mostra conforme o contexto: nome do
+/// projeto, camada selecionada, selecao multipla (faixa verde) ou painel.
+enum _HeaderKind { projeto, camada, multipla, painel }
+
 /// Editor: preview, transporte, timeline com playhead central e paginas
 /// de ferramenta em tela cheia.
 class EditorScreen extends ConsumerStatefulWidget {
@@ -312,6 +317,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   title: _title,
                   isMain: _mode == _Mode.main,
                   onBack: _back,
+                  onLayerMenu: _onTapLayer,
                 ),
                 // RepaintBoundary: palco, timeline e painel pintam em
                 // camadas separadas — repintar um nao repinta os outros.
@@ -469,77 +475,218 @@ Future<void> _menuDasMarcas(
   );
 }
 
+/// Exclui as camadas de [targets] pelo MESMO caminho da barra de acoes:
+/// respeita o magnetico e oferece "Desfazer". Vive fora da barra porque
+/// o cabecalho verde tambem exclui — dois botoes, uma regra so.
+void _excluirCamadas(
+    BuildContext context, WidgetRef ref, Set<String> targets) {
+  if (targets.isEmpty) return;
+  final controller = ref.read(editorControllerProvider.notifier);
+  final count = targets.length;
+  // MAGNETICO: excluir FECHA o buraco e puxa o que vinha depois. Era a
+  // reclamacao "corta, apaga e fica um buraco". Desligado, o buraco
+  // fica — e o que se quer quando outra trilha precisa continuar no
+  // mesmo lugar.
+  final magnetico = ref.read(magneticProvider);
+  if (magnetico) {
+    for (final id in targets) {
+      controller.rippleDeleteLayer(id);
+    }
+    // rippleDeleteLayer limpa so a selecao simples. Sem limpar a multipla
+    // aqui, ids mortos mantem a contagem e o cabecalho verde acesos
+    // depois de nao sobrar camada nenhuma.
+    ref.read(multiSelectProvider.notifier).state = const {};
+  } else {
+    controller.removeLayers(targets);
+  }
+  AureaSnack.show(
+    context,
+    count == 1
+        ? (magnetico
+            ? 'Camada excluida e o buraco fechado'
+            : 'Camada excluida')
+        : '$count camadas excluidas',
+    actionLabel: 'Desfazer',
+    onAction: controller.undo,
+  );
+}
+
+/// Agrupa a selecao e sai da selecao multipla. groupLayers ja seleciona o
+/// grupo novo, mas nao limpa a multipla — sem isso os ids antigos ficam
+/// contando e o cabecalho nao cairia para o estado de camada.
+void _agruparSelecao(WidgetRef ref, Set<String> targets) {
+  ref.read(editorControllerProvider.notifier).groupLayers(targets.toList());
+  ref.read(multiSelectProvider.notifier).state = const {};
+}
+
+/// Cabecalho contextual SOBRE o preview: uma faixa chapada, sempre na
+/// mesma altura, que troca de conteudo (e de cor) conforme o contexto.
+/// Os watches de selecao ficam AQUI, e nao no build da tela, para um
+/// toque longo nao rebuildar preview, timeline e painel.
 class _TopBar extends ConsumerWidget {
   const _TopBar({
     required this.title,
     required this.isMain,
     required this.onBack,
+    required this.onLayerMenu,
   });
 
   final String title;
   final bool isMain;
   final VoidCallback onBack;
+  final ValueChanged<Layer> onLayerMenu;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final selectedId = isMain ? ref.watch(selectedLayerProvider) : null;
+    final multi =
+        isMain ? ref.watch(multiSelectProvider) : const <String>{};
+    // Observa so o NOME da camada, nao o projeto inteiro: o cabecalho nao
+    // precisa repintar a cada keyframe movido.
+    final nome = ref.watch(editorControllerProvider.select((p) =>
+        selectedId == null ? null : p.layerById(selectedId)?.name));
+    // Mesma formula da barra de acoes: o toque longo pode deixar a
+    // camada primaria fora do conjunto multiplo.
+    final targets = <String>{...multi, ?selectedId};
+    final n = targets.length;
+
+    // Precedencia: painel aberto ganha de tudo; depois a selecao multipla;
+    // uma camada cujo id ja nao existe (undo) cai no projeto sem quebrar.
+    //
+    // Verde so com DUAS ou mais: a faixa verde diz "voce esta agindo
+    // sobre um conjunto". Um toque longo que deixa uma camada sozinha no
+    // conjunto pintava tudo de verde com "1 camada" — modo de conjunto
+    // sem conjunto nenhum.
+    final kind = !isMain
+        ? _HeaderKind.painel
+        : n >= 2
+            ? _HeaderKind.multipla
+            : (selectedId != null && nome != null)
+                ? _HeaderKind.camada
+                : _HeaderKind.projeto;
+    final multipla = kind == _HeaderKind.multipla;
+
+    // A faixa INTEIRA muda de cor na selecao multipla: o modo se
+    // reconhece sem ler. Texto e icones invertem para o fundo escuro.
+    final tinta = multipla ? AmColors.bg : AmColors.text;
+
+    final titulo = switch (kind) {
+      _HeaderKind.projeto || _HeaderKind.painel => title,
+      _HeaderKind.camada => nome!.isEmpty ? 'Camada' : nome,
+      _HeaderKind.multipla => '$n camada${n == 1 ? '' : 's'}',
+    };
+
+    // Botao da esquerda. No projeto e no painel ele VOLTA de nivel. Com
+    // uma camada, ele so LIMPA a selecao (nao sai do editor). Na selecao
+    // multipla, sair da selecao nao e voltar de nivel — por isso e um X,
+    // nao um chevron; a camada primaria fica e o cabecalho cai para ela.
+    final VoidCallback esquerda = switch (kind) {
+      _HeaderKind.projeto || _HeaderKind.painel => onBack,
+      _HeaderKind.camada => () =>
+          ref.read(selectedLayerProvider.notifier).state = null,
+      _HeaderKind.multipla => () =>
+          ref.read(multiSelectProvider.notifier).state = const {},
+    };
+
     return Container(
       height: 52,
-      color: AmColors.topBar,
+      color: multipla ? AmColors.accent : AmColors.topBar,
       child: Row(
         children: [
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            onPressed: onBack,
-            child: const Icon(CupertinoIcons.chevron_back,
-                size: 24, color: AmColors.text),
+            onPressed: esquerda,
+            child: Icon(
+                multipla
+                    ? CupertinoIcons.xmark
+                    : CupertinoIcons.chevron_back,
+                size: 24,
+                color: tinta),
           ),
           Expanded(
             child: Text(
-              title,
-              textAlign: isMain ? TextAlign.left : TextAlign.center,
+              titulo,
+              textAlign: kind == _HeaderKind.projeto || multipla
+                  ? TextAlign.left
+                  : TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AmColors.text,
+                color: tinta,
               ),
             ),
           ),
-          if (isMain) ...[
-            // Engrenagem: liga o overlay de diagnostico do preview
-            // (composicoes/s, camadas, marcha — motor-de-preview §7).
-            Consumer(
-              builder: (context, ref, _) => CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                onPressed: () => ref
-                    .read(debugOverlayProvider.notifier)
-                    .state = !ref.read(debugOverlayProvider),
-                child: Icon(CupertinoIcons.gear,
-                    size: 23,
-                    color: ref.watch(debugOverlayProvider)
-                        ? AmColors.accent
-                        : AmColors.text),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: GestureDetector(
-                onTap: () => showExportSheet(context, ref),
-                child: Container(
-                  width: 42,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AmColors.accent,
-                    borderRadius: BorderRadius.circular(10),
+          ...switch (kind) {
+            _HeaderKind.projeto => [
+                // Engrenagem: liga o overlay de diagnostico do preview
+                // (composicoes/s, camadas, marcha — motor-de-preview §7).
+                Consumer(
+                  builder: (context, ref, _) => CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    onPressed: () => ref
+                        .read(debugOverlayProvider.notifier)
+                        .state = !ref.read(debugOverlayProvider),
+                    child: Icon(CupertinoIcons.gear,
+                        size: 23,
+                        color: ref.watch(debugOverlayProvider)
+                            ? AmColors.accent
+                            : AmColors.text),
                   ),
-                  child: const Icon(CupertinoIcons.square_arrow_up,
-                      size: 20, color: Color(0xFF0B0E12)),
                 ),
-              ),
-            ),
-          ] else
-            const SizedBox(width: 52),
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: GestureDetector(
+                    onTap: () => showExportSheet(context, ref),
+                    child: Container(
+                      width: 42,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AmColors.accent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(CupertinoIcons.square_arrow_up,
+                          size: 20, color: Color(0xFF0B0E12)),
+                    ),
+                  ),
+                ),
+              ],
+            // "..." abre o MESMO menu que tocar na barra da timeline abre:
+            // um so lugar para as acoes da camada, alcancavel sem mirar
+            // na barra.
+            _HeaderKind.camada => [
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  onPressed: () {
+                    final layer = ref
+                        .read(editorControllerProvider)
+                        .layerById(selectedId!);
+                    if (layer != null) onLayerMenu(layer);
+                  },
+                  child: Icon(CupertinoIcons.ellipsis,
+                      size: 24, color: tinta),
+                ),
+              ],
+            // Agrupar e excluir com os mesmos icones da barra de acoes,
+            // para a pessoa reconhecer sem aprender de novo.
+            _HeaderKind.multipla => [
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  onPressed: () => _agruparSelecao(ref, targets),
+                  child: Icon(CupertinoIcons.square_stack_3d_up,
+                      size: 22, color: tinta),
+                ),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  onPressed: () => _excluirCamadas(context, ref, targets),
+                  child: Icon(CupertinoIcons.trash, size: 22, color: tinta),
+                ),
+              ],
+            // Espacador da largura do botao de voltar: o titulo
+            // centralizado fica de fato no centro.
+            _HeaderKind.painel => [const SizedBox(width: 52)],
+          },
         ],
       ),
     );
@@ -716,7 +863,9 @@ class _ActionBar extends ConsumerWidget {
             enabled: n >= 2,
             reason:
                 'Selecione duas ou mais camadas (toque longo nas barras)',
-            onTap: () => controller.groupLayers(targets.toList()),
+            // Pelo helper: limpa a selecao multipla depois de agrupar,
+            // senao o "N camadas" ficava aceso com ids mortos.
+            onTap: () => _agruparSelecao(ref, targets),
           ),
           btn(
             icon: CupertinoIcons.link,
@@ -798,31 +947,8 @@ class _ActionBar extends ConsumerWidget {
             icon: CupertinoIcons.trash,
             enabled: n >= 1,
             reason: 'Selecione uma camada',
-            onTap: () {
-              final count = n;
-              // MAGNETICO: excluir FECHA o buraco e puxa o que vinha
-              // depois. Era a reclamacao "corta, apaga e fica um
-              // buraco". Desligado, o buraco fica — e o que se quer
-              // quando outra trilha precisa continuar no mesmo lugar.
-              final magnetico = ref.read(magneticProvider);
-              if (magnetico) {
-                for (final id in targets) {
-                  controller.rippleDeleteLayer(id);
-                }
-              } else {
-                controller.removeLayers(targets);
-              }
-              AureaSnack.show(
-                context,
-                count == 1
-                    ? (magnetico
-                        ? 'Camada excluida e o buraco fechado'
-                        : 'Camada excluida')
-                    : '$count camadas excluidas',
-                actionLabel: 'Desfazer',
-                onAction: controller.undo,
-              );
-            },
+            // Mesma regra do cabecalho verde: magnetico + "Desfazer".
+            onTap: () => _excluirCamadas(context, ref, targets),
           ),
         ],
       ),

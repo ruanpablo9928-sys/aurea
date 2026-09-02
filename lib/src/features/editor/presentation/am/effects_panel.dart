@@ -9,12 +9,17 @@ import '../../domain/layer.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/effect.dart';
 import '../../domain/effect_preset.dart';
+import '../../domain/keyframe.dart';
 import 'am_colors.dart';
 import 'color_picker_sheet.dart';
 import 'am_widgets.dart';
 
-/// Painel "Efeitos": pilha de cards, cada parametro com regua + diamante
-/// ("keyframe em tudo"), olho para ligar/desligar e reordenacao.
+/// Painel "Efeitos": LISTA VERTICAL de blocos colapsaveis, um por efeito.
+/// Cabecalho = chevron (colapsa) + nome + "..." (menu) + lixeira. Cada
+/// linha de parametro = ponto verde (tem keyframes) + nome + regua de
+/// ticks + valor alinhado (par X/Y numa linha so) + diamante ("keyframe
+/// em tudo"). O trilho esquerdo tem voltar e o diamante do parametro
+/// selecionado.
 class EffectsPanel extends ConsumerStatefulWidget {
   const EffectsPanel({
     super.key,
@@ -31,6 +36,144 @@ class EffectsPanel extends ConsumerStatefulWidget {
 
 class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   String? _selectedParam;
+
+  /// Efeitos RECOLHIDOS (nao os expandidos): assim todo efeito nasce
+  /// aberto — inclusive os que chegam depois por addEffect/applyPreset —
+  /// sem precisar semear o conjunto a cada build.
+  final Set<String> _recolhidos = <String>{};
+
+  bool _expandido(String effectId) => !_recolhidos.contains(effectId);
+
+  void _alternarExpandido(String effectId) {
+    setState(() {
+      if (!_recolhidos.remove(effectId)) _recolhidos.add(effectId);
+    });
+  }
+
+  /// Menu "..." do efeito: SO o que o controller sabe fazer de verdade
+  /// (mover, ligar/desligar, resetar, remover). Duplicar e curva de
+  /// parametro ficam de fora porque nao existem no EditorController.
+  Future<void> _menuDoEfeito(
+    BuildContext context,
+    String layerId,
+    EffectInstance effect,
+    int index,
+    int total,
+  ) async {
+    final controller = ref.read(editorControllerProvider.notifier);
+    const estilo = TextStyle(color: AmColors.text, fontSize: 15);
+    // ListTile so esmaece via tema, e nossas cores explicitas vencem o
+    // tema: nas pontas o item ficaria igual ao ativo e inerte. Opacity
+    // 0.32 e a mesma de _MenuTile, para o "desligado" ter uma cara so.
+    final podeSubir = index > 0;
+    final podeDescer = index < total - 1;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AmColors.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Titulo: qual efeito esta sendo mexido, ja que o menu cobre
+            // a lista.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(effect.spec.name,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text)),
+              ),
+            ),
+            // Nas pontas o item fica esmaecido em vez de sumir: a pessoa
+            // ve que o comando existe, so nao faz sentido agora.
+            Opacity(
+              opacity: podeSubir ? 1 : 0.32,
+              child: ListTile(
+                enabled: podeSubir,
+                leading: const Icon(CupertinoIcons.arrow_up,
+                    color: AmColors.muted, size: 20),
+                title: const Text('Mover para cima', style: estilo),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  controller.reorderEffect(layerId, effect.id, -1);
+                },
+              ),
+            ),
+            Opacity(
+              opacity: podeDescer ? 1 : 0.32,
+              child: ListTile(
+                enabled: podeDescer,
+                leading: const Icon(CupertinoIcons.arrow_down,
+                    color: AmColors.muted, size: 20),
+                title: const Text('Mover para baixo', style: estilo),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  controller.reorderEffect(layerId, effect.id, 1);
+                },
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                  effect.enabled
+                      ? CupertinoIcons.eye_slash
+                      : CupertinoIcons.eye,
+                  color: AmColors.muted,
+                  size: 20),
+              title: Text(effect.enabled ? 'Desligar' : 'Ligar',
+                  style: estilo),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                controller.toggleEffectEnabled(layerId, effect.id);
+              },
+            ),
+            // RESET = cada parametro volta ao valor inicial da ficha NESTE
+            // tempo: num parametro animado isso grava um keyframe com o
+            // inicial (edited), nao apaga a trilha — nao ha API para isso.
+            // As N edicoes viram um undo so (coalesce de 450 ms).
+            ListTile(
+              leading: const Icon(CupertinoIcons.arrow_counterclockwise,
+                  color: AmColors.muted, size: 20),
+              title: const Text('Resetar parametros', style: estilo),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                // O tempo e lido NO TOQUE, nao ao abrir o menu: o painel
+                // nao pausa a reproducao, e o menu pode ficar aberto por
+                // segundos — o keyframe do reset tem de cair onde o
+                // cabecote esta agora, nao onde estava.
+                final agora = widget.playback.time.value;
+                for (final e in effect.spec.params.entries) {
+                  controller.editEffectParam(
+                      layerId, effect.id, e.key, agora, e.value.initial);
+                }
+                if (effect.spec.hasColor) {
+                  controller.setEffectColor(
+                      layerId, effect.id, const Color(0xFFFF5566));
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(CupertinoIcons.trash,
+                  color: AmColors.pink, size: 20),
+              title: const Text('Remover',
+                  style: TextStyle(color: AmColors.pink, fontSize: 15)),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                controller.removeEffect(layerId, effect.id);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
   /// CATALOGO (PR-C4): o gargalo de quem tem muitos efeitos nao e ter —
   /// e ACHAR. Busca com sinonimos, chips por categoria com contador,
@@ -273,44 +416,91 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
 
     return ColoredBox(
       color: AmColors.panel,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
+      // Reavalia os valores conforme o playhead anda. Envolve o Row
+      // inteiro porque o diamante do trilho tambem precisa saber se ha
+      // keyframe no cabecote.
+      child: ValueListenableBuilder<Duration>(
+        valueListenable: widget.playback.time,
+        builder: (context, t, _) {
+          final local = layer.localTime(t);
+
+          // Parametro selecionado -> efeito + chaves (par X/Y vem como
+          // 'x|y'). Resolve por id, nunca por indice: o efeito pode ter
+          // sido removido ou reordenado desde a selecao.
+          final partes = _selectedParam?.split('/');
+          EffectInstance? sel;
+          final chaves = <String>[];
+          if (partes != null && partes.length == 2) {
+            for (final e in layer.effects) {
+              if (e.id == partes[0]) sel = e;
+            }
+            chaves.addAll(partes[1].split('|'));
+          }
+          final selAnimado =
+              sel != null && chaves.any((k) => sel!.track(k).isAnimated);
+          final selKfAqui = sel != null &&
+              chaves.every((k) => sel!.track(k).hasKeyframeAt(local));
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AmRailButton(
-                onTap: widget.onBack,
-                child: const Icon(CupertinoIcons.chevron_back,
-                    size: 24, color: AmColors.text),
+              Column(
+                children: [
+                  AmRailButton(
+                    onTap: widget.onBack,
+                    child: const Icon(CupertinoIcons.chevron_back,
+                        size: 24, color: AmColors.text),
+                  ),
+                  // Diamante do parametro selecionado, como nos outros
+                  // paineis: apagado e inerte quando nada esta selecionado.
+                  // Com o par 'x|y' em estado misto (so um eixo com
+                  // keyframe aqui, cenario da regua arrastada) o toggle
+                  // cego trocaria o keyframe de eixo. Regra: diamante vazio
+                  // COMPLETA (so onde falta), diamante cheio LIMPA os dois.
+                  AmRailButton(
+                    onTap: sel == null
+                        ? null
+                        : () {
+                            for (final k in chaves) {
+                              if (selKfAqui ||
+                                  !sel!.track(k).hasKeyframeAt(local)) {
+                                controller.toggleEffectParamKeyframe(
+                                    id, sel!.id, k, t);
+                              }
+                            }
+                          },
+                    child: AmDiamondAdd(
+                        active: selAnimado, filled: selKfAqui),
+                  ),
+                ],
               ),
-            ],
-          ),
-          Expanded(
-            // Reavalia os valores conforme o playhead anda.
-            child: ValueListenableBuilder<Duration>(
-              valueListenable: widget.playback.time,
-              builder: (context, t, _) {
-                final local = layer.localTime(t);
-                return ListView(
+              Expanded(
+                child: ListView(
                   padding: const EdgeInsets.fromLTRB(4, 8, 16, 16),
                   children: [
-                    for (final effect in layer.effects)
+                    for (var i = 0; i < layer.effects.length; i++)
                       _EffectCard(
-                        effect: effect,
+                        effect: layer.effects[i],
                         local: local,
+                        expanded: _expandido(layer.effects[i].id),
                         selectedParam: _selectedParam,
+                        onToggleExpanded: () =>
+                            _alternarExpandido(layer.effects[i].id),
+                        onMenu: () => _menuDoEfeito(context, id,
+                            layer.effects[i], i, layer.effects.length),
                         onSelectParam: (p) =>
                             setState(() => _selectedParam = p),
                         onParam: (key, v) => controller.editEffectParam(
-                            id, effect.id, key, t, v),
-                        onParamKeyframe: (key) => controller
-                            .toggleEffectParamKeyframe(id, effect.id, key, t),
-                        onColor: (c) =>
-                            controller.setEffectColor(id, effect.id, c),
+                            id, layer.effects[i].id, key, t, v),
+                        onParamKeyframe: (key) =>
+                            controller.toggleEffectParamKeyframe(
+                                id, layer.effects[i].id, key, t),
+                        onToggleEnabled: () => controller
+                            .toggleEffectEnabled(id, layer.effects[i].id),
+                        onColor: (c) => controller.setEffectColor(
+                            id, layer.effects[i].id, c),
                         onRemove: () =>
-                            controller.removeEffect(id, effect.id),
-                        onToggleEnabled: () =>
-                            controller.toggleEffectEnabled(id, effect.id),
+                            controller.removeEffect(id, layer.effects[i].id),
                       ),
                     // ANALISAR: o Blob Tracker precisa varrer o video
                     // uma vez antes de desenhar. Sem o comando, o efeito
@@ -350,11 +540,11 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                       ),
                     ),
                   ],
-                );
-              },
-            ),
-          ),
-        ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -364,7 +554,10 @@ class _EffectCard extends StatelessWidget {
   const _EffectCard({
     required this.effect,
     required this.local,
+    required this.expanded,
     required this.selectedParam,
+    required this.onToggleExpanded,
+    required this.onMenu,
     required this.onSelectParam,
     required this.onParam,
     required this.onParamKeyframe,
@@ -375,13 +568,104 @@ class _EffectCard extends StatelessWidget {
 
   final EffectInstance effect;
   final Duration local;
+  final bool expanded;
   final String? selectedParam;
+  final VoidCallback onToggleExpanded;
+  final VoidCallback onMenu;
   final ValueChanged<String> onSelectParam;
   final void Function(String key, double value) onParam;
   final void Function(String key) onParamKeyframe;
   final ValueChanged<Color> onColor;
   final VoidCallback onRemove;
   final VoidCallback onToggleEnabled;
+
+  /// Linhas de parametro. O par X/Y de um ponto (ParamKind.point) vira
+  /// UMA linha com dois valores. Pareia por ADJACENCIA + kind, nunca por
+  /// nome: 'tile_center'/'tile_center_y' nao segue o sufixo X.
+  List<Widget> _linhas() {
+    final entradas = effect.spec.params.entries.toList();
+    final linhas = <Widget>[];
+    for (var i = 0; i < entradas.length; i++) {
+      final entry = entradas[i];
+      final ehPar = entry.value.kind == ParamKind.point &&
+          i + 1 < entradas.length &&
+          entradas[i + 1].value.kind == ParamKind.point;
+      if (ehPar) {
+        final x = entry;
+        final y = entradas[i + 1];
+        final paramKey = '${effect.id}/${x.key}|${y.key}';
+        final xt = effect.track(x.key);
+        final yt = effect.track(y.key);
+        // O diamante do par so mostra "cheio" com keyframe nos DOIS
+        // eixos. Em estado misto (regua de um eixo arrastada grava so
+        // nele) um toggle cego apagaria o eixo que tinha e criaria no
+        // outro: o diamante seguiria vazio e o keyframe sumiria. Por
+        // isso decide por eixo: vazio completa onde falta, cheio limpa.
+        final ambos = xt.hasKeyframeAt(local) && yt.hasKeyframeAt(local);
+        linhas.add(_PointRow(
+          paramKey: paramKey,
+          label: x.value.label.replaceFirst(RegExp(r' X$'), ''),
+          xTrack: xt,
+          yTrack: yt,
+          local: local,
+          xMin: x.value.min,
+          xMax: x.value.max,
+          yMin: y.value.min,
+          yMax: y.value.max,
+          selected: selectedParam == paramKey,
+          onSelect: onSelectParam,
+          onChangedX: (v) => onParam(x.key, v),
+          onChangedY: (v) => onParam(y.key, v),
+          // Dois toggles separados, coalescidos num undo so pelo
+          // controller (450 ms).
+          onKeyframe: () {
+            if (ambos || !xt.hasKeyframeAt(local)) onParamKeyframe(x.key);
+            if (ambos || !yt.hasKeyframeAt(local)) onParamKeyframe(y.key);
+          },
+        ));
+        i++;
+        continue;
+      }
+      // PR-C1: cada TIPO de parametro ganha seu controle. Antes so
+      // havia numero, e todo efeito que precisava de escolha ou
+      // ponto ficava visivel e inerte.
+      linhas.add(switch (entry.value.kind) {
+        ParamKind.choice => _ChoiceRow(
+            label: entry.value.label,
+            options: entry.value.options,
+            value: effect
+                .paramAt(entry.key, local)
+                .round()
+                .clamp(0, entry.value.options.length - 1),
+            onChanged: (i) => onParam(entry.key, i.toDouble()),
+          ),
+        ParamKind.seed => _SeedRow(
+            label: entry.value.label,
+            value: effect.paramAt(entry.key, local),
+            onChanged: (v) => onParam(entry.key, v),
+          ),
+        ParamKind.toggle => _ToggleRow(
+            label: entry.value.label,
+            value: effect.paramAt(entry.key, local) > 0.5,
+            onChanged: (v) => onParam(entry.key, v ? 1.0 : 0.0),
+          ),
+        // Numero (e ponto solteiro) usam a regua; o ponto vem em 0..1.
+        _ => _ParamRow(
+            paramKey: '${effect.id}/${entry.key}',
+            label: entry.value.label,
+            track: effect.track(entry.key),
+            local: local,
+            min: entry.value.min,
+            max: entry.value.max,
+            selected: selectedParam == '${effect.id}/${entry.key}',
+            onSelect: onSelectParam,
+            onChanged: (v) => onParam(entry.key, v),
+            onKeyframe: () => onParamKeyframe(entry.key),
+          ),
+      });
+    }
+    return linhas;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -393,34 +677,65 @@ class _EffectCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       child: Opacity(
+        // Desligado continua visivel, so esmaecido.
         opacity: effect.enabled ? 1 : 0.45,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(CupertinoIcons.arrowtriangle_down_fill,
-                    size: 12, color: AmColors.text),
-                const SizedBox(width: 10),
+                // So chevron + nome colapsam: um toque em "..." ou na
+                // lixeira nao pode fechar o bloco junto.
                 Expanded(
-                  child: Text(
-                    effect.spec.name,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onToggleExpanded,
+                    child: Row(
+                      children: [
+                        Icon(
+                          expanded
+                              ? CupertinoIcons.chevron_down
+                              : CupertinoIcons.chevron_right,
+                          size: 14,
+                          color: AmColors.text,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            effect.spec.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: AmColors.text,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
+                // O OLHO FICA NO CABECALHO, a um toque. Ligar e desligar
+                // um efeito para comparar e a acao mais frequente que
+                // existe aqui — escondida no menu viraria dois toques por
+                // comparacao, e comparar e o que se faz o tempo todo.
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: onToggleEnabled,
                   child: Icon(
                     effect.enabled
                         ? CupertinoIcons.eye
                         : CupertinoIcons.eye_slash,
                     size: 22,
-                    color: AmColors.text,
+                    color: effect.enabled ? AmColors.text : AmColors.muted,
                   ),
+                ),
+                const SizedBox(width: 14),
+                GestureDetector(
+                  onTap: onMenu,
+                  child: const Icon(CupertinoIcons.ellipsis,
+                      size: 22, color: AmColors.text),
                 ),
                 const SizedBox(width: 14),
                 GestureDetector(
@@ -430,56 +745,101 @@ class _EffectCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            // PR-C1: cada TIPO de parametro ganha seu controle. Antes so
-            // havia numero, e todo efeito que precisava de escolha ou
-            // ponto ficava visivel e inerte.
-            for (final entry in effect.spec.params.entries)
-              switch (entry.value.kind) {
-                ParamKind.choice => _ChoiceRow(
-                    label: entry.value.label,
-                    options: entry.value.options,
-                    value: effect
-                        .paramAt(entry.key, local)
-                        .round()
-                        .clamp(0, entry.value.options.length - 1),
-                    onChanged: (i) => onParam(entry.key, i.toDouble()),
-                  ),
-                ParamKind.seed => _SeedRow(
-                    label: entry.value.label,
-                    value: effect.paramAt(entry.key, local),
-                    onChanged: (v) => onParam(entry.key, v),
-                  ),
-                ParamKind.toggle => _ToggleRow(
-                    label: entry.value.label,
-                    value: effect.paramAt(entry.key, local) > 0.5,
-                    onChanged: (v) =>
-                        onParam(entry.key, v ? 1.0 : 0.0),
-                  ),
-                // Ponto e numero usam a regua; o ponto vem em 0..1 e o
-                // par X/Y aparece como duas linhas nomeadas.
-                _ => _ParamRow(
-                    paramKey: '${effect.id}/${entry.key}',
-                    label: entry.value.label,
-                    track: effect.track(entry.key),
-                    local: local,
-                    min: entry.value.min,
-                    max: entry.value.max,
-                    selected:
-                        selectedParam == '${effect.id}/${entry.key}',
-                    onSelect: onSelectParam,
-                    onChanged: (v) => onParam(entry.key, v),
-                    onKeyframe: () => onParamKeyframe(entry.key),
-                  ),
-              },
-            if (effect.spec.hasColor)
-              _ColorRow(effect: effect, onColor: onColor),
+            // Recolhido: nem constroi o corpo.
+            if (expanded) ...[
+              const SizedBox(height: 8),
+              ..._linhas(),
+              if (effect.spec.hasColor)
+                _ColorRow(effect: effect, onColor: onColor),
+            ],
           ],
         ),
       ),
     );
   }
 }
+
+/// Ponto verde a esquerda do nome quando o parametro tem keyframes. O
+/// espaco existe SEMPRE, para o nome nao pular de lugar ao animar.
+class _PontoAnimado extends StatelessWidget {
+  const _PontoAnimado({required this.animated});
+
+  final bool animated;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 12,
+      child: animated
+          ? Center(
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AmColors.accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+/// Nome do parametro, selecionavel (fundo accentDim quando selecionado).
+class _NomeParam extends StatelessWidget {
+  const _NomeParam({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // A linha tem 58 px (altura da regua); sem altura propria o alvo do
+    // nome ficava com ~30 px e metade da linha nao selecionava o
+    // parametro — e selecionar e o que liga o diamante do trilho. 44 px
+    // e o minimo de toque do iOS e cabe sem crescer a linha; o `opaque`
+    // faz o padding transparente contar como toque.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 88,
+        height: 44,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AmColors.accentDim.withValues(alpha: 0.5)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 15,
+            color: selected ? AmColors.accent : AmColors.muted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Valor alinhado a direita com digitos tabulares: ao arrastar a regua o
+/// numero nao "danca" de largura.
+const _estiloValor = TextStyle(
+  fontSize: 14,
+  color: AmColors.text,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
 
 class _ParamRow extends StatelessWidget {
   const _ParamRow({
@@ -497,7 +857,7 @@ class _ParamRow extends StatelessWidget {
 
   final String paramKey;
   final String label;
-  final dynamic track; // AnimatedDouble
+  final AnimatedDouble track;
   final Duration local;
   final double min;
   final double max;
@@ -508,39 +868,19 @@ class _ParamRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double value = track.valueAt(local);
-    final bool animated = track.isAnimated;
-    final bool kfHere = track.hasKeyframeAt(local);
+    final value = track.valueAt(local);
+    final animated = track.isAnimated;
+    final kfHere = track.hasKeyframeAt(local);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
-          GestureDetector(
+          _PontoAnimado(animated: animated),
+          _NomeParam(
+            label: label,
+            selected: selected,
             onTap: () => onSelect(paramKey),
-            child: Container(
-              width: 88,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AmColors.accentDim.withValues(alpha: 0.5)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: selected ? AmColors.accent : AmColors.muted,
-                  decoration: TextDecoration.underline,
-                  decorationColor:
-                      selected ? AmColors.accent : AmColors.muted,
-                ),
-              ),
-            ),
           ),
           Expanded(
             child: AmTickRuler(
@@ -560,10 +900,118 @@ class _ParamRow extends StatelessWidget {
             child: Text(
               amNumber(value, value.abs() >= 10 ? 1 : 3),
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 14, color: AmColors.text),
+              style: _estiloValor,
             ),
           ),
           // Diamante do parametro ("keyframe em tudo").
+          CupertinoButton(
+            padding: const EdgeInsets.only(left: 8),
+            onPressed: onKeyframe,
+            child: Icon(
+              kfHere ? CupertinoIcons.rhombus_fill : CupertinoIcons.rhombus,
+              size: 24,
+              color: animated ? AmColors.accent : AmColors.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Par X/Y de um ponto numa linha so: duas reguas curtas e dois valores
+/// alinhados. A sensibilidade da regua e por pixel (unitsPerPixel), entao
+/// meia largura nao muda o arrasto — so o tanto de ticks visiveis.
+class _PointRow extends StatelessWidget {
+  const _PointRow({
+    required this.paramKey,
+    required this.label,
+    required this.xTrack,
+    required this.yTrack,
+    required this.local,
+    required this.xMin,
+    required this.xMax,
+    required this.yMin,
+    required this.yMax,
+    required this.selected,
+    required this.onSelect,
+    required this.onChangedX,
+    required this.onChangedY,
+    required this.onKeyframe,
+  });
+
+  final String paramKey;
+  final String label;
+  final AnimatedDouble xTrack;
+  final AnimatedDouble yTrack;
+  final Duration local;
+  final double xMin;
+  final double xMax;
+  final double yMin;
+  final double yMax;
+  final bool selected;
+  final ValueChanged<String> onSelect;
+  final ValueChanged<double> onChangedX;
+  final ValueChanged<double> onChangedY;
+  final VoidCallback onKeyframe;
+
+  @override
+  Widget build(BuildContext context) {
+    final x = xTrack.valueAt(local);
+    final y = yTrack.valueAt(local);
+    // Animado se qualquer eixo anima; "no cabecote" so se os DOIS tem
+    // keyframe aqui — senao o diamante cheio mentiria sobre um deles.
+    final animated = xTrack.isAnimated || yTrack.isAnimated;
+    final kfHere =
+        xTrack.hasKeyframeAt(local) && yTrack.hasKeyframeAt(local);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          _PontoAnimado(animated: animated),
+          _NomeParam(
+            label: label,
+            selected: selected,
+            onTap: () => onSelect(paramKey),
+          ),
+          Expanded(
+            child: AmTickRuler(
+              value: x,
+              min: xMin,
+              max: xMax,
+              unitsPerPixel: (xMax - xMin) / 400,
+              height: 58,
+              onChanged: (v) {
+                onSelect(paramKey);
+                onChangedX(v);
+              },
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: AmTickRuler(
+              value: y,
+              min: yMin,
+              max: yMax,
+              unitsPerPixel: (yMax - yMin) / 400,
+              height: 58,
+              onChanged: (v) {
+                onSelect(paramKey);
+                onChangedY(v);
+              },
+            ),
+          ),
+          SizedBox(
+            width: 44,
+            child: Text(amNumber(x, 2),
+                textAlign: TextAlign.right, style: _estiloValor),
+          ),
+          SizedBox(
+            width: 44,
+            child: Text(amNumber(y, 2),
+                textAlign: TextAlign.right, style: _estiloValor),
+          ),
           CupertinoButton(
             padding: const EdgeInsets.only(left: 8),
             onPressed: onKeyframe,
@@ -599,8 +1047,10 @@ class _ChoiceRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
+          // Mesma coluna do nome das linhas com regua (ponto + 88).
+          const SizedBox(width: 12),
           SizedBox(
-              width: 96,
+              width: 88,
               child: Text(label,
                   style: const TextStyle(
                       fontSize: 13, color: AmColors.muted))),
@@ -654,8 +1104,10 @@ class _SeedRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
+          // Mesma coluna do nome das linhas com regua (ponto + 88).
+          const SizedBox(width: 12),
           SizedBox(
-              width: 96,
+              width: 88,
               child: Text(label,
                   style: const TextStyle(
                       fontSize: 13, color: AmColors.muted))),
@@ -708,8 +1160,10 @@ class _ToggleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        // Mesma coluna do nome das linhas com regua (ponto + 88).
+        const SizedBox(width: 12),
         SizedBox(
-            width: 96,
+            width: 88,
             child: Text(label,
                 style: const TextStyle(
                     fontSize: 13, color: AmColors.muted))),
@@ -748,16 +1202,13 @@ class _ColorRow extends StatelessWidget {
       padding: const EdgeInsets.only(top: 6),
       child: Row(
         children: [
+          // Mesma coluna do nome das linhas com regua (ponto + 88).
+          const SizedBox(width: 12),
           const SizedBox(
             width: 88,
             child: Text(
               'Cor',
-              style: TextStyle(
-                fontSize: 13,
-                color: AmColors.muted,
-                decoration: TextDecoration.underline,
-                decorationColor: AmColors.muted,
-              ),
+              style: TextStyle(fontSize: 13, color: AmColors.muted),
             ),
           ),
           const Spacer(),

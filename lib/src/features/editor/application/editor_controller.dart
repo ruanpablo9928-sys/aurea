@@ -92,6 +92,10 @@ class EditorController extends Notifier<VideoProject> {
     _undoStack.clear();
     _redoStack.clear();
     ref.read(selectedLayerProvider.notifier).state = null;
+    // A selecao multipla tambem carrega ids do projeto anterior: sem
+    // limpar, o cabecalho abre verde ("2 camadas") sobre camadas que nao
+    // existem, e agrupar/excluir agem sobre ids mortos.
+    ref.read(multiSelectProvider.notifier).state = const {};
   }
 
   void renameProject(String name) => _mutate(state.copyWith(name: name));
