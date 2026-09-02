@@ -2175,6 +2175,49 @@ class EditorController extends Notifier<VideoProject> {
     ref.read(selectedLayerProvider.notifier).state = second.id;
   }
 
+  /// DIVIDE a camada em todos os [times] (globais), de uma vez.
+  ///
+  /// E o "decupar sozinho": os cortes que a deteccao de cena achou viram
+  /// pedacos na linha do tempo. Cada pedaco novo e a segunda metade do
+  /// anterior, entao a divisao segue em cadeia; tudo cai num passo so
+  /// de desfazer. Devolve os ids dos pedacos, na ordem do tempo.
+  List<String> splitLayerAtTimes(String id, Iterable<Duration> times) {
+    final ordenados = times.toList()..sort();
+    var atual = id;
+    final ids = <String>[id];
+    for (final t in ordenados) {
+      final layer = _layer(atual);
+      if (layer == null) break;
+      if (!layer.activeAt(t)) continue;
+      ref.read(selectedLayerProvider.notifier).state = atual;
+      splitLayer(atual, t);
+      final novo = ref.read(selectedLayerProvider);
+      if (novo != null && novo != atual) {
+        atual = novo;
+        ids.add(novo);
+      }
+    }
+    return ids;
+  }
+
+  /// MARCAS em varios instantes de uma vez, sem duplicar as que ja
+  /// existem perto. E o outro destino dos cortes de cena: marcar em vez
+  /// de cortar, para decidir depois.
+  void addMarkers(Iterable<Duration> times, {String label = ''}) {
+    const tol = Duration(milliseconds: 120);
+    final novos = <Marker>[];
+    for (final t in times) {
+      if (t < Duration.zero) continue;
+      if (state.markerNear(t, tol) != null) continue;
+      if (novos.any((m) => (m.time - t).abs() < tol)) continue;
+      novos.add(Marker(time: t, label: label));
+    }
+    if (novos.isEmpty) return;
+    final todos = [...state.markers, ...novos]
+      ..sort((a, b) => a.time.compareTo(b.time));
+    _mutate(state.copyWith(markers: todos));
+  }
+
   // -------------------------------------------------- transform + keyframes
 
   void editPosition(String id, Duration globalTime, Offset value) {
