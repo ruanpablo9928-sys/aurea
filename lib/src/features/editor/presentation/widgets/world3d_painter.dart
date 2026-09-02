@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../application/mesh_cache.dart';
 import '../../application/texture_cache.dart';
 import '../../domain/element3d.dart';
 import '../../domain/layer.dart';
@@ -89,10 +90,15 @@ class _MeshInfo {
   final List<List<List<double>>> smooth;
 }
 
-final Map<Element3DKind, _MeshInfo> _infoCache = {};
+final Map<Object, _MeshInfo> _infoCache = {};
 
-_MeshInfo _infoDe(Element3DKind kind, Element3DMesh mesh) =>
-    _infoCache[kind] ??= _buildInfo(mesh);
+/// Chave: o tipo do solido nativo, ou o caminho do modelo importado.
+_MeshInfo _infoDe(Object key, Element3DMesh mesh) {
+  final pronto = _infoCache[key];
+  if (pronto != null) return pronto;
+  if (_infoCache.length > 64) _infoCache.clear();
+  return _infoCache[key] = _buildInfo(mesh);
+}
 
 _MeshInfo _buildInfo(Element3DMesh mesh) {
   final normals = <List<double>>[];
@@ -164,8 +170,11 @@ class World3DPainter extends CustomPainter {
     for (var k = 0; k < items.length; k++) {
       final it = items[k];
       final l = it.layer;
-      final mesh = element3DMesh(l.kind);
-      final info = _infoDe(l.kind, mesh);
+      // Modelo importado, se ja chegou; senao o solido nativo.
+      final custom =
+          l.meshPath == null ? null : MeshCache.instance.meshFor(l.meshPath!);
+      final mesh = custom ?? element3DMesh(l.kind);
+      final info = _infoDe(custom == null ? l.kind : l.meshPath!, mesh);
       final img = images == null || k >= images.length ? null : images[k];
 
       final rx = it.rotXDeg * math.pi / 180;
@@ -216,7 +225,9 @@ class World3DPainter extends CustomPainter {
 
       // Subdivisao: triangulos grandes viram quatro, ate duas vezes, para
       // a ordenacao por profundidade acertar quando solidos se cruzam.
-      final limiar = items.length > 1 ? 70.0 : 1e9;
+      // Modelos importados grandes ja vem em triangulos pequenos.
+      final limiar =
+          items.length > 1 && mesh.faces.length <= 2000 ? 70.0 : 1e9;
       void emite(List<List<double>> v, int mask, int prof) {
         double dist(List<double> a, List<double> b) {
           final dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];

@@ -1853,6 +1853,7 @@ class Element3DLayer extends Layer {
     this.reflect = 0,
     this.environment = EnvironmentKind.estudio,
     this.imagePath,
+    this.meshPath,
     this.material = 0,
     this.gradient = const [
       Color(0xFF7A3FF2),
@@ -1897,6 +1898,10 @@ class Element3DLayer extends Layer {
   /// IMAGEM vestindo o solido (projecao de caixa), ou nula.
   final String? imagePath;
 
+  /// Modelo importado (OBJ/FBX): caminho do arquivo. Null = solido
+  /// nativo de [kind].
+  final String? meshPath;
+
   /// Material: 0 solido, 1 brilhante (degrade iridescente), 2 vidro,
   /// 3 metal, 4 fosco.
   final int material;
@@ -1916,6 +1921,8 @@ class Element3DLayer extends Layer {
     EnvironmentKind? environment,
     String? imagePath,
     bool clearImage = false,
+    String? meshPath,
+    bool clearMesh = false,
     int? material,
     List<Color>? gradient,
     double? shininess,
@@ -1932,6 +1939,7 @@ class Element3DLayer extends Layer {
       reflect: reflect ?? this.reflect,
       environment: environment ?? this.environment,
       imagePath: clearImage ? null : (imagePath ?? this.imagePath),
+      meshPath: clearMesh ? null : (meshPath ?? this.meshPath),
       material: material ?? this.material,
       gradient: gradient ?? this.gradient,
       shininess: shininess ?? this.shininess,
@@ -1992,6 +2000,7 @@ class Element3DLayer extends Layer {
       reflect: reflect,
       environment: environment,
       imagePath: imagePath,
+      meshPath: meshPath,
       material: material,
       gradient: gradient,
       shininess: shininess,
@@ -2029,6 +2038,7 @@ class Element3DLayer extends Layer {
       reflect: reflect,
       environment: environment,
       imagePath: imagePath,
+      meshPath: meshPath,
       material: material,
       gradient: gradient,
       shininess: shininess,

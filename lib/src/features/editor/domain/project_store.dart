@@ -982,6 +982,7 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['reflect'] = e.reflect;
       base['env'] = e.environment.index;
       if (e.imagePath != null) base['img'] = e.imagePath;
+      if (e.meshPath != null) base['mesh'] = e.meshPath;
       base['mat'] = e.material;
       base['grad'] = [for (final c in e.gradient) _col(c)];
       base['shine'] = e.shininess;
@@ -1509,6 +1510,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         environment: EnvironmentKind.values[
             ((m['env'] as num?)?.toInt() ?? 0).clamp(0, EnvironmentKind.values.length - 1)],
         imagePath: m['img'] as String?,
+        meshPath: m['mesh'] as String?,
         material: (m['mat'] as num?)?.toInt() ?? 0,
         gradient: m['grad'] is List && (m['grad'] as List).length >= 2
             ? [for (final c in m['grad'] as List) _asCol(c)]

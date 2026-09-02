@@ -34,6 +34,7 @@ import '../../domain/bloom.dart';
 import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'world3d_painter.dart';
+import '../../application/mesh_cache.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
 import 'preview_raster.dart';
@@ -1163,9 +1164,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     }
     return Positioned.fill(
       child: IgnorePointer(
-        child: ValueListenableBuilder<int>(
-          valueListenable: TextureCache.instance.revision,
-          builder: (_, _, _) => CustomPaint(
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            TextureCache.instance.revision,
+            MeshCache.instance.revision,
+          ]),
+          builder: (_, _) => CustomPaint(
             painter: World3DPainter(items: items),
           ),
         ),
@@ -3616,9 +3620,12 @@ class _LayerContent extends StatelessWidget {
         ),
       // Elemento 3D: vertices girados no espaco dentro do pintor (como
       // as particulas) — nada de inclinar o canvas como um cartao.
-      Element3DLayer l => ValueListenableBuilder<int>(
-            valueListenable: TextureCache.instance.revision,
-            builder: (_, _, _) => CustomPaint(
+      Element3DLayer l => ListenableBuilder(
+            listenable: Listenable.merge([
+              TextureCache.instance.revision,
+              MeshCache.instance.revision,
+            ]),
+            builder: (_, _) => CustomPaint(
           size: const Size(620, 620),
           painter: World3DPainter(items: [
             World3DItem(

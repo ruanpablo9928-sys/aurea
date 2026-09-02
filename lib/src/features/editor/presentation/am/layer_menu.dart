@@ -1,5 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
+
+import '../../application/mesh_cache.dart';
+import '../../domain/mesh_import.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -2301,6 +2304,64 @@ Future<void> showElement3DSheet(
                   ],
                 ),
                 const SizedBox(height: 12),
+                // MODELO IMPORTADO: OBJ ou FBX (ASCII) no lugar do solido.
+                Row(
+                  children: [
+                    const SizedBox(
+                        width: 86,
+                        child: Text('Modelo',
+                            style: TextStyle(
+                                fontSize: 13, color: AmColors.muted))),
+                    Expanded(
+                      child: Text(
+                        _descricaoDoModelo(layer),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, color: AmColors.text),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () async {
+                        await _escolherModelo3D(sheetContext, ref, layerId);
+                        setSheetState(() {});
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AmColors.chip,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(CupertinoIcons.cube_box,
+                                size: 16, color: AmColors.accent),
+                            SizedBox(width: 6),
+                            Text('OBJ / FBX',
+                                style: TextStyle(
+                                    fontSize: 12, color: AmColors.accent)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (layer.meshPath != null)
+                      GestureDetector(
+                        onTap: () {
+                          controller.updateElement3D(layerId,
+                              (e) => e.copyElement3D(clearMesh: true));
+                          setSheetState(() {});
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(CupertinoIcons.xmark_circle_fill,
+                              size: 20, color: AmColors.muted),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 // IMAGEM NO SOLIDO: uma foto ou logo vestindo as faces.
                 Row(
                   children: [
@@ -4321,6 +4382,89 @@ Future<void> showExtrudeSheet(
           ),
         );
       },
+    ),
+  );
+}
+
+String _descricaoDoModelo(Element3DLayer layer) {
+  final caminho = layer.meshPath;
+  if (caminho == null) return 'Solido nativo';
+  final nome = caminho.split(RegExp(r'[\\/]')).last;
+  final r = MeshCache.instance.resultFor(caminho);
+  if (r != null) return '$nome · ${r.faceCount} faces';
+  final erro = MeshCache.instance.errorFor(caminho);
+  if (erro != null) return '$nome · nao carregou';
+  return '$nome · carregando...';
+}
+
+/// Escolhe um OBJ/FBX, le fora da UI, avisa se for pesado e aplica.
+Future<void> _escolherModelo3D(
+    BuildContext context, WidgetRef ref, String layerId) async {
+  final controller = ref.read(editorControllerProvider.notifier);
+  final r = await FilePicker.platform.pickFiles(type: FileType.any);
+  final caminho = r?.files.single.path;
+  if (caminho == null) return;
+  final ext = caminho.split('.').last.toLowerCase();
+  if (!context.mounted) return;
+  if (ext != 'obj' && ext != 'fbx') {
+    await _avisoModelo(context, 'Formato nao suportado',
+        'Escolha um arquivo .obj ou .fbx (ASCII).');
+    return;
+  }
+  MeshImportResult resultado;
+  try {
+    resultado = await MeshCache.instance.load(caminho);
+  } on MeshImportException catch (e) {
+    if (!context.mounted) return;
+    await _avisoModelo(context, 'Nao deu para importar', e.message);
+    return;
+  }
+  if (!context.mounted) return;
+  if (resultado.heavy) {
+    final segue = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (c) => CupertinoAlertDialog(
+        title: const Text('Modelo pesado'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            '${resultado.faceCount} faces'
+            '${resultado.truncated ? ' (o app usa as primeiras $kMeshFacesMax)' : ''}. '
+            'Modelos assim podem travar em celulares fracos; em aparelhos '
+            'potentes rodam bem. Importar mesmo assim?',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+              onPressed: () => Navigator.of(c).pop(false),
+              child: const Text('Cancelar')),
+          CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(c).pop(true),
+              child: const Text('Importar')),
+        ],
+      ),
+    );
+    if (segue != true) return;
+  }
+  controller.updateElement3D(
+      layerId, (e) => e.copyElement3D(meshPath: caminho));
+}
+
+Future<void> _avisoModelo(
+    BuildContext context, String titulo, String texto) async {
+  await showCupertinoDialog<void>(
+    context: context,
+    builder: (c) => CupertinoAlertDialog(
+      title: Text(titulo),
+      content: Padding(
+          padding: const EdgeInsets.only(top: 8), child: Text(texto)),
+      actions: [
+        CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(c).pop(),
+            child: const Text('OK')),
+      ],
     ),
   );
 }
