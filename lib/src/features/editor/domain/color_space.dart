@@ -52,6 +52,16 @@ double radiusToPixels(double fraction, int compWidth, int compHeight) {
   return fraction.clamp(0.0, 4.0) * menorLado;
 }
 
+/// UM VALOR PENSADO EM 1080p, convertido para esta composicao.
+///
+/// Alguns controles nasceram medidos em pixel — amplitude de tremor,
+/// deslocamento de canal. Trocar a unidade quebraria todo projeto ja
+/// salvo, e nao e preciso: basta dizer em que resolucao aquele numero
+/// foi pensado. Em 1080p o resultado e exatamente o de antes; em 4K
+/// dobra, que e o mesmo tamanho APARENTE.
+double pxAt1080(double px, int compWidth, int compHeight) =>
+    radiusToPixels(px / 1080.0, compWidth, compHeight);
+
 /// O caminho de volta, para a interface mostrar o numero em pixel.
 double pixelsToRadius(double pixels, int compWidth, int compHeight) {
   final menorLado = math.min(compWidth, compHeight).toDouble();

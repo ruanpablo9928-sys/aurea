@@ -1816,7 +1816,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         case EffectType.tremor:
           // SHAKE: fase INTEGRADA no tempo, componentes aleatoria e de
           // onda separadas por eixo, e canais RGB com fase propria.
-          final amp = effect.paramAt('amplitude', local) * 60;
+          // A AMPLITUDE ERA PIXEL CRU, e a ficha ja dizia que era
+          // relativa. Um tremor de "1" sacudia 60 px em qualquer
+          // resolucao: em 4K isso e metade do tremor aparente de 1080p,
+          // e o mesmo projeto exportado em duas resolucoes tremia
+          // diferente. Em 1080p o resultado continua identico.
+          final amp = pxAt1080(
+              effect.paramAt('amplitude', local) * 60, fxWidth, fxHeight);
           final style = effect.paramAt('style', local).round().clamp(0, 2);
           final seed = effect.paramAt('seed', local).round();
           final phase = integratedPhase(effect.track('frequency'), local) +
@@ -2022,8 +2028,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           }
 
         case EffectType.rgbSplit:
-          final d =
-              effect.paramAt('deslocamento', local).clamp(0.0, 100.0);
+          // Mesma historia do tremor: deslocamento em pixel cru, com a
+          // ficha dizendo relativo. Em 1080p nada muda.
+          final d = pxAt1080(
+              effect.paramAt('deslocamento', local).clamp(0.0, 100.0),
+              fxWidth,
+              fxHeight);
           if (d > 0.2) {
             final ang =
                 effect.paramAt('angulo', local) * math.pi / 180;
