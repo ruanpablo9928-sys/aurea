@@ -336,6 +336,19 @@ class BendPainter extends _FxPainter {
 /// interface derrubaria o preview. O caminho certo e o mesmo do Blob
 /// Tracker — analisar sob comando e guardar o resultado — e esta
 /// anotado como pendente, nao disfarcado.
+/// O QUE ESTE PINTOR NAO FAZ, e por que.
+///
+/// Ele nao le um pixel sequer: escolhe as linhas por ruido semeado e
+/// estica fatias da foto da camada. Isso e o que permite ele rodar em
+/// tempo real — e tambem o que torna impossivel "ordenar por matiz" ou
+/// "por saturacao", que exigiriam trazer a imagem para a CPU
+/// (`toByteData`) e ordenar de verdade, a cada quadro.
+///
+/// Os controles de ordenacao por conteudo foram TIRADOS da ficha por
+/// isso. Controle que nunca vai poder funcionar e pior que controle que
+/// nao existe: a pessoa mexe, o numero muda, a imagem nao, e ela conclui
+/// que o efeito esta quebrado. Quando houver um caminho por shader que
+/// leia a imagem, eles voltam.
 class PixelSortPainter extends _FxPainter {
   PixelSortPainter({
     required this.mode,

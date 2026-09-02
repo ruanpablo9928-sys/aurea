@@ -200,12 +200,6 @@ void main() {
         // um seletor de imagem que nao existe.
         'glowVol expoe "tonemapping" e nunca le',
         'glowVol expoe "lens_dirt_amount" e nunca le',
-        // Pixel Sorter: ordenar por matiz/saturacao e resolver em outra
-        // resolucao exigem mexer no pintor, nao so passar o valor.
-        'pixelSort expoe "sort_by" e nunca le',
-        'pixelSort expoe "sort_resolution" e nunca le',
-        'pixelSort expoe "downsample" e nunca le',
-        'pixelSort expoe "blur_threshold_matte" e nunca le',
       };
 
       final novos = mortos.where((m) => !divida.contains(m)).toList();

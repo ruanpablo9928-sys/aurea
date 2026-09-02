@@ -727,15 +727,7 @@ const effectSpecs = <EffectType, EffectSpec>{
           options: ['Below Threshold', 'Above Threshold']),
       'reverse_sort': EffectParam('Reverse Sort', 0.0, 0.0, 1.0,
           kind: ParamKind.toggle),
-      'sort_by': EffectParam('Sort By', 0.0, 0.0, 9.0,
-          kind: ParamKind.choice,
-          options: [
-            'Monochrome', 'Average', 'Minimum', 'Maximum', 'Red',
-            'Green', 'Blue', 'Hue', 'Saturation', 'Brightness',
-          ]),
       'random_restart': EffectParam('Random Restart', 100.0, 0.0, 1000.0),
-      'blur_threshold_matte':
-          EffectParam('Blur Threshold Matte', 0.1, 0.0, 5.0),
       'seed': EffectParam('Seed', 0.273, 0.0, 999.0,
           kind: ParamKind.seed),
       'blend_with_original':
@@ -743,9 +735,6 @@ const effectSpecs = <EffectType, EffectSpec>{
       // LIGADO por padrao: ordenacao e sequencial e e o efeito mais
       // hostil a GPU da lista. Em 720 o resultado e o mesmo e o preview
       // continua andando.
-      'downsample': EffectParam('Downsample', 1.0, 0.0, 1.0,
-          kind: ParamKind.toggle),
-      'sort_resolution': EffectParam('Sort Resolution', 720.0, 64.0, 4320.0),
       'show': EffectParam('Show', 0.0, 0.0, 3.0,
           kind: ParamKind.choice,
           options: [
