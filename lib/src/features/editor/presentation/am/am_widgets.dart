@@ -217,7 +217,15 @@ class AmValueChip extends StatelessWidget {
 
 /// Regua de ticks arrastavel (scrub fino de valor): os ticks deslizam com o
 /// valor e o indicador central fica fixo.
-class AmTickRuler extends StatelessWidget {
+///
+/// O arrasto ACUMULA desde o inicio do gesto: valor = valor no toque -
+/// deslocamento total x sensibilidade. Aplicar cada delta em cima de
+/// [value] parece igual, mas [value] so muda quando o dono reconstroi —
+/// e chegam dois ou tres eventos de movimento por quadro. Cada evento
+/// a mais no mesmo quadro era descartado: um arrasto rapido de 300 px
+/// virava o ultimo deltazinho de 3 px, e a superficie de arrasto
+/// parecia "nao pegar".
+class AmTickRuler extends StatefulWidget {
   const AmTickRuler({
     super.key,
     required this.value,
@@ -240,19 +248,34 @@ class AmTickRuler extends StatelessWidget {
   final double max;
 
   @override
+  State<AmTickRuler> createState() => _AmTickRulerState();
+}
+
+class _AmTickRulerState extends State<AmTickRuler> {
+  double _inicio = 0;
+  double _acumulado = 0;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: (d) =>
-          onChanged((value - d.delta.dx * unitsPerPixel).clamp(min, max)),
+      onHorizontalDragStart: (_) {
+        _inicio = widget.value;
+        _acumulado = 0;
+      },
+      onHorizontalDragUpdate: (d) {
+        _acumulado += d.delta.dx;
+        widget.onChanged((_inicio - _acumulado * widget.unitsPerPixel)
+            .clamp(widget.min, widget.max));
+      },
       child: SizedBox(
-        height: height,
+        height: widget.height,
         width: double.infinity,
         child: CustomPaint(
           painter: _TickRulerPainter(
-            value: value,
-            unitsPerPixel: unitsPerPixel,
-            accentCenter: accentCenter,
+            value: widget.value,
+            unitsPerPixel: widget.unitsPerPixel,
+            accentCenter: widget.accentCenter,
           ),
         ),
       ),
