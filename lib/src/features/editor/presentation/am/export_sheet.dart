@@ -227,14 +227,15 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                                   fontSize: 12, color: AmColors.muted)),
                         ),
                         Expanded(
-                          child: CupertinoSlider(
-                            value: ajustes.bitrateMbps!.clamp(1, 120),
-                            min: 1,
-                            max: 120,
-                            activeColor: AmColors.accent,
-                            onChanged: (v) => setSheetState(() =>
+                          child: AmTickRuler(
+  value: ajustes.bitrateMbps!.clamp(1, 120),
+  min: 1,
+  max: 120,
+  unitsPerPixel: ((120) - (1)) / 420,
+  height: 40,
+  onChanged: (v) => setSheetState(() =>
                                 ajustes = ajustes.copyWith(bitrateMbps: v)),
-                          ),
+),
                         ),
                         SizedBox(
                           width: 66,

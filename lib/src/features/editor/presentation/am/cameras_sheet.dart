@@ -95,13 +95,15 @@ Future<void> showCamerasSheet(
                               fontSize: 12, color: AmColors.muted)),
                     ),
                     Expanded(
-                      child: CupertinoSlider(
-                        value: transicao,
-                        max: 3,
-                        activeColor: AmColors.accent,
-                        onChanged: (v) =>
+                      child: AmTickRuler(
+  value: transicao,
+  min: 0,
+  max: 3,
+  unitsPerPixel: ((3) - (0)) / 420,
+  height: 40,
+  onChanged: (v) =>
                             setSheetState(() => transicao = v),
-                      ),
+),
                     ),
                     SizedBox(
                       width: 66,

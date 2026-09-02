@@ -33,6 +33,7 @@ import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
+import 'dither_layer.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import 'scene3d_painter.dart';
@@ -198,24 +199,32 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // SEM DITHERING NO PREVIEW.
+                          // DITHERING NO PREVIEW, so sem video na cena.
                           //
-                          // O dithering precisa fotografar a composicao
-                          // para rodar o shader em cima, e essa foto e um
-                          // raster guardado: quando a cena muda, ele
-                          // continua mostrando o quadro velho. Na
-                          // pratica: apagar uma camada e ela continuar na
-                          // tela, dar play e nada andar, acrescentar uma
-                          // camada e nao ver nada.
+                          // Sombra ampla sobre fundo escuro BANDEIA em 8
+                          // bits, e gradiente suave e metade do visual
+                          // "Apple". O dithering resolve — mas ele
+                          // fotografa a composicao para rodar o shader,
+                          // e a textura de video nao entra nessa foto
+                          // (vira buraco preto). Entao: cena so de
+                          // grafismo ganha dithering; cena com video
+                          // fica sem, e o dithering dela acontece na
+                          // exportacao, onde o video chega como imagem.
                           //
-                          // O preview e vivo; ele nao pode depender de
-                          // uma foto. O dithering continua onde ele
-                          // importa de verdade e onde o quadro e
-                          // desenhado uma vez so: na EXPORTACAO.
-                          CompositionView(
-                            time: widget.playback.time,
-                            videos: widget.videos,
-                            selectedId: selectedId,
+                          // A foto e refeita a cada reconstrucao (a
+                          // invalidacao do FxSnapshot); sem isso o preview
+                          // congelava no primeiro quadro.
+                          ValueListenableBuilder<Duration>(
+                            valueListenable: widget.playback.time,
+                            builder: (context, t, child) => project.layers
+                                    .any((l) => l is VideoLayer)
+                                ? child!
+                                : DitherLayer(time: t, child: child!),
+                            child: CompositionView(
+                              time: widget.playback.time,
+                              videos: widget.videos,
+                              selectedId: selectedId,
+                            ),
                           ),
                           // CASCA DE CEBOLA: os quadros vizinhos,
                           // fantasmas, ATRAS do quadro atual. Passado

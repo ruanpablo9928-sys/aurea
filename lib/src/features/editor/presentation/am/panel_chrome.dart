@@ -18,49 +18,130 @@ import 'am_widgets.dart';
 ///                    enquadramento pula debaixo do dedo.
 ///   ABAS EM FILEIRA  trocar de parametro e UM toque lateral, nao
 ///                    voltar-e-entrar. Com indicador de que ha mais.
-///   ACOES FIXAS      as cinco acoes de keyframe sempre na mesma posicao,
-///                    na mesma ordem. Memoria muscular so existe se o
-///                    botao nao anda.
-///   TRILHA TOCAVEL   diz onde a pessoa esta e volta um nivel.
+///   TRILHO FIXO      voltar, keyframe, curva e mais num trilho vertical
+///                    a esquerda, na mesma posicao em toda aba. Memoria
+///                    muscular so existe se o botao nao anda.
 class AmPanelChrome extends StatelessWidget {
   const AmPanelChrome({
     super.key,
-    required this.trilha,
     required this.onBack,
     required this.corpo,
+    required this.animado,
+    required this.temKfAqui,
+    required this.onCravar,
+    this.onCurva,
+    this.onMais,
     this.abas = const [],
     this.abaAtiva,
     this.onAba,
-    this.acoes,
   });
 
-  /// "Estrela 2 · Mover e transformar".
-  final String trilha;
   final VoidCallback onBack;
   final Widget corpo;
+
+  /// O parametro em edicao tem keyframes / tem keyframe neste instante.
+  final bool animado;
+  final bool temKfAqui;
+  final VoidCallback onCravar;
+  final VoidCallback? onCurva;
+  final VoidCallback? onMais;
 
   final List<ParamTab> abas;
   final String? abaAtiva;
   final ValueChanged<String>? onAba;
 
-  /// A fileira fixa de acoes. Normalmente [AmKeyframeActions].
-  final Widget? acoes;
-
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: AmColors.panel,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // TRILHO ESQUERDO FIXO. Troca-se de aba pela fileira e o
+          // diamante nao sai do lugar — e o que faz memoria muscular.
+          AmLeftRail(
+            onBack: onBack,
+            animado: animado,
+            temKfAqui: temKfAqui,
+            onCravar: onCravar,
+            onCurva: onCurva,
+            onMais: onMais,
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                if (abas.isNotEmpty)
+                  AmParamTabs(
+                    abas: abas,
+                    ativa: abaAtiva,
+                    onAba: onAba ?? (_) {},
+                  ),
+                Expanded(child: corpo),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// O TRILHO ESQUERDO: `← ◆ ⌇ ⋯`, na mesma posicao em todo painel.
+///
+/// Voltar, cravar keyframe, curva de easing, mais. Acao indisponivel
+/// fica esmaecida, nunca some: botao que aparece e some troca o lugar
+/// dos vizinhos, e a memoria muscular vira chute. Navegar entre
+/// keyframes nao mora aqui: e tocar no diamante da barra da camada.
+class AmLeftRail extends StatelessWidget {
+  const AmLeftRail({
+    super.key,
+    required this.onBack,
+    required this.animado,
+    required this.temKfAqui,
+    required this.onCravar,
+    this.onCurva,
+    this.onMais,
+  });
+
+  final VoidCallback onBack;
+  final bool animado;
+  final bool temKfAqui;
+  final VoidCallback onCravar;
+  final VoidCallback? onCurva;
+  final VoidCallback? onMais;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 56,
       child: Column(
         children: [
-          _Trilha(texto: trilha, onBack: onBack),
-          if (abas.isNotEmpty)
-            AmParamTabs(
-              abas: abas,
-              ativa: abaAtiva,
-              onAba: onAba ?? (_) {},
+          AmRailButton(
+            onTap: onBack,
+            child: const Icon(CupertinoIcons.chevron_back,
+                size: 24, color: AmColors.text),
+          ),
+          AmRailButton(
+            onTap: onCravar,
+            child: AmDiamondAdd(active: animado, filled: temKfAqui),
+          ),
+          AmRailButton(
+            onTap: animado ? onCurva : null,
+            child: Opacity(
+              opacity: animado && onCurva != null ? 1 : 0.32,
+              child: AmCurveIcon(
+                  color: animado ? AmColors.text : AmColors.muted),
             ),
-          Expanded(child: corpo),
-          ?acoes,
+          ),
+          const Spacer(),
+          AmRailButton(
+            onTap: onMais,
+            child: Opacity(
+              opacity: onMais != null ? 1 : 0.32,
+              child: const Icon(CupertinoIcons.ellipsis,
+                  size: 20, color: AmColors.text),
+            ),
+          ),
         ],
       ),
     );
@@ -81,50 +162,6 @@ class ParamTab {
   /// Tem keyframes: a aba ganha um ponto, para se achar o que ja foi
   /// animado sem entrar em cada uma.
   final bool animated;
-}
-
-/// A trilha: onde a pessoa esta, e o caminho de volta.
-class _Trilha extends StatelessWidget {
-  const _Trilha({required this.texto, required this.onBack});
-
-  final String texto;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onBack,
-      // Deslizar para baixo tambem fecha. O corpo do painel fica de
-      // fora do gesto de proposito: la dentro vertical e arrastar
-      // valor, e roubar esse gesto seria pior que nao ter o atalho.
-      onVerticalDragEnd: (d) {
-        if ((d.primaryVelocity ?? 0) > 300) onBack();
-      },
-      child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AmColors.hairline)),
-        ),
-        child: Row(
-          children: [
-            const Icon(CupertinoIcons.chevron_back,
-                size: 15, color: AmColors.muted),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                texto,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AmColors.muted),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// FILEIRA DE ABAS horizontal e rolavel, com indicador nas pontas.
@@ -288,112 +325,6 @@ class _Aba extends StatelessWidget {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// AS CINCO ACOES DE KEYFRAME, sempre nesta ordem e nesta posicao.
-///
-/// `‹◆  ◆  ◆›  ∿  ↺` — keyframe anterior, cravar aqui, proximo, curva,
-/// resetar. Acao indisponivel fica ESMAECIDA, nunca some: botao que
-/// aparece e some troca o lugar dos vizinhos, e ai a memoria muscular
-/// vira chute.
-class AmKeyframeActions extends StatelessWidget {
-  const AmKeyframeActions({
-    super.key,
-    required this.animado,
-    required this.temKfAqui,
-    required this.onAnterior,
-    required this.onCravar,
-    required this.onProximo,
-    required this.onCurva,
-    required this.onResetar,
-  });
-
-  final bool animado;
-  final bool temKfAqui;
-  final VoidCallback? onAnterior;
-  final VoidCallback onCravar;
-  final VoidCallback? onProximo;
-  final VoidCallback? onCurva;
-  final VoidCallback onResetar;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 46,
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AmColors.hairline)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _Acao(
-            onTap: animado ? onAnterior : null,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.chevron_left, size: 13),
-                Icon(CupertinoIcons.rhombus, size: 13),
-              ],
-            ),
-          ),
-          _Acao(
-            onTap: onCravar,
-            destaque: true,
-            child: AmDiamondAdd(active: animado, filled: temKfAqui),
-          ),
-          _Acao(
-            onTap: animado ? onProximo : null,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.rhombus, size: 13),
-                Icon(CupertinoIcons.chevron_right, size: 13),
-              ],
-            ),
-          ),
-          _Acao(
-            onTap: animado ? onCurva : null,
-            child: AmCurveIcon(
-                color: animado ? AmColors.text : AmColors.muted),
-          ),
-          _Acao(
-            onTap: onResetar,
-            child: const Icon(CupertinoIcons.arrow_counterclockwise, size: 17),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Acao extends StatelessWidget {
-  const _Acao({required this.child, this.onTap, this.destaque = false});
-
-  final Widget child;
-  final VoidCallback? onTap;
-  final bool destaque;
-
-  @override
-  Widget build(BuildContext context) {
-    final ligado = onTap != null;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: 56,
-        height: 46,
-        alignment: Alignment.center,
-        child: Opacity(
-          opacity: ligado ? 1 : 0.32,
-          child: IconTheme(
-            data: IconThemeData(
-                color: destaque ? AmColors.text : AmColors.muted),
-            child: child,
-          ),
         ),
       ),
     );

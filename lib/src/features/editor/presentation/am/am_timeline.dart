@@ -1067,22 +1067,25 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                 // consegue tocar vira enigma: de quem e essa? So `onTap`
                 // — arrastar continua movendo o clipe, porque um
                 // reconhecedor de toque perde a arena para um de arrasto.
-                child: (active || onForeignKeyframe == null)
-                    ? IgnorePointer(
-                        child: Center(
-                            child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 11),
-                                child: marca)))
-                    : GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => onForeignKeyframe!(grupo.times.first),
-                        child: Center(
-                            child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 11),
-                                child: marca)),
-                      ),
+                // O diamante ACESO leva o cabecote ate ele: e como se
+                // navega de keyframe em keyframe no Alight Motion, tocando
+                // na barra. Sem botao de anterior/proximo, sem menu.
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (active) {
+                      playback.pause();
+                      playback.seek(layer.startTime + grupo.times.first);
+                    } else {
+                      onForeignKeyframe?.call(grupo.times.first);
+                    }
+                  },
+                  child: Center(
+                      child: Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 11),
+                          child: marca)),
+                ),
               );
             }),
           // Setas de navegacao entre camadas (paginas de ferramenta).

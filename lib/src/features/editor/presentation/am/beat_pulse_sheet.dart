@@ -115,14 +115,15 @@ Future<void> showBeatPulseSheet(
                                 fontSize: 12, color: AmColors.muted)),
                       ),
                       Expanded(
-                        child: CupertinoSlider(
-                          value: forca,
-                          min: 0.02,
-                          max: 0.6,
-                          activeColor: AmColors.accent,
-                          onChanged: (v) =>
+                        child: AmTickRuler(
+  value: forca,
+  min: 0.02,
+  max: 0.6,
+  unitsPerPixel: ((0.6) - (0.02)) / 420,
+  height: 40,
+  onChanged: (v) =>
                               setSheetState(() => forca = v),
-                        ),
+),
                       ),
                       SizedBox(
                         width: 56,

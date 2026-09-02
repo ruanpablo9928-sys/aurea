@@ -11,6 +11,7 @@ import '../../application/editor_controller.dart';
 import '../../application/media_preview_service.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
+import 'am_widgets.dart';
 import 'clip_preview_painters.dart';
 
 /// MODO DECUPAGEM: a tela de escolher o que fica.
@@ -746,13 +747,14 @@ class _Deslize extends StatelessWidget {
                     fontSize: 12, color: AmColors.muted)),
           ),
           Expanded(
-            child: CupertinoSlider(
-              value: valor.clamp(min, max),
-              min: min,
-              max: max,
-              activeColor: AmColors.accent,
-              onChanged: onChanged,
-            ),
+            child: AmTickRuler(
+  value: valor.clamp(min, max),
+  min: min,
+  max: max,
+  unitsPerPixel: ((max) - (min)) / 420,
+  height: 40,
+  onChanged: onChanged,
+),
           ),
           SizedBox(
             width: 62,

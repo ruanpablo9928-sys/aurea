@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter/scheduler.dart';
@@ -31,6 +32,14 @@ class CurvePanel extends ConsumerStatefulWidget {
 
 class _CurvePanelState extends ConsumerState<CurvePanel> {
   bool _overshoot = false;
+
+  /// GRAFICO DE VELOCIDADE em vez do de valor.
+  ///
+  /// A curva em S que da o timing "Apple" — desaceleracao forte nas duas
+  /// pontas — se molda olhando a VELOCIDADE: la a desaceleracao e uma
+  /// rampa que se ve; no grafico de valor ela e uma curvinha que se
+  /// adivinha. Sao a mesma bezier vista de dois jeitos: aqui a derivada.
+  bool _velocidade = false;
 
   /// O ULTIMO TRECHO MOSTRADO, em tempo local da camada.
   ///
@@ -218,6 +227,15 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                       child: const Icon(CupertinoIcons.arrow_2_squarepath,
                           size: 22, color: AmColors.text),
                     ),
+                    // VALOR / VELOCIDADE: o mesmo segmento, visto pela
+                    // derivada. E onde a curva em S se ajusta de verdade.
+                    AmRailButton(
+                      selected: _velocidade,
+                      onTap: () => setState(() => _velocidade = !_velocidade),
+                      child: Icon(CupertinoIcons.speedometer,
+                          size: 20,
+                          color: _velocidade ? AmColors.accent : AmColors.text),
+                    ),
                     AmRailButton(
                       onTap: () => _showMenu(context, id, ease),
                       child: const Icon(CupertinoIcons.ellipsis,
@@ -236,13 +254,22 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                           // Esmaecido diz "isto nao e o que esta sob o
                           // cabecote agora" sem sumir com a curva.
                           opacity: foraDoTrecho ? 0.45 : 1,
-                          child: _CurveGraph(
-                            ease: ease,
-                            overshootEnabled: _overshoot,
-                            percorrido: percorrido,
-                            onBezierChanged: (e) => controller.setSegmentEase(
-                                id, widget.prop, segment!.$1, e),
-                          ),
+                          child: _velocidade
+                              ? _SpeedGraph(
+                                  ease: ease,
+                                  percorrido: percorrido,
+                                  onBezierChanged: (e) =>
+                                      controller.setSegmentEase(
+                                          id, widget.prop, segment!.$1, e),
+                                )
+                              : _CurveGraph(
+                                  ease: ease,
+                                  overshootEnabled: _overshoot,
+                                  percorrido: percorrido,
+                                  onBezierChanged: (e) =>
+                                      controller.setSegmentEase(
+                                          id, widget.prop, segment!.$1, e),
+                                ),
                         ),
                       ),
                       SizedBox(
@@ -651,6 +678,181 @@ class _CurveGraph extends StatelessWidget {
       },
     );
   }
+}
+
+/// GRAFICO DE VELOCIDADE: a derivada da bezier de easing, editavel.
+///
+/// Dois pontos: a velocidade de SAIDA do keyframe inicial e a de CHEGADA
+/// no final, cada um com a sua influencia (quanto do trecho ele domina).
+/// Numa bezier de easing com alcas (x1,y1) e (x2,y2), a velocidade
+/// inicial e y1/x1, a final e (1-y2)/(1-x2), e as influencias sao x1 e
+/// 1-x2. Arrastar um ponto na horizontal muda a influencia; na vertical,
+/// a velocidade. A curva de VALOR e reconstruida na hora — e a mesma
+/// bezier, entao trocar de grafico nunca perde nada.
+class _SpeedGraph extends StatelessWidget {
+  const _SpeedGraph({
+    required this.ease,
+    required this.onBezierChanged,
+    this.percorrido,
+  });
+
+  final Easing ease;
+  final ValueChanged<Easing> onBezierChanged;
+  final double? percorrido;
+
+  /// Velocidade maxima mostrada, em "vezes a velocidade media".
+  static const double _vMax = 4.0;
+
+  static double _vIni(Easing e) =>
+      e.x1 <= 1e-4 ? _vMax : (e.y1 / e.x1).clamp(0.0, _vMax);
+  static double _vFim(Easing e) =>
+      (1 - e.x2) <= 1e-4 ? _vMax : ((1 - e.y2) / (1 - e.x2)).clamp(0.0, _vMax);
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, c) {
+      final size = Size(c.maxWidth, c.maxHeight);
+      Offset plot(double x, double v) =>
+          Offset(x * size.width, size.height - v / _vMax * size.height);
+
+      final pIni = plot(ease.x1, _vIni(ease));
+      final pFim = plot(ease.x2, _vFim(ease));
+
+      void drag(DragUpdateDetails d) {
+        final p = d.localPosition;
+        final pertoIni =
+            (p - pIni).distanceSquared <= (p - pFim).distanceSquared;
+        final x = (p.dx / size.width).clamp(0.02, 0.98);
+        final v = ((size.height - p.dy) / size.height * _vMax)
+            .clamp(0.0, _vMax);
+        if (pertoIni) {
+          // influencia = x1; velocidade inicial = y1/x1 -> y1 = v * x1.
+          final x1 = math.min(x, ease.x2 - 0.02);
+          onBezierChanged(ease.copyWith(x1: x1, y1: (v * x1).clamp(-2.0, 2.0)));
+        } else {
+          // influencia = 1-x2; velocidade final = (1-y2)/(1-x2).
+          final x2 = math.max(x, ease.x1 + 0.02);
+          onBezierChanged(
+              ease.copyWith(x2: x2, y2: (1 - v * (1 - x2)).clamp(-1.0, 3.0)));
+        }
+      }
+
+      final editavel = ease.type == EasingType.cubicBezier;
+      return GestureDetector(
+        onVerticalDragUpdate: editavel ? drag : null,
+        onHorizontalDragUpdate: editavel ? drag : null,
+        child: CustomPaint(
+          size: size,
+          painter: _SpeedPainter(
+            ease: ease,
+            vMax: _vMax,
+            pIni: pIni,
+            pFim: pFim,
+            percorrido: percorrido,
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _SpeedPainter extends CustomPainter {
+  const _SpeedPainter({
+    required this.ease,
+    required this.vMax,
+    required this.pIni,
+    required this.pFim,
+    this.percorrido,
+  });
+
+  final Easing ease;
+  final double vMax;
+  final Offset pIni;
+  final Offset pFim;
+  final double? percorrido;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Grade, com a linha da velocidade MEDIA (1x) destacada: e a
+    // referencia — acima dela o movimento esta rapido, abaixo, lento.
+    final grid = Paint()
+      ..color = const Color(0xFF34405A)
+      ..strokeWidth = 1;
+    for (var i = 1; i < 8; i++) {
+      final x = size.width * i / 8;
+      for (var y = 0.0; y < size.height; y += 7) {
+        canvas.drawLine(Offset(x, y), Offset(x, y + 2.5), grid);
+      }
+    }
+    final yMedia = size.height - 1 / vMax * size.height;
+    final media = Paint()
+      ..color = Colors.white54
+      ..strokeWidth = 1;
+    for (var x = 0.0; x < size.width; x += 9) {
+      canvas.drawLine(Offset(x, yMedia), Offset(x + 4.5, yMedia), media);
+    }
+
+    // A derivada, amostrada: dy/dx da curva de valor.
+    Offset plot(double x, double v) =>
+        Offset(x * size.width, size.height - v.clamp(0, vMax) / vMax * size.height);
+    final path = Path();
+    const n = 96;
+    const h = 1e-3;
+    for (var i = 0; i <= n; i++) {
+      final t = i / n;
+      final a = ease.transform((t - h).clamp(0.0, 1.0));
+      final b = ease.transform((t + h).clamp(0.0, 1.0));
+      final v = (b - a) / (2 * h);
+      final p = plot(t, v);
+      if (i == 0) {
+        path.moveTo(p.dx, p.dy);
+      } else {
+        path.lineTo(p.dx, p.dy);
+      }
+    }
+    // Area sob a curva: velocidade x tempo = deslocamento. Ver a area e
+    // ver que o trecho inteiro percorre o mesmo caminho, so redistribui.
+    final area = Path.from(path)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(area, Paint()..color = AmColors.accent.withValues(alpha: 0.12));
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.white
+        ..strokeWidth = 4
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // O ponto que corre, na velocidade do instante.
+    final andando = percorrido;
+    if (andando != null) {
+      final a = ease.transform((andando - h).clamp(0.0, 1.0));
+      final b = ease.transform((andando + h).clamp(0.0, 1.0));
+      final p = plot(andando, (b - a) / (2 * h));
+      canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height),
+          Paint()..color = AmColors.pink.withValues(alpha: 0.35));
+      canvas.drawCircle(p, 8, Paint()..color = AmColors.pink);
+    }
+
+    // As duas alcas: influencia (x) e velocidade (y) de cada ponta.
+    if (ease.type == EasingType.cubicBezier) {
+      final alca = Paint()..color = Colors.white;
+      final guia = Paint()
+        ..color = AmColors.tealBright
+        ..strokeWidth = 1.2;
+      canvas.drawLine(Offset(0, pIni.dy), pIni, guia);
+      canvas.drawLine(pFim, Offset(size.width, pFim.dy), guia);
+      canvas.drawCircle(pIni, 13, alca);
+      canvas.drawCircle(pFim, 13, alca);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SpeedPainter old) =>
+      old.ease != ease || old.percorrido != percorrido;
 }
 
 class _AmCurvePainter extends CustomPainter {

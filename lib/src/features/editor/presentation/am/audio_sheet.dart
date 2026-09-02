@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/snack.dart';
@@ -265,23 +264,14 @@ class _Slider extends StatelessWidget {
                     const TextStyle(fontSize: 12, color: AmColors.muted)),
           ),
           Expanded(
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 3,
-                activeTrackColor: AmColors.accent,
-                inactiveTrackColor: AmColors.chip,
-                thumbColor: AmColors.accent,
-                overlayShape: SliderComponentShape.noOverlay,
-                thumbShape:
-                    const RoundSliderThumbShape(enabledThumbRadius: 7),
-              ),
-              child: Slider(
-                value: value.clamp(min, max),
-                min: min,
-                max: max,
-                onChanged: onChanged,
-              ),
-            ),
+            child: AmTickRuler(
+  value: value.clamp(min, max),
+  min: min,
+  max: max,
+  unitsPerPixel: ((max) - (min)) / 420,
+  height: 40,
+  onChanged: onChanged,
+),
           ),
           SizedBox(
             width: 52,

@@ -102,8 +102,15 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     bool animated,
   ) {
     return AmPanelChrome(
-      trilha: '${layer.name} \u00b7 Mover e transformar',
       onBack: widget.onBack,
+      animado: animated,
+      temKfAqui: hasKfHere,
+      // Le o relogio NO TOQUE: o keyframe cai exatamente onde o cabecote
+      // esta agora, nunca num tempo capturado antes.
+      onCravar: () =>
+          controller.toggleKeyframe(id, widget.playback.time.value, _prop),
+      onCurva: () => widget.onOpenCurve(_prop),
+      onMais: () => _menuMais(context, controller, id),
       abas: [
         ParamTab(
             id: TransformTool.position.name,
@@ -151,49 +158,41 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
             _PivotControl(layer: layer, playback: widget.playback),
         },
       ),
-      acoes: AmKeyframeActions(
-        animado: animated,
-        temKfAqui: hasKfHere,
-        onAnterior: () => pularKeyframe(ref, widget.playback, layer, _prop, -1),
-        // Le o relogio NO TOQUE: o keyframe cai exatamente onde o
-        // cabecote esta agora, nunca num tempo capturado antes.
-        onCravar: () => controller.toggleKeyframe(
-            id, widget.playback.time.value, _prop),
-        onProximo: () => pularKeyframe(ref, widget.playback, layer, _prop, 1),
-        onCurva: () => widget.onOpenCurve(_prop),
-        onResetar: () => controller.resetProp(id, _prop),
-      ),
     );
   }
-}
 
-/// Pula para o keyframe anterior (dir < 0) ou proximo (dir > 0) da
-/// propriedade. Pausa antes: mover o cabecote com o relogio andando e
-/// disputa, e quem perde e a pessoa.
-void pularKeyframe(
-  WidgetRef ref,
-  PlaybackController playback,
-  Layer layer,
-  LayerProp prop,
-  int dir,
-) {
-  final controller = ref.read(editorControllerProvider.notifier);
-  final times = controller.propKeyframeTimes(layer, prop);
-  if (times.isEmpty) return;
-  final local = layer.localTime(playback.time.value);
-  Duration? target;
-  if (dir < 0) {
-    for (final kt in times) {
-      if (kt < local - const Duration(milliseconds: 8)) target = kt;
-    }
-  } else {
-    for (final kt in times.reversed) {
-      if (kt > local + const Duration(milliseconds: 8)) target = kt;
-    }
-  }
-  if (target != null) {
-    playback.pause();
-    playback.seek(layer.startTime + target);
+  /// O "mais" do trilho: o que nao merece botao proprio.
+  Future<void> _menuMais(
+      BuildContext context, EditorController controller, String id) async {
+    final nome = switch (widget.tool) {
+      TransformTool.position => 'posicao',
+      TransformTool.rotation => 'rotacao',
+      TransformTool.scale => 'escala',
+      TransformTool.skew => 'inclinacao',
+      TransformTool.pivot => 'pivo',
+    };
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AmColors.panel,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(CupertinoIcons.arrow_counterclockwise,
+                  size: 19, color: AmColors.text),
+              title: Text('Resetar $nome',
+                  style: const TextStyle(color: AmColors.text, fontSize: 15)),
+              onTap: () {
+                controller.resetProp(id, _prop);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            const SizedBox(height: 6),
+          ],
+        ),
+      ),
+    );
   }
 }
 

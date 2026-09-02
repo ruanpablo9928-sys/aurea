@@ -475,11 +475,67 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                 ],
               ),
               Expanded(
-                child: ListView(
+                // REORDENAR PELA ALCA. A ordem dos efeitos e a ordem da
+                // conta — desfocar depois de brilhar nao e o mesmo que
+                // brilhar depois de desfocar — e arrastar pela alca e o
+                // jeito de ver a ordem trocar, em vez de contar toques de
+                // "mover para cima".
+                child: ReorderableListView(
                   padding: const EdgeInsets.fromLTRB(4, 8, 16, 16),
+                  buildDefaultDragHandles: false,
+                  // onReorderItem ja entrega o destino descontando o
+                  // item retirado — o onReorder antigo nao descontava.
+                  onReorderItem: (de, para) {
+                    if (para == de) return;
+                    controller.reorderEffect(
+                        id, layer.effects[de].id, para - de);
+                  },
+                  footer: Column(
+                    children: [
+                      // ANALISAR: o Blob Tracker precisa varrer o video
+                      // uma vez antes de desenhar. Sem o comando, o efeito
+                      // so mostra o rastreio simulado — e a pessoa nao
+                      // teria como saber que falta um passo.
+                      for (final effect in layer.effects)
+                        if (effect.type == EffectType.blobTracker &&
+                            layer is VideoLayer)
+                          _BotaoAnalisar(
+                            effectId: effect.id,
+                            layerId: id,
+                            controller: controller,
+                          ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () => _addEffect(context, id),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AmColors.chip,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.plus,
+                                  size: 17, color: AmColors.accent),
+                              SizedBox(width: 8),
+                              Text('Adicionar efeito',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AmColors.accent)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   children: [
                     for (var i = 0; i < layer.effects.length; i++)
                       _EffectCard(
+                        key: ValueKey(layer.effects[i].id),
+                        index: i,
                         effect: layer.effects[i],
                         local: local,
                         expanded: _expandido(layer.effects[i].id),
@@ -502,43 +558,6 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                         onRemove: () =>
                             controller.removeEffect(id, layer.effects[i].id),
                       ),
-                    // ANALISAR: o Blob Tracker precisa varrer o video
-                    // uma vez antes de desenhar. Sem o comando, o efeito
-                    // so mostra o rastreio simulado — e a pessoa nao
-                    // teria como saber que falta um passo.
-                    for (final effect in layer.effects)
-                      if (effect.type == EffectType.blobTracker &&
-                          layer is VideoLayer)
-                        _BotaoAnalisar(
-                          effectId: effect.id,
-                          layerId: id,
-                          controller: controller,
-                        ),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () => _addEffect(context, id),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: AmColors.chip,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(CupertinoIcons.plus,
-                                size: 17, color: AmColors.accent),
-                            SizedBox(width: 8),
-                            Text('Adicionar efeito',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AmColors.accent)),
-                          ],
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -552,6 +571,8 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
 
 class _EffectCard extends StatelessWidget {
   const _EffectCard({
+    super.key,
+    required this.index,
     required this.effect,
     required this.local,
     required this.expanded,
@@ -565,6 +586,9 @@ class _EffectCard extends StatelessWidget {
     required this.onRemove,
     required this.onToggleEnabled,
   });
+
+  /// Posicao na lista: e o que a alca de arrastar entrega ao reordenar.
+  final int index;
 
   final EffectInstance effect;
   final Duration local;
@@ -742,6 +766,17 @@ class _EffectCard extends StatelessWidget {
                   onTap: onRemove,
                   child: const Icon(CupertinoIcons.trash,
                       size: 22, color: AmColors.text),
+                ),
+                const SizedBox(width: 10),
+                // A ALCA: so ela arrasta. O resto da linha continua
+                // tocando, colapsando e abrindo menu.
+                ReorderableDragStartListener(
+                  index: index,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Icon(CupertinoIcons.line_horizontal_3,
+                        size: 22, color: AmColors.muted),
+                  ),
                 ),
               ],
             ),
