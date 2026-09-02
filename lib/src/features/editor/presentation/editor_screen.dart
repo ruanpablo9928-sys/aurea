@@ -989,24 +989,31 @@ class _ActionBar extends ConsumerWidget {
           // RITMO com a reproducao andando — e assim que se marca musica,
           // e por isso ele nunca pausa nada. Toque longo abre o que as
           // marcas destravam.
-          Builder(builder: (context) {
-            final t = playback.time.value;
-            final tem = project.markerNear(
-                    t, const Duration(milliseconds: 120)) !=
-                null;
-            return GestureDetector(
-              onLongPress: () => _menuDasMarcas(context, ref, playback),
-              child: btn(
-                icon: tem
-                    ? CupertinoIcons.bookmark_fill
-                    : CupertinoIcons.bookmark,
-                enabled: true,
-                reason: '',
-                color: tem ? AmColors.accent : AmColors.text,
-                onTap: () => controller.toggleMarker(t),
-              ),
-            );
-          }),
+          // O TEMPO E LIDO NO TOQUE, e o icone segue o relogio. A barra
+          // nao reconstroi quando o cabecote anda; ler o tempo na
+          // construcao deixava um valor velho no toque — toda marca caia
+          // no mesmo instante antigo, e o segundo toque apagava a
+          // primeira. "So da para por uma marca" era isso.
+          ValueListenableBuilder<Duration>(
+            valueListenable: playback.time,
+            builder: (context, t, _) {
+              final tem = project.markerNear(
+                      t, const Duration(milliseconds: 120)) !=
+                  null;
+              return GestureDetector(
+                onLongPress: () => _menuDasMarcas(context, ref, playback),
+                child: btn(
+                  icon: tem
+                      ? CupertinoIcons.bookmark_fill
+                      : CupertinoIcons.bookmark,
+                  enabled: true,
+                  reason: '',
+                  color: tem ? AmColors.accent : AmColors.text,
+                  onTap: () => controller.toggleMarker(playback.time.value),
+                ),
+              );
+            },
+          ),
           // ALINHAR E DISTRIBUIR (PR-X1): exato ao pixel, o que no dedo
           // nunca fica.
           btn(

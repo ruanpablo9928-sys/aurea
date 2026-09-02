@@ -107,7 +107,16 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 
   void _onClock() {
-    if (!_scroll.hasClients || _editingBar || _rolagemDoDedo) return;
+    if (!_scroll.hasClients || _editingBar) return;
+    // A trava so vale enquanto a rolagem esta DE FATO em andamento. Se
+    // o aviso de fim se perdeu (um arrasto de barra que comecou no meio
+    // de uma inercia engolia o ScrollEnd), a regua parava de seguir o
+    // relogio para sempre: o keyframe nascia no tempo certo e aparecia
+    // longe do cabecote. isScrollingNotifier e a verdade do motor.
+    if (_rolagemDoDedo && _scroll.position.isScrollingNotifier.value) {
+      return;
+    }
+    _rolagemDoDedo = false;
     final target = _timeToPx(widget.playback.time.value);
     if ((target - _scroll.offset).abs() < 0.5) return;
     _syncingScroll = true;
@@ -124,14 +133,21 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       Duration(microseconds: (px / _pps * 1e6).round());
 
   bool _onScroll(ScrollNotification n) {
-    if (_syncingScroll || _editingBar) return false;
+    if (_syncingScroll) return false;
+    // SO A ROLAGEM HORIZONTAL e tempo. A lista de camadas rola na
+    // vertical dentro desta, e os avisos dela sobem ate aqui: tratar o
+    // deslocamento vertical como tempo mandava o relogio para o comeco
+    // a cada rolada na lista.
+    if (n.metrics.axis != Axis.horizontal) return false;
     if (n is ScrollStartNotification) {
       _rolagemDoDedo = true;
     } else if (n is ScrollEndNotification) {
       _rolagemDoDedo = false;
       // Parou: acomoda o conteudo no quadro em que o relogio caiu.
       _onClock();
+      return false;
     }
+    if (_editingBar) return false;
     if (n is ScrollUpdateNotification) {
       if (n.dragDetails != null && widget.playback.playing.value) {
         widget.playback.pause();
