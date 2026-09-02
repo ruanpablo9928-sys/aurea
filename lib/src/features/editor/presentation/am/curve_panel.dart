@@ -703,10 +703,10 @@ class _SpeedGraph extends StatelessWidget {
   /// Velocidade maxima mostrada, em "vezes a velocidade media".
   static const double _vMax = 4.0;
 
-  static double _vIni(Easing e) =>
-      e.x1 <= 1e-4 ? _vMax : (e.y1 / e.x1).clamp(0.0, _vMax);
-  static double _vFim(Easing e) =>
-      (1 - e.x2) <= 1e-4 ? _vMax : ((1 - e.y2) / (1 - e.x2)).clamp(0.0, _vMax);
+  // A velocidade nas pontas vem da mesma derivada analitica do grafico:
+  // as alcas caem EM CIMA da curva, inclusive com a alca degenerada.
+  static double _vIni(Easing e) => e.speedAt(0).clamp(0.0, _vMax);
+  static double _vFim(Easing e) => e.speedAt(1).clamp(0.0, _vMax);
 
   @override
   Widget build(BuildContext context) {
@@ -792,18 +792,15 @@ class _SpeedPainter extends CustomPainter {
       canvas.drawLine(Offset(x, yMedia), Offset(x + 4.5, yMedia), media);
     }
 
-    // A derivada, amostrada: dy/dx da curva de valor.
+    // A derivada ANALITICA da curva de valor (ver Easing.speedAt): e o
+    // que faz o grafico sair liso em vez de serrilhado.
     Offset plot(double x, double v) =>
         Offset(x * size.width, size.height - v.clamp(0, vMax) / vMax * size.height);
     final path = Path();
     const n = 96;
-    const h = 1e-3;
     for (var i = 0; i <= n; i++) {
       final t = i / n;
-      final a = ease.transform((t - h).clamp(0.0, 1.0));
-      final b = ease.transform((t + h).clamp(0.0, 1.0));
-      final v = (b - a) / (2 * h);
-      final p = plot(t, v);
+      final p = plot(t, ease.speedAt(t));
       if (i == 0) {
         path.moveTo(p.dx, p.dy);
       } else {
@@ -829,9 +826,7 @@ class _SpeedPainter extends CustomPainter {
     // O ponto que corre, na velocidade do instante.
     final andando = percorrido;
     if (andando != null) {
-      final a = ease.transform((andando - h).clamp(0.0, 1.0));
-      final b = ease.transform((andando + h).clamp(0.0, 1.0));
-      final p = plot(andando, (b - a) / (2 * h));
+      final p = plot(andando, ease.speedAt(andando));
       canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height),
           Paint()..color = AmColors.pink.withValues(alpha: 0.35));
       canvas.drawCircle(p, 8, Paint()..color = AmColors.pink);

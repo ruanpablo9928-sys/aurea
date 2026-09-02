@@ -95,6 +95,68 @@ class Easing {
     }
   }
 
+  /// VELOCIDADE no progresso [x] (0..1): dy/dx da curva de valor, em
+  /// "vezes a velocidade media" — 1 e o ritmo constante do linear.
+  ///
+  /// Para a bezier a derivada e ANALITICA: acha-se o parametro u com
+  /// x(u) = x por bissecao (x(u) e monotona porque x1, x2 estao em 0..1)
+  /// e divide-se y'(u) por x'(u). Diferenca finita em cima de
+  /// [transform] nao serve: o solver da bezier tem erro de ~1e-3, da
+  /// ordem do passo, e a "derivada" vira serrilhado. Nas outras curvas
+  /// [transform] e formula fechada, e a diferenca central basta.
+  double speedAt(double x) {
+    final xc = x.clamp(0.0, 1.0);
+    if (type != EasingType.cubicBezier || isLinear) {
+      if (type == EasingType.cubicBezier) return 1;
+      const h = 1e-3;
+      final a = transform((xc - h).clamp(0.0, 1.0));
+      final b = transform((xc + h).clamp(0.0, 1.0));
+      final dx = (xc + h).clamp(0.0, 1.0) - (xc - h).clamp(0.0, 1.0);
+      return dx <= 0 ? 1 : (b - a) / dx;
+    }
+    final ax = x1.clamp(0.0, 1.0), bx = x2.clamp(0.0, 1.0);
+    double px(double u) {
+      final v = 1 - u;
+      return 3 * v * v * u * ax + 3 * v * u * u * bx + u * u * u;
+    }
+    double dpx(double u) {
+      final v = 1 - u;
+      return 3 * v * v * ax + 6 * v * u * (bx - ax) + 3 * u * u * (1 - bx);
+    }
+    double dpy(double u) {
+      final v = 1 - u;
+      return 3 * v * v * y1 + 6 * v * u * (y2 - y1) + 3 * u * u * (1 - y2);
+    }
+    // Bissecao: 40 passos dao u com erro ~1e-12.
+    var lo = 0.0, hi = 1.0;
+    for (var i = 0; i < 40; i++) {
+      final mid = (lo + hi) / 2;
+      if (px(mid) < xc) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    final u = (lo + hi) / 2;
+    var dx = dpx(u), dy = dpy(u);
+    // Ponta degenerada (alca em cima da ancora): a direcao vem da
+    // segunda derivada, isto e, da outra alca.
+    if (dx.abs() < 1e-9 && dy.abs() < 1e-9) {
+      if (u < 0.5) {
+        dx = bx;
+        dy = y2;
+      } else {
+        dx = 1 - ax;
+        dy = 1 - y1;
+      }
+      if (dx.abs() < 1e-9 && dy.abs() < 1e-9) return 1;
+    }
+    if (dx.abs() < 1e-9) {
+      return dy >= 0 ? double.infinity : double.negativeInfinity;
+    }
+    return dy / dx;
+  }
+
   Easing copyWith({
     EasingType? type,
     double? x1,
