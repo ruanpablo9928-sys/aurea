@@ -30,7 +30,13 @@ float hash(vec2 p) {
 
 void main() {
   vec2 pos = FlutterFragCoord().xy;
-  vec4 c = texture(uTexture, pos / uSize);
+  // Como filtro de imagem, uSize vem do motor (tamanho da textura). No
+  // backend OpenGL ES do Impeller o eixo Y chega invertido.
+  vec2 uv = pos / uSize;
+#ifdef IMPELLER_TARGET_OPENGLES
+  uv.y = 1.0 - uv.y;
+#endif
+  vec4 c = texture(uTexture, uv);
 
   // Dois uniformes independentes -> distribuicao triangular em [-1, 1].
   float a = hash(pos + uSeed);
