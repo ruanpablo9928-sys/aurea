@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../../core/app_mode.dart';
 import '../../application/editor_controller.dart';
 import '../../../export/domain/export_settings.dart';
 import '../../../export/presentation/export_video_screen.dart';
@@ -79,6 +80,9 @@ class _Escolha extends StatelessWidget {
 /// Lottie, nao MP4.
 Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
   final controller = ref.read(editorControllerProvider.notifier);
+  // NUCLEO: exportar MP4, uma resolucao, uma qualidade — o botao e so.
+  // Tamanho, codec, taxa, Lottie, SVG e template sao estudio.
+  final completo = ref.read(appModeProvider).isFull;
   String? status;
   var busy = false;
   var ajustes = const ExportSettings();
@@ -163,6 +167,7 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                 ),
                 const SizedBox(height: 10),
 
+                if (completo) ...[
                 _Escolha(
                   rotulo: 'Formato',
                   opcoes: [
@@ -465,17 +470,13 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                   );
                 }),
 
+                ],
                 if (status != null) ...[
                   const SizedBox(height: 10),
                   Text(status!,
                       style: const TextStyle(
                           fontSize: 11, color: AmColors.accent)),
                 ],
-                const SizedBox(height: 8),
-                const Text(
-                  'Video (MP4) continua em desenvolvimento.',
-                  style: TextStyle(fontSize: 11, color: AmColors.muted),
-                ),
               ],
             ),
           ),
