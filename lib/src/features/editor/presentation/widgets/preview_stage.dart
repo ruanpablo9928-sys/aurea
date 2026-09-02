@@ -2528,15 +2528,21 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           if (compr > 0.001 && mistura < 0.999) {
             out = FxSnapshot(
               painter: PixelSortPainter(
+                // A instancia do efeito e a chave do cache do resultado.
+                cacheKey: effect.id,
                 mode: effect.paramAt('mode', local).round().clamp(0, 2),
                 sortAngle: effect.paramAt('sort_angle', local),
                 threshold: effect.paramAt('threshold', local),
                 aboveThreshold:
                     effect.paramAt('direction', local) >= 0.5,
                 reverse: effect.paramAt('reverse_sort', local) >= 0.5,
+                sortBy: effect.paramAt('sort_by', local).round().clamp(0, 2),
                 length: compr,
                 randomRestart: effect.paramAt('random_restart', local),
                 seed: effect.paramAt('seed', local).round(),
+                sortResolution: effect.paramAt('sort_resolution', local),
+                downsample: effect.paramAt('downsample', local),
+                matteBlur: effect.paramAt('blur_threshold_matte', local),
                 blendWithOriginal: mistura,
                 show: effect.paramAt('show', local).round().clamp(0, 3),
                 softEdges: effect.paramAt('soft_edges', local) >= 0.5,

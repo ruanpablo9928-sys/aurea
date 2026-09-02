@@ -732,9 +732,23 @@ const effectSpecs = <EffectType, EffectSpec>{
           kind: ParamKind.seed),
       'blend_with_original':
           EffectParam('Blend With Original', 0.0, 0.0, 1.0),
-      // LIGADO por padrao: ordenacao e sequencial e e o efeito mais
-      // hostil a GPU da lista. Em 720 o resultado e o mesmo e o preview
-      // continua andando.
+      // ORDENACAO POR CONTEUDO. Estes quatro ja estiveram na ficha, foram
+      // tirados quando o pintor so esticava fatias por ruido, e voltam
+      // agora que ele ordena pixels de verdade, em CPU.
+      'sort_by': EffectParam('Sort By', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Luminance', 'Hue', 'Saturation']),
+      // A resolucao em que a ORDENACAO acontece (lado maior). Ordenar e
+      // sequencial, em CPU: 360 sao poucos milissegundos e o preview
+      // continua andando; para exportar, subir. O resultado e ampliado
+      // de volta, e as faixas ficam mais grossas em resolucao menor.
+      'sort_resolution':
+          EffectParam('Sort Resolution', 360.0, 64.0, 1080.0),
+      'downsample': EffectParam('Downsample', 1.0, 1.0, 4.0),
+      // Desfoque 1D sobre o matte do limiar, em pixels do buffer: sem
+      // ele, ruido de compressao abre e fecha trechos a cada pixel.
+      'blur_threshold_matte':
+          EffectParam('Blur Threshold Matte', 0.0, 0.0, 20.0),
       'show': EffectParam('Show', 0.0, 0.0, 3.0,
           kind: ParamKind.choice,
           options: [

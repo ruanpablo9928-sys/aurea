@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/blob_track.dart';
+import '../../domain/pixel_sort.dart';
 import 'package:flutter/rendering.dart';
 
 /// EFEITOS DO LOTE 2.
@@ -336,29 +339,43 @@ class BendPainter extends _FxPainter {
 /// interface derrubaria o preview. O caminho certo e o mesmo do Blob
 /// Tracker — analisar sob comando e guardar o resultado — e esta
 /// anotado como pendente, nao disfarcado.
-/// O QUE ESTE PINTOR NAO FAZ, e por que.
+/// PIXEL SORTER — de verdade, lendo os pixels.
 ///
-/// Ele nao le um pixel sequer: escolhe as linhas por ruido semeado e
-/// estica fatias da foto da camada. Isso e o que permite ele rodar em
-/// tempo real — e tambem o que torna impossivel "ordenar por matiz" ou
-/// "por saturacao", que exigiriam trazer a imagem para a CPU
-/// (`toByteData`) e ordenar de verdade, a cada quadro.
+/// O efeito classico ordena, em cada linha, os trechos onde o brilho
+/// passa de um limiar. E isso que faz um rosto escorrer em faixas e o
+/// cabelo de uma estatua derreter para baixo: o escorrido nasce ONDE A
+/// IMAGEM E CLARA, nao de ruido sorteado. A versao anterior esticava
+/// fatias por ruido — parecia glitch, nunca pixel sorting.
 ///
-/// Os controles de ordenacao por conteudo foram TIRADOS da ficha por
-/// isso. Controle que nunca vai poder funcionar e pior que controle que
-/// nao existe: a pessoa mexe, o numero muda, a imagem nao, e ela conclui
-/// que o efeito esta quebrado. Quando houver um caminho por shader que
-/// leia a imagem, eles voltam.
+/// Ordenar exige ler pixel, e ler pixel na GPU nao existe em passe
+/// unico. Entao o caminho e este:
+///
+///   1. no `paint`, a foto da camada e desenhada REDUZIDA num buffer
+///      (e girada, se o angulo pede) — `toImageSync`, ainda na GPU;
+///   2. o buffer e lido para a CPU (`toByteData`, assincrono) e a conta
+///      pura de [pixelSort] roda num isolate;
+///   3. o resultado volta como imagem e fica num CACHE por efeito, que
+///      sobrevive a reconstrucao do pintor. Sem isso, cada rebuild
+///      apagaria o resultado e a tela piscaria entre ordenado e cru.
+///
+/// Enquanto a conta roda, o pintor mostra o ULTIMO resultado (ou a
+/// imagem crua, na primeira vez). Em 360 px de lado sao poucos
+/// milissegundos por quadro.
 class PixelSortPainter extends _FxPainter {
   PixelSortPainter({
+    required this.cacheKey,
     required this.mode,
     required this.sortAngle,
     required this.threshold,
     required this.aboveThreshold,
     required this.reverse,
+    required this.sortBy,
     required this.length,
     required this.randomRestart,
     required this.seed,
+    required this.sortResolution,
+    required this.downsample,
+    required this.matteBlur,
     required this.blendWithOriginal,
     required this.show,
     required this.softEdges,
@@ -370,7 +387,10 @@ class PixelSortPainter extends _FxPainter {
     required this.radiusVariation,
     required this.startVariation,
     required this.thickness,
-  });
+  }) : _cache = _SortCache.of(cacheKey);
+
+  /// Identifica a INSTANCIA do efeito: e a chave do cache do resultado.
+  final String cacheKey;
 
   /// 0 Linear, 1 Radial, 2 Circular.
   final int mode;
@@ -379,12 +399,22 @@ class PixelSortPainter extends _FxPainter {
   final bool aboveThreshold;
   final bool reverse;
 
-  /// Comprimento do arrasto, em fracao do lado.
+  /// 0 luminancia, 1 matiz, 2 saturacao.
+  final int sortBy;
+
+  /// Comprimento maximo do trecho, em fracao da linha.
   final double length;
 
-  /// Quantas linhas por mil pixels — quanto maior, mais faixas.
+  /// Reinicios aleatorios, 0..1000 na ficha.
   final double randomRestart;
   final int seed;
+
+  /// Lado maior do buffer em que a ordenacao acontece.
+  final double sortResolution;
+  final double downsample;
+
+  /// Desfoque 1D do matte, em pixels do buffer.
+  final double matteBlur;
   final double blendWithOriginal;
 
   /// 0 Result, 1 Raw Values, 2 Threshold Matte, 3 Restart Noise.
@@ -400,6 +430,53 @@ class PixelSortPainter extends _FxPainter {
   final double startVariation;
   final double thickness;
 
+  final _SortCache _cache;
+
+  // O objeto de render escuta o PINTOR; o pintor nasce de novo a cada
+  // rebuild. Repassar o ouvinte ao cache e o que faz o resultado que
+  // chega depois repintar o pintor ATUAL, seja ele qual for.
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    _cache.addListener(listener);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    super.removeListener(listener);
+    _cache.removeListener(listener);
+  }
+
+  PixelSortSpec get _spec => PixelSortSpec(
+        mode: PixelSortMode.values[mode.clamp(0, 2)],
+        threshold: threshold,
+        above: aboveThreshold,
+        reverse: reverse,
+        key: PixelSortKey.values[sortBy.clamp(0, 2)],
+        maxRun: length,
+        // 0..1000 na ficha -> 0..100 na conta (probabilidade / 1000).
+        restart: randomRestart / 10.0,
+        seed: seed,
+        matteBlur: matteBlur.round().clamp(0, 20),
+        centerX: centerX,
+        centerY: centerY,
+        startAngle: startAngle,
+        degreesSorted: degreesSorted,
+        innerRadius: innerRadius,
+        radiusVariation: radiusVariation,
+        startVariation: startVariation,
+        thickness: thickness,
+      );
+
+  String get _assinatura => [
+        mode, sortAngle, threshold, aboveThreshold, reverse, sortBy, length,
+        randomRestart, seed, sortResolution, downsample, matteBlur, centerX,
+        centerY, startAngle, degreesSorted, innerRadius, radiusVariation,
+        startVariation, thickness,
+      ].join('|');
+
+  bool get _linearComAngulo => mode == 0 && sortAngle.abs() % 360 > 0.01;
+
   @override
   void paintSnapshot(PaintingContext context, Offset offset, Size size,
       ui.Image image, Size sourceSize, double pixelRatio) {
@@ -409,8 +486,8 @@ class PixelSortPainter extends _FxPainter {
         0, 0, image.width.toDouble(), image.height.toDouble());
     final dst = _dst(offset, size);
 
-    // DIAGNOSTICO: os modos de "Show" nao sao enfeite — sao como se
-    // descobre por que o efeito nao pegou onde devia.
+    // DIAGNOSTICO: os modos de "Show" sao como se descobre por que o
+    // efeito nao pegou onde devia.
     if (show == 3) {
       _mostrarRuido(canvas, dst, size);
       return;
@@ -419,119 +496,44 @@ class PixelSortPainter extends _FxPainter {
       _mostrarMatte(canvas, image, src, dst);
       return;
     }
+    if (show == 1) {
+      _mostrarChave(canvas, image, src, dst);
+      return;
+    }
 
-    canvas.drawImageRect(
-        image, src, dst, Paint()..filterQuality = FilterQuality.low);
-    if (show == 1) return; // Raw Values: so a fonte, sem arrasto.
+    // Poe a conta para rodar (ou reaproveita o que ja esta pronto).
+    _agendar(image);
 
-    final ladoMenor = math.min(size.width, size.height);
-    final comprimento = length * ladoMenor;
-    if (comprimento < 1) return;
-
-    // Quantas linhas: Random Restart e "reinicios por mil pixels".
-    final linhas =
-        ((randomRestart / 1000) * ladoMenor).round().clamp(1, 400);
-
-    canvas.save();
-    canvas.clipRect(dst);
-
-    final cx = offset.dx + size.width * centerX;
-    final cy = offset.dy + size.height * centerY;
-    final sx = image.width / size.width;
-    final sy = image.height / size.height;
+    final pronto = _cache.resultado;
     final pintura = Paint()
       ..filterQuality = softEdges ? FilterQuality.low : FilterQuality.none;
 
-    for (var i = 0; i < linhas; i++) {
-      // O LIMIAR decide quais linhas entram. "Above" pega as linhas de
-      // valor alto; "Below", as de valor baixo — sao imagens diferentes,
-      // e e por isso que a direcao existe.
-      final valor = fxNoise(i.toDouble(), 0, seed);
-      final passa = aboveThreshold ? valor >= threshold : valor <= threshold;
-      if (!passa) continue;
-
-      final variacao = fxNoise(i.toDouble(), 1, seed + 31);
-      final comp = comprimento *
-          (0.35 + variacao * 0.65) *
-          (1 + (radiusVariation) * (variacao - 0.5) * 2);
-      final sinal = reverse ? -1.0 : 1.0;
-
-      switch (mode) {
-        case 1:
-          // RADIAL: raios saindo do centro.
-          final fatia = degreesSorted / linhas;
-          final ang = (startAngle + i * fatia) * math.pi / 180;
-          final r0 = innerRadius * ladoMenor / 2;
-          final dirX = math.cos(ang), dirY = math.sin(ang);
-          final x0 = cx + dirX * r0;
-          final y0 = cy + dirY * r0;
-          canvas.save();
-          canvas.translate(x0, y0);
-          canvas.rotate(ang);
-          canvas.drawImageRect(
-            image,
-            Rect.fromLTWH((x0 - offset.dx) * sx, (y0 - offset.dy) * sy,
-                math.max(1, sx * 2), math.max(1, sy * 2)),
-            Rect.fromLTWH(0, -thickness, comp * sinal.abs(), thickness * 2),
-            pintura,
-          );
-          canvas.restore();
-        case 2:
-          // CIRCULAR: aneis em volta do centro.
-          final passoR = (ladoMenor / 2) / linhas;
-          final raio = innerRadius * ladoMenor / 2 +
-              i * passoR * (1 + startVariation * (variacao - 0.5));
-          final abertura = degreesSorted * math.pi / 180;
-          final ini = (startAngle +
-                  startVariation * variacao * 360) *
-              math.pi /
-              180;
-          final caminho = Path()
-            ..addArc(
-                Rect.fromCircle(center: Offset(cx, cy), radius: raio),
-                ini,
-                abertura * (comp / ladoMenor));
-          canvas.drawPath(
-            caminho,
-            Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = math.max(1, thickness)
-              ..shader = ui.ImageShader(
-                image,
-                TileMode.clamp,
-                TileMode.clamp,
-                (Matrix4.identity()
-                      ..translateByDouble(offset.dx, offset.dy, 0, 1)
-                      ..scaleByDouble(1 / sx, 1 / sy, 1, 1))
-                    .storage,
-              ),
-          );
-        default:
-          // LINEAR: faixas em qualquer angulo.
-          final ang = sortAngle * math.pi / 180;
-          final passo = ladoMenor / linhas;
-          final base = i * passo;
-          final inicio = fxNoise(i.toDouble(), 2, seed + 7) * ladoMenor;
-          canvas.save();
-          canvas.translate(offset.dx + size.width / 2,
-              offset.dy + size.height / 2);
-          canvas.rotate(ang);
-          final x = base - ladoMenor / 2;
-          final y = inicio - ladoMenor / 2;
-          canvas.drawImageRect(
-            image,
-            Rect.fromLTWH(
-                (base * sx).clamp(0, image.width - 1).toDouble(),
-                (inicio * sy).clamp(0, image.height - 1).toDouble(),
-                math.max(1, passo * sx),
-                math.max(1, sy)),
-            Rect.fromLTWH(x, sinal > 0 ? y : y - comp, passo, comp),
-            pintura,
-          );
-          canvas.restore();
+    if (pronto == null) {
+      canvas.drawImageRect(image, src, dst, pintura);
+    } else {
+      canvas.save();
+      canvas.clipRect(dst);
+      final bufRect = Rect.fromLTWH(
+          0, 0, pronto.width.toDouble(), pronto.height.toDouble());
+      if (_cache.anguloRad.abs() > 1e-6) {
+        // O buffer foi girado por -angulo antes de ordenar; desgira.
+        final e = _cache.escala;
+        canvas.translate(dst.center.dx, dst.center.dy);
+        canvas.rotate(_cache.anguloRad);
+        canvas.drawImageRect(
+          pronto,
+          bufRect,
+          Rect.fromCenter(
+              center: Offset.zero,
+              width: pronto.width / e * (size.width / image.width),
+              height: pronto.height / e * (size.height / image.height)),
+          pintura,
+        );
+      } else {
+        canvas.drawImageRect(pronto, bufRect, dst, pintura);
       }
+      canvas.restore();
     }
-    canvas.restore();
 
     // BLEND WITH ORIGINAL em 1 tem de devolver a imagem INTACTA — e o
     // valor "desligado" da ficha, e a prova de neutralidade.
@@ -548,27 +550,85 @@ class PixelSortPainter extends _FxPainter {
     }
   }
 
-  /// O RUIDO DE REINICIO, desenhado: e onde cada linha comeca.
+  /// Reduz (e gira) a foto para o buffer de ordenacao, na GPU, e entrega
+  /// a conta. Se ja ha conta rodando, guarda o pedido mais novo e joga
+  /// fora o anterior: so o quadro mais recente interessa.
+  void _agendar(ui.Image image) {
+    final assinatura = _assinatura;
+    final lado = (sortResolution / downsample.clamp(1.0, 4.0))
+        .clamp(64.0, 1080.0);
+    final escala = lado / math.max(image.width, image.height);
+    final w = math.max(2, (image.width * escala).round());
+    final h = math.max(2, (image.height * escala).round());
+    final girar = _linearComAngulo;
+    final ang = girar ? sortAngle * math.pi / 180 : 0.0;
+    // Girado, o buffer e um quadrado que contem a imagem em qualquer
+    // angulo; o que sobra fica transparente e nunca entra num trecho.
+    final lado2 = girar ? math.sqrt(w * w + h * h).ceil() : 0;
+    final bufW = girar ? lado2 : w;
+    final bufH = girar ? lado2 : h;
+
+    final rec = ui.PictureRecorder();
+    final c = Canvas(rec);
+    c.translate(bufW / 2, bufH / 2);
+    if (girar) c.rotate(-ang);
+    c.scale(escala, escala);
+    c.drawImage(image, Offset(-image.width / 2, -image.height / 2),
+        Paint()..filterQuality = FilterQuality.low);
+    final pequena = rec.endRecording().toImageSync(bufW, bufH);
+
+    final pedido = _Pedido(
+      imagem: pequena,
+      w: bufW,
+      h: bufH,
+      escala: escala,
+      anguloRad: ang,
+      assinatura: assinatura,
+      spec: _spec,
+    );
+    if (_cache.ocupado) {
+      _cache.pendente?.imagem.dispose();
+      _cache.pendente = pedido;
+      return;
+    }
+    _cache.rodar(pedido);
+  }
+
+  /// RAW VALUES: a chave em cinza — o que o limiar esta lendo.
+  void _mostrarChave(Canvas canvas, ui.Image image, Rect src, Rect dst) {
+    canvas.drawImageRect(
+      image,
+      src,
+      dst,
+      Paint()
+        ..filterQuality = FilterQuality.low
+        ..colorFilter = const ColorFilter.matrix(<double>[
+          0.2126, 0.7152, 0.0722, 0, 0, //
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0, 0, 0, 1, 0,
+        ]),
+    );
+  }
+
+  /// O RUIDO DE REINICIO, desenhado: onde os trechos tendem a quebrar.
   void _mostrarRuido(Canvas canvas, Rect dst, Size size) {
     canvas.drawRect(dst, Paint()..color = const Color(0xFF000000));
-    final linhas =
-        ((randomRestart / 1000) * math.min(size.width, size.height))
-            .round()
-            .clamp(1, 400);
+    const linhas = 96;
     final passo = size.height / linhas;
     for (var i = 0; i < linhas; i++) {
       final v = fxNoise(i.toDouble(), 0, seed);
       canvas.drawRect(
         Rect.fromLTWH(dst.left, dst.top + i * passo, dst.width, passo),
-        Paint()..color = Color.fromRGBO(
-            (v * 255).round(), (v * 255).round(), (v * 255).round(), 1),
+        Paint()
+          ..color = Color.fromRGBO(
+              (v * 255).round(), (v * 255).round(), (v * 255).round(), 1),
       );
     }
   }
 
   /// O MATTE DO LIMIAR: branco onde o efeito age, preto onde nao age.
-  void _mostrarMatte(
-      Canvas canvas, ui.Image image, Rect src, Rect dst) {
+  void _mostrarMatte(Canvas canvas, ui.Image image, Rect src, Rect dst) {
     canvas.saveLayer(dst, Paint());
     canvas.drawImageRect(
         image, src, dst, Paint()..filterQuality = FilterQuality.low);
@@ -578,7 +638,7 @@ class PixelSortPainter extends _FxPainter {
       dst,
       Paint()
         ..colorFilter = ColorFilter.matrix(<double>[
-          0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255,
+          0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255, //
           0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255,
           0.2126 * 255, 0.7152 * 255, 0.0722 * 255, 0, -corte * 255,
           0, 0, 0, 1, 0,
@@ -592,14 +652,19 @@ class PixelSortPainter extends _FxPainter {
 
   @override
   bool shouldRepaint(covariant PixelSortPainter old) =>
+      old.cacheKey != cacheKey ||
       old.mode != mode ||
       old.sortAngle != sortAngle ||
       old.threshold != threshold ||
       old.aboveThreshold != aboveThreshold ||
       old.reverse != reverse ||
+      old.sortBy != sortBy ||
       old.length != length ||
       old.randomRestart != randomRestart ||
       old.seed != seed ||
+      old.sortResolution != sortResolution ||
+      old.downsample != downsample ||
+      old.matteBlur != matteBlur ||
       old.blendWithOriginal != blendWithOriginal ||
       old.show != show ||
       old.softEdges != softEdges ||
@@ -611,6 +676,162 @@ class PixelSortPainter extends _FxPainter {
       old.radiusVariation != radiusVariation ||
       old.startVariation != startVariation ||
       old.thickness != thickness;
+}
+
+/// Um pedido de ordenacao: o buffer ja reduzido e os parametros.
+class _Pedido {
+  const _Pedido({
+    required this.imagem,
+    required this.w,
+    required this.h,
+    required this.escala,
+    required this.anguloRad,
+    required this.assinatura,
+    required this.spec,
+  });
+
+  final ui.Image imagem;
+  final int w;
+  final int h;
+  final double escala;
+  final double anguloRad;
+  final String assinatura;
+  final PixelSortSpec spec;
+}
+
+/// O RESULTADO ORDENADO de um efeito, vivo entre reconstrucoes.
+///
+/// E um ChangeNotifier porque o objeto de render escuta o pintor, e o
+/// pintor nasce de novo a cada rebuild: o pintor atual repassa o seu
+/// ouvinte para ca, e quando a conta termina e AQUI que se avisa.
+class _SortCache extends ChangeNotifier {
+  _SortCache._();
+
+  static final Map<String, _SortCache> _todos = {};
+  static const _maximo = 8;
+
+  /// Um cache por efeito, com teto: efeito removido ha muito tempo nao
+  /// pode segurar imagem para sempre.
+  static _SortCache of(String chave) {
+    final existente = _todos[chave];
+    if (existente != null) return existente;
+    if (_todos.length >= _maximo) {
+      final velha = _todos.keys.first;
+      _todos.remove(velha)?._descartar();
+    }
+    return _todos[chave] = _SortCache._();
+  }
+
+  ui.Image? resultado;
+  double escala = 1;
+  double anguloRad = 0;
+  String assinatura = '';
+  int hashFonte = 0;
+  bool ocupado = false;
+  _Pedido? pendente;
+
+  void _descartar() {
+    resultado?.dispose();
+    resultado = null;
+    pendente?.imagem.dispose();
+    pendente = null;
+  }
+
+  Future<void> rodar(_Pedido pedido) async {
+    ocupado = true;
+    try {
+      final dados =
+          await pedido.imagem.toByteData(format: ui.ImageByteFormat.rawRgba);
+      pedido.imagem.dispose();
+      if (dados == null) return;
+      final bytes = dados.buffer.asUint8List();
+
+      // Mesma fonte, mesmos parametros: nada a fazer. Poupa a conta E a
+      // troca de imagem, que e o que faria a tela piscar.
+      var hash = pedido.w * 73856093 ^ pedido.h * 19349663;
+      for (var i = 0; i < bytes.length; i += 251) {
+        hash = (hash * 31 + bytes[i]) & 0x7fffffff;
+      }
+      if (hash == hashFonte &&
+          pedido.assinatura == assinatura &&
+          resultado != null) {
+        return;
+      }
+
+      final s = pedido.spec;
+      final saida = await compute(_ordenarEmIsolate, <String, Object>{
+        'bytes': bytes,
+        'w': pedido.w,
+        'h': pedido.h,
+        'mode': s.mode.index,
+        'threshold': s.threshold,
+        'above': s.above,
+        'reverse': s.reverse,
+        'key': s.key.index,
+        'maxRun': s.maxRun,
+        'restart': s.restart,
+        'seed': s.seed,
+        'matteBlur': s.matteBlur,
+        'centerX': s.centerX,
+        'centerY': s.centerY,
+        'startAngle': s.startAngle,
+        'degreesSorted': s.degreesSorted,
+        'innerRadius': s.innerRadius,
+        'radiusVariation': s.radiusVariation,
+        'startVariation': s.startVariation,
+        'thickness': s.thickness,
+      });
+
+      final done = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+          saida, pedido.w, pedido.h, ui.PixelFormat.rgba8888, done.complete);
+      final nova = await done.future;
+
+      resultado?.dispose();
+      resultado = nova;
+      escala = pedido.escala;
+      anguloRad = pedido.anguloRad;
+      assinatura = pedido.assinatura;
+      hashFonte = hash;
+      notifyListeners();
+    } catch (_) {
+      // Leitura da GPU pode falhar num aparelho sem suporte: fica a
+      // imagem crua, sem derrubar o preview.
+    } finally {
+      ocupado = false;
+      final proximo = pendente;
+      pendente = null;
+      if (proximo != null) {
+        // O quadro que chegou enquanto a conta rodava.
+        unawaited(rodar(proximo));
+      }
+    }
+  }
+}
+
+/// A conta, num isolate: recebe primitivos e devolve bytes.
+Uint8List _ordenarEmIsolate(Map<String, Object> m) {
+  final spec = PixelSortSpec(
+    mode: PixelSortMode.values[m['mode'] as int],
+    threshold: m['threshold'] as double,
+    above: m['above'] as bool,
+    reverse: m['reverse'] as bool,
+    key: PixelSortKey.values[m['key'] as int],
+    maxRun: m['maxRun'] as double,
+    restart: m['restart'] as double,
+    seed: m['seed'] as int,
+    matteBlur: m['matteBlur'] as int,
+    centerX: m['centerX'] as double,
+    centerY: m['centerY'] as double,
+    startAngle: m['startAngle'] as double,
+    degreesSorted: m['degreesSorted'] as double,
+    innerRadius: m['innerRadius'] as double,
+    radiusVariation: m['radiusVariation'] as double,
+    startVariation: m['startVariation'] as double,
+    thickness: m['thickness'] as double,
+  );
+  return pixelSort(
+      m['bytes'] as Uint8List, m['w'] as int, m['h'] as int, spec);
 }
 
 // -------------------------------------------------------- CC Semear

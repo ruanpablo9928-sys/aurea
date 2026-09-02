@@ -18,31 +18,32 @@ int bloomLevels(int quality) => switch (quality) {
       _ => 3, // Normal
     };
 
-/// Pesos NORMALIZADOS de cada nivel, do mais largo ao mais estreito.
+/// Pesos NORMALIZADOS de cada nivel: IGUAIS, e a soma e sempre 1.
 ///
-/// O nivel estreito pesa mais: e ele que da o nucleo brilhante. Os
-/// largos dao o halo. A proporcao e geometrica, e a soma e sempre 1.
+/// A primeira versao dava ao nivel estreito quatro vezes o peso do
+/// largo, "para o nucleo brilhar". O resultado era um halo curto: o
+/// nivel largo, que e o unico que alcanca longe, ficava com 6% da luz e
+/// sumia a um palmo da forma. O Deep Glow de referencia soma cada
+/// oitava com o MESMO peso — e por isso o halo dele vai longe com
+/// degrade suave sem lavar o nucleo. A energia continua conservada:
+/// acrescentar nivel espalha, nao clareia.
 List<double> bloomWeights(int levels) {
   if (levels <= 0) return const [];
-  if (levels == 1) return const [1.0];
-  final brutos = <double>[
-    for (var i = 0; i < levels; i++) math.pow(1.6, i).toDouble(),
-  ];
-  final soma = brutos.reduce((a, b) => a + b);
-  // Do mais LARGO (peso menor) para o mais estreito (peso maior).
-  return [for (final b in brutos) b / soma];
+  return List<double>.filled(levels, 1.0 / levels);
 }
 
 /// O sigma de cada nivel, em pixels, para um raio pedido.
 ///
-/// Dobra a cada nivel: e o que cobre um raio grande com poucos passes.
-/// O primeiro nivel e o mais largo.
+/// DOBRA PARA CIMA a partir do raio: o primeiro nivel tem o sigma do
+/// raio pedido e cada seguinte tem o dobro. A versao anterior dividia
+/// por dois a partir do raio, entao o raio da ficha era o MAIOR sigma —
+/// e um Deep Glow de raio 40 nao passava de 40 px, quando no plugin de
+/// referencia 40 e a base de uma piramide que chega a centenas.
 List<double> bloomSigmas(double radiusPx, int levels) {
   if (levels <= 0 || radiusPx <= 0) return const [];
   final out = <double>[];
   for (var i = 0; i < levels; i++) {
-    // i = 0 -> o mais largo.
-    out.add(radiusPx / math.pow(2, i));
+    out.add(radiusPx * math.pow(2, i));
   }
   return out;
 }

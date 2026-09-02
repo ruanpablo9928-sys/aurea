@@ -22,10 +22,12 @@ void main() {
       expect(bloomLevels(1), lessThan(bloomLevels(2)));
     });
 
-    // O nivel estreito da o nucleo brilhante; os largos, o halo.
-    test('o nivel mais estreito pesa mais', () {
+    // Cada oitava com o MESMO peso: e o que faz o halo ir longe. Dar
+    // mais peso ao nivel estreito deixava o largo com 6% da luz, e o
+    // halo sumia a um palmo da forma.
+    test('todos os niveis pesam igual', () {
       final p = bloomWeights(4);
-      expect(p.last, greaterThan(p.first));
+      expect(p.every((v) => (v - 0.25).abs() < 1e-9), isTrue);
     });
 
     test('um nivel so pesa tudo', () {
@@ -33,13 +35,14 @@ void main() {
       expect(bloomWeights(0), isEmpty);
     });
 
-    // Sigma dobrando e o que cobre raio grande com poucos passes; um
-    // passe unico com sigma enorme sai quadrado e com banda.
-    test('o sigma cai pela metade a cada nivel', () {
-      final s = bloomSigmas(80, 3);
-      expect(s[0], closeTo(80, 1e-9));
-      expect(s[1], closeTo(40, 1e-9));
-      expect(s[2], closeTo(20, 1e-9));
+    // Sigma dobrando PARA CIMA a partir do raio: o raio da ficha e a
+    // base da piramide, nao o teto. E o que faz um raio de 40 chegar a
+    // centenas de pixels no nivel largo, como no plugin de referencia.
+    test('o sigma dobra a cada nivel a partir do raio', () {
+      final s = bloomSigmas(40, 3);
+      expect(s[0], closeTo(40, 1e-9));
+      expect(s[1], closeTo(80, 1e-9));
+      expect(s[2], closeTo(160, 1e-9));
     });
 
     test('raio zero nao gera sigma', () {
