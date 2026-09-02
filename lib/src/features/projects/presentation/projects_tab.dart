@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/app_mode.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/aurea_logo.dart';
 import '../../about/presentation/report_sheet.dart';
@@ -211,6 +212,7 @@ class ProjectsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final projects = ref.watch(projectsControllerProvider);
     final theme = Theme.of(context);
+    final completo = ref.watch(appModeProvider).isFull;
     ThumbnailService.instance.init();
 
     return SafeArea(
@@ -247,18 +249,21 @@ class ProjectsTab extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                _IconeQuadrado(
-                  icon: CupertinoIcons.doc_on_doc,
-                  tooltip: 'Abrir template',
-                  onTap: () => _openTemplate(context, ref),
-                ),
-                const SizedBox(width: 10),
-                _IconeQuadrado(
-                  icon: CupertinoIcons.arrow_down_doc,
-                  tooltip: 'Importar preset do Alight (XML)',
-                  onTap: () => _importarAlight(context, ref),
-                ),
+                // Template e preset do Alight sao estudio.
+                if (completo) ...[
+                  const SizedBox(width: 10),
+                  _IconeQuadrado(
+                    icon: CupertinoIcons.doc_on_doc,
+                    tooltip: 'Abrir template',
+                    onTap: () => _openTemplate(context, ref),
+                  ),
+                  const SizedBox(width: 10),
+                  _IconeQuadrado(
+                    icon: CupertinoIcons.arrow_down_doc,
+                    tooltip: 'Importar preset do Alight (XML)',
+                    onTap: () => _importarAlight(context, ref),
+                  ),
+                ],
               ],
             ),
           ),
@@ -324,27 +329,30 @@ class ProjectsTab extends ConsumerWidget {
                 ),
               ),
             ),
-          const SizedBox(height: 28),
           // MODELOS: motions inteiros montados camada por camada — abrir
-          // um e ver como cada coisa foi feita.
-          const _TituloSecao('Modelos'),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 176,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                _CartaoModelo(
-                  imagem: 'assets/templates/notes.jpg',
-                  titulo: 'Notes',
-                  detalhe: 'Icone, botao, listas, whip e glow',
-                  onTap: () =>
-                      _abrirModelo(context, ref, buildNotesMotionTemplate()),
-                ),
-              ],
+          // um e ver como cada coisa foi feita. Estudio: usam texto,
+          // formas e efeitos que o nucleo nao mostra.
+          if (completo) ...[
+            const SizedBox(height: 28),
+            const _TituloSecao('Modelos'),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 176,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  _CartaoModelo(
+                    imagem: 'assets/templates/notes.jpg',
+                    titulo: 'Notes',
+                    detalhe: 'Icone, botao, listas, whip e glow',
+                    onTap: () => _abrirModelo(
+                        context, ref, buildNotesMotionTemplate()),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: 30),
           _Linha(
             icon: CupertinoIcons.sparkles,

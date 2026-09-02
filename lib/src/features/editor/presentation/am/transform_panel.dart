@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/app_mode.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
@@ -11,7 +12,7 @@ import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'panel_chrome.dart';
 
-enum TransformTool { position, rotation, scale, skew, pivot }
+enum TransformTool { position, rotation, scale, skew, pivot, opacity }
 
 LayerProp propOfTool(TransformTool tool) => switch (tool) {
       TransformTool.position => LayerProp.position,
@@ -19,6 +20,7 @@ LayerProp propOfTool(TransformTool tool) => switch (tool) {
       TransformTool.scale => LayerProp.scale,
       TransformTool.skew => LayerProp.skew,
       TransformTool.pivot => LayerProp.pivot,
+      TransformTool.opacity => LayerProp.opacity,
     };
 
 /// Painel "Movimentacao e transformacao": trilho esquerdo (voltar,
@@ -75,6 +77,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
           TransformTool.scale => layer.scaleX.hasKeyframeAt(local),
           TransformTool.skew => layer.skewX.hasKeyframeAt(local),
           TransformTool.pivot => layer.pivot.hasKeyframeAt(local),
+          TransformTool.opacity => layer.opacity.hasKeyframeAt(local),
         };
         final animated = switch (widget.tool) {
           TransformTool.position => layer.position.isAnimated,
@@ -84,6 +87,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
           TransformTool.scale => layer.scaleX.isAnimated,
           TransformTool.skew => layer.skewX.isAnimated,
           TransformTool.pivot => layer.pivot.isAnimated,
+          TransformTool.opacity => layer.opacity.isAnimated,
         };
 
         return _buildBody(
@@ -101,6 +105,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     bool hasKfHere,
     bool animated,
   ) {
+    final completo = ref.watch(appModeProvider).isFull;
     return AmPanelChrome(
       onBack: widget.onBack,
       animado: animated,
@@ -126,14 +131,22 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
             id: TransformTool.scale.name,
             label: 'Escala',
             animated: layer.scaleX.isAnimated || layer.scaleY.isAnimated),
+        // NUCLEO: quatro propriedades — posicao, escala, rotacao e
+        // opacidade. Inclinar e pivo sao estudio.
+        if (completo)
+          ParamTab(
+              id: TransformTool.skew.name,
+              label: 'Inclinar',
+              animated: layer.skewX.isAnimated || layer.skewY.isAnimated),
+        if (completo)
+          ParamTab(
+              id: TransformTool.pivot.name,
+              label: 'Pivo',
+              animated: layer.pivot.isAnimated),
         ParamTab(
-            id: TransformTool.skew.name,
-            label: 'Inclinar',
-            animated: layer.skewX.isAnimated || layer.skewY.isAnimated),
-        ParamTab(
-            id: TransformTool.pivot.name,
-            label: 'Pivo',
-            animated: layer.pivot.isAnimated),
+            id: TransformTool.opacity.name,
+            label: 'Opacidade',
+            animated: layer.opacity.isAnimated),
       ],
       abaAtiva: widget.tool.name,
       onAba: (nome) => widget.onToolChanged(
@@ -156,6 +169,8 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
             _SkewControl(layer: layer, playback: widget.playback),
           TransformTool.pivot =>
             _PivotControl(layer: layer, playback: widget.playback),
+          TransformTool.opacity =>
+            _OpacityControl(layer: layer, playback: widget.playback),
         },
       ),
     );
@@ -170,6 +185,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
       TransformTool.scale => 'escala',
       TransformTool.skew => 'inclinacao',
       TransformTool.pivot => 'pivo',
+      TransformTool.opacity => 'opacidade',
     };
     await showModalBottomSheet<void>(
       context: context,
@@ -748,6 +764,43 @@ class _SkewControl extends ConsumerWidget {
             accentCenter: false,
             height: double.infinity,
             onChanged: (v) => controller.editSkewY(layer.id, t, v),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Opacidade da camada: uma regua de 0 a 100, com o keyframe cravado
+/// pelo trilho como qualquer outra propriedade.
+class _OpacityControl extends ConsumerWidget {
+  const _OpacityControl({required this.layer, required this.playback});
+
+  final Layer layer;
+  final PlaybackController playback;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = playback.time.value;
+    final local = layer.localTime(t);
+    final op = layer.opacity.valueAt(local).clamp(0.0, 1.0);
+    final controller = ref.read(editorControllerProvider.notifier);
+
+    return Column(
+      children: [
+        AmValueChip(
+            text: '${amNumber(op * 100, 0)}%', label: 'Opacidade', width: 132),
+        const SizedBox(height: 10),
+        Expanded(
+          child: AmTickRuler(
+            value: op * 100,
+            min: 0,
+            max: 100,
+            unitsPerPixel: 0.35,
+            accentCenter: false,
+            height: double.infinity,
+            onChanged: (v) => controller.editOpacity(
+                layer.id, playback.time.value, (v / 100).clamp(0.0, 1.0)),
           ),
         ),
       ],

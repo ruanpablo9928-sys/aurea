@@ -12,6 +12,7 @@ import '../application/video_layer_manager.dart';
 import '../domain/gear.dart';
 import '../domain/layer.dart';
 import 'am/align_sheet.dart';
+import '../../../core/app_mode.dart';
 import '../../../core/ui/snack.dart';
 import '../../projects/application/thumbnail_service.dart';
 import 'am/am_colors.dart';
@@ -170,9 +171,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       LayerProp.scale => TransformTool.scale,
       LayerProp.skew => TransformTool.skew,
       LayerProp.pivot => TransformTool.pivot,
+      LayerProp.opacity => TransformTool.opacity,
       _ => null,
     };
-    final podeIr = tool != null || prop == LayerProp.opacity || nome == 'Efeitos';
+    final podeIr = tool != null || nome == 'Efeitos';
 
     AureaSnack.show(
       context,
@@ -186,8 +188,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 if (tool != null) {
                   _tool = tool;
                   _mode = _Mode.transform;
-                } else if (prop == LayerProp.opacity) {
-                  _mode = _Mode.blending;
                 } else {
                   _mode = _Mode.effects;
                 }
@@ -214,7 +214,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       case LayerMenuAction.transform:
         setState(() => _mode = _Mode.transform);
       case LayerMenuAction.blending:
-        setState(() => _mode = _Mode.blending);
+        // NUCLEO: opacidade e uma sub-aba do transform (quatro
+        // propriedades num painel so); mesclagem e matte sao estudio.
+        if (ref.read(appModeProvider).isCore) {
+          setState(() {
+            _tool = TransformTool.opacity;
+            _mode = _Mode.transform;
+          });
+        } else {
+          setState(() => _mode = _Mode.blending);
+        }
       case LayerMenuAction.colorFill:
         setState(() => _mode = _Mode.colorFill);
       case LayerMenuAction.effects:
@@ -867,6 +876,7 @@ class _ActionBar extends ConsumerWidget {
     final multi = ref.watch(multiSelectProvider);
     final targets = <String>{...multi, ?selId};
     final n = targets.length;
+    final completo = ref.watch(appModeProvider).isFull;
 
     Widget btn({
       required IconData icon,
@@ -947,6 +957,7 @@ class _ActionBar extends ConsumerWidget {
               }
             },
           ),
+          if (completo)
           btn(
             icon: CupertinoIcons.square_stack_3d_up,
             enabled: n >= 2,
@@ -956,6 +967,7 @@ class _ActionBar extends ConsumerWidget {
             // senao o "N camadas" ficava aceso com ids mortos.
             onTap: () => _agruparSelecao(ref, targets),
           ),
+          if (completo)
           btn(
             icon: CupertinoIcons.link,
             enabled: n == 1,
@@ -1021,6 +1033,7 @@ class _ActionBar extends ConsumerWidget {
           ),
           // ALINHAR E DISTRIBUIR (PR-X1): exato ao pixel, o que no dedo
           // nunca fica.
+          if (completo)
           btn(
             icon: CupertinoIcons.square_grid_3x2,
             enabled: n >= 1,
@@ -1061,6 +1074,7 @@ class _TransportBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final duration = ref.watch(editorControllerProvider).duration;
     final selectedId = ref.watch(selectedLayerProvider);
+    final completo = ref.watch(appModeProvider).isFull;
 
     final controller = ref.read(editorControllerProvider.notifier);
     return SizedBox(
@@ -1120,6 +1134,17 @@ class _TransportBar extends ConsumerWidget {
             child: const Icon(CupertinoIcons.forward_end,
                 size: 22, color: AmColors.text),
           ),
+          // LOOP: a reproducao volta ao inicio ao chegar no fim — e assim
+          // que se marca batida e se confere um trecho sem parar.
+          ValueListenableBuilder<bool>(
+            valueListenable: playback.loop,
+            builder: (context, loop, _) => GestureDetector(
+              onTap: () => playback.loop.value = !loop,
+              child: Icon(CupertinoIcons.repeat,
+                  size: 22, color: loop ? AmColors.accent : AmColors.text),
+            ),
+          ),
+          if (completo)
           GestureDetector(
             onTap: selectedId == null
                 ? null
@@ -1133,6 +1158,7 @@ class _TransportBar extends ConsumerWidget {
           ),
           // CASCA DE CEBOLA: toque cicla 0 -> 1 -> 2 -> 0. Animar a mao
           // sem ver o quadro anterior e desenhar no escuro.
+          if (completo)
           Builder(builder: (context) {
             final onion = ref.watch(onionSkinProvider);
             return GestureDetector(

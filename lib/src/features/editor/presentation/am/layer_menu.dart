@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../../../core/app_mode.dart';
 import '../../application/mesh_cache.dart';
 import '../../domain/mesh_import.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +58,7 @@ Future<LayerMenuAction?> showLayerMenu(
   Layer layer,
   PlaybackController playback,
 ) {
+  final completo = ref.read(appModeProvider).isFull;
   final controller = ref.read(editorControllerProvider.notifier);
 
   return showModalBottomSheet<LayerMenuAction>(
@@ -152,6 +154,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                   onTap: () => abrirDepois(() =>
                                       openDecupagem(context, ref, layer.id)),
                                 ),
+                                if (completo)
                                 // Mudo e toggle no lugar (nao abre nada):
                                 // nao ha metodo de mudo no controller, e
                                 // composto com updateAudioSpec + copyWith.
@@ -173,6 +176,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                   onTap: () => abrirDepois(() =>
                                       showAudioSheet(context, ref, layer.id)),
                                 ),
+                                if (completo)
                                 _UtilIcon(
                                   icon: CupertinoIcons.metronome,
                                   label: 'Batidas',
@@ -180,7 +184,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                       showBeatsSheet(context, ref, layer.id)),
                                 ),
                               ],
-                              if (layer is VideoLayer) ...[
+                              if (completo && layer is VideoLayer) ...[
                                 _UtilIcon(
                                   icon: CupertinoIcons.crop,
                                   label: 'Reenquadrar sozinho',
@@ -229,6 +233,9 @@ Future<LayerMenuAction?> showLayerMenu(
                               // 3D DA CAMADA e MOTION BLUR na mesma fileira
                               // em que se acha a mascara: o botao existe
                               // onde a pessoa procura, nao num submenu.
+                              // Tudo daqui em diante e ESTUDIO (fora do
+                              // nucleo).
+                              if (completo) ...[
                               _UtilIcon(
                                 icon: layer.is3D
                                     ? CupertinoIcons.cube_fill
@@ -315,12 +322,14 @@ Future<LayerMenuAction?> showLayerMenu(
                                       playback.time.value));
                                 },
                               ),
+                              ],
                             ],
                           ),
                         ),
                       ),
                       // "Mais" fixo no fim, discreto: guarda editores sem
                       // lugar na grade (raros ou especificos do tipo).
+                      if (completo)
                       _UtilIcon(
                         icon: CupertinoIcons.ellipsis,
                         label: 'Mais',
@@ -337,7 +346,30 @@ Future<LayerMenuAction?> showLayerMenu(
                   ),
                 ),
                 const SizedBox(height: 12),
+                // NUCLEO: so o transform e a opacidade. O resto da grade
+                // e estudio.
+                if (!completo)
+                  Row(
+                    children: [
+                      _MenuTile(
+                        icon: CupertinoIcons.move,
+                        label: 'Mover e\ntransf.',
+                        onTap: () => Navigator.of(sheetContext)
+                            .pop(LayerMenuAction.transform),
+                      ),
+                      const SizedBox(width: 8),
+                      _MenuTile(
+                        icon: CupertinoIcons.circle_lefthalf_fill,
+                        label: 'Opacidade',
+                        enabled: layer is! NullLayer,
+                        disabledReason: 'Objeto nulo nao tem opacidade',
+                        onTap: () => Navigator.of(sheetContext)
+                            .pop(LayerMenuAction.blending),
+                      ),
+                    ],
+                  ),
                 // Fileira 1 da grade: 3 botoes largos (aparencia).
+                if (completo)
                 Row(
                   children: [
                     _MenuTile(
@@ -391,8 +423,9 @@ Future<LayerMenuAction?> showLayerMenu(
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                if (completo) const SizedBox(height: 8),
                 // Fileira 2 da grade: 4 botoes (geometria e efeitos).
+                if (completo)
                 Row(
                   children: [
                     _MenuTile(

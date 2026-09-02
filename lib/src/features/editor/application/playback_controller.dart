@@ -22,6 +22,9 @@ class PlaybackController {
   final ValueNotifier<Duration> time = ValueNotifier(Duration.zero);
   final ValueNotifier<bool> playing = ValueNotifier(false);
 
+  /// LOOP: ao chegar no fim, volta ao inicio sem parar o relogio.
+  final ValueNotifier<bool> loop = ValueNotifier(false);
+
   /// Taxa da COMPOSICAO (fps do projeto). O ticker roda a cada vsync
   /// (60-120 Hz), mas o clock so notifica quando o FRAME da composicao
   /// muda — num painel de 90 Hz com projeto de 30 fps, isso corta 2/3
@@ -35,6 +38,12 @@ class PlaybackController {
     final t = _base + elapsed;
     final end = durationOf();
     if (t >= end) {
+      if (loop.value && end > Duration.zero) {
+        // Recomeca de zero no proximo tick: a base passa a ser -elapsed.
+        _base = Duration.zero - elapsed;
+        time.value = Duration.zero;
+        return;
+      }
       time.value = end;
       pause();
       return;
@@ -134,5 +143,6 @@ class PlaybackController {
     _ticker.dispose();
     time.dispose();
     playing.dispose();
+    loop.dispose();
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/app_mode.dart';
 import '../../application/editor_controller.dart';
 import '../../application/iconify_service.dart';
 import '../../application/transcription_service.dart';
@@ -22,6 +23,7 @@ Future<void> showAddLayerSheet(
   WidgetRef ref,
   Duration playhead,
 ) {
+  final completo = ref.read(appModeProvider).isFull;
   final controller = ref.read(editorControllerProvider.notifier);
   // FORMA NA MESMA FOLHA. Criar um retangulo era "+", folha de tipos,
   // OUTRA folha com quinze formas, toque — e a segunda folha subindo por
@@ -70,6 +72,8 @@ Future<void> showAddLayerSheet(
                     fontWeight: FontWeight.w700,
                     color: AmColors.text)),
             const SizedBox(height: 18),
+            // NUCLEO: video, imagem e audio. O resto so no estudio
+            // completo (interruptor AppMode).
             Row(
               children: [
                 _AddOption(
@@ -88,6 +92,7 @@ Future<void> showAddLayerSheet(
                     controller.importImageFromGallery(playhead);
                   },
                 ),
+                if (completo)
                 _AddOption(
                   icon: CupertinoIcons.textformat,
                   label: 'Texto',
@@ -96,11 +101,13 @@ Future<void> showAddLayerSheet(
                     controller.addTextLayer(playhead);
                   },
                 ),
+                if (completo)
                 _AddOption(
                   icon: CupertinoIcons.circle_fill,
                   label: 'Forma',
                   onTap: () => setSheetState(() => mostrarFormas = true),
                 ),
+                if (completo)
                 _AddOption(
                   icon: CupertinoIcons.captions_bubble,
                   label: 'Legendas',
@@ -117,9 +124,11 @@ Future<void> showAddLayerSheet(
                     controller.importAudioFile(playhead);
                   },
                 ),
+                if (!completo) const Spacer(flex: 3),
               ],
             ),
-            const SizedBox(height: 12),
+            if (completo) const SizedBox(height: 12),
+            if (completo)
             Row(
               children: [
                 _AddOption(
