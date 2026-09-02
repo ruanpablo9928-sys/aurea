@@ -623,29 +623,36 @@ class ShapeStroke extends ShapeItem {
   ShapeStroke({
     super.id,
     this.color = const Color(0xFFFFFFFF),
-    this.width = 12,
+    AnimatedDouble? width,
     this.cap = StrokeCap.round,
     this.join = StrokeJoin.round,
     this.miterLimit = 4,
-    this.opacity = 1,
-    this.dashLength = 0,
-    this.gapLength = 0,
+    AnimatedDouble? opacity,
+    AnimatedDouble? dashLength,
+    AnimatedDouble? gapLength,
     AnimatedDouble? dashOffset,
-  }) : dashOffset = dashOffset ?? AnimatedDouble(0);
+  })  : width = width ?? AnimatedDouble(12),
+        opacity = opacity ?? AnimatedDouble(1),
+        dashLength = dashLength ?? AnimatedDouble(0),
+        gapLength = gapLength ?? AnimatedDouble(0),
+        dashOffset = dashOffset ?? AnimatedDouble(0);
 
   final Color color;
-  final double width;
+
+  /// TODO NUMERO ANIMA (constituicao, regra 6): espessura, opacidade e
+  /// o tracejado tem diamante e curva como qualquer outra propriedade.
+  final AnimatedDouble width;
   final StrokeCap cap;
   final StrokeJoin join;
   final double miterLimit;
 
   /// Opacidade PROPRIA do contorno (cadeia: camada x preenchimento x
   /// contorno — "vidro com borda" = fill 20% e stroke 100%).
-  final double opacity;
+  final AnimatedDouble opacity;
 
   /// dashLength > 0 liga o tracejado.
-  final double dashLength;
-  final double gapLength;
+  final AnimatedDouble dashLength;
+  final AnimatedDouble gapLength;
 
   /// Deslocamento do tracejado ao longo do caminho — ANIMAVEL: keyframe
   /// linear da a "formiguinha" (receita 12 da spec de mascaras).
@@ -653,13 +660,13 @@ class ShapeStroke extends ShapeItem {
 
   ShapeStroke copyWith({
     Color? color,
-    double? width,
+    AnimatedDouble? width,
     StrokeCap? cap,
     StrokeJoin? join,
     double? miterLimit,
-    double? opacity,
-    double? dashLength,
-    double? gapLength,
+    AnimatedDouble? opacity,
+    AnimatedDouble? dashLength,
+    AnimatedDouble? gapLength,
     AnimatedDouble? dashOffset,
   }) {
     return ShapeStroke(
@@ -1436,16 +1443,21 @@ List<ShapeDraw> evaluateShape(
       case ShapeStroke stroke:
         for (final path in paths) {
           draws.add(ShapeDraw(
-            path: _dashPath(path, stroke.dashLength, stroke.gapLength,
+            path: _dashPath(
+                path,
+                stroke.dashLength.valueAt(t),
+                stroke.gapLength.valueAt(t),
                 stroke.dashOffset.valueAt(t)),
             paint: Paint()
               ..style = PaintingStyle.stroke
-              ..strokeWidth = stroke.width
+              ..strokeWidth = stroke.width.valueAt(t)
               ..strokeCap = stroke.cap
               ..strokeJoin = stroke.join
               ..strokeMiterLimit = stroke.miterLimit
               ..color = stroke.color.withValues(
-                  alpha: stroke.color.a * stroke.opacity * opacity),
+                  alpha: stroke.color.a *
+                      stroke.opacity.valueAt(t).clamp(0.0, 1.0) *
+                      opacity),
           ));
         }
     }
@@ -1546,7 +1558,7 @@ abstract final class ShapePresets {
 
   static List<ShapeItem> wave() => [
         ShapePath(primitive: ShapePrimitive.wave, width: 640),
-        ShapeStroke(color: const Color(0xFF35C4E7), width: 16),
+        ShapeStroke(color: const Color(0xFF35C4E7), width: AnimatedDouble(16)),
       ];
 
   static List<ShapeItem> polygon() => [

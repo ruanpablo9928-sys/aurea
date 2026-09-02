@@ -34,7 +34,7 @@ void main() {
       final draws = evaluateShape([
         ShapeSvgPath(pathData: 'M0 0 L100 0 L100 100 L0 100 Z'),
         TrimOperator(end: AnimatedDouble(0.5)),
-        ShapeStroke(width: 8),
+        ShapeStroke(width: AnimatedDouble(8)),
       ], Duration.zero);
       expect(draws, isNotEmpty);
     });
@@ -43,8 +43,8 @@ void main() {
   group('Auditoria de formas (PR-A1) — gaps corrigidos', () {
     test('formiguinha: dash offset animado desloca o tracejado', () {
       final stroke = ShapeStroke(
-        dashLength: 20,
-        gapLength: 10,
+        dashLength: AnimatedDouble(20),
+        gapLength: AnimatedDouble(10),
         dashOffset: AnimatedDouble(0, [
           Keyframe(time: Duration.zero, value: 0),
           Keyframe(time: const Duration(seconds: 1), value: 30),

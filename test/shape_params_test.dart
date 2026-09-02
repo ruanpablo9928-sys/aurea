@@ -18,7 +18,7 @@ void main() {
             .withKeyframe(Duration.zero, 100)
             .withKeyframe(const Duration(seconds: 1), 400),
       );
-      final items = [rect, ShapeStroke(width: 10, dashLength: 0)];
+      final items = [rect, ShapeStroke(width: AnimatedDouble(10), dashLength: AnimatedDouble(0))];
 
       final at0 = evaluateShape(items, Duration.zero);
       final at1 = evaluateShape(items, const Duration(seconds: 1));
@@ -152,7 +152,7 @@ void main() {
         ShapeParametric(kind: ParamShapeKind.rect),
         ShapeFill(color: const Color(0xFFFFFFFF), opacity: 0.5),
         ShapeStroke(
-            color: const Color(0xFFFFFFFF), opacity: 0.5, width: 4),
+            color: const Color(0xFFFFFFFF), opacity: AnimatedDouble(0.5), width: AnimatedDouble(4)),
       ];
       // "opacity" aqui e a da CAMADA repassada ao avaliador.
       final draws = evaluateShape(items, Duration.zero, opacity: 0.5);
@@ -163,7 +163,7 @@ void main() {
     test('juncao/limite de miter chegam ao Paint', () {
       final draws = evaluateShape([
         ShapeParametric(kind: ParamShapeKind.rect),
-        ShapeStroke(join: StrokeJoin.miter, miterLimit: 2, width: 6),
+        ShapeStroke(join: StrokeJoin.miter, miterLimit: 2, width: AnimatedDouble(6)),
       ], Duration.zero);
       expect(draws.single.paint.strokeJoin, StrokeJoin.miter);
       // O getter de strokeMiterLimit devolve o valor CODIFICADO do
@@ -190,7 +190,7 @@ void main() {
           ),
           ShapeFill(evenOdd: true),
           ShapeStroke(
-              join: StrokeJoin.bevel, miterLimit: 7, opacity: 0.4),
+              join: StrokeJoin.bevel, miterLimit: 7, opacity: AnimatedDouble(0.4)),
         ],
       );
       final back =
@@ -204,7 +204,7 @@ void main() {
       final st = back.contents[2] as ShapeStroke;
       expect(st.join, StrokeJoin.bevel);
       expect(st.miterLimit, 7);
-      expect(st.opacity, 0.4);
+      expect(st.opacity.base, 0.4);
     });
 
     test('keyframes da geometria aparecem na barra da camada', () {

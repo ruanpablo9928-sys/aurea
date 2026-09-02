@@ -439,7 +439,7 @@ VideoProject buildNotesMotionTemplate() {
           size: 66,
         ),
         ShapeFill(color: _branco),
-        ShapeStroke(color: _tinta, width: 4),
+        ShapeStroke(color: _tinta, width: AnimatedDouble(4)),
       ],
     ));
     meta['b_cursor'] = _sombra(opacidade: 0.25, dist: 4, tam: 10);
@@ -744,7 +744,7 @@ VideoProject buildNotesMotionTemplate() {
             d: 24,
             cor: _branco,
             soTraco: true,
-            traco: ShapeStroke(color: const Color(0xFFC7C7CC), width: 2.5),
+            traco: ShapeStroke(color: const Color(0xFFC7C7CC), width: AnimatedDouble(2.5)),
             opacidade: _opacidade([(6.45 + i * 0.04, 0), (6.75 + i * 0.04, 1)]),
           )
         else ...[
@@ -779,7 +779,7 @@ VideoProject buildNotesMotionTemplate() {
             ]),
             contents: [
               ShapeSvgPath(pathData: 'M2 7 L5.5 10.5 L12 3', size: 14),
-              ShapeStroke(color: _branco, width: 2.6),
+              ShapeStroke(color: _branco, width: AnimatedDouble(2.6)),
             ],
           ),
         ],

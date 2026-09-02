@@ -182,7 +182,15 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
       case ShapeTool.stroke:
         final s = _stroke(l);
         if (s == null) return const [];
-        return [item(s.id, 'dashOffset', 'Deslocamento', -2000, 2000)];
+        // TODO NUMERO ANIMA (regra 6): espessura, tracejado, espaco e
+        // deslocamento tem diamante no trilho e curva.
+        return [
+          item(s.id, 'width', 'Espessura', 0, 120),
+          item(s.id, 'dashLength', 'Tracejado', 0, 200),
+          item(s.id, 'gapLength', 'Espaco', 0, 200),
+          item(s.id, 'dashOffset', 'Deslocamento', -2000, 2000),
+          item(s.id, 'opacity', 'Opacidade', 0, 1, scale: 100, suffix: '%'),
+        ];
       case ShapeTool.draw:
         final t = _trim(l);
         if (t == null) return const [];
@@ -554,54 +562,24 @@ class _Traco extends StatelessWidget {
       );
     }
     final local = layer.localTime(t);
-    final desloc = trilhas.isEmpty ? null : trilhas.first;
     return SingleChildScrollView(
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _Linha(
-                  label: 'Espessura',
-                  value: s.width,
-                  min: 0,
-                  max: 120,
-                  upp: 0.3,
-                  display: amNumber(s.width, 0),
-                  onChanged: (v) => onUpdate((x) => x.copyWith(width: v)),
-                ),
-              ),
-            ],
-          ),
-          _Linha(
-            label: 'Tracejado',
-            value: s.dashLength,
-            min: 0,
-            max: 200,
-            upp: 0.5,
-            display: s.dashLength <= 0 ? 'Solido' : amNumber(s.dashLength, 0),
-            onChanged: (v) => onUpdate((x) => x.copyWith(
-                dashLength: v, gapLength: x.gapLength <= 0 ? v : x.gapLength)),
-          ),
-          _Linha(
-            label: 'Espaco',
-            value: s.gapLength,
-            min: 0,
-            max: 200,
-            upp: 0.5,
-            display: amNumber(s.gapLength, 0),
-            onChanged: (v) => onUpdate((x) => x.copyWith(gapLength: v)),
-          ),
-          if (desloc != null)
+          // Toda regua daqui e uma TRILHA: le do keyframe, escreve no
+          // tempo, e o diamante do trilho crava (regras 5 e 6).
+          for (final tr in trilhas)
             _Linha(
-              label: 'Deslocamento',
-              value: desloc.read(layer)?.valueAt(local) ?? 0,
-              min: -2000,
-              max: 2000,
-              upp: 3,
-              display: amNumber(desloc.read(layer)?.valueAt(local) ?? 0, 0),
-              onChanged: (v) => desloc.write(t, v),
-              animado: desloc.read(layer)?.isAnimated ?? false,
+              label: tr.label,
+              value: (tr.read(layer)?.valueAt(local) ?? 0) * tr.scale,
+              min: tr.min * tr.scale,
+              max: tr.max * tr.scale,
+              upp: (tr.max - tr.min) * tr.scale / 420,
+              display: tr.label == 'Tracejado' &&
+                      (tr.read(layer)?.valueAt(local) ?? 0) <= 0
+                  ? 'Solido'
+                  : '${amNumber((tr.read(layer)?.valueAt(local) ?? 0) * tr.scale, tr.decimals)}${tr.suffix}',
+              onChanged: (v) => tr.write(t, v / tr.scale),
+              animado: tr.read(layer)?.isAnimated ?? false,
             ),
           const SizedBox(height: 6),
           Row(

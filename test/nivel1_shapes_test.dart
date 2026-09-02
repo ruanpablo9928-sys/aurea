@@ -9,6 +9,7 @@ import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/mask.dart';
+import 'package:aurea/src/features/editor/domain/project_store.dart';
 import 'package:aurea/src/features/editor/domain/shape.dart';
 import 'package:aurea/src/features/editor/domain/shape_library.dart';
 import 'package:aurea/src/features/editor/domain/video_project.dart';
@@ -109,15 +110,56 @@ void main() {
       final s2 = ctl.ensureShapeStroke(id);
       expect(s1, isNotNull);
       expect(s1, s2, reason: 'nao duplica o traco');
-      ctl.updateShapeStroke(id, (s) => s.copyWith(dashLength: 20, gapLength: 12));
+      ctl.updateShapeStroke(id, (s) => s.copyWith(dashLength: AnimatedDouble(20), gapLength: AnimatedDouble(12)));
       ctl.toggleShapeItemTrackKeyframe(id, s1!, 'dashOffset', Duration.zero);
       ctl.editShapeItemTrack(id, s1, 'dashOffset', const Duration(seconds: 2), 300);
       final stroke = camada().contents.whereType<ShapeStroke>().single;
-      expect(stroke.dashLength, 20);
+      expect(stroke.dashLength.base, 20);
       expect(stroke.dashOffset.keyframes.length, 2, reason: 'formiguinha');
       expect(stroke.dashOffset.valueAt(const Duration(seconds: 1)), 150);
       ctl.removeShapeStroke(id);
       expect(camada().contents.whereType<ShapeStroke>(), isEmpty);
+    });
+
+    test('regra 6: todo numero do traco anima, e o projeto antigo abre', () {
+      final ctl = c.read(editorControllerProvider.notifier);
+      final sid = ctl.ensureShapeStroke(id)!;
+      // Espessura com dois keyframes: o desenho usa o valor DO TEMPO.
+      ctl.toggleShapeItemTrackKeyframe(id, sid, 'width', Duration.zero);
+      ctl.editShapeItemTrack(id, sid, 'width', Duration.zero, 4);
+      ctl.editShapeItemTrack(id, sid, 'width', const Duration(seconds: 1), 40);
+      final stroke = camada().contents.whereType<ShapeStroke>().single;
+      expect(stroke.width.keyframes.length, 2);
+      final meio = evaluateShape(
+          camada().contents, const Duration(milliseconds: 500));
+      expect(meio.last.paint.strokeWidth, closeTo(22, 0.001));
+
+      // Os quatro numeros tem trilha; nenhum ficou como double solto.
+      for (final k in ['width', 'opacity', 'dashLength', 'gapLength']) {
+        expect(EditorController.shapeItemTrack(stroke, k), isNotNull,
+            reason: k);
+      }
+      // E viram diamante na barra da camada.
+      expect(camada().moduleTimesUs, contains(0));
+
+      // Projeto salvo com os numeros soltos (antes da regra 6) ainda abre.
+      final antigo = <String, dynamic>{
+        'kind': 'stroke',
+        'id': 'x',
+        'color': 0xFFFFFFFF,
+        'w': 7.0,
+        'cap': 1,
+        'join': 1,
+        'miter': 4.0,
+        'op': 0.5,
+        'dash': 12.0,
+        'gap': 6.0,
+      };
+      final lido = shapeItemFromJson(antigo) as ShapeStroke;
+      expect(lido.width.base, 7);
+      expect(lido.opacity.base, 0.5);
+      expect(lido.dashLength.base, 12);
+      expect(lido.gapLength.base, 6);
     });
 
     test('Drawing Progress: entra antes da pintura e anima de 0 a 100', () {
@@ -167,7 +209,7 @@ void main() {
     test('forma vazia (desenho vetorial) ganha um caminho aberto', () {
       final ctl = c.read(editorControllerProvider.notifier);
       ctl.addShapeLayer(Duration.zero,
-          contents: [ShapeStroke(width: 10)], name: 'Desenho');
+          contents: [ShapeStroke(width: AnimatedDouble(10))], name: 'Desenho');
       final nova = c.read(editorControllerProvider).layers.firstWhere((l) => l.name.startsWith('Desenho'));
       final itemId = ctl.ensureShapeBezierGeometry(nova.id, Duration.zero)!;
       final bez = ctl.shapeBezierOf(nova.id, itemId)!;

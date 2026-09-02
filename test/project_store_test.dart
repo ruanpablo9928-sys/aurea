@@ -79,7 +79,7 @@ void main() {
               TrimOperator(end: AnimatedDouble(0.6)),
               RepeaterOperator(copies: 4, dx: 100),
               ShapeFill(color: const Color(0xFFFFB020)),
-              ShapeStroke(dashLength: 10, gapLength: 6),
+              ShapeStroke(dashLength: AnimatedDouble(10), gapLength: AnimatedDouble(6)),
             ],
           ),
           GroupLayer(
@@ -176,7 +176,7 @@ void main() {
       expect(shape.rotationX.base, 45);
       expect(shape.contents.length, 5);
       expect(shape.contents[2], isA<RepeaterOperator>());
-      expect((shape.contents[4] as ShapeStroke).dashLength, 10);
+      expect((shape.contents[4] as ShapeStroke).dashLength.base, 10);
 
       final group = restored.layers[2] as GroupLayer;
       expect(group.children.single, isA<NullLayer>());

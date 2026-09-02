@@ -225,7 +225,7 @@ class ShapeLibrary {
   /// Linha: caminho aberto com traco, sem preenchimento.
   static List<ShapeItem> line() => [
         _bezier([_v(-200, 0), _v(200, 0)], closed: false),
-        ShapeStroke(color: const Color(0xFFFFFFFF), width: 14),
+        ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(14)),
       ];
 
   /// X: duas barras cruzadas, doze cantos.

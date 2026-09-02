@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../domain/keyframe.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
 import '../../domain/shape_library.dart';
@@ -59,7 +60,7 @@ class _FreehandOverlayState extends ConsumerState<FreehandOverlay> {
       widget.playback.time.value,
       contents: [
         ShapeBezier(path: AnimatedPath(caminho)),
-        ShapeStroke(color: const Color(0xFFFFFFFF), width: 12),
+        ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(12)),
       ],
       name: 'Desenho livre',
     );

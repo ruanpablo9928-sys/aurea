@@ -64,6 +64,14 @@ Map<String, dynamic> _ad(AnimatedDouble a) => {
         },
     };
 
+/// Numero que VIROU animavel (constituicao, regra 6): projeto antigo
+/// gravou um numero solto; o novo grava a trilha inteira. Os dois abrem.
+AnimatedDouble _asAdOuNumero(dynamic v, double padrao) {
+  if (v == null) return AnimatedDouble(padrao);
+  if (v is num) return AnimatedDouble(v.toDouble());
+  return _asAd(v);
+}
+
 AnimatedDouble _asAd(dynamic v) {
   final m = v as Map<String, dynamic>;
   final loopMap = m['loop'] as Map<String, dynamic>?;
@@ -361,13 +369,13 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
           'kind': 'stroke',
           'id': st.id,
           'color': _col(st.color),
-          'w': st.width,
+          'w': _ad(st.width),
           'cap': st.cap.index,
           'join': st.join.index,
           'miter': st.miterLimit,
-          'op': st.opacity,
-          'dash': st.dashLength,
-          'gap': st.gapLength,
+          'op': _ad(st.opacity),
+          'dash': _ad(st.dashLength),
+          'gap': _ad(st.gapLength),
           'doff': _ad(st.dashOffset),
         },
       ShapeGradientFill g => {
@@ -455,6 +463,11 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
         },
     };
 
+/// Um item de forma para JSON e de volta — publico para os testes de
+/// compatibilidade (numero que virou animavel continua abrindo).
+Map<String, dynamic> shapeItemToJson(ShapeItem s) => _shapeItem(s);
+ShapeItem shapeItemFromJson(Map<String, dynamic> m) => _asShapeItem(m);
+
 ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
       'path' => ShapePath(
           id: m['id'] as String,
@@ -496,15 +509,15 @@ ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
       'stroke' => ShapeStroke(
           id: m['id'] as String,
           color: _asCol(m['color']),
-          width: (m['w'] as num).toDouble(),
+          width: _asAdOuNumero(m['w'], 12),
           cap: StrokeCap.values[(m['cap'] as num).toInt()],
           join: m['join'] == null
               ? StrokeJoin.round
               : StrokeJoin.values[(m['join'] as num).toInt()],
           miterLimit: (m['miter'] as num?)?.toDouble() ?? 4,
-          opacity: (m['op'] as num?)?.toDouble() ?? 1,
-          dashLength: (m['dash'] as num).toDouble(),
-          gapLength: (m['gap'] as num).toDouble(),
+          opacity: _asAdOuNumero(m['op'], 1),
+          dashLength: _asAdOuNumero(m['dash'], 0),
+          gapLength: _asAdOuNumero(m['gap'], 0),
           dashOffset:
               m['doff'] == null ? AnimatedDouble(0) : _asAd(m['doff']),
         ),

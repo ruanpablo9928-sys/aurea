@@ -748,7 +748,12 @@ class ShapeLayer extends Layer {
         case ShapeBezier b:
           out.addAll(_times(b.path.keyframes));
         case ShapeStroke s:
-          out.addAll(_times(s.dashOffset.keyframes));
+          out
+            ..addAll(_times(s.width.keyframes))
+            ..addAll(_times(s.opacity.keyframes))
+            ..addAll(_times(s.dashLength.keyframes))
+            ..addAll(_times(s.gapLength.keyframes))
+            ..addAll(_times(s.dashOffset.keyframes));
         // Geometria parametrica: TODAS as trilhas viram diamantes na
         // barra da camada.
         case ShapeParametric p:

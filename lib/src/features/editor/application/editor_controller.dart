@@ -3677,7 +3677,14 @@ class EditorController extends Notifier<VideoProject> {
             'offset' => t.offset,
             _ => null,
           },
-        ShapeStroke s => key == 'dashOffset' ? s.dashOffset : null,
+        ShapeStroke s => switch (key) {
+            'width' => s.width,
+            'opacity' => s.opacity,
+            'dashLength' => s.dashLength,
+            'gapLength' => s.gapLength,
+            'dashOffset' => s.dashOffset,
+            _ => null,
+          },
         _ => null,
       };
 
@@ -3690,7 +3697,14 @@ class EditorController extends Notifier<VideoProject> {
             'offset' => t.copyWith(offset: v),
             _ => t,
           },
-        ShapeStroke s => key == 'dashOffset' ? s.copyWith(dashOffset: v) : s,
+        ShapeStroke s => switch (key) {
+            'width' => s.copyWith(width: v),
+            'opacity' => s.copyWith(opacity: v),
+            'dashLength' => s.copyWith(dashLength: v),
+            'gapLength' => s.copyWith(gapLength: v),
+            'dashOffset' => s.copyWith(dashOffset: v),
+            _ => s,
+          },
         _ => item,
       };
 
@@ -3744,7 +3758,7 @@ class EditorController extends Notifier<VideoProject> {
     for (final i in layer.contents) {
       if (i is ShapeStroke) return i.id;
     }
-    final s = ShapeStroke(color: color, width: width);
+    final s = ShapeStroke(color: color, width: AnimatedDouble(width));
     _updateShape(id, (items) => [...items, s]);
     return s.id;
   }

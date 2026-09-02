@@ -11,6 +11,7 @@ import '../../application/transcription_service.dart';
 import '../../domain/caption.dart';
 import '../../domain/element3d.dart';
 import '../../domain/layer.dart';
+import '../../domain/keyframe.dart';
 import '../../domain/shape.dart';
 import '../../domain/shape_library.dart';
 import '../am/points_panel.dart' show editPointsRequestProvider;
@@ -994,7 +995,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
           }),
           item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
             final id = _criaForma(
-                () => [ShapeStroke(color: const Color(0xFFFFFFFF), width: 10)],
+                () => [ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(10))],
                 'Desenho');
             _fecha();
             if (id != null) {
