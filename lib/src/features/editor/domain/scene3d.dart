@@ -32,6 +32,8 @@ class Material3D {
     this.opacity = 1.0,
     this.kind = MaterialKind.pbr,
     this.textureLayerId,
+    this.reflectivity = 0.0,
+    this.imagePath,
   });
 
   final String name;
@@ -41,6 +43,16 @@ class Material3D {
   final double emissive;
   final double opacity;
   final MaterialKind kind;
+
+  /// REFLEXO DO AMBIENTE (0..1): quanto da cena ao redor a superficie
+  /// devolve. Zero e fosco; um e espelho. Multiplica a forca global da
+  /// cena, entao um material espelhado numa cena sem ambiente continua
+  /// fosco.
+  final double reflectivity;
+
+  /// IMAGEM NA SUPERFICIE: um arquivo vestindo o objeto, projetado por
+  /// caixa (cada face recebe a imagem pelo eixo que ela mais encara).
+  final String? imagePath;
 
   /// TEXTURA VINDA DE CAMADA DA CENA (§6): uma precomp animada vira a
   /// tela de um celular 3D ou o rotulo de uma embalagem. E o recurso
@@ -59,6 +71,9 @@ class Material3D {
     double? opacity,
     MaterialKind? kind,
     String? textureLayerId,
+    double? reflectivity,
+    String? imagePath,
+    bool clearImage = false,
   }) =>
       Material3D(
         name: name ?? this.name,
@@ -69,6 +84,8 @@ class Material3D {
         opacity: opacity ?? this.opacity,
         kind: kind ?? this.kind,
         textureLayerId: textureLayerId ?? this.textureLayerId,
+        reflectivity: reflectivity ?? this.reflectivity,
+        imagePath: clearImage ? null : (imagePath ?? this.imagePath),
       );
 }
 
@@ -306,9 +323,16 @@ class Scene3D {
     this.msaa = true,
     this.draftMode = false,
     this.cameraParentId,
+    this.environment = EnvironmentKind.estudio,
+    this.envReflect = 0.7,
   });
 
   final List<SceneNode> nodes;
+
+  /// O AMBIENTE refletido pelos materiais (ver [EnvironmentKind]) e a
+  /// forca global do reflexo, que multiplica a de cada material.
+  final EnvironmentKind environment;
+  final double envReflect;
 
   /// De qual NO da cena a camera interna e filha. Nulo = solta.
   ///
@@ -368,8 +392,12 @@ class Scene3D {
     bool? draftMode,
     String? cameraParentId,
     bool clearCameraParent = false,
+    EnvironmentKind? environment,
+    double? envReflect,
   }) =>
       Scene3D(
+        environment: environment ?? this.environment,
+        envReflect: envReflect ?? this.envReflect,
         nodes: nodes ?? this.nodes,
         lights: lights ?? this.lights,
         savedViews: savedViews ?? this.savedViews,
@@ -450,11 +478,22 @@ class RenderTri {
     required this.color,
     required this.transparent,
     this.nodeId = '',
+    this.uvA,
+    this.uvB,
+    this.uvC,
+    this.texture,
   });
 
   final Offset a;
   final Offset b;
   final Offset c;
+
+  /// Coordenadas de imagem (0..1) de cada canto, e o arquivo da imagem.
+  /// Nulos = face de cor lisa.
+  final Offset? uvA;
+  final Offset? uvB;
+  final Offset? uvC;
+  final String? texture;
 
   /// Z medio em espaco de camera (maior = mais longe).
   final double depth;
@@ -748,9 +787,36 @@ SceneFrame renderScene(
 
       final isTransparent = node.material.isTransparent;
 
+      // IMAGEM NA SUPERFICIE: a luz vira fator (base branca) e a imagem
+      // entra multiplicada no desenho. As coordenadas vem por PROJECAO
+      // DE CAIXA nas coordenadas locais da malha: cada face recebe a
+      // imagem pelo eixo que ela mais encara.
+      final textura = node.material.imagePath;
+      final matLuz = textura == null
+          ? node.material
+          : node.material.copyWith(baseColor: const Color(0xFFFFFFFF));
+      var lminX = double.infinity, lminY = double.infinity,
+          lminZ = double.infinity;
+      var lmaxX = -double.infinity, lmaxY = -double.infinity,
+          lmaxZ = -double.infinity;
+      if (textura != null) {
+        for (final v in mesh.verts) {
+          if (v[0] < lminX) lminX = v[0];
+          if (v[0] > lmaxX) lmaxX = v[0];
+          if (v[1] < lminY) lminY = v[1];
+          if (v[1] > lmaxY) lmaxY = v[1];
+          if (v[2] < lminZ) lminZ = v[2];
+          if (v[2] > lmaxZ) lmaxZ = v[2];
+        }
+      }
+      double faixa(double a, double lo, double hi) =>
+          hi - lo < 1e-9 ? 0.5 : ((a - lo) / (hi - lo)).clamp(0.0, 1.0);
+
       for (final face in mesh.faces) {
-        // Normal em espaco de MUNDO (Newell), para a iluminacao.
+        // Normal em espaco de MUNDO (Newell), para a iluminacao — e a
+        // normal LOCAL, para escolher o eixo da projecao da imagem.
         var nx = 0.0, ny = 0.0, nz = 0.0;
+        var lnx = 0.0, lny = 0.0, lnz = 0.0;
         var fcx = 0.0, fcy = 0.0, fcz = 0.0;
         for (var i = 0; i < face.length; i++) {
           final a = face[i];
@@ -761,6 +827,24 @@ SceneFrame renderScene(
           fcx += wx[a];
           fcy += wy[a];
           fcz += wz[a];
+          if (textura != null) {
+            final va = mesh.verts[a], vb = mesh.verts[b];
+            lnx += (va[1] - vb[1]) * (va[2] + vb[2]);
+            lny += (va[2] - vb[2]) * (va[0] + vb[0]);
+            lnz += (va[0] - vb[0]) * (va[1] + vb[1]);
+          }
+        }
+        Offset? uvDe(int i) {
+          if (textura == null) return null;
+          final v = mesh.verts[i];
+          final ax = lnx.abs(), ay = lny.abs(), az = lnz.abs();
+          if (ax >= ay && ax >= az) {
+            return Offset(faixa(v[2], lminZ, lmaxZ), faixa(v[1], lminY, lmaxY));
+          }
+          if (ay >= ax && ay >= az) {
+            return Offset(faixa(v[0], lminX, lmaxX), faixa(v[2], lminZ, lmaxZ));
+          }
+          return Offset(faixa(v[0], lminX, lmaxX), faixa(v[1], lminY, lmaxY));
         }
         final inv = 1.0 / face.length;
         final faceCenter = Vec3(fcx * inv, fcy * inv, fcz * inv);
@@ -788,10 +872,11 @@ SceneFrame renderScene(
 
         final color = shadeFace(
           scene: scene,
-          material: node.material,
+          material: matLuz,
           normal: normal,
           point: faceCenter,
           t: t,
+          viewDir: (cam.position - faceCenter).normalized,
         );
 
         // Leque de triangulos: o poligono vira triangulos, e cada um
@@ -847,6 +932,10 @@ SceneFrame renderScene(
             color: color,
             transparent: isTransparent,
             nodeId: node.id,
+            uvA: uvDe(ia),
+            uvB: uvDe(ib),
+            uvC: uvDe(ic),
+            texture: textura,
           );
           if (isTransparent) {
             transparent.add(tri);
@@ -942,6 +1031,7 @@ Color shadeFace({
   required Vec3 normal,
   required Vec3 point,
   required Duration t,
+  Vec3? viewDir,
 }) {
   if (material.kind == MaterialKind.unlit) return material.baseColor;
 
@@ -1009,6 +1099,63 @@ Color shadeFace({
       g += (baseG * metalTint + (1 - metalTint)) * spec;
       b += (baseB * metalTint + (1 - metalTint)) * spec;
     }
+  }
+
+  // REFLEXO DO AMBIENTE. A superficie devolve o que ha ao redor na
+  // direcao espelhada da vista; Fresnel faz a borda refletir mais que o
+  // centro (e o que se ve numa bola de metal: o meio mostra a cor, a
+  // borda mostra a sala). Rugosidade embaca o reflexo puxando-o para a
+  // media do hemisferio, e metal tinge o reflexo com a propria cor.
+  final refl = material.reflectivity * scene.envReflect;
+  if (viewDir != null && refl > 0.001) {
+    final nv = normal.dot(viewDir).clamp(0.0, 1.0);
+    final rv = normal * (2 * nv) - viewDir;
+    Vec3? sol;
+    var solR = 1.0, solG = 1.0, solB = 1.0, solI = 0.0;
+    for (final light in scene.lights) {
+      if (light.kind != Light3DKind.directional) continue;
+      final i = light.intensity.valueAt(t);
+      if (i <= solI) continue;
+      solI = i;
+      sol = (light.direction * -1).normalized;
+      solR = light.color.r;
+      solG = light.color.g;
+      solB = light.color.b;
+    }
+    final rough = material.roughness.clamp(0.0, 1.0);
+    var (er, eg, eb) = environmentColor(
+      scene.environment,
+      rv.x,
+      rv.y,
+      rv.z,
+      sunX: sol?.x ?? 0,
+      sunY: sol?.y ?? 0,
+      sunZ: sol?.z ?? 0,
+      sunR: solR,
+      sunG: solG,
+      sunB: solB,
+      sunSharp: 8 + (1 - rough) * (1 - rough) * 300,
+      sunGain: sol == null ? 0 : solI * (1 - rough * 0.7),
+    );
+    // Embacar: mistura com a media do hemisferio na altura do reflexo.
+    if (rough > 0.01) {
+      final (mr, mg, mb) = environmentColor(scene.environment, 0, rv.y, 0);
+      final k = rough * 0.85;
+      er += (mr - er) * k;
+      eg += (mg - eg) * k;
+      eb += (mb - eb) * k;
+    }
+    final fresnel = 0.04 + 0.96 * math.pow(1 - nv, 5).toDouble();
+    final metal = material.metallic.clamp(0.0, 1.0);
+    final amount =
+        (refl * (metal * 0.9 + (1 - metal) * (0.25 + 0.75 * fresnel)))
+            .clamp(0.0, 1.0);
+    final tintR = 1 - metal + metal * baseR;
+    final tintG = 1 - metal + metal * baseG;
+    final tintB = 1 - metal + metal * baseB;
+    r = r * (1 - amount) + er * tintR * amount;
+    g = g * (1 - amount) + eg * tintG * amount;
+    b = b * (1 - amount) + eb * tintB * amount;
   }
 
   if (material.emissive > 0) {

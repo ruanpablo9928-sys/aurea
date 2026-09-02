@@ -956,6 +956,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['size'] = e.size;
       base['color'] = _col(e.color);
       base['edges'] = e.edges;
+      base['reflect'] = e.reflect;
+      base['env'] = e.environment.index;
+      if (e.imagePath != null) base['img'] = e.imagePath;
     case Scene3DLayer s:
       base['kind'] = 'scene3d';
       if (s.extraCameras.isNotEmpty) {
@@ -1002,6 +1005,8 @@ Map<String, dynamic> _material(Material3D mat) => {
       'op': mat.opacity,
       'kind': mat.kind.index,
       if (mat.textureLayerId != null) 'tex': mat.textureLayerId,
+      if (mat.reflectivity != 0) 'refl': mat.reflectivity,
+      if (mat.imagePath != null) 'img': mat.imagePath,
     };
 
 Material3D _asMaterial(Map<String, dynamic> m) => Material3D(
@@ -1013,10 +1018,14 @@ Material3D _asMaterial(Map<String, dynamic> m) => Material3D(
       opacity: (m['op'] as num).toDouble(),
       kind: MaterialKind.values[(m['kind'] as num).toInt()],
       textureLayerId: m['tex'] as String?,
+      reflectivity: (m['refl'] as num?)?.toDouble() ?? 0,
+      imagePath: m['img'] as String?,
     );
 
 Map<String, dynamic> _scene(Scene3D s) => {
       'ambient': s.ambient,
+      'env': s.environment.index,
+      'envk': s.envReflect,
       if (s.background != null) 'bg': _col(s.background!),
       'grid': s.showFloorGrid,
       'msaa': s.msaa,
@@ -1082,6 +1091,9 @@ List<Offset>? _asOutline(dynamic v) => v == null
 
 Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
       cameraParentId: m['camParent'] as String?,
+      environment: EnvironmentKind.values[
+          ((m['env'] as num?)?.toInt() ?? 0).clamp(0, EnvironmentKind.values.length - 1)],
+      envReflect: (m['envk'] as num?)?.toDouble() ?? 0.7,
       ambient: (m['ambient'] as num?)?.toDouble() ?? 0.28,
       background: m['bg'] == null ? null : _asCol(m['bg']),
       showFloorGrid: m['grid'] as bool? ?? true,
@@ -1449,6 +1461,10 @@ Layer layerFromJson(Map<String, dynamic> m) {
         size: (m['size'] as num).toDouble(),
         color: _asCol(m['color']),
         edges: m['edges'] as bool? ?? true,
+        reflect: (m['reflect'] as num?)?.toDouble() ?? 0,
+        environment: EnvironmentKind.values[
+            ((m['env'] as num?)?.toInt() ?? 0).clamp(0, EnvironmentKind.values.length - 1)],
+        imagePath: m['img'] as String?,
         position: pos, scaleX: sx, scaleY: sy, rotation: rot,
         rotationX: rotX, rotationY: rotY, opacity: op,
         skewX: skx, skewY: sky, pivot: pivot, blendMode: blend,

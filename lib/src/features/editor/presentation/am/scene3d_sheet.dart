@@ -548,6 +548,85 @@ class _ObjectsTab extends StatelessWidget {
               onChanged();
             },
           ),
+          // REFLEXO DO AMBIENTE: quanto da cena ao redor o material
+          // devolve. E o controle que separa plastico de metal polido.
+          _Plain(
+            label: 'Reflexo',
+            value: node.material.reflectivity,
+            min: 0,
+            max: 1,
+            decimals: 2,
+            onChanged: (v) {
+              controller.updateSceneNode(
+                  layer.id,
+                  node.id,
+                  (n) => n.copyWith(
+                      material: n.material.copyWith(reflectivity: v)));
+              onChanged();
+            },
+          ),
+          // IMAGEM NO OBJETO: uma foto, um logo, uma tela. Projecao de
+          // caixa — cada face recebe a imagem pelo eixo que mais encara.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                const SizedBox(
+                    width: 92,
+                    child: Text('Imagem',
+                        style: TextStyle(
+                            fontSize: 12, color: AmColors.muted))),
+                Expanded(
+                  child: Text(
+                    node.material.imagePath == null
+                        ? 'Nenhuma'
+                        : node.material.imagePath!.split(RegExp(r'[\\/]')).last,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12, color: AmColors.text),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () async {
+                    final r = await FilePicker.platform
+                        .pickFiles(type: FileType.image);
+                    final caminho = r?.files.single.path;
+                    if (caminho == null) return;
+                    controller.updateSceneNode(
+                        layer.id,
+                        node.id,
+                        (n) => n.copyWith(
+                            material:
+                                n.material.copyWith(imagePath: caminho)));
+                    onChanged();
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(CupertinoIcons.photo,
+                        size: 20, color: AmColors.accent),
+                  ),
+                ),
+                if (node.material.imagePath != null)
+                  GestureDetector(
+                    onTap: () {
+                      controller.updateSceneNode(
+                          layer.id,
+                          node.id,
+                          (n) => n.copyWith(
+                              material:
+                                  n.material.copyWith(clearImage: true)));
+                      onChanged();
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.only(left: 4),
+                      child: Icon(CupertinoIcons.xmark_circle,
+                          size: 20, color: AmColors.muted),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           _Plain(
             label: 'Emissivo',
             value: node.material.emissive,
@@ -853,6 +932,40 @@ class _LightsTab extends StatelessWidget {
             onChanged();
           },
         ),
+        const SizedBox(height: 8),
+        // O AMBIENTE que os materiais refletem. Nao e luz: e o que um
+        // espelho apontado para la veria — ceu, chao, horizonte, e no
+        // estudio a softbox. Sem ele, "reflexo" no material nao mostra
+        // nada, porque espelho de nada e preto.
+        _SectionTitle('Ambiente refletido'),
+        _Chips(
+          label: 'Ambiente',
+          options: [
+            for (final k in EnvironmentKind.values) environmentLabel(k),
+          ],
+          index: layer.scene.environment.index,
+          onChanged: (i) {
+            controller.updateScene3D(
+                layer.id,
+                (s) => s.copyWith(environment: EnvironmentKind.values[i]));
+            onChanged();
+          },
+        ),
+        _Plain(
+          label: 'Reflexo',
+          value: layer.scene.envReflect,
+          min: 0,
+          max: 1,
+          decimals: 2,
+          onChanged: (v) {
+            controller.updateScene3D(
+                layer.id, (s) => s.copyWith(envReflect: v));
+            onChanged();
+          },
+        ),
+        const _Hint(
+            'A forca aqui multiplica o "Reflexo" de cada material: zero '
+            'apaga todo reflexo da cena de uma vez.'),
         const SizedBox(height: 8),
         for (final l in lights) ...[
           _SectionTitle(switch (l.kind) {

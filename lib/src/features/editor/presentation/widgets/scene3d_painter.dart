@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../domain/camera3d.dart';
+import '../../application/texture_cache.dart';
 import '../../domain/scene3d.dart';
 
 /// Pintor do CONTEINER CENA 3D. Faz os dois passes da spec §3:
@@ -206,12 +207,26 @@ class Scene3DPainter extends CustomPainter {
     final paint = Paint()
       ..isAntiAlias = scene.msaa
       ..style = PaintingStyle.fill;
+    final cache = TextureCache.instance;
+
+    // Face de cor lisa — ou face com imagem que ainda nao chegou, que
+    // sai lisa ate a imagem carregar.
+    bool lisa(RenderTri t) =>
+        t.texture == null || cache.imageFor(t.texture!) == null;
 
     var i = 0;
     while (i < tris.length) {
-      final color = tris[i].color;
       final start = i;
-      while (i < tris.length && tris[i].color == color) {
+      if (!lisa(tris[i])) {
+        final tex = tris[i].texture;
+        while (i < tris.length && tris[i].texture == tex) {
+          i++;
+        }
+        _paintTextured(canvas, tris, start, i, cache.imageFor(tex!)!, paint);
+        continue;
+      }
+      final color = tris[i].color;
+      while (i < tris.length && tris[i].color == color && lisa(tris[i])) {
         i++;
       }
       final count = i - start;
@@ -258,6 +273,59 @@ class Scene3DPainter extends CustomPainter {
         );
       }
     }
+  }
+
+  /// FACES COM IMAGEM: a imagem entra como shader e a luz como cor por
+  /// vertice, multiplicadas. E o mesmo drawVertices — uma chamada por
+  /// lote de mesma imagem — com coordenadas de textura em pixels.
+  void _paintTextured(Canvas canvas, List<RenderTri> tris, int start,
+      int end, ui.Image img, Paint paint) {
+    final count = end - start;
+    final positions = Float32List(count * 6);
+    final coords = Float32List(count * 6);
+    final colors = Int32List(count * 3);
+    final w = img.width.toDouble(), h = img.height.toDouble();
+    for (var k = 0; k < count; k++) {
+      final t = tris[start + k];
+      positions[k * 6] = t.a.dx;
+      positions[k * 6 + 1] = t.a.dy;
+      positions[k * 6 + 2] = t.b.dx;
+      positions[k * 6 + 3] = t.b.dy;
+      positions[k * 6 + 4] = t.c.dx;
+      positions[k * 6 + 5] = t.c.dy;
+      final ua = t.uvA ?? Offset.zero;
+      final ub = t.uvB ?? Offset.zero;
+      final uc = t.uvC ?? Offset.zero;
+      coords[k * 6] = ua.dx * w;
+      coords[k * 6 + 1] = ua.dy * h;
+      coords[k * 6 + 2] = ub.dx * w;
+      coords[k * 6 + 3] = ub.dy * h;
+      coords[k * 6 + 4] = uc.dx * w;
+      coords[k * 6 + 5] = uc.dy * h;
+      final c = t.color.toARGB32();
+      colors[k * 3] = c;
+      colors[k * 3 + 1] = c;
+      colors[k * 3 + 2] = c;
+    }
+    paint
+      ..color = const Color(0xFFFFFFFF)
+      ..shader = ui.ImageShader(
+        img,
+        TileMode.clamp,
+        TileMode.clamp,
+        Matrix4.identity().storage,
+      );
+    canvas.drawVertices(
+      ui.Vertices.raw(
+        ui.VertexMode.triangles,
+        positions,
+        textureCoordinates: coords,
+        colors: colors,
+      ),
+      BlendMode.modulate,
+      paint,
+    );
+    paint.shader = null;
   }
 
   /// BOKEH: cada ponto de luz fora de foco vira o FORMATO DA IRIS.

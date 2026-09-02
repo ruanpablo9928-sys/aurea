@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../application/texture_cache.dart';
 import '../../application/editor_controller.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/layer.dart';
@@ -431,7 +432,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         _pointers = 0;
         _endGesture();
       },
-      child: CustomPaint(
+      child: ValueListenableBuilder<int>(
+            valueListenable: TextureCache.instance.revision,
+            builder: (_, _, _) => CustomPaint(
         size: size,
         painter: Scene3DPainter(
           scene: layer.scene,
@@ -443,7 +446,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
           overrideCamera:
               _view == SceneView.camera ? null : cam,
         ),
-      ),
+      )),
     );
   }
 

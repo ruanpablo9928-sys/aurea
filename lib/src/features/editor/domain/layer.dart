@@ -1706,6 +1706,9 @@ class Element3DLayer extends Layer {
     this.size = 200,
     this.color = const Color(0xFF7C62FF),
     this.edges = true,
+    this.reflect = 0,
+    this.environment = EnvironmentKind.estudio,
+    this.imagePath,
     super.position,
     super.scaleX,
     super.scaleY,
@@ -1736,11 +1739,22 @@ class Element3DLayer extends Layer {
   /// Tracar as arestas das faces (look tecnico).
   final bool edges;
 
+  /// REFLEXO DO AMBIENTE (0..1) e qual ambiente se reflete.
+  final double reflect;
+  final EnvironmentKind environment;
+
+  /// IMAGEM vestindo o solido (projecao de caixa), ou nula.
+  final String? imagePath;
+
   Element3DLayer copyElement3D({
     Element3DKind? kind,
     double? size,
     Color? color,
     bool? edges,
+    double? reflect,
+    EnvironmentKind? environment,
+    String? imagePath,
+    bool clearImage = false,
   }) {
     return Element3DLayer(
       id: id,
@@ -1751,6 +1765,9 @@ class Element3DLayer extends Layer {
       size: size ?? this.size,
       color: color ?? this.color,
       edges: edges ?? this.edges,
+      reflect: reflect ?? this.reflect,
+      environment: environment ?? this.environment,
+      imagePath: clearImage ? null : (imagePath ?? this.imagePath),
       position: position,
       scaleX: scaleX,
       scaleY: scaleY,
@@ -1805,6 +1822,9 @@ class Element3DLayer extends Layer {
       size: size,
       color: color,
       edges: edges,
+      reflect: reflect,
+      environment: environment,
+      imagePath: imagePath,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -1836,6 +1856,9 @@ class Element3DLayer extends Layer {
         size: size,
         color: color,
         edges: edges,
+      reflect: reflect,
+      environment: environment,
+      imagePath: imagePath,
         position: position,
         scaleX: scaleX,
         scaleY: scaleY,

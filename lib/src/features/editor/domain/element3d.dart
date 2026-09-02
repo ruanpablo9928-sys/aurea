@@ -14,6 +14,129 @@ enum Element3DKind {
   diamond,
   torus,
   star,
+  plane,
+  capsule,
+  tube,
+  octahedron,
+  wedge,
+  dome,
+}
+
+/// AMBIENTE que os objetos refletem — e que colore o reflexo.
+///
+/// Um mapa procedural, sem um pixel de textura: ceu, chao e horizonte,
+/// mais o que cada ambiente tem de caracteristico. No estudio e a
+/// SOFTBOX — a faixa clara e larga que, refletida numa superficie, e o
+/// que o olho le como "metal". No neon, as duas faixas de cor no
+/// horizonte. Sem ambiente nao ha reflexo: espelho de nada e preto.
+enum EnvironmentKind { estudio, ceu, porDoSol, neon }
+
+String environmentLabel(EnvironmentKind k) => switch (k) {
+      EnvironmentKind.estudio => 'Estudio',
+      EnvironmentKind.ceu => 'Ceu',
+      EnvironmentKind.porDoSol => 'Por do sol',
+      EnvironmentKind.neon => 'Neon',
+    };
+
+(double, double, double) _mistura(
+        (double, double, double) a, (double, double, double) b, double t) =>
+    (a.$1 + (b.$1 - a.$1) * t, a.$2 + (b.$2 - a.$2) * t,
+        a.$3 + (b.$3 - a.$3) * t);
+
+/// Cor do ambiente na direcao (dx, dy, dz), com Y PARA CIMA. Devolve
+/// (r, g, b) — pode passar de 1 no brilho de uma luz, e o tonemap
+/// depois comprime.
+///
+/// [sun*] e uma luz forte opcional (a direcional da cena): o reflexo
+/// dela e o pontinho de brilho que corre pela superficie quando o
+/// objeto gira. [sunSharp] concentra (superficie lisa) ou espalha
+/// (rugosa) esse ponto.
+(double, double, double) environmentColor(
+  EnvironmentKind kind,
+  double dx,
+  double dy,
+  double dz, {
+  double sunX = 0,
+  double sunY = 0,
+  double sunZ = 0,
+  double sunR = 1,
+  double sunG = 1,
+  double sunB = 1,
+  double sunSharp = 60,
+  double sunGain = 0,
+}) {
+  final len = math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1e-9) return (0.3, 0.3, 0.3);
+  final x = dx / len, y = dy / len, z = dz / len;
+
+  final (double, double, double) topo, horizonte, chao;
+  var faixa = (0.0, 0.0, 0.0);
+  switch (kind) {
+    case EnvironmentKind.estudio:
+      topo = (0.58, 0.60, 0.64);
+      horizonte = (0.42, 0.43, 0.46);
+      chao = (0.14, 0.14, 0.15);
+    case EnvironmentKind.ceu:
+      topo = (0.30, 0.52, 0.95);
+      horizonte = (0.82, 0.89, 0.98);
+      chao = (0.30, 0.26, 0.20);
+      faixa = (0.10, 0.08, 0.02);
+    case EnvironmentKind.porDoSol:
+      topo = (0.16, 0.12, 0.38);
+      horizonte = (1.00, 0.52, 0.22);
+      chao = (0.10, 0.07, 0.09);
+      faixa = (0.35, 0.12, 0.00);
+    case EnvironmentKind.neon:
+      topo = (0.04, 0.02, 0.10);
+      horizonte = (0.10, 0.06, 0.18);
+      chao = (0.03, 0.02, 0.06);
+  }
+
+  final t = y.abs();
+  var cor = y >= 0
+      ? _mistura(horizonte, topo, math.pow(t, 0.7).toDouble())
+      : _mistura(horizonte, chao, math.pow(t, 0.6).toDouble());
+
+  // Faixa do horizonte: onde o ceu encosta no chao ha sempre um brilho.
+  final banda = math.exp(-(y * y) / (2 * 0.10 * 0.10));
+  var r = cor.$1 + faixa.$1 * banda;
+  var g = cor.$2 + faixa.$2 * banda;
+  var b = cor.$3 + faixa.$3 * banda;
+
+  switch (kind) {
+    case EnvironmentKind.estudio:
+      // A softbox: um retangulo claro, alto, um pouco a esquerda.
+      final wy = math.exp(-math.pow((y - 0.50) / 0.16, 2).toDouble());
+      final wx = math.exp(-math.pow((x + 0.25) / 0.34, 2).toDouble());
+      final w = wy * wx * (z > -0.2 ? 1.0 : 0.35);
+      r += 0.95 * w;
+      g += 0.95 * w;
+      b += 0.98 * w;
+    case EnvironmentKind.neon:
+      // Cian de um lado, magenta do outro, as duas coladas no horizonte.
+      final w = math.exp(-(y * y) / (2 * 0.16 * 0.16));
+      final lado = (x + 1) / 2; // 0 = esquerda (magenta), 1 = direita (cian)
+      r += w * (0.95 * (1 - lado) + 0.10 * lado);
+      g += w * (0.15 * (1 - lado) + 0.85 * lado);
+      b += w * (0.75 * (1 - lado) + 0.95 * lado);
+    case EnvironmentKind.ceu:
+    case EnvironmentKind.porDoSol:
+      break;
+  }
+
+  if (sunGain > 0) {
+    final sl = math.sqrt(sunX * sunX + sunY * sunY + sunZ * sunZ);
+    if (sl > 1e-9) {
+      final d = (x * sunX + y * sunY + z * sunZ) / sl;
+      if (d > 0) {
+        final spot = math.pow(d, sunSharp).toDouble() * sunGain;
+        r += sunR * spot;
+        g += sunG * spot;
+        b += sunB * spot;
+      }
+    }
+  }
+  return (r, g, b);
 }
 
 /// Malha em coordenadas unitarias (meia-extensao ~1). O pintor escala
@@ -87,7 +210,147 @@ Element3DMesh _build(Element3DKind kind) {
         pts.add([r * math.cos(a), r * math.sin(a)]);
       }
       return _extrude(outline: pts, halfDepth: 0.28);
+
+    case Element3DKind.plane:
+      return _plane();
+
+    case Element3DKind.capsule:
+      return _capsule(slices: 18, arcos: 5);
+
+    case Element3DKind.tube:
+      return _tube(segments: 24, inner: 0.62);
+
+    case Element3DKind.octahedron:
+      return Element3DMesh(
+        [
+          [0, -1.15, 0], [0, 1.15, 0],
+          [-1, 0, 0], [0, 0, -1], [1, 0, 0], [0, 0, 1],
+        ],
+        [
+          [0, 2, 3], [0, 3, 4], [0, 4, 5], [0, 5, 2],
+          [1, 3, 2], [1, 4, 3], [1, 5, 4], [1, 2, 5],
+        ],
+      );
+
+    case Element3DKind.wedge:
+      // Uma rampa: triangulo retangulo extrudado.
+      return _extrude(
+        outline: const [
+          [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0],
+        ],
+        halfDepth: 1.0,
+      );
+
+    case Element3DKind.dome:
+      return _dome(slices: 18, arcos: 6);
   }
+}
+
+/// PLANO: um cartao. E a forma que mais recebe imagem — uma foto, um
+/// logo, uma tela. Duas faces em sentidos opostos, porque cada lado
+/// precisa da SUA normal: o descarte de costas deixa passar a que olha
+/// para a camera e some com a outra.
+Element3DMesh _plane() => Element3DMesh(
+      [
+        [-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0],
+      ],
+      [
+        [0, 1, 2, 3],
+        [3, 2, 1, 0],
+      ],
+    );
+
+/// SOLIDO DE REVOLUCAO: um perfil (raio, y) girado em torno de Y.
+/// Raio zero vira polo (um vertice so); os aneis vizinhos viram quads
+/// ou, contra o polo, triangulos.
+Element3DMesh _revolve(List<List<double>> perfil, int slices,
+    {bool tampaInicio = false, bool tampaFim = false}) {
+  final verts = <List<double>>[];
+  final aneis = <List<int>>[];
+  for (final p in perfil) {
+    final r = p[0], y = p[1];
+    if (r.abs() < 1e-9) {
+      aneis.add([verts.length]);
+      verts.add([0, y, 0]);
+    } else {
+      final anel = <int>[];
+      for (var i = 0; i < slices; i++) {
+        final a = 2 * math.pi * i / slices;
+        anel.add(verts.length);
+        verts.add([r * math.cos(a), y, r * math.sin(a)]);
+      }
+      aneis.add(anel);
+    }
+  }
+  final faces = <List<int>>[];
+  for (var k = 0; k + 1 < aneis.length; k++) {
+    final a = aneis[k], b = aneis[k + 1];
+    if (a.length == 1 && b.length == 1) continue;
+    for (var i = 0; i < slices; i++) {
+      final j = (i + 1) % slices;
+      if (a.length == 1) {
+        faces.add([a[0], b[j], b[i]]);
+      } else if (b.length == 1) {
+        faces.add([a[i], a[j], b[0]]);
+      } else {
+        faces.add([a[i], a[j], b[j], b[i]]);
+      }
+    }
+  }
+  if (tampaInicio && aneis.first.length > 1) {
+    faces.add([for (final i in aneis.first) i]);
+  }
+  if (tampaFim && aneis.last.length > 1) {
+    faces.add([for (final i in aneis.last) i]);
+  }
+  return Element3DMesh(verts, faces);
+}
+
+/// CAPSULA: cilindro com as duas pontas em meia esfera.
+Element3DMesh _capsule({required int slices, required int arcos}) {
+  const raio = 0.55;
+  const meio = 0.45;
+  final perfil = <List<double>>[];
+  for (var k = 0; k <= arcos; k++) {
+    final a = math.pi / 2 * k / arcos;
+    perfil.add([raio * math.sin(a), -meio - raio * math.cos(a)]);
+  }
+  for (var k = arcos; k >= 0; k--) {
+    final a = math.pi / 2 * k / arcos;
+    perfil.add([raio * math.sin(a), meio + raio * math.cos(a)]);
+  }
+  return _revolve(perfil, slices);
+}
+
+/// CUPULA: meia esfera com a base fechada, centrada na propria altura.
+Element3DMesh _dome({required int slices, required int arcos}) {
+  // Polo em -0.5 (cima), base em +0.5: centrada na propria altura.
+  final perfil = <List<double>>[
+    for (var k = 0; k <= arcos; k++)
+      [math.sin(math.pi / 2 * k / arcos), 0.5 - math.cos(math.pi / 2 * k / arcos)],
+  ];
+  return _revolve(perfil, slices, tampaFim: true);
+}
+
+/// TUBO: cilindro oco. Parede de fora, parede de dentro e os dois aneis.
+Element3DMesh _tube({required int segments, required double inner}) {
+  final verts = <List<double>>[];
+  // 0: fora-baixo, 1: fora-cima, 2: dentro-cima, 3: dentro-baixo.
+  for (final (r, y) in [(1.0, -1.0), (1.0, 1.0), (inner, 1.0), (inner, -1.0)]) {
+    for (var i = 0; i < segments; i++) {
+      final a = 2 * math.pi * i / segments;
+      verts.add([r * math.cos(a), y, r * math.sin(a)]);
+    }
+  }
+  int at(int anel, int i) => anel * segments + i % segments;
+  final faces = <List<int>>[];
+  for (var i = 0; i < segments; i++) {
+    faces.add([at(0, i), at(0, i + 1), at(1, i + 1), at(1, i)]);
+    faces.add([at(1, i), at(1, i + 1), at(2, i + 1), at(2, i)]);
+    faces.add([at(2, i), at(2, i + 1), at(3, i + 1), at(3, i)]);
+    faces.add([at(3, i), at(3, i + 1), at(0, i + 1), at(0, i)]);
+  }
+  return Element3DMesh(verts, faces);
 }
 
 /// Cone/funil: aro no plano Y + apex; cap opcional no aro.
@@ -230,6 +493,12 @@ String element3DLabel(Element3DKind kind) => switch (kind) {
       Element3DKind.diamond => 'Diamante',
       Element3DKind.torus => 'Anel 3D',
       Element3DKind.star => 'Estrela 3D',
+      Element3DKind.plane => 'Plano',
+      Element3DKind.capsule => 'Capsula',
+      Element3DKind.tube => 'Tubo',
+      Element3DKind.octahedron => 'Octaedro',
+      Element3DKind.wedge => 'Rampa',
+      Element3DKind.dome => 'Cupula',
     };
 
 

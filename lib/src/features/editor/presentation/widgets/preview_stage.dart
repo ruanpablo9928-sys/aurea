@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../application/texture_cache.dart';
 import '../../application/blob_track_service.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
@@ -3033,7 +3034,9 @@ class _LayerContent extends StatelessWidget {
       Scene3DLayer l => SizedBox(
           width: compWidth,
           height: project.outputHeight.toDouble(),
-          child: CustomPaint(
+          child: ValueListenableBuilder<int>(
+            valueListenable: TextureCache.instance.revision,
+            builder: (_, _, _) => CustomPaint(
             painter: Scene3DPainter(
               scene: l.scene,
               camera: l.camera,
@@ -3048,7 +3051,7 @@ class _LayerContent extends StatelessWidget {
               // Ajudas NUNCA entram na exportacao — so no preview.
               showHelpers: l.showHelpers,
             ),
-          ),
+          )),
         ),
       // Precomp: filhos compostos no tempo local do grupo.
       // PRECOMP: tempo proprio (com remapeamento), quadro proprio e a
@@ -3136,14 +3139,16 @@ class _LayerContent extends StatelessWidget {
         ),
       // Elemento 3D: vertices girados no espaco dentro do pintor (como
       // as particulas) — nada de inclinar o canvas como um cartao.
-      Element3DLayer l => CustomPaint(
+      Element3DLayer l => ValueListenableBuilder<int>(
+            valueListenable: TextureCache.instance.revision,
+            builder: (_, _, _) => CustomPaint(
           size: const Size(620, 620),
           painter: Element3DPainter(
             layer: l,
             rotXDeg: particlesRotX,
             rotYDeg: particlesRotY,
           ),
-        ),
+        )),
       CaptionLayer l => Builder(builder: (context) {
           final cue = l.cueAt(localTime);
           if (cue == null) return const SizedBox.shrink();

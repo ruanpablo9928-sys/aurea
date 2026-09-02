@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -1894,6 +1895,131 @@ Future<void> showElement3DSheet(
                                     color: Colors.white, width: 2.5)
                                 : null,
                           ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // REFLEXO DO AMBIENTE + qual ambiente. E o que faz o
+                // solido deixar de parecer plastico fosco.
+                Row(
+                  children: [
+                    const SizedBox(
+                        width: 86,
+                        child: Text('Reflexo',
+                            style: TextStyle(
+                                fontSize: 13, color: AmColors.muted))),
+                    Expanded(
+                      child: AmTickRuler(
+                        value: layer.reflect,
+                        min: 0,
+                        max: 1,
+                        unitsPerPixel: 1 / 420,
+                        height: 46,
+                        onChanged: (v) {
+                          controller.updateElement3D(layerId,
+                              (e) => e.copyElement3D(reflect: v));
+                          setSheetState(() {});
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                        width: 56,
+                        child: Text(amNumber(layer.reflect * 100, 0),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 14, color: AmColors.accent))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final k in EnvironmentKind.values)
+                      GestureDetector(
+                        onTap: () {
+                          controller.updateElement3D(layerId,
+                              (e) => e.copyElement3D(environment: k));
+                          setSheetState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: layer.environment == k
+                                ? AmColors.accentDim
+                                : AmColors.chip,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(environmentLabel(k),
+                              style: const TextStyle(
+                                  fontSize: 12, color: AmColors.accent)),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // IMAGEM NO SOLIDO: uma foto ou logo vestindo as faces.
+                Row(
+                  children: [
+                    const SizedBox(
+                        width: 86,
+                        child: Text('Imagem',
+                            style: TextStyle(
+                                fontSize: 13, color: AmColors.muted))),
+                    Expanded(
+                      child: Text(
+                        layer.imagePath == null
+                            ? 'Nenhuma'
+                            : layer.imagePath!.split(RegExp(r'[\\/]')).last,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, color: AmColors.text),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () async {
+                        final r = await FilePicker.platform
+                            .pickFiles(type: FileType.image);
+                        final caminho = r?.files.single.path;
+                        if (caminho == null) return;
+                        controller.updateElement3D(layerId,
+                            (e) => e.copyElement3D(imagePath: caminho));
+                        setSheetState(() {});
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AmColors.chip,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(CupertinoIcons.photo,
+                                size: 16, color: AmColors.accent),
+                            SizedBox(width: 6),
+                            Text('Escolher',
+                                style: TextStyle(
+                                    fontSize: 12, color: AmColors.accent)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (layer.imagePath != null)
+                      GestureDetector(
+                        onTap: () {
+                          controller.updateElement3D(layerId,
+                              (e) => e.copyElement3D(clearImage: true));
+                          setSheetState(() {});
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(CupertinoIcons.xmark_circle,
+                              size: 20, color: AmColors.muted),
                         ),
                       ),
                   ],
