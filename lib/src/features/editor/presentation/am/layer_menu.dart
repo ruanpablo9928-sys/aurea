@@ -2060,6 +2060,64 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                     fps: ref.read(editorControllerProvider).fps,
                   ),
                   const SizedBox(height: 6),
+                  // EDITAR NOS: a forma vira caminho bezier (se ainda nao
+                  // e) e os nos aparecem sobre o preview. E daqui que sai
+                  // o retangulo que vira card: dois keyframes do caminho.
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      color: AmColors.chip,
+                      borderRadius: BorderRadius.circular(12),
+                      onPressed: () {
+                        ShapeItem? geo;
+                        for (final i in layer.contents) {
+                          if (i is ShapeBezier ||
+                              i is ShapePath ||
+                              i is ShapeParametric ||
+                              i is ShapeSvgPath ||
+                              i is ShapeMorph) {
+                            geo = i;
+                            break;
+                          }
+                        }
+                        if (geo == null) {
+                          showReasonToast(
+                              context, 'Esta forma nao tem geometria');
+                          return;
+                        }
+                        if (geo is! ShapeBezier &&
+                            !controller.convertShapeItemToBezier(
+                                layerId, geo.id, t)) {
+                          showReasonToast(context,
+                              'Nao consegui converter esta geometria');
+                          return;
+                        }
+                        final idGeo = geo.id;
+                        Navigator.of(sheetContext).maybePop();
+                        Future.microtask(() {
+                          if (context.mounted) {
+                            showPathEditSheet(
+                                context, ref, layerId, idGeo, playback,
+                                forma: true);
+                          }
+                        });
+                      },
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(CupertinoIcons.pencil_outline,
+                              size: 17, color: AmColors.accent),
+                          SizedBox(width: 8),
+                          Text('Editar nos do caminho',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AmColors.accent)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   if (sp == null) ...[
                     const Text(
                       'Esta forma e um caminho desenhado (sem '

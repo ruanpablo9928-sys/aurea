@@ -745,6 +745,8 @@ class ShapeLayer extends Layer {
           out.addAll(_times(r.rotation.keyframes));
         case ShapeMorph m:
           out.addAll(_times(m.progress.keyframes));
+        case ShapeBezier b:
+          out.addAll(_times(b.path.keyframes));
         case ShapeStroke s:
           out.addAll(_times(s.dashOffset.keyframes));
         // Geometria parametrica: TODAS as trilhas viram diamantes na

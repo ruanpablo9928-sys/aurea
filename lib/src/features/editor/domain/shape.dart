@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import 'keyframe.dart';
 import 'shape_ops.dart';
+import 'mask.dart';
 import 'svg_path.dart';
 
 /// Formas vetoriais (spec AM2-formas-3d §1): a camada de forma vira uma
@@ -732,6 +733,112 @@ class ShapeSvgPath extends ShapeItem {
       ShapeSvgPath(id: id, pathData: pathData, size: size ?? this.size);
 }
 
+/// ---------------------------------------------------------- caminho editavel
+
+/// CAMINHO BEZIER ANIMAVEL — o que faltava para o motion "Apple".
+///
+/// As outras geometrias sao primitivas ou uma string SVG: dao para
+/// desenhar, nao dao para pegar um no com o dedo nem para virar outra
+/// forma com keyframe. Este item guarda um [AnimatedPath] — o mesmo
+/// modelo das mascaras, que ja sabe interpolar dois caminhos igualando
+/// a contagem de vertices por comprimento de arco, corrigindo o sentido
+/// e alinhando o vertice inicial. Um retangulo que vira um card com
+/// recortes e exatamente um keyframe deste caminho para outro.
+class ShapeBezier extends ShapeItem {
+  ShapeBezier({super.id, required this.path});
+
+  final AnimatedPath path;
+
+  Path buildAt(Duration t) => path.valueAt(t).build();
+
+  ShapeBezier copyWith({AnimatedPath? path}) =>
+      ShapeBezier(id: id, path: path ?? this.path);
+}
+
+/// Amostra um Path do Flutter como poligono de [n] cantos — o caminho de
+/// volta para o que nasceu como caixa preta (anel, arco, onda, geometria
+/// parametrica). Perde a curvatura exata entre os pontos; ganha um
+/// caminho que se edita e se anima.
+BezierPath sampleBezier(Path path, {int n = 32}) {
+  final metrics = path.computeMetrics().toList();
+  if (metrics.isEmpty) return BezierPath(vertices: const []);
+  final m = metrics.first;
+  if (m.length <= 0) return BezierPath(vertices: const []);
+  final pts = <PathVertex>[];
+  for (var i = 0; i < n; i++) {
+    final tg = m.getTangentForOffset(m.length * i / n);
+    if (tg != null) pts.add(PathVertex(p: tg.position));
+  }
+  return BezierPath(vertices: pts, closed: m.isClosed);
+}
+
+/// O caminho bezier equivalente a um item de geometria, no instante [t].
+///
+/// Primitivas com formula fechada (retangulo, elipse, estrela, coracao)
+/// viram os nos EXATOS; o resto e amostrado. SVG entra pelo parser de
+/// nos e e ajustado a caixa como o desenho ja fazia.
+BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
+  switch (item) {
+    case ShapeBezier b:
+      return b.path.valueAt(t);
+    case ShapePath p:
+      switch (p.primitive) {
+        case ShapePrimitive.rectangle:
+          return BezierPath.rect(p.width, p.height);
+        case ShapePrimitive.ellipse:
+          return BezierPath.ellipse(p.width, p.height);
+        case ShapePrimitive.star:
+          return BezierPath.star(
+              p.points, p.width / 2, p.width / 2 * p.innerRadiusRatio);
+        case ShapePrimitive.polygon:
+          return BezierPath(vertices: [
+            for (var i = 0; i < p.points; i++)
+              PathVertex(
+                p: Offset(
+                  math.cos(-math.pi / 2 + i * 2 * math.pi / p.points) *
+                      p.width / 2,
+                  math.sin(-math.pi / 2 + i * 2 * math.pi / p.points) *
+                      p.width / 2,
+                ),
+              ),
+          ]);
+        default:
+          return sampleBezier(p.build());
+      }
+    case ShapeParametric p:
+      return sampleBezier(p.buildAt(t), n: 48);
+    case ShapeSvgPath p:
+      return _fitBezierToBox(svgPathToBezier(p.pathData), p.size);
+    case ShapeMorph m:
+      return sampleBezier(m.build(t), n: 64);
+    default:
+      return null;
+  }
+}
+
+/// Escala e centraliza um caminho bezier numa caixa de [size] — a mesma
+/// regra de [fitPathToBox], aplicada aos nos em vez de ao desenho.
+BezierPath _fitBezierToBox(BezierPath path, double size) {
+  if (path.isEmpty) return path;
+  final b = path.build().getBounds();
+  final maior = math.max(b.width, b.height);
+  if (maior <= 0) return path;
+  final k = size / maior;
+  final c = b.center;
+  return BezierPath(
+    closed: path.closed,
+    vertices: [
+      for (final v in path.vertices)
+        PathVertex(
+          p: Offset((v.p.dx - c.dx) * k, (v.p.dy - c.dy) * k),
+          inT: v.inT * k,
+          outT: v.outT * k,
+          corner: v.corner,
+        ),
+    ],
+  );
+}
+
 /// ----------------------------------------------------------------- morph
 
 /// Morph entre duas formas parametricas (fundamento do motion/AE):
@@ -1217,6 +1324,8 @@ List<ShapeDraw> evaluateShape(
         paths = [...paths, p.build()];
       case ShapeMorph m:
         paths = [...paths, m.build(t)];
+      case ShapeBezier b:
+        paths = [...paths, b.buildAt(t)];
       case TrimOperator op:
         paths = op.apply(paths, t);
       case RepeaterOperator op:

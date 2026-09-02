@@ -20,10 +20,12 @@ Future<void> showPathEditSheet(
   WidgetRef ref,
   String layerId,
   String maskId,
-  PlaybackController playback,
-) async {
+  PlaybackController playback, {
+  /// [maskId] e o id de um item ShapeBezier da forma, nao de mascara.
+  bool forma = false,
+}) async {
   ref.read(pathEditTargetProvider.notifier).state =
-      PathEditTarget(layerId, maskId);
+      PathEditTarget(layerId, maskId, forma: forma);
   ref.read(pathEditSelectedProvider.notifier).state = null;
 
   await showParamSheet(
@@ -37,20 +39,30 @@ Future<void> showPathEditSheet(
         final layer = project.layerById(layerId);
         if (layer == null) return const SizedBox.shrink();
 
-        LayerMask? mascara;
-        for (final m in layer.masks) {
-          if (m.id == maskId) mascara = m;
+        // O caminho vem de uma mascara ou de um item da forma — a folha
+        // e a mesma, porque editar no e editar no.
+        AnimatedPath? animado;
+        if (forma) {
+          animado = controller.shapeBezierOf(layerId, maskId)?.path;
+        } else {
+          for (final m in layer.masks) {
+            if (m.id == maskId) animado = m.path;
+          }
         }
-        if (mascara == null) return const SizedBox.shrink();
+        if (animado == null) return const SizedBox.shrink();
 
         final t = playback.time.value;
-        final caminho = mascara.path.valueAt(layer.localTime(t));
+        final caminho = animado.valueAt(layer.localTime(t));
         final sel = ref.watch(pathEditSelectedProvider);
         final temNo =
             sel != null && sel >= 0 && sel < caminho.vertices.length;
 
         void editar(BezierPath Function(BezierPath) fn) {
-          controller.editMaskPath(layerId, maskId, t, fn);
+          if (forma) {
+            controller.editShapeBezier(layerId, maskId, t, fn);
+          } else {
+            controller.editMaskPath(layerId, maskId, t, fn);
+          }
           setSheetState(() {});
         }
 
@@ -124,15 +136,19 @@ Future<void> showPathEditSheet(
                     const SizedBox(width: 8),
                     Expanded(
                       child: _Acao(
-                        icone: mascara.path.hasKeyframeAt(
-                                layer.localTime(t))
+                        icone: animado.hasKeyframeAt(layer.localTime(t))
                             ? CupertinoIcons.circle_filled
                             : CupertinoIcons.circle,
                         rotulo: 'Keyframe',
                         ativo: true,
                         onTap: () {
-                          controller.toggleMaskPathKeyframe(
-                              layerId, maskId, t);
+                          if (forma) {
+                            controller.toggleShapeBezierKeyframe(
+                                layerId, maskId, t);
+                          } else {
+                            controller.toggleMaskPathKeyframe(
+                                layerId, maskId, t);
+                          }
                           setSheetState(() {});
                         },
                       ),
@@ -140,10 +156,14 @@ Future<void> showPathEditSheet(
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Com o caminho animado, cada ajuste cria keyframe no '
-                  'tempo atual — e assim que a mascara acompanha alguem '
-                  'andando na cena.',
+                Text(
+                  forma
+                      ? 'Com o caminho animado, cada ajuste cria keyframe no '
+                          'tempo atual — e entre dois keyframes a forma '
+                          'VIRA a outra: os vertices sao casados sozinhos.'
+                      : 'Com o caminho animado, cada ajuste cria keyframe no '
+                          'tempo atual — e assim que a mascara acompanha '
+                          'alguem andando na cena.',
                   style: TextStyle(
                       fontSize: 11, height: 1.35, color: AmColors.muted),
                 ),

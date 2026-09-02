@@ -380,6 +380,11 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
           'd': p.pathData,
           'size': p.size,
         },
+      ShapeBezier b => {
+          'kind': 'bezier',
+          'id': b.id,
+          'path': _apath(b.path),
+        },
       ShapeMorph m => {
           'kind': 'morph',
           'id': m.id,
@@ -510,6 +515,10 @@ ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
           id: m['id'] as String,
           pathData: m['d'] as String,
           size: (m['size'] as num).toDouble(),
+        ),
+      'bezier' => ShapeBezier(
+          id: m['id'] as String,
+          path: _asApath(m['path'] as Map<String, dynamic>),
         ),
       'morph' => ShapeMorph(
           id: m['id'] as String,

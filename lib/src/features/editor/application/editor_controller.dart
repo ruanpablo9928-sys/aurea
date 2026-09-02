@@ -3445,6 +3445,93 @@ class EditorController extends Notifier<VideoProject> {
     });
   }
 
+  // ------------------------------------------------- caminho editavel
+
+  /// CONVERTE um item de geometria em caminho bezier editavel, mantendo
+  /// o id (a selecao continua valendo). Primitivas com formula fechada
+  /// viram nos exatos; o resto e amostrado. Devolve false se o item nao
+  /// e geometria.
+  bool convertShapeItemToBezier(
+      String layerId, String itemId, Duration globalTime) {
+    final layer = _layer(layerId);
+    if (layer is! ShapeLayer) return false;
+    final local = layer.localTime(globalTime);
+    var ok = false;
+    _updateShape(layerId, (items) => [
+          for (final i in items)
+            if (i.id != itemId || i is ShapeBezier)
+              i
+            else
+              switch (bezierOfShapeItem(i, local)) {
+                null => i,
+                final BezierPath b => () {
+                    ok = true;
+                    return ShapeBezier(id: i.id, path: AnimatedPath(b));
+                  }(),
+              },
+        ]);
+    return ok;
+  }
+
+  ShapeBezier? shapeBezierOf(String layerId, String itemId) {
+    final layer = _layer(layerId);
+    if (layer is! ShapeLayer) return null;
+    for (final i in layer.contents) {
+      if (i.id == itemId && i is ShapeBezier) return i;
+    }
+    return null;
+  }
+
+  /// O primeiro caminho bezier da forma, ou nulo.
+  ShapeBezier? firstShapeBezier(String layerId) {
+    final layer = _layer(layerId);
+    if (layer is! ShapeLayer) return null;
+    for (final i in layer.contents) {
+      if (i is ShapeBezier) return i;
+    }
+    return null;
+  }
+
+  /// EDITAR OS NOS do caminho da forma. Com o caminho ja animado, vira
+  /// keyframe no tempo atual; sem, muda a forma base. E o mesmo
+  /// contrato de [editMaskPath] — o editor de nos nao sabe a diferenca.
+  void editShapeBezier(
+    String layerId,
+    String itemId,
+    Duration globalTime,
+    BezierPath Function(BezierPath) fn,
+  ) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    _updateShape(layerId, (items) => [
+          for (final i in items)
+            if (i.id == itemId && i is ShapeBezier)
+              i.copyWith(path: i.path.edited(local, fn(i.path.valueAt(local))))
+            else
+              i,
+        ]);
+  }
+
+  /// Keyframe do CAMINHO da forma no tempo atual.
+  void toggleShapeBezierKeyframe(
+      String layerId, String itemId, Duration globalTime) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    _updateShape(layerId, (items) => [
+          for (final i in items)
+            if (i.id == itemId && i is ShapeBezier)
+              i.copyWith(
+                path: i.path.hasKeyframeAt(local)
+                    ? i.path.withoutKeyframe(local)
+                    : i.path.withKeyframe(local, i.path.valueAt(local)),
+              )
+            else
+              i,
+        ]);
+  }
+
   /// Desfaz o morph mantendo a forma de ORIGEM.
   void removeMorph(String id, String itemId) {
     _updateShape(id, (items) => [

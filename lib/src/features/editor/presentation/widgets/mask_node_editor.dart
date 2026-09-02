@@ -7,25 +7,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/editor_controller.dart';
 import '../../domain/layer.dart';
 import '../../domain/mask.dart';
+import '../../domain/shape.dart';
 import '../../domain/path_edit.dart';
 import '../am/am_colors.dart';
 
 /// Que mascara esta sendo editada no a no. Nulo = ninguem, e a camada
 /// volta a se mover com o dedo normalmente.
 class PathEditTarget {
-  const PathEditTarget(this.layerId, this.maskId);
-
+  const PathEditTarget(this.layerId, this.maskId, {this.forma = false});
   final String layerId;
+
+  /// O id da mascara — ou, com [forma], o id do item ShapeBezier.
   final String maskId;
 
+  /// O CAMINHO E DA FORMA, nao de uma mascara. O editor de nos e o
+  /// mesmo: um contorno bezier no espaco da camada, com o dedo. So muda
+  /// de onde o caminho vem e para onde volta.
+  final bool forma;
   @override
   bool operator ==(Object other) =>
       other is PathEditTarget &&
       other.layerId == layerId &&
-      other.maskId == maskId;
-
+      other.maskId == maskId &&
+      other.forma == forma;
   @override
-  int get hashCode => Object.hash(layerId, maskId);
+  int get hashCode => Object.hash(layerId, maskId, forma);
 }
 
 final pathEditTargetProvider =
@@ -72,11 +78,20 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
   Layer? _camada(PathEditTarget alvo) =>
       ref.read(editorControllerProvider).layerById(alvo.layerId);
 
-  LayerMask? _mascara(PathEditTarget alvo) {
+  /// O caminho ANIMAVEL sob edicao: de uma mascara ou de um item de
+  /// forma, conforme o alvo.
+  AnimatedPath? _caminhoAnimado(PathEditTarget alvo) {
     final l = _camada(alvo);
     if (l == null) return null;
+    if (alvo.forma) {
+      if (l is! ShapeLayer) return null;
+      for (final i in l.contents) {
+        if (i.id == alvo.maskId && i is ShapeBezier) return i.path;
+      }
+      return null;
+    }
     for (final m in l.masks) {
-      if (m.id == alvo.maskId) return m;
+      if (m.id == alvo.maskId) return m.path;
     }
     return null;
   }
@@ -112,8 +127,12 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
 
   void _editar(
       PathEditTarget alvo, BezierPath Function(BezierPath) fn) {
-    ref.read(editorControllerProvider.notifier).editMaskPath(
-        alvo.layerId, alvo.maskId, widget.time.value, fn);
+    final c = ref.read(editorControllerProvider.notifier);
+    if (alvo.forma) {
+      c.editShapeBezier(alvo.layerId, alvo.maskId, widget.time.value, fn);
+    } else {
+      c.editMaskPath(alvo.layerId, alvo.maskId, widget.time.value, fn);
+    }
   }
 
   @override
@@ -129,12 +148,12 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
       valueListenable: widget.time,
       builder: (context, t, _) {
         final camada = _camada(alvo);
-        final mascara = _mascara(alvo);
-        if (camada == null || mascara == null) {
+        final animado = _caminhoAnimado(alvo);
+        if (camada == null || animado == null) {
           return const SizedBox.shrink();
         }
         final pose = _pose(camada, t);
-        final caminho = mascara.path.valueAt(camada.localTime(t));
+        final caminho = animado.valueAt(camada.localTime(t));
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
