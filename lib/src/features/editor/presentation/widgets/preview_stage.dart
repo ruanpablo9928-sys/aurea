@@ -35,6 +35,7 @@ import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'world3d_painter.dart';
 import 'extrude_painter.dart';
+import 'freehand_overlay.dart';
 import '../../application/mesh_cache.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
@@ -308,6 +309,11 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                               time: widget.playback.time,
                               stageScale: () => _stageScale,
                             ),
+                          ),
+                          // DESENHO LIVRE: por cima de tudo enquanto o
+                          // pedido do menu estiver ligado.
+                          Positioned.fill(
+                            child: FreehandOverlay(playback: widget.playback),
                           ),
                         ],
                       ),

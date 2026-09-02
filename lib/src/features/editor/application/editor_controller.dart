@@ -3662,6 +3662,160 @@ class EditorController extends Notifier<VideoProject> {
         ]);
   }
 
+  // ------------------------------------------------------------------
+  // NIVEL 1 (shapes no modelo AM): trilhas dos ITENS da forma — o
+  // Drawing Progress (Trim: inicio/fim/deslocamento) e o deslocamento do
+  // tracejado do traco — com keyframe, curva e edicao no tempo, como
+  // qualquer propriedade.
+
+  /// Trilha animavel de um item da forma pelo nome.
+  static AnimatedDouble? shapeItemTrack(ShapeItem item, String key) =>
+      switch (item) {
+        TrimOperator t => switch (key) {
+            'start' => t.start,
+            'end' => t.end,
+            'offset' => t.offset,
+            _ => null,
+          },
+        ShapeStroke s => key == 'dashOffset' ? s.dashOffset : null,
+        _ => null,
+      };
+
+  static ShapeItem _shapeItemWithTrack(
+          ShapeItem item, String key, AnimatedDouble v) =>
+      switch (item) {
+        TrimOperator t => switch (key) {
+            'start' => t.copyWith(start: v),
+            'end' => t.copyWith(end: v),
+            'offset' => t.copyWith(offset: v),
+            _ => t,
+          },
+        ShapeStroke s => key == 'dashOffset' ? s.copyWith(dashOffset: v) : s,
+        _ => item,
+      };
+
+  void _updateShapeItemTrack(String id, String itemId, String key,
+      AnimatedDouble Function(AnimatedDouble) fn) {
+    _updateShape(id, (items) => [
+          for (final i in items)
+            if (i.id == itemId && shapeItemTrack(i, key) != null)
+              _shapeItemWithTrack(i, key, fn(shapeItemTrack(i, key)!))
+            else
+              i,
+        ]);
+  }
+
+  void editShapeItemTrack(String id, String itemId, String key,
+      Duration globalTime, double value) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    _updateShapeItemTrack(id, itemId, key, (t) => t.edited(local, value));
+  }
+
+  void toggleShapeItemTrackKeyframe(
+      String id, String itemId, String key, Duration globalTime) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    _updateShapeItemTrack(
+        id,
+        itemId,
+        key,
+        (t) => t.hasKeyframeAt(local)
+            ? t.withoutKeyframe(local)
+            : t.withKeyframe(local, t.valueAt(local)));
+  }
+
+  void setShapeItemTrackSegmentEase(String id, String itemId, String key,
+          Duration segStartLocal, Easing ease) =>
+      _updateShapeItemTrack(
+          id, itemId, key, (t) => t.withEase(segStartLocal, ease));
+
+  void applyEaseToAllShapeItemTrackSegments(
+          String id, String itemId, String key, Easing ease) =>
+      _updateShapeItemTrack(id, itemId, key, (t) => t.withEaseAll(ease));
+
+  /// O traco da forma (Border & Shadow): garante um e devolve o id.
+  String? ensureShapeStroke(String id,
+      {double width = 10, Color color = const Color(0xFFFFFFFF)}) {
+    final layer = _layer(id);
+    if (layer is! ShapeLayer) return null;
+    for (final i in layer.contents) {
+      if (i is ShapeStroke) return i.id;
+    }
+    final s = ShapeStroke(color: color, width: width);
+    _updateShape(id, (items) => [...items, s]);
+    return s.id;
+  }
+
+  void updateShapeStroke(String id, ShapeStroke Function(ShapeStroke) fn) {
+    _updateShape(id, (items) => [
+          for (final i in items)
+            if (i is ShapeStroke) fn(i) else i,
+        ]);
+  }
+
+  void removeShapeStroke(String id) {
+    _updateShape(id, (items) => [
+          for (final i in items)
+            if (i is! ShapeStroke) i,
+        ]);
+  }
+
+  /// DRAWING PROGRESS (o Trim Paths da AM): garante um na forma, antes
+  /// da pintura, e devolve o id.
+  String? ensureShapeTrim(String id) {
+    final layer = _layer(id);
+    if (layer is! ShapeLayer) return null;
+    for (final i in layer.contents) {
+      if (i is TrimOperator) return i.id;
+    }
+    final op = TrimOperator();
+    _updateShape(id, (items) {
+      final paintIdx = items.indexWhere((i) =>
+          i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill);
+      final out = [...items];
+      out.insert(paintIdx < 0 ? out.length : paintIdx, op);
+      return out;
+    });
+    return op.id;
+  }
+
+  void removeShapeTrim(String id) {
+    _updateShape(id, (items) => [
+          for (final i in items)
+            if (i is! TrimOperator) i,
+        ]);
+  }
+
+  /// A geometria da forma como caminho bezier (converte a parametrica
+  /// ou primitiva se preciso) e o id do item — a porta do Edit Points.
+  String? ensureShapeBezierGeometry(String id, Duration globalTime) {
+    final layer = _layer(id);
+    if (layer is! ShapeLayer) return null;
+    ShapeItem? geo;
+    for (final i in layer.contents) {
+      if (i is ShapeBezier ||
+          i is ShapePath ||
+          i is ShapeParametric ||
+          i is ShapeSvgPath ||
+          i is ShapeMorph) {
+        geo = i;
+        break;
+      }
+    }
+    if (geo == null) {
+      // Forma vazia (desenho vetorial recem-criado): nasce um caminho.
+      final b = ShapeBezier(
+          path: AnimatedPath(BezierPath(vertices: const [], closed: false)));
+      _updateShape(id, (items) => [b, ...items]);
+      return b.id;
+    }
+    if (geo is ShapeBezier) return geo.id;
+    return convertShapeItemToBezier(id, geo.id, globalTime) ? geo.id : null;
+  }
+
   void removeShapeItem(String id, String itemId) {
     _updateShape(id, (items) => [
           for (final i in items)

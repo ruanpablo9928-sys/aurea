@@ -48,6 +48,11 @@ enum LayerMenuAction {
   effects,
   editText,
   textAnimators,
+
+  /// Nivel 1: o painel "Editar forma" (numeros da forma, traco,
+  /// desenhar, pontos) e o mesmo painel aberto na aba do traco.
+  editShape,
+  stroke,
 }
 
 /// Menu que abre ao tocar na barra da camada selecionada: fileira de
@@ -412,8 +417,18 @@ Future<LayerMenuAction?> showLayerMenu(
                       label: 'Borda e\nsombra',
                       enabled: layer is! NullLayer,
                       disabledReason: 'Objeto nulo nao renderiza',
-                      onTap: () => abrirDepois(() => showLayerStylesSheet(
-                          context, ref, layer.id, playback)),
+                      onTap: () {
+                        // Forma: o traco vetorial (espessura, cor,
+                        // tracejado animavel) mora no painel da forma;
+                        // a sombra continua nos estilos, a um toque.
+                        if (layer is ShapeLayer) {
+                          Navigator.of(sheetContext)
+                              .pop(LayerMenuAction.stroke);
+                          return;
+                        }
+                        abrirDepois(() => showLayerStylesSheet(
+                            context, ref, layer.id, playback));
+                      },
                     ),
                     const SizedBox(width: 8),
                     _MenuTile(
@@ -449,8 +464,10 @@ Future<LayerMenuAction?> showLayerMenu(
                       enabled: layer is ShapeLayer,
                       disabledReason:
                           'So camadas de forma tem geometria editavel',
-                      onTap: () => abrirDepois(() => showShapeParamsSheet(
-                          context, ref, layer.id, playback)),
+                      // Painel de baixo (modelo AM), nao sheet: a barra da
+                      // camada com os keyframes fica visivel.
+                      onTap: () => Navigator.of(sheetContext)
+                          .pop(LayerMenuAction.editShape),
                     ),
                     const SizedBox(width: 8),
                     _MenuTile(

@@ -40,6 +40,10 @@ final pathEditTargetProvider =
 /// Qual no esta selecionado (o unico que mostra alcas).
 final pathEditSelectedProvider = StateProvider<int?>((ref) => null);
 
+/// O CURSOR do trackpad (Edit Points), em coordenadas do caminho: onde
+/// o proximo ponto cai. Desenhado como ⊹ no preview; null = sem cursor.
+final pathEditCursorProvider = StateProvider<Offset?>((ref) => null);
+
 /// EDITOR DE NOS, EM CIMA DA COMPOSICAO.
 ///
 /// Desenhar a mascara em volta de uma pessoa nao acontece num formulario
@@ -143,6 +147,7 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
     // Redesenha quando a mascara muda.
     ref.watch(editorControllerProvider);
     final selecionado = ref.watch(pathEditSelectedProvider);
+    final cursor = ref.watch(pathEditCursorProvider);
 
     return ValueListenableBuilder<Duration>(
       valueListenable: widget.time,
@@ -211,6 +216,7 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
             painter: _NodePainter(
               path: caminho,
               selected: selecionado,
+              cursor: cursor,
               toComp: (p) => _paraComp(p, pose),
               scale: widget.stageScale(),
             ),
@@ -227,15 +233,20 @@ class _NodePainter extends CustomPainter {
     required this.selected,
     required this.toComp,
     required this.scale,
+    this.cursor,
   });
 
   final BezierPath path;
   final int? selected;
+
+  /// Cursor do trackpad (⊹), no espaco do caminho.
+  final Offset? cursor;
   final Offset Function(Offset) toComp;
   final double scale;
 
   @override
   void paint(Canvas canvas, Size size) {
+    _pintaCursor(canvas, 1 / math.max(scale, 0.05));
     if (path.vertices.isEmpty) return;
     // Espessuras em pixels de TELA: o no tem o mesmo tamanho aparente
     // com a composicao encolhida ou ampliada.
@@ -311,4 +322,28 @@ class _NodePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_NodePainter old) => true;
+
+  /// ⊹: cruz aberta com um anel no meio, sempre por cima e sempre do
+  /// mesmo tamanho na tela.
+  void _pintaCursor(Canvas canvas, double k) {
+    final c0 = cursor;
+    if (c0 == null) return;
+    final c = toComp(c0);
+    final sombra = Paint()
+      ..color = const Color(0xCC000000)
+      ..strokeWidth = 4 * k
+      ..style = PaintingStyle.stroke;
+    final tinta = Paint()
+      ..color = AmColors.accent
+      ..strokeWidth = 1.8 * k
+      ..style = PaintingStyle.stroke;
+    final braco = 16 * k, furo = 6 * k;
+    for (final p in [sombra, tinta]) {
+      canvas.drawLine(c - Offset(braco, 0), c - Offset(furo, 0), p);
+      canvas.drawLine(c + Offset(furo, 0), c + Offset(braco, 0), p);
+      canvas.drawLine(c - Offset(0, braco), c - Offset(0, furo), p);
+      canvas.drawLine(c + Offset(0, furo), c + Offset(0, braco), p);
+      canvas.drawCircle(c, furo, p);
+    }
+  }
 }

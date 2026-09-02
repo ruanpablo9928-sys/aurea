@@ -83,10 +83,21 @@ void main() {
     }
   });
 
-  testWidgets('no estudio completo, tudo volta', (tester) async {
+  testWidgets('no estudio completo, o menu da AM volta com tudo',
+      (tester) async {
     final c = await containerCom({'app.mode': 'full'});
     await abreSheet(tester, c);
-    for (final item in ['Video', 'Texto', 'Forma', 'Particulas', 'Cena 3D']) {
+    // Abas e trilho (nivel 1): as coisas ficam por aba, nao numa fileira.
+    for (final aba in ['Forma', 'Midia', 'Audio', 'Objeto', 'Modelo']) {
+      expect(find.text(aba), findsOneWidget, reason: aba);
+    }
+    expect(find.text('Texto'), findsOneWidget);
+    await tester.tap(find.text('Midia'));
+    await tester.pumpAndSettle();
+    expect(find.text('Video'), findsOneWidget);
+    await tester.tap(find.text('Objeto'));
+    await tester.pumpAndSettle();
+    for (final item in ['Particulas', 'Cena 3D', 'Nulo 3D']) {
       expect(find.text(item), findsOneWidget, reason: item);
     }
     AppModeSwitch.force(AppMode.core);

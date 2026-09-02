@@ -12,6 +12,9 @@ import '../../domain/caption.dart';
 import '../../domain/element3d.dart';
 import '../../domain/layer.dart';
 import '../../domain/shape.dart';
+import '../../domain/shape_library.dart';
+import '../am/points_panel.dart' show editPointsRequestProvider;
+import 'freehand_overlay.dart' show freehandRequestProvider;
 import '../../domain/svg_path.dart';
 import '../am/am_colors.dart';
 import '../am/am_widgets.dart';
@@ -34,6 +37,7 @@ Future<void> showAddLayerSheet(
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AmColors.panel,
+    isScrollControlled: completo,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -56,7 +60,13 @@ Future<void> showAddLayerSheet(
               ),
             ),
             const SizedBox(height: 14),
-            if (mostrarFormas)
+            if (completo)
+              _AddMenuAm(
+                sheetContext: sheetContext,
+                ref: ref,
+                playhead: playhead,
+              )
+            else if (mostrarFormas)
               _SecaoFormas(
                 onVoltar: () => setSheetState(() => mostrarFormas = false),
                 onEscolher: (build, nome) {
@@ -839,4 +849,408 @@ class _AddOption extends StatelessWidget {
       ),
     );
   }
+}
+
+/// As abas do menu de adicionar (modelo Alight Motion).
+enum _AbaAdd { forma, midia, audio, objeto, modelo }
+
+/// MENU DE ADICIONAR NO MODELO AM: abas horizontais (Forma · Midia ·
+/// Audio · Objeto/Elemento · Modelo) e um trilho vertical a direita com
+/// os MODOS de criar (Desenho livre · Desenho vetorial · Texto · fechar)
+/// — desenho e texto nao sao itens de escolher, sao jeitos de comecar.
+/// A grade de formas tem 7 por linha, 3 linhas, em paginas, e cada tile
+/// mostra a forma de verdade.
+class _AddMenuAm extends ConsumerStatefulWidget {
+  const _AddMenuAm({
+    required this.sheetContext,
+    required this.ref,
+    required this.playhead,
+  });
+
+  final BuildContext sheetContext;
+  final WidgetRef ref;
+  final Duration playhead;
+
+  @override
+  ConsumerState<_AddMenuAm> createState() => _AddMenuAmState();
+}
+
+class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
+  _AbaAdd _aba = _AbaAdd.forma;
+  int _pagina = 0;
+  final _pager = PageController();
+
+  static const int _porPagina = 21;
+
+  EditorController get _controller =>
+      ref.read(editorControllerProvider.notifier);
+
+  void _fecha() => Navigator.of(widget.sheetContext).pop();
+
+  /// Cria a camada e devolve o id dela (a nova e a que nao existia).
+  String? _criaForma(List<ShapeItem> Function() build, String nome) {
+    final antes = {for (final l in ref.read(editorControllerProvider).layers) l.id};
+    _controller.addShapeLayer(widget.playhead, contents: build(), name: nome);
+    for (final l in ref.read(editorControllerProvider).layers) {
+      if (!antes.contains(l.id)) return l.id;
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    _pager.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final alto = MediaQuery.of(context).size.height;
+    return SizedBox(
+      height: (alto * 0.40).clamp(300.0, 360.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _abas(),
+                const SizedBox(height: 10),
+                Expanded(child: _conteudo()),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _trilho(),
+        ],
+      ),
+    );
+  }
+
+  Widget _abas() {
+    const nomes = {
+      _AbaAdd.forma: 'Forma',
+      _AbaAdd.midia: 'Midia',
+      _AbaAdd.audio: 'Audio',
+      _AbaAdd.objeto: 'Objeto',
+      _AbaAdd.modelo: 'Modelo',
+    };
+    return SizedBox(
+      height: 36,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (final a in _AbaAdd.values)
+            GestureDetector(
+              onTap: () => setState(() => _aba = a),
+              child: Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _aba == a ? AmColors.accentDim : AmColors.chip,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(nomes[a]!,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _aba == a ? AmColors.accent : AmColors.text)),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _trilho() {
+    Widget item(IconData icon, String label, VoidCallback onTap) =>
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 20, color: AmColors.accent),
+                const SizedBox(height: 2),
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 9, height: 1.1, color: AmColors.muted)),
+              ],
+            ),
+          ),
+        );
+    return SizedBox(
+      width: 64,
+      child: Column(
+        children: [
+          item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
+            _fecha();
+            ref.read(freehandRequestProvider.notifier).state = true;
+          }),
+          item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
+            final id = _criaForma(
+                () => [ShapeStroke(color: const Color(0xFFFFFFFF), width: 10)],
+                'Desenho');
+            _fecha();
+            if (id != null) {
+              ref.read(editPointsRequestProvider.notifier).state = id;
+            }
+          }),
+          item(CupertinoIcons.textformat, 'Texto', () {
+            _fecha();
+            _controller.addTextLayer(widget.playhead);
+          }),
+          const Spacer(),
+          item(CupertinoIcons.xmark, '', _fecha),
+        ],
+      ),
+    );
+  }
+
+  Widget _conteudo() {
+    switch (_aba) {
+      case _AbaAdd.forma:
+        return _formas();
+      case _AbaAdd.midia:
+        // _AddOption e um Expanded: so vive dentro de Row.
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _AddOption(
+              icon: CupertinoIcons.videocam_fill,
+              label: 'Video',
+              onTap: () {
+                _fecha();
+                _controller.importVideoFromGallery(widget.playhead);
+              },
+            ),
+            _AddOption(
+              icon: CupertinoIcons.photo_fill,
+              label: 'Imagem',
+              onTap: () {
+                _fecha();
+                _controller.importImageFromGallery(widget.playhead);
+              },
+            ),
+            _AddOption(
+              icon: CupertinoIcons.captions_bubble,
+              label: 'Legendas',
+              onTap: () {
+                _fecha();
+                _showSrtSheet(context, widget.ref);
+              },
+            ),
+            const Spacer(flex: 3),
+          ],
+        );
+      case _AbaAdd.audio:
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _AddOption(
+              icon: CupertinoIcons.music_note,
+              label: 'Audio',
+              onTap: () {
+                _fecha();
+                _controller.importAudioFile(widget.playhead);
+              },
+            ),
+            const Spacer(flex: 5),
+          ],
+        );
+      case _AbaAdd.objeto:
+        return Column(
+          children: [
+            Row(children: [
+            _AddOption(
+              icon: CupertinoIcons.viewfinder,
+              label: 'Nulo 3D',
+              onTap: () {
+                _fecha();
+                _controller.addNullLayer(widget.playhead);
+              },
+            ),
+            _AddOption(
+              icon: CupertinoIcons.sparkles,
+              label: 'Particulas',
+              onTap: () {
+                _fecha();
+                _controller.addParticlesLayer(widget.playhead);
+              },
+            ),
+            _AddOption(
+              icon: CupertinoIcons.square_grid_2x2,
+              label: 'Icones',
+              onTap: () {
+                _fecha();
+                _showIconSheet(context, widget.ref, widget.playhead);
+              },
+            ),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+            _AddOption(
+              icon: CupertinoIcons.slider_horizontal_3,
+              label: 'Ajuste',
+              onTap: () {
+                _fecha();
+                _controller.addAdjustmentLayer(widget.playhead);
+              },
+            ),
+            _AddOption(
+              icon: CupertinoIcons.cube,
+              label: 'Elementos 3D',
+              onTap: () {
+                _fecha();
+                _showElement3DPickerSheet(context, widget.ref, widget.playhead);
+              },
+            ),
+            _AddOption(
+              icon: CupertinoIcons.cube_box,
+              label: 'Cena 3D',
+              onTap: () {
+                _fecha();
+                _controller.addScene3DLayer(widget.playhead);
+              },
+            ),
+            ]),
+          ],
+        );
+      case _AbaAdd.modelo:
+        return const Padding(
+          padding: EdgeInsets.only(top: 6),
+          child: Text(
+            'Modelos prontos abrem pela tela inicial (Modelos) como um '
+            'projeto novo, camada por camada. Templates em arquivo (.json) '
+            'tambem entram por la.',
+            style: TextStyle(fontSize: 13, color: AmColors.muted, height: 1.4),
+          ),
+        );
+    }
+  }
+
+  Widget _formas() {
+    final total = shapeLibrary.length;
+    final paginas = (total / _porPagina).ceil();
+    return Column(
+      children: [
+        Expanded(
+          child: PageView.builder(
+            controller: _pager,
+            itemCount: paginas,
+            onPageChanged: (i) => setState(() => _pagina = i),
+            itemBuilder: (context, pagina) {
+              final ini = pagina * _porPagina;
+              final fim = (ini + _porPagina).clamp(0, total);
+              return GridView.count(
+                crossAxisCount: 7,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  for (var i = ini; i < fim; i++)
+                    _TileForma(
+                      entrada: shapeLibrary[i],
+                      onTap: () {
+                        final e = shapeLibrary[i];
+                        _criaForma(e.build, e.nome);
+                        _fecha();
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < paginas; i++)
+              Container(
+                width: 6,
+                height: 6,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i == _pagina ? AmColors.accent : AmColors.muted,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Um tile da grade: a forma desenhada, do tamanho do tile.
+class _TileForma extends StatelessWidget {
+  const _TileForma({required this.entrada, required this.onTap});
+
+  final ShapeLibraryEntry entrada;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final itens = entrada.build();
+    return Tooltip(
+      message: entrada.nome,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AmColors.chip,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: CustomPaint(
+              painter: _FormaPainter(
+                shapeLibraryPreviewPath(itens),
+                stroke: shapeLibraryIsStrokeOnly(itens),
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FormaPainter extends CustomPainter {
+  const _FormaPainter(this.path, {required this.stroke});
+
+  final Path path;
+  final bool stroke;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final b = path.getBounds();
+    // A linha tem altura zero: o que conta e o lado maior.
+    if (b.longestSide <= 0) return;
+    final k = 0.9 * (size.shortestSide / b.longestSide);
+    canvas.translate(size.width / 2, size.height / 2);
+    canvas.scale(k, k);
+    canvas.translate(-b.center.dx, -b.center.dy);
+    // Anel, padrao de pontos: o furo e um subcaminho — par-impar.
+    path.fillType = PathFillType.evenOdd;
+    final paint = Paint()..color = AmColors.accent;
+    if (stroke) {
+      paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 14 / k
+        ..strokeCap = StrokeCap.round;
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_FormaPainter old) => old.path != path;
 }

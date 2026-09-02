@@ -13,6 +13,10 @@ import '../domain/gear.dart';
 import '../domain/layer.dart';
 import 'am/align_sheet.dart';
 import '../../../core/app_mode.dart';
+import '../domain/shape.dart';
+import 'am/points_panel.dart';
+import 'am/shape_panel.dart';
+import 'widgets/mask_node_editor.dart';
 import '../../../core/ui/snack.dart';
 import '../../projects/application/thumbnail_service.dart';
 import 'am/am_colors.dart';
@@ -28,7 +32,18 @@ import 'am/transform_panel.dart';
 import 'widgets/add_layer_sheet.dart';
 import 'widgets/preview_stage.dart';
 
-enum _Mode { main, transform, blending, colorFill, effects, curve, animators }
+enum _Mode {
+  main,
+  transform,
+  blending,
+  colorFill,
+  effects,
+  curve,
+  animators,
+  // Nivel 1 (shapes): o painel da forma e o Edit Points com trackpad.
+  editShape,
+  editPoints,
+}
 
 /// Os quatro estados do cabecalho (observados no Alight Motion). A mesma
 /// faixa, na mesma altura, muda o que mostra conforme o contexto: nome do
@@ -50,6 +65,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   final VideoLayerManager _videos = VideoLayerManager();
 
   _Mode _mode = _Mode.main;
+  ShapeTool _shapeTool = ShapeTool.size;
+  String? _pointsItemId;
+  final GlobalKey<PointsPanelState> _pointsKey = GlobalKey<PointsPanelState>();
   LayerProp _curveProp = LayerProp.position;
   _Mode _curveReturn = _Mode.transform;
   TransformTool _tool = TransformTool.rotation;
@@ -101,10 +119,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         _Mode.effects => 'Efeitos',
         _Mode.curve => 'Curva de gradacao',
         _Mode.animators => 'Animacao de texto',
+        _Mode.editShape => 'Editar forma',
+        _Mode.editPoints => 'Editar pontos',
       };
 
   void _back() {
     switch (_mode) {
+      case _Mode.editPoints:
+        _fecharEditPoints();
+        setState(() => _mode = _Mode.editShape);
+        return;
       case _Mode.main:
         // A miniatura do projeto para a tela inicial: capturada AGORA,
         // com o palco ainda vivo; a escrita segue em segundo plano.
@@ -232,7 +256,48 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         _editText(layer);
       case LayerMenuAction.textAnimators:
         setState(() => _mode = _Mode.animators);
+      case LayerMenuAction.editShape:
+        setState(() {
+          _shapeTool = ShapeTool.size;
+          _mode = _Mode.editShape;
+        });
+      case LayerMenuAction.stroke:
+        setState(() {
+          _shapeTool = ShapeTool.stroke;
+          _mode = _Mode.editShape;
+        });
     }
+  }
+
+  /// EDIT POINTS: a geometria vira caminho (se ainda nao e), o editor
+  /// de nos passa a mirar nela e o painel do trackpad abre.
+  void _abrirEditPoints([String? layerId]) {
+    final id = layerId ?? ref.read(selectedLayerProvider);
+    if (id == null) return;
+    final controller = ref.read(editorControllerProvider.notifier);
+    final itemId =
+        controller.ensureShapeBezierGeometry(id, _playback.time.value);
+    if (itemId == null) {
+      showReasonToast(context, 'Esta camada nao tem caminho editavel');
+      return;
+    }
+    _playback.pause();
+    ref.read(selectedLayerProvider.notifier).state = id;
+    ref.read(pathEditTargetProvider.notifier).state =
+        PathEditTarget(id, itemId, forma: true);
+    ref.read(pathEditSelectedProvider.notifier).state = null;
+    ref.read(pathEditCursorProvider.notifier).state = null;
+    ref.read(pathEditModeProvider.notifier).state = PointsMode.move;
+    setState(() {
+      _pointsItemId = itemId;
+      _mode = _Mode.editPoints;
+    });
+  }
+
+  void _fecharEditPoints() {
+    ref.read(pathEditTargetProvider.notifier).state = null;
+    ref.read(pathEditSelectedProvider.notifier).state = null;
+    ref.read(pathEditCursorProvider.notifier).state = null;
   }
 
   Future<void> _editText(Layer layer) async {
@@ -298,7 +363,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           playback: _playback, prop: _curveProp, onBack: _back),
       _Mode.animators =>
         TextAnimatorsPanel(playback: _playback, onBack: _back),
+      _Mode.editShape => ShapePanel(
+          playback: _playback,
+          tool: _shapeTool,
+          onToolChanged: (t) => setState(() => _shapeTool = t),
+          onBack: _back,
+          onEditPoints: _abrirEditPoints),
+      _Mode.editPoints => PointsPanel(
+          key: _pointsKey,
+          playback: _playback,
+          layerId: selectedId ?? '',
+          itemId: _pointsItemId ?? '',
+          onBack: _back),
     };
+
+    // Desenho vetorial pelo menu de adicionar: abre o Edit Points na
+    // camada recem-criada.
+    ref.listen<String?>(editPointsRequestProvider, (_, id) {
+      if (id == null) return;
+      ref.read(editPointsRequestProvider.notifier).state = null;
+      _abrirEditPoints(id);
+    });
 
     final pinkPlayhead = _mode == _Mode.effects ||
         _mode == _Mode.curve ||
@@ -318,6 +403,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             _Mode.effects => layer.effectTimesUs,
             _Mode.colorFill => const <int>{},
             _Mode.animators => null,
+            // Todo numero da forma, o tracejado, o Desenhar e os pontos.
+            _Mode.editShape || _Mode.editPoints => layer.moduleTimesUs,
           };
 
     return Scaffold(
@@ -334,6 +421,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   onBack: _back,
                   onLayerMenu: _onTapLayer,
                   playback: _playback,
+                  trailing: _mode == _Mode.editPoints
+                      ? _PointsHeaderActions(
+                          playback: _playback,
+                          onKeyframe: () =>
+                              _pointsKey.currentState?.toggleKeyframe(),
+                          onAdd: () => _pointsKey.currentState?.addPoint(),
+                        )
+                      : null,
                 ),
                 // RepaintBoundary: palco, timeline e painel pintam em
                 // camadas separadas — repintar um nao repinta os outros.
@@ -604,6 +699,7 @@ class _TopBar extends ConsumerWidget {
   const _TopBar({
     required this.title,
     required this.isMain,
+    this.trailing,
     required this.onBack,
     required this.onLayerMenu,
     required this.playback,
@@ -611,6 +707,9 @@ class _TopBar extends ConsumerWidget {
 
   final String title;
   final bool isMain;
+
+  /// Acoes a direita no cabecalho de painel (ex.: ◈ e ⊕ do Edit Points).
+  final Widget? trailing;
   final VoidCallback onBack;
   final ValueChanged<Layer> onLayerMenu;
   final PlaybackController playback;
@@ -772,7 +871,7 @@ class _TopBar extends ConsumerWidget {
               ],
             // Espacador da largura do botao de voltar: o titulo
             // centralizado fica de fato no centro.
-            _HeaderKind.painel => [const SizedBox(width: 52)],
+            _HeaderKind.painel => [trailing ?? const SizedBox(width: 52)],
           },
         ],
       ),
@@ -1174,6 +1273,65 @@ class _TransportBar extends ConsumerWidget {
           const Icon(Icons.fullscreen, size: 24, color: AmColors.text),
         ],
       ),
+    );
+  }
+}
+
+/// `◈` (keyframe dos pontos) e `⊕` (adicionar no cursor) do Edit
+/// Points, no cabecalho — como na AM. O diamante acende quando o
+/// caminho e animado e enche quando ha keyframe no tempo de agora.
+class _PointsHeaderActions extends ConsumerWidget {
+  const _PointsHeaderActions({
+    required this.playback,
+    required this.onKeyframe,
+    required this.onAdd,
+  });
+
+  final PlaybackController playback;
+  final VoidCallback onKeyframe;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final project = ref.watch(editorControllerProvider);
+    final alvo = ref.watch(pathEditTargetProvider);
+    return ValueListenableBuilder<Duration>(
+      valueListenable: playback.time,
+      builder: (context, t, _) {
+        var animado = false;
+        var temKf = false;
+        if (alvo != null) {
+          final layer = project.layerById(alvo.layerId);
+          if (layer is ShapeLayer) {
+            for (final i in layer.contents) {
+              if (i.id == alvo.maskId && i is ShapeBezier) {
+                animado = i.path.isAnimated;
+                temKf = i.path.hasKeyframeAt(layer.localTime(t));
+              }
+            }
+          }
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              onPressed: onKeyframe,
+              child: Icon(
+                temKf ? CupertinoIcons.rhombus_fill : CupertinoIcons.rhombus,
+                size: 22,
+                color: animado ? AmColors.accent : AmColors.text,
+              ),
+            ),
+            CupertinoButton(
+              padding: const EdgeInsets.only(left: 6, right: 14),
+              onPressed: onAdd,
+              child: const Icon(CupertinoIcons.plus_circle,
+                  size: 24, color: AmColors.text),
+            ),
+          ],
+        );
+      },
     );
   }
 }
