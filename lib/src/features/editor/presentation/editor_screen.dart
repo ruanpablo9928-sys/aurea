@@ -13,6 +13,7 @@ import '../domain/gear.dart';
 import '../domain/layer.dart';
 import 'am/align_sheet.dart';
 import '../../../core/ui/snack.dart';
+import '../../projects/application/thumbnail_service.dart';
 import 'am/am_colors.dart';
 import 'am/layer_look.dart';
 import 'am/export_sheet.dart';
@@ -104,6 +105,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void _back() {
     switch (_mode) {
       case _Mode.main:
+        // A miniatura do projeto para a tela inicial: capturada AGORA,
+        // com o palco ainda vivo; a escrita segue em segundo plano.
+        ThumbnailService.instance
+            .capture(previewStageKey, ref.read(editorControllerProvider).id);
         Navigator.of(context).maybePop();
       case _Mode.curve:
         setState(() => _mode = _curveReturn);
