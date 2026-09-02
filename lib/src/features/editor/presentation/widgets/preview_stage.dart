@@ -1842,10 +1842,15 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 // GLOW ONLY: so o brilho, sem a fonte. Serve para mandar
                 // o glow para outra camada e mesclar la.
                 ? Stack(clipBehavior: Clip.none, children: camadas)
+                // A FONTE EMBAIXO, O GLOW POR CIMA. Com a fonte por
+                // ultimo, o solido cobria o brilho e o glow so aparecia
+                // pela borda de fora — um contorno, nao um glow. O Deep
+                // Glow soma luz em cima de tudo: o miolo claro tambem
+                // acende, e e isso que faz um texto branco "queimar".
                 : Stack(clipBehavior: Clip.none, children: [
+                    out,
                     for (final c in camadas)
                       BlendMask(blendMode: modo, child: c),
-                    out,
                   ]);
           }
 

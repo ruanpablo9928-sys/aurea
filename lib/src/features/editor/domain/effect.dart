@@ -1136,10 +1136,51 @@ class EffectInstance {
   }
 
   /// Edita valor: keyframe automatico se o parametro ja anima.
-  EffectInstance withParamEdited(String key, Duration local, double value) =>
-      copyWith(params: {...params, key: track(key).edited(local, value)});
+  /// KEYFRAME UNIVERSAL (como no Alight Motion): o efeito tem UM
+  /// diamante, e cada keyframe guarda TODOS os parametros.
+  ///
+  /// Num efeito sem animacao, editar so muda o valor. Num efeito que ja
+  /// tem keyframe em qualquer parametro, editar um parametro neste
+  /// instante grava o keyframe deste instante com todos os parametros —
+  /// o editado com o valor novo, os outros com o valor que tinham. E o
+  /// que faz "marco no inicio, vou ao fim e mexo" funcionar sem pensar
+  /// em qual parametro tem diamante.
+  EffectInstance withParamEdited(String key, Duration local, double value) {
+    if (!hasAnimation) {
+      return copyWith(params: {...params, key: track(key).edited(local, value)});
+    }
+    final novos = <String, AnimatedDouble>{...params};
+    for (final k in {...spec.params.keys, ...params.keys}) {
+      final t = track(k);
+      if (k == key) {
+        novos[k] = t.withKeyframe(local, value);
+      } else if (!t.hasKeyframeAt(local)) {
+        novos[k] = t.withKeyframe(local, t.valueAt(local));
+      }
+    }
+    return copyWith(params: novos);
+  }
 
-  /// Diamante do parametro: liga/desliga keyframe no tempo local.
+  /// Ha keyframe do EFEITO neste instante: qualquer parametro basta.
+  bool hasKeyframeAt(Duration local) =>
+      params.values.any((t) => t.hasKeyframeAt(local));
+
+  /// O diamante do efeito: liga o keyframe universal neste instante
+  /// (todos os parametros, com o valor atual) ou desliga de todos.
+  EffectInstance withKeyframeToggled(Duration local) {
+    final ligar = !hasKeyframeAt(local);
+    final novos = <String, AnimatedDouble>{...params};
+    for (final k in {...spec.params.keys, ...params.keys}) {
+      final t = track(k);
+      novos[k] = ligar
+          ? (t.hasKeyframeAt(local) ? t : t.withKeyframe(local, t.valueAt(local)))
+          : t.withoutKeyframe(local);
+    }
+    return copyWith(params: novos);
+  }
+
+  /// Diamante de UM parametro: liga/desliga keyframe no tempo local.
+  /// (Usado por pares x|y que completam um eixo por vez.)
   EffectInstance withParamKeyframeToggled(String key, Duration local) {
     final t = track(key);
     return copyWith(params: {

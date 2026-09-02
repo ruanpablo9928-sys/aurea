@@ -53,6 +53,14 @@ class VideoLayerManager {
   /// vez por reproducao e descontado de todas as amostras seguintes.
   final Map<String, int> _biasUs = {};
 
+  /// PRE-ROLL: pedaco que vai entrar daqui a pouco ja foi posicionado
+  /// (seek feito, tocador parado) no offset guardado aqui. Na entrada,
+  /// so o play — sem o seek que travava o preview no ponto do corte.
+  final Map<String, Duration> _preRolled = {};
+
+  /// Quanto antes do inicio de um pedaco ele e preparado.
+  static const Duration _janelaPreRoll = Duration(seconds: 2);
+
   VideoPlayerController? controllerFor(String layerId) =>
       _controllers[layerId];
 
@@ -121,6 +129,7 @@ class VideoLayerManager {
         _lastSeek.remove(id);
         _appliedVolume.remove(id);
         _lastPos.remove(id);
+        _preRolled.remove(id);
       }
     }
     final mediaLayers = _media;
@@ -130,17 +139,26 @@ class VideoLayerManager {
     Duration? master;
 
     for (final m in mediaLayers) {
-      _ensure(m.id, m.path, m.volume);
+      final layer = m.layer;
+      final active = layer.activeAt(t);
+      final ateComecar = layer.startTime - t;
+      final vemAi = !active &&
+          ateComecar > Duration.zero &&
+          ateComecar <= _janelaPreRoll;
+      // CONTROLLER SOB DEMANDA: um video decupado em vinte pedacos e
+      // o mesmo arquivo vinte vezes. Vinte tocadores preparados de uma
+      // vez sao vinte decodificadores vivos — e o preview que engasga.
+      // So o pedaco ativo (e o que vem ai) ganha tocador; os outros
+      // ganham o deles quando o cabecote chegar perto.
+      if (active || vemAi) _ensure(m.id, m.path, m.volume);
       final controller = _controllers[m.id];
       if (controller == null) continue;
-      final layer = m.layer;
       final isAudio = layer is AudioLayer;
 
       if (_appliedVolume[m.id] != m.volume) {
         _appliedVolume[m.id] = m.volume;
         controller.setVolume(m.volume);
       }
-      final active = layer.activeAt(t);
       // A VELOCIDADE estica a leitura da fonte: um segundo na linha
       // consome [speed] segundos de arquivo.
       final vel = switch (layer) {
@@ -156,9 +174,27 @@ class VideoLayerManager {
                   microseconds:
                       (decorrido.inMicroseconds * vel).round()));
 
+      if (vemAi && isPlaying) {
+        // PRE-ROLL: posiciona o pedaco que vem ai enquanto o atual ainda
+        // toca. O seek e o que custa (o decodificador volta ao quadro-
+        // chave anterior e avanca ate o ponto); feito agora, na entrada
+        // sobra so o play. Era o "trava quando chega onde decupei".
+        if (_preRolled[m.id] != m.offset) {
+          if (controller.value.isPlaying) controller.pause();
+          controller.seekTo(m.offset);
+          _preRolled[m.id] = m.offset;
+        }
+        continue;
+      }
+
       if (active && isPlaying) {
         if (!controller.value.isPlaying) {
-          controller.seekTo(local);
+          // Pre-rolado no ponto certo: nada de seek de novo. O atraso
+          // entre o pre-roll e a entrada e de no maximo um tique.
+          final preparado = _preRolled.remove(m.id);
+          final jaNoLugar = preparado != null &&
+              (local - preparado).abs() < const Duration(milliseconds: 250);
+          if (!jaNoLugar) controller.seekTo(local);
           // O tocador tem velocidade propria: usar ela e o que mantem o
           // som continuo em vez de picotado por seeks.
           controller.setPlaybackSpeed(vel.clamp(0.1, 4.0));
@@ -207,6 +243,7 @@ class VideoLayerManager {
           if (!controller.value.isPlaying) controller.play();
         }
       } else {
+        _preRolled.remove(m.id);
         if (controller.value.isPlaying) controller.pause();
         // Scrub pausado: video precisa do seek para MOSTRAR o frame;
         // audio pausado nao tem nada a mostrar — seek so na hora do

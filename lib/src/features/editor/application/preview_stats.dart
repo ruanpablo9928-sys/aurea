@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/gear.dart';
@@ -14,6 +15,35 @@ final debugOverlayProvider = StateProvider<bool>((ref) => false);
 /// REALMENTE compoe — com o portao de marchas, cena estatica compoe ~0/s
 /// (o analogo Flutter de "o player nao compoe, so toca").
 abstract final class PreviewStats {
+  /// TRAVADAS DE INTERFACE: quadros que passaram de 34 ms do inicio da
+  /// construcao ao fim da rasterizacao, contados pelo proprio motor.
+  /// E o numero que mede "arrastar trava a tela" — o registrador de
+  /// frames so ve a reproducao, e a travada de arrasto acontece parado.
+  static final ValueNotifier<int> jankFrames = ValueNotifier(0);
+  static final ValueNotifier<double> worstFrameMs = ValueNotifier(0);
+  static bool _timingsHooked = false;
+
+  static void hookTimings() {
+    if (_timingsHooked) return;
+    _timingsHooked = true;
+    SchedulerBinding.instance.addTimingsCallback((timings) {
+      var travadas = 0;
+      var pior = 0.0;
+      for (final t in timings) {
+        final ms = t.totalSpan.inMicroseconds / 1000.0;
+        if (ms > pior) pior = ms;
+        if (ms > 34) travadas++;
+      }
+      if (travadas > 0) jankFrames.value += travadas;
+      if (pior > worstFrameMs.value) worstFrameMs.value = pior;
+    });
+  }
+
+  static void resetJank() {
+    jankFrames.value = 0;
+    worstFrameMs.value = 0;
+  }
+
   /// Composicoes por segundo (janela de 1 s).
   static final ValueNotifier<int> compsPerSec = ValueNotifier(0);
 

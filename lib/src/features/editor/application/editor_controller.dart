@@ -2542,6 +2542,18 @@ class EditorController extends Notifier<VideoProject> {
     ]));
   }
 
+  /// Diamante do EFEITO: keyframe universal neste instante.
+  void toggleEffectKeyframe(
+      String layerId, String effectId, Duration globalTime) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    _replace(layer.copyLayer(effects: [
+      for (final e in layer.effects)
+        e.id == effectId ? e.withKeyframeToggled(local) : e,
+    ]));
+  }
+
   /// Diamante do parametro do efeito.
   void toggleEffectParamKeyframe(
       String layerId, String effectId, String key, Duration globalTime) {

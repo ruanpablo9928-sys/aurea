@@ -708,6 +708,8 @@ class _DiagOverlay extends ConsumerWidget {
         ref.watch(editorControllerProvider.select((p) => p.fps));
     final total = ref.watch(
         editorControllerProvider.select((p) => p.layers.length));
+    // Liga o contador de travadas de interface junto com o overlay.
+    PreviewStats.hookTimings();
     return ValueListenableBuilder<GearDecision?>(
       valueListenable: PreviewStats.gear,
       builder: (context, gear, _) => ValueListenableBuilder<int>(
@@ -728,9 +730,16 @@ class _DiagOverlay extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AmColors.hairline),
                   ),
-                  child: ValueListenableBuilder<FrameReport?>(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: PreviewStats.jankFrames,
+                    builder: (context, jank, _) =>
+                        ValueListenableBuilder<double>(
+                      valueListenable: PreviewStats.worstFrameMs,
+                      builder: (context, pior, _) =>
+                          ValueListenableBuilder<FrameReport?>(
                     valueListenable: FrameLog.report,
                     builder: (context, r, _) => Text(
+                      'UI: $jank travadas · pior ${pior.toStringAsFixed(0)} ms\n'
                       'MARCHA: ${gear == null ? '—' : gearLabel(gear.gear)}\n'
                       'motivo: ${gear?.reason ?? '—'}\n'
                       'compoe $comps/s · projeto ${fps}fps\n'
@@ -748,6 +757,8 @@ class _DiagOverlay extends ConsumerWidget {
                         color: AmColors.accent,
                         height: 1.4,
                         fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
                       ),
                     ),
                   ),

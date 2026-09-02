@@ -436,10 +436,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
             }
             chaves.addAll(partes[1].split('|'));
           }
-          final selAnimado =
-              sel != null && chaves.any((k) => sel!.track(k).isAnimated);
-          final selKfAqui = sel != null &&
-              chaves.every((k) => sel!.track(k).hasKeyframeAt(local));
+          // KEYFRAME UNIVERSAL: o diamante e do EFEITO inteiro, como
+          // no Alight Motion — um keyframe guarda todos os parametros.
+          final selAnimado = sel != null && sel.hasAnimation;
+          final selKfAqui = sel != null && sel.hasKeyframeAt(local);
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -460,15 +460,8 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                   AmRailButton(
                     onTap: sel == null
                         ? null
-                        : () {
-                            for (final k in chaves) {
-                              if (selKfAqui ||
-                                  !sel!.track(k).hasKeyframeAt(local)) {
-                                controller.toggleEffectParamKeyframe(
-                                    id, sel!.id, k, t);
-                              }
-                            }
-                          },
+                        : () => controller.toggleEffectKeyframe(
+                            id, sel!.id, t),
                     child: AmDiamondAdd(
                         active: selAnimado, filled: selKfAqui),
                   ),
@@ -548,9 +541,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                             setState(() => _selectedParam = p),
                         onParam: (key, v) => controller.editEffectParam(
                             id, layer.effects[i].id, key, t, v),
-                        onParamKeyframe: (key) =>
-                            controller.toggleEffectParamKeyframe(
-                                id, layer.effects[i].id, key, t),
+                        // Qualquer diamante do cartao e o diamante do
+                        // efeito: keyframe universal neste instante.
+                        onParamKeyframe: (_) => controller
+                            .toggleEffectKeyframe(id, layer.effects[i].id, t),
                         onToggleEnabled: () => controller
                             .toggleEffectEnabled(id, layer.effects[i].id),
                         onColor: (c) => controller.setEffectColor(
@@ -620,12 +614,6 @@ class _EffectCard extends StatelessWidget {
         final paramKey = '${effect.id}/${x.key}|${y.key}';
         final xt = effect.track(x.key);
         final yt = effect.track(y.key);
-        // O diamante do par so mostra "cheio" com keyframe nos DOIS
-        // eixos. Em estado misto (regua de um eixo arrastada grava so
-        // nele) um toggle cego apagaria o eixo que tinha e criaria no
-        // outro: o diamante seguiria vazio e o keyframe sumiria. Por
-        // isso decide por eixo: vazio completa onde falta, cheio limpa.
-        final ambos = xt.hasKeyframeAt(local) && yt.hasKeyframeAt(local);
         linhas.add(_PointRow(
           paramKey: paramKey,
           label: x.value.label.replaceFirst(RegExp(r' X$'), ''),
@@ -642,10 +630,7 @@ class _EffectCard extends StatelessWidget {
           onChangedY: (v) => onParam(y.key, v),
           // Dois toggles separados, coalescidos num undo so pelo
           // controller (450 ms).
-          onKeyframe: () {
-            if (ambos || !xt.hasKeyframeAt(local)) onParamKeyframe(x.key);
-            if (ambos || !yt.hasKeyframeAt(local)) onParamKeyframe(y.key);
-          },
+          onKeyframe: () => onParamKeyframe(x.key),
         ));
         i++;
         continue;
@@ -678,6 +663,8 @@ class _EffectCard extends StatelessWidget {
             paramKey: '${effect.id}/${entry.key}',
             label: entry.value.label,
             track: effect.track(entry.key),
+            kfAqui: effect.hasKeyframeAt(local),
+            animado: effect.hasAnimation,
             local: local,
             min: entry.value.min,
             max: entry.value.max,
@@ -888,6 +875,8 @@ class _ParamRow extends StatelessWidget {
     required this.onSelect,
     required this.onChanged,
     required this.onKeyframe,
+    this.kfAqui,
+    this.animado,
   });
 
   final String paramKey;
@@ -901,11 +890,16 @@ class _ParamRow extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final VoidCallback onKeyframe;
 
+  /// Estado do diamante vindo do EFEITO (keyframe universal). Nulo =
+  /// o da propria trilha.
+  final bool? kfAqui;
+  final bool? animado;
+
   @override
   Widget build(BuildContext context) {
     final value = track.valueAt(local);
-    final animated = track.isAnimated;
-    final kfHere = track.hasKeyframeAt(local);
+    final animated = animado ?? track.isAnimated;
+    final kfHere = kfAqui ?? track.hasKeyframeAt(local);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),

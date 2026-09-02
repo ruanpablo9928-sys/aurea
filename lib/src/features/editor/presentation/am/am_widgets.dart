@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../../core/utils/time_format.dart';
 import '../../application/playback_controller.dart';
@@ -255,6 +256,26 @@ class _AmTickRulerState extends State<AmTickRuler> {
   double _inicio = 0;
   double _acumulado = 0;
 
+  /// UMA ENTREGA POR QUADRO. Chegam dois ou tres eventos de movimento
+  /// por quadro, e cada entrega reconstroi o projeto inteiro (preview,
+  /// timeline, painel). Entregar todos e pagar a reconstrucao tres
+  /// vezes para mostrar um quadro so — e o que se sentia como
+  /// microtravamento ao arrastar. O primeiro evento do quadro sai na
+  /// hora; os seguintes ficam guardados e o ultimo sai logo depois do
+  /// quadro pintar. Nada se perde: o valor final e sempre entregue.
+  double? _pendente;
+  bool _agendado = false;
+
+  void _entregar(double v) {
+    widget.onChanged(v);
+  }
+
+  void _descarregar() {
+    final p = _pendente;
+    _pendente = null;
+    if (p != null) _entregar(p);
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -265,9 +286,21 @@ class _AmTickRulerState extends State<AmTickRuler> {
       },
       onHorizontalDragUpdate: (d) {
         _acumulado += d.delta.dx;
-        widget.onChanged((_inicio - _acumulado * widget.unitsPerPixel)
-            .clamp(widget.min, widget.max));
+        final v = (_inicio - _acumulado * widget.unitsPerPixel)
+            .clamp(widget.min, widget.max);
+        if (_agendado) {
+          _pendente = v;
+          return;
+        }
+        _agendado = true;
+        _entregar(v);
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _agendado = false;
+          if (mounted) _descarregar();
+        });
       },
+      onHorizontalDragEnd: (_) => _descarregar(),
+      onHorizontalDragCancel: _descarregar,
       child: SizedBox(
         height: widget.height,
         width: double.infinity,
