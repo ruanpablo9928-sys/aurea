@@ -743,7 +743,7 @@ const effectSpecs = <EffectType, EffectSpec>{
       // continua andando; para exportar, subir. O resultado e ampliado
       // de volta, e as faixas ficam mais grossas em resolucao menor.
       'sort_resolution':
-          EffectParam('Sort Resolution', 360.0, 64.0, 1080.0),
+          EffectParam('Sort Resolution', 720.0, 64.0, 1080.0),
       'downsample': EffectParam('Downsample', 1.0, 1.0, 4.0),
       // Desfoque 1D sobre o matte do limiar, em pixels do buffer: sem
       // ele, ruido de compressao abre e fecha trechos a cada pixel.

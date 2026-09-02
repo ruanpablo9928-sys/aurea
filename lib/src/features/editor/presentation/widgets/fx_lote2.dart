@@ -505,8 +505,14 @@ class PixelSortPainter extends _FxPainter {
     _agendar(image);
 
     final pronto = _cache.resultado;
+    // A ORDENACAO ACONTECE MENOR e o resultado e AMPLIADO de volta.
+    // Ampliar sem filtro transforma cada pixel ordenado num quadradinho,
+    // e o efeito, que deveria escorrer, sai picotado — parece dither, e
+    // foi exatamente o que apareceu na primeira prova no aparelho.
+    // "Soft edges" escolhe o quanto suavizar, nunca se suaviza.
     final pintura = Paint()
-      ..filterQuality = softEdges ? FilterQuality.low : FilterQuality.none;
+      ..filterQuality =
+          softEdges ? FilterQuality.medium : FilterQuality.low;
 
     if (pronto == null) {
       canvas.drawImageRect(image, src, dst, pintura);
