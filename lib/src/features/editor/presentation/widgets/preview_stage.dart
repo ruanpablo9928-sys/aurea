@@ -35,6 +35,7 @@ import 'mask_node_editor.dart';
 import 'element3d_painter.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
+import 'preview_raster.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import 'scene3d_painter.dart';
@@ -191,7 +192,22 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                   child: Transform.scale(
                     scale: scale,
                     alignment: Alignment.topLeft,
-                    child: OverflowBox(
+                    child: MediaQuery(
+                      // FOTOS NA RESOLUCAO DA TELA. Tudo que fotografa a
+                      // composicao (efeitos, mescla, dithering) le a razao
+                      // de pixels daqui: com a do aparelho, cada foto saia
+                      // em 1080x1920 x DPR — 75 MB por efeito por quadro no
+                      // iPhone, e o iOS fechava o app na primeira animacao.
+                      data: MediaQuery.of(context).copyWith(
+                        devicePixelRatio: previewRasterRatio(
+                          compWidth: compW,
+                          compHeight: compH,
+                          stageScale: scale,
+                          devicePixelRatio:
+                              MediaQuery.devicePixelRatioOf(context),
+                        ),
+                      ),
+                      child: OverflowBox(
                       alignment: Alignment.topLeft,
                       minWidth: compW,
                       maxWidth: compW,
@@ -220,7 +236,14 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                             builder: (context, t, child) => project.layers
                                     .any((l) => l is VideoLayer)
                                 ? child!
-                                : DitherLayer(time: t, child: child!),
+                                : DitherLayer(
+                                    time: t,
+                                    // Escala do palco x DPR de verdade: e o
+                                    // tamanho da textura do filtro.
+                                    pixelRatio: scale *
+                                        MediaQuery.devicePixelRatioOf(context),
+                                    child: child!,
+                                  ),
                             child: CompositionView(
                               time: widget.playback.time,
                               videos: widget.videos,
@@ -285,6 +308,7 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                           ),
                         ],
                       ),
+                    ),
                     ),
                   ),
                 ),
