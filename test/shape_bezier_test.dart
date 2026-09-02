@@ -152,12 +152,34 @@ void main() {
           Duration.zero)!;
       expect(estrela.vertices.length, 10);
 
-      // Arredondado nao tem formula fechada em nos: amostra.
+      // Arredondado: um quarto de circulo por canto, dois nos por canto.
       final arredondado = bezierOfShapeItem(
           ShapeParametric(
-              kind: ParamShapeKind.rect, roundness: AnimatedDouble(20)),
+              kind: ParamShapeKind.rect,
+              sizeX: AnimatedDouble(120),
+              sizeY: AnimatedDouble(60),
+              roundness: AnimatedDouble(20)),
           Duration.zero)!;
-      expect(arredondado.vertices.length, greaterThan(4));
+      expect(arredondado.vertices.length, 8);
+      final b = arredondado.build().getBounds();
+      expect(b.width, closeTo(120, 1e-6));
+      expect(b.height, closeTo(60, 1e-6));
+      // Os nos do arco tem alca so de um lado; o lado reto nao tem alca.
+      expect(arredondado.vertices.where((v) => v.inT == Offset.zero).length,
+          4);
+
+      // Capsula: o raio satura a altura, os lados verticais somem e os
+      // nos coincidentes se fundem num no liso.
+      final capsula = bezierOfShapeItem(
+          ShapeParametric(
+              kind: ParamShapeKind.rect,
+              sizeX: AnimatedDouble(200),
+              sizeY: AnimatedDouble(100),
+              roundness: AnimatedDouble(100)),
+          Duration.zero)!;
+      expect(capsula.vertices.length, 6);
+      expect(capsula.vertices.where((v) => !v.corner).length, 2);
+      expect(capsula.build().getBounds().width, closeTo(200, 1e-6));
     });
 
     test('pintura nao e geometria', () {

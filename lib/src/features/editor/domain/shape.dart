@@ -815,7 +815,12 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
       final rOut = math.max(0.0, p.outerRadius.valueAt(t));
       final rIn = math.max(0.0, p.innerRadius.valueAt(t));
       final rot = p.shapeRotation.valueAt(t) * math.pi / 180;
-      final semArredondar = p.roundness.valueAt(t).abs() < 1e-6;
+      // O raio do canto pela MESMA regra do desenho: % do menor lado ou
+      // px fixo, saturando em metade do menor lado.
+      final halfMin = math.min(sx, sy) / 2;
+      final round = p.roundness.valueAt(t);
+      final raio = (p.roundnessPercent ? round / 100 * halfMin : round)
+          .clamp(0.0, halfMin);
       final pontasRetas = p.outerRoundness.valueAt(t).abs() < 1e-6 &&
           p.innerRoundness.valueAt(t).abs() < 1e-6;
 
@@ -835,8 +840,10 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
       }
 
       switch (p.kind) {
-        case ParamShapeKind.rect when semArredondar:
-          return BezierPath.rect(sx, sy);
+        case ParamShapeKind.rect:
+          // Canto arredondado e um quarto de circulo: uma cubica por
+          // canto, oito nos. Nao precisa amostrar.
+          return BezierPath.roundedRect(sx, sy, raio);
         case ParamShapeKind.ellipse:
           return BezierPath.ellipse(sx, sy);
         case ParamShapeKind.polygon when pontasRetas:

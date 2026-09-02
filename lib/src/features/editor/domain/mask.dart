@@ -233,6 +233,56 @@ class BezierPath {
     ]);
   }
 
+  /// Retangulo arredondado em NOS EXATOS: cada canto e um quarto de
+  /// circulo, que e uma unica cubica com alca de `r * kappa`. Da oito nos
+  /// — dois por canto — em vez de dezenas de amostras. Quando o raio
+  /// satura um lado (capsula, circulo), os nos coincidentes se fundem e
+  /// as alcas continuam colineares: fica liso, sem no duplicado.
+  static BezierPath roundedRect(double w, double h, double r,
+      {Offset center = Offset.zero}) {
+    final w2 = w / 2, h2 = h / 2;
+    final rr = r.clamp(0.0, math.min(w2, h2));
+    if (rr <= 0) return rect(w, h, center: center);
+    final k = rr * _kappa;
+    final brutos = [
+      // Sentido horario a partir do topo esquerdo, apos o arco.
+      PathVertex(
+          p: center + Offset(-w2 + rr, -h2), inT: Offset(-k, 0), corner: true),
+      PathVertex(
+          p: center + Offset(w2 - rr, -h2), outT: Offset(k, 0), corner: true),
+      PathVertex(
+          p: center + Offset(w2, -h2 + rr), inT: Offset(0, -k), corner: true),
+      PathVertex(
+          p: center + Offset(w2, h2 - rr), outT: Offset(0, k), corner: true),
+      PathVertex(
+          p: center + Offset(w2 - rr, h2), inT: Offset(k, 0), corner: true),
+      PathVertex(
+          p: center + Offset(-w2 + rr, h2), outT: Offset(-k, 0), corner: true),
+      PathVertex(
+          p: center + Offset(-w2, h2 - rr), inT: Offset(0, k), corner: true),
+      PathVertex(
+          p: center + Offset(-w2, -h2 + rr), outT: Offset(0, -k), corner: true),
+    ];
+    // Funde vizinhos que cairam no mesmo ponto (lado de comprimento zero):
+    // o no fundido herda a alca de entrada do primeiro e a de saida do
+    // segundo, que sao colineares — por isso vira liso, nao canto.
+    final out = <PathVertex>[];
+    for (final v in brutos) {
+      if (out.isNotEmpty && (out.last.p - v.p).distance < 1e-6) {
+        final a = out.removeLast();
+        out.add(PathVertex(p: a.p, inT: a.inT, outT: v.outT, corner: false));
+      } else {
+        out.add(v);
+      }
+    }
+    if (out.length > 1 && (out.first.p - out.last.p).distance < 1e-6) {
+      final a = out.removeLast();
+      final b = out.removeAt(0);
+      out.insert(0, PathVertex(p: b.p, inT: a.inT, outT: b.outT, corner: false));
+    }
+    return BezierPath(vertices: out);
+  }
+
   static BezierPath ellipse(double w, double h,
       {Offset center = Offset.zero}) {
     final rx = w / 2, ry = h / 2;
