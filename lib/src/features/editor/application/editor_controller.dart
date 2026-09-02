@@ -2500,6 +2500,29 @@ class EditorController extends Notifier<VideoProject> {
     ));
   }
 
+  /// AS TRES PROFUNDIDADES (constituicao, regra 2): descer e subir nao
+  /// mexe em numero nenhum — muda so quanto se ve.
+  void setEffectDepth(String layerId, String effectId, EffectDepth depth) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    _replace(layer.copyLayer(effects: [
+      for (final e in layer.effects)
+        e.id == effectId ? e.withDepth(depth) : e,
+    ]));
+  }
+
+  /// PRONTO: o preset crava os numeros dele (e a cor, quando o preset
+  /// manda nela) e deixa o resto como estava.
+  void applyEffectPronto(
+      String layerId, String effectId, EffectPronto pronto) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    _replace(layer.copyLayer(effects: [
+      for (final e in layer.effects)
+        e.id == effectId ? e.withPreset(pronto) : e,
+    ]));
+  }
+
   void removeEffect(String layerId, String effectId) {
     final layer = _layer(layerId);
     if (layer == null) return;

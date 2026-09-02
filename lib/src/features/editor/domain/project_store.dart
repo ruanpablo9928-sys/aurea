@@ -291,11 +291,36 @@ Map<String, dynamic> _effect(EffectInstance e) => {
       if (e.extraColors.isNotEmpty)
         'colors': [for (final c in e.extraColors) _col(c)],
       'enabled': e.enabled,
+      'depth': e.depth.index,
+      // VERSAO: alguns numeros mudaram de UNIDADE no nivel 3 (raio em
+      // pixel, limite e intensidade em porcentagem). Sem isto nao da
+      // para saber se o numero lido ja esta na unidade nova.
+      'v': kEffectVersion,
       'params': {for (final p in e.params.entries) p.key: _ad(p.value)},
     };
 
+/// Converte a trilha inteira (base e keyframes) para a unidade de agora.
+AnimatedDouble _migrarTrilha(
+    EffectType tipo, String chave, AnimatedDouble t, int versao) {
+  final base = migrateParamValue(tipo, chave, t.base, versao);
+  if (base == t.base && t.keyframes.isEmpty) return t;
+  return AnimatedDouble(
+    base,
+    [
+      for (final k in t.keyframes)
+        Keyframe<double>(
+          time: k.time,
+          value: migrateParamValue(tipo, chave, k.value, versao),
+          ease: k.ease,
+        ),
+    ],
+    t.loop,
+  );
+}
+
 EffectInstance _asEffect(Map<String, dynamic> m) {
   final tipo = _tipoDoEfeito(m);
+  final versao = (m['v'] as num?)?.toInt() ?? 0;
   return EffectInstance(
     id: m['id'] as String,
     type: tipo,
@@ -308,8 +333,13 @@ EffectInstance _asEffect(Map<String, dynamic> m) {
     // fazer o efeito voltar ao padrao sem aviso.
     params: {
       for (final p in (m['params'] as Map<String, dynamic>).entries)
-        resolveParamKey(tipo, p.key): _asAd(p.value),
+        resolveParamKey(tipo, p.key): _migrarTrilha(
+            tipo, resolveParamKey(tipo, p.key), _asAd(p.value), versao),
     },
+    depth: m['depth'] == null
+        ? EffectDepth.avancado
+        : EffectDepth.values[
+            ((m['depth'] as num).toInt()).clamp(0, EffectDepth.values.length - 1)],
   );
 }
 

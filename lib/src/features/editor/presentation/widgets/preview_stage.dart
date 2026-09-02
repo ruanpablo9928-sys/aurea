@@ -35,6 +35,7 @@ import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
 import 'world3d_painter.dart';
 import 'extrude_painter.dart';
+import 'vignette_painter.dart';
 import 'freehand_overlay.dart';
 import '../../application/mesh_cache.dart';
 import 'masked_box.dart';
@@ -1708,83 +1709,110 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       if (!effect.enabled) continue;
       switch (effect.type) {
         case EffectType.gaussianBlur:
-          // Raio em FRACAO do menor lado (0..1 -> 0..4% do menor lado
-          // por unidade): o mesmo numero da o mesmo desfoque aparente em
-          // 720p e em 4K. E o desfoque acontece em espaco LINEAR, senao
-          // a borda entre claro e escuro ganha halo escuro.
-          final sigma = radiusToPixels(
-              effect.paramAt('amount', local) * 0.04, fxWidth, fxHeight);
+          // NIVEL 3: o raio e pixel (pensado em 1080p), a borda decide o
+          // que existe fora da camada, e a qualidade escolhe entre a
+          // conta em espaco linear (certa) e o desfoque direto (barato).
+          final sigma = pxAt1080(
+              effect.paramAt('raio', local).clamp(0.0, 500.0),
+              fxWidth,
+              fxHeight);
           if (sigma > 0.01) {
-            out = LinearLight.blurred(
-sigmaX: sigma, sigmaY: sigma, size: fxSize,
- child: out,
-);
+            final tile = switch (
+                effect.paramAt('borda', local).round().clamp(0, 2)) {
+              1 => ui.TileMode.repeated,
+              2 => ui.TileMode.mirror,
+              _ => ui.TileMode.decal,
+            };
+            out = effect.paramAt('qualidade', local) > 0.5
+                ? LinearLight.blurred(
+                    sigmaX: sigma,
+                    sigmaY: sigma,
+                    size: fxSize,
+                    tileMode: tile,
+                    child: out)
+                : ImageFiltered(
+                    imageFilter: ui.ImageFilter.blur(
+                        sigmaX: sigma, sigmaY: sigma, tileMode: tile),
+                    child: out);
           }
-        case EffectType.lightGlow:
-          final sigma = 4 +
-              radiusToPixels(effect.paramAt('diffusion', local) * 0.055,
-                  fxWidth, fxHeight);
-          final intensity =
-              effect.paramAt('intensity', local).clamp(0.0, 1.0);
-          // NEUTRO E NEUTRO: em intensidade zero o resultado ja era
-          // identico, mas o caminho ainda desfocava a camada e abria uma
-          // camada de composicao para depois multiplicar tudo por zero.
-          // Efeito desligado tem de custar zero, nao so parecer zero.
-          if (intensity > 0.004) {
-            // O LIMITE VOLTOU A EXISTIR.
-            //
-            // O controle estava na tela e a conta nunca o lia: o glow
-            // borrava a camada INTEIRA e somava por cima. E dai que vem o
-            // aspecto acinzentado — brilho e o que passa de um certo
-            // ponto, nao a imagem toda desfocada. Aqui o que esta abaixo
-            // do limite vai a zero antes do desfoque, e o que passou dele
-            // e reescalado para nao perder forca no caminho.
-            final th =
-                effect.paramAt('threshold', local).clamp(0.0, 0.98);
-            final e = 1 / (1 - th);
-            final o = -th * 255 * e;
-            final acimaDoLimite = th < 0.004
-                ? out
-                : ColorFiltered(
-                    colorFilter: ColorFilter.matrix(<double>[
-                      e, 0, 0, 0, o,
-                      0, e, 0, 0, o,
-                      0, 0, e, 0, o,
-                      0, 0, 0, 1, 0,
-                    ]),
-                    child: out,
-                  );
 
-            // A FONTE EMBAIXO E O BRILHO SOMADO POR CIMA: glow e luz a
-            // mais, inclusive no miolo. Com a fonte por cima o solido
-            // cobria o brilho e sobrava so um contorno.
-            out = Stack(
-              clipBehavior: Clip.none,
-              children: [
-                out,
+        case EffectType.lightGlow:
+          // NIVEL 3. Tres numeros no montar: limite (%), raio (px) e
+          // intensidade (%, ate 400 — estourar e uma escolha). No
+          // avancado entram a mesclagem, a piramide e o multiplicador
+          // por canal.
+          //
+          // A PIRAMIDE e o que faz halo grande sem pagar o raio inteiro:
+          // cada nivel dobra o sigma e vale metade, somando um halo
+          // largo e barato por cima do nucleo apertado.
+          final intensidade =
+              (effect.paramAt('intensity', local) / 100).clamp(0.0, 4.0);
+          if (intensidade > 0.004) {
+            final raio = pxAt1080(
+                effect.paramAt('raio', local).clamp(0.0, 500.0),
+                fxWidth,
+                fxHeight);
+            final sigma = math.max(0.6, raio);
+            final th =
+                (effect.paramAt('threshold', local) / 100).clamp(0.0, 0.98);
+            final niveis =
+                effect.paramAt('piramide', local).round().clamp(1, 5);
+            final multR = effect.paramAt('mult_r', local).clamp(0.0, 2.0);
+            final multG = effect.paramAt('mult_g', local).clamp(0.0, 2.0);
+            final multB = effect.paramAt('mult_b', local).clamp(0.0, 2.0);
+            final modo = switch (
+                effect.paramAt('mesclagem', local).round().clamp(0, 2)) {
+              1 => BlendMode.screen,
+              2 => BlendMode.lighten,
+              _ => BlendMode.plus,
+            };
+
+            // O LIMITE: o que esta abaixo vai a zero ANTES do desfoque —
+            // brilho e o que passa de um ponto, nao a imagem inteira
+            // borrada. O ganho da intensidade entra aqui junto, para o
+            // halo nascer forte e nao ser multiplicado depois de somado.
+            final e = 1 / (1 - th);
+            final g = e * intensidade;
+            final o = -th * 255 * e * intensidade;
+            final fonte = ColorFiltered(
+              colorFilter: ColorFilter.matrix(<double>[
+                g * multR, 0, 0, 0, o,
+                0, g * multG, 0, 0, o,
+                0, 0, g * multB, 0, o,
+                0, 0, 0, 1, 0,
+              ]),
+              child: out,
+            );
+            final tingido = ColorFiltered(
+              colorFilter: ColorFilter.mode(effect.color, BlendMode.srcATop),
+              child: fonte,
+            );
+
+            final pesos = <double>[
+              for (var k = 0; k < niveis; k++) 1 / (1 << k),
+            ];
+            final soma = pesos.fold<double>(0, (a, b) => a + b);
+            out = Stack(clipBehavior: Clip.none, children: [
+              out,
+              for (var k = 0; k < niveis; k++)
                 BlendMask(
-                  blendMode: BlendMode.plus,
-                  margem: 3 * sigma + 4,
+                  blendMode: modo,
+                  margem: 3 * sigma * (1 << k) + 4,
                   child: Opacity(
-                    opacity: intensity,
+                    opacity: (pesos[k] / soma).clamp(0.0, 1.0),
+                    // EM ESPACO LINEAR: glow SOMA luz, e soma de luz em
+                    // sRGB da o halo lavado com borda escura de sempre.
                     child: LinearLight.blurred(
-                      // EM ESPACO LINEAR. Glow SOMA luz, e soma de luz em
-                      // sRGB da o cinza de sempre: a curva de exibicao
-                      // pesa o escuro mais do que deveria, entao o halo
-                      // sai lavado e com uma borda escura onde encontra o
-                      // fundo. Em linear a conta e a que a luz faz.
-                      sigmaX: sigma, sigmaY: sigma, size: fxSize,
-                      child: ColorFiltered(
-                        colorFilter:
-                            ColorFilter.mode(effect.color, BlendMode.srcATop),
-                        child: acimaDoLimite,
-                      ),
+                      sigmaX: sigma * (1 << k),
+                      sigmaY: sigma * (1 << k),
+                      size: fxSize,
+                      child: tingido,
                     ),
                   ),
                 ),
-              ],
-            );
+            ]);
           }
+
         case EffectType.flicker:
           // FLICKER: a camada pisca. Aleatorio e a lampada ruim; strobe e
           // a balada; senoide e a respiracao. Age na opacidade ou no
@@ -2495,18 +2523,38 @@ sigmaX: math.max(0.1, sx),
             final ang =
                 effect.paramAt('angulo', local) * math.pi / 180;
             final off = Offset(math.cos(ang) * d, math.sin(ang) * d);
+            // QUAIS CANAIS se afastam (avancado): o par decide a cor das
+            // franjas. O terceiro fica parado, no lugar da imagem.
+            final (antes, meio, depois) = switch (
+                effect.paramAt('canais', local).round().clamp(0, 2)) {
+              1 => (0, 2, 1),
+              2 => (1, 0, 2),
+              _ => (0, 1, 2),
+            };
+            final suave = effect.paramAt('suavizar', local).clamp(0.0, 1.0);
+            final sigma = suave * d * 0.35;
+            Widget canal(int i, Offset deslocamento) {
+              Widget w = _channelIso(out, i);
+              if (sigma > 0.05) {
+                w = LinearLight.blurred(
+                    sigmaX: sigma, sigmaY: sigma, size: fxSize, child: w);
+              }
+              return deslocamento == Offset.zero
+                  ? w
+                  : Transform.translate(offset: deslocamento, child: w);
+            }
+
+            final margem = off.distance + 3 * sigma + 4;
             out = Stack(clipBehavior: Clip.none, children: [
-              Transform.translate(
-                  offset: -off, child: _channelIso(out, 0)),
+              canal(antes, -off),
               BlendMask(
                   blendMode: BlendMode.plus,
-                  margem: off.distance + 4,
-                  child: _channelIso(out, 1)),
+                  margem: margem,
+                  child: canal(meio, Offset.zero)),
               BlendMask(
                   blendMode: BlendMode.plus,
-                  margem: off.distance + 4,
-                  child: Transform.translate(
-                      offset: off, child: _channelIso(out, 2))),
+                  margem: margem,
+                  child: canal(depois, off)),
             ]);
           }
 
@@ -2593,10 +2641,12 @@ sigmaX: math.max(0.1, sx),
           final span = (inMax - inMin).abs() < 1e-4 ? 1e-4 : inMax - inMin;
           final scale = (outMax - outMin) / span;
           final shift = outMin - inMin * scale;
+          // CANAL (avancado): a mesma curva num canal so.
+          final canal = effect.paramAt('canal', local).round().clamp(0, 3);
           if ((scale - 1).abs() > 1e-4 || shift.abs() > 1e-4) {
             out = ColorFiltered(
-              colorFilter: ColorFilter.matrix(_scaleShiftMatrix(
-                  scale, shift)),
+              colorFilter: ColorFilter.matrix(
+                  _scaleShiftMatrix(scale, shift, canal: canal)),
               child: out,
             );
           }
@@ -2604,8 +2654,8 @@ sigmaX: math.max(0.1, sx),
           if ((gamma - 1).abs() > 0.01) {
             final g = 1 / gamma;
             out = ColorFiltered(
-              colorFilter:
-                  ColorFilter.matrix(_scaleShiftMatrix(g, (1 - g) * 0.18)),
+              colorFilter: ColorFilter.matrix(
+                  _scaleShiftMatrix(g, (1 - g) * 0.18, canal: canal)),
               child: out,
             );
           }
@@ -2770,23 +2820,21 @@ sigmaX: math.max(0.1, sx),
           final amt =
               effect.paramAt('quantidade', local).clamp(0.0, 1.0);
           if (amt > 0.01) {
-            final radius = effect.paramAt('raio', local);
-            final soft =
-                effect.paramAt('suavidade', local).clamp(0.0, 1.0);
             out = Stack(clipBehavior: Clip.none, children: [
               out,
               Positioned.fill(
                 child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        radius: radius,
-                        colors: [
-                          effect.color.withValues(alpha: 0),
-                          effect.color.withValues(alpha: 0),
-                          effect.color.withValues(alpha: amt),
-                        ],
-                        stops: [0, (1 - soft * 0.6).clamp(0.0, 0.99), 1],
+                  child: CustomPaint(
+                    painter: VignettePainter(
+                      amount: amt,
+                      radius: effect.paramAt('raio', local),
+                      softness:
+                          effect.paramAt('suavidade', local).clamp(0.0, 1.0),
+                      color: effect.color,
+                      retangular: effect.paramAt('forma', local) > 0.5,
+                      center: Offset(
+                        effect.paramAt('centroX', local).clamp(-1.0, 2.0),
+                        effect.paramAt('centroY', local).clamp(-1.0, 2.0),
                       ),
                     ),
                   ),
@@ -3375,8 +3423,20 @@ sigmaX: math.max(0.1, sx),
   }
 
   /// Matriz de ganho+deslocamento igual nos tres canais.
-  static List<double> _scaleShiftMatrix(double s, double shift) {
+  /// Escala e desloca. Com [canal] 1..3 mexe so em R, G ou B — e o
+  /// "por canal" do Levels avancado.
+  static List<double> _scaleShiftMatrix(double s, double shift,
+      {int canal = 0}) {
     final b = shift * 255;
+    if (canal != 0) {
+      final r = canal == 1, g = canal == 2, bl = canal == 3;
+      return <double>[
+        r ? s : 1, 0, 0, 0, r ? b : 0, //
+        0, g ? s : 1, 0, 0, g ? b : 0,
+        0, 0, bl ? s : 1, 0, bl ? b : 0,
+        0, 0, 0, 1, 0,
+      ];
+    }
     return <double>[
       s, 0, 0, 0, b,
       0, s, 0, 0, b,

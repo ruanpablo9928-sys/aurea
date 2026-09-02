@@ -141,8 +141,23 @@ PresetCompat reconcilePreset(EffectPreset preset) {
     }
     final kept = <String, AnimatedDouble>{};
     for (final entry in e.params.entries) {
-      if (spec.params.containsKey(entry.key)) {
-        kept[entry.key] = entry.value;
+      // PARAMETRO RENOMEADO nao e parametro perdido: a chave antiga vira
+      // a nova (e, se mudou de unidade, o numero e convertido junto).
+      final chave = resolveParamKey(e.type, entry.key);
+      if (spec.params.containsKey(chave)) {
+        kept[chave] = chave == entry.key
+            ? entry.value
+            : AnimatedDouble(
+                migrateParamValue(e.type, chave, entry.value.base, 0),
+                [
+                  for (final k in entry.value.keyframes)
+                    Keyframe<double>(
+                      time: k.time,
+                      value: migrateParamValue(e.type, chave, k.value, 0),
+                      ease: k.ease,
+                    ),
+                ],
+                entry.value.loop);
       } else {
         warnings.add(
             '"${entry.key}" nao existe mais em ${spec.name} e foi ignorado.');

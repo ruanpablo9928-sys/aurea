@@ -643,6 +643,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                             .toggleEffectKeyframe(id, layer.effects[i].id, t),
                         onToggleEnabled: () => controller
                             .toggleEffectEnabled(id, layer.effects[i].id),
+                        onDepth: (d) => controller.setEffectDepth(
+                            id, layer.effects[i].id, d),
+                        onPronto: (pr) => controller.applyEffectPronto(
+                            id, layer.effects[i].id, pr),
                         onColor: (c) => controller.setEffectColor(
                             id, layer.effects[i].id, c),
                         onExtraColor: (k, c) => controller.setEffectExtraColor(
@@ -678,6 +682,8 @@ class _EffectCard extends StatelessWidget {
     required this.onExtraColor,
     required this.onRemove,
     required this.onToggleEnabled,
+    required this.onDepth,
+    required this.onPronto,
   });
 
   /// Posicao na lista: e o que a alca de arrastar entrega ao reordenar.
@@ -696,12 +702,26 @@ class _EffectCard extends StatelessWidget {
   final void Function(int index, Color color) onExtraColor;
   final VoidCallback onRemove;
   final VoidCallback onToggleEnabled;
+  final ValueChanged<EffectDepth> onDepth;
+  final ValueChanged<EffectPronto> onPronto;
 
   /// Linhas de parametro. O par X/Y de um ponto (ParamKind.point) vira
   /// UMA linha com dois valores. Pareia por ADJACENCIA + kind, nunca por
   /// nome: 'tile_center'/'tile_center_y' nao segue o sufixo X.
   List<Widget> _linhas() {
-    final entradas = effect.spec.params.entries.toList();
+    final spec = effect.spec;
+    // MONTAR mostra no maximo tres numeros, com o nome humano; AVANCADO
+    // mostra a ficha inteira. PRONTO nao mostra numero nenhum.
+    if (spec.temProfundidades && effect.depth == EffectDepth.pronto) {
+      return const [];
+    }
+    final entradas = spec.temProfundidades &&
+            effect.depth == EffectDepth.montar
+        ? [
+            for (final k in spec.montar)
+              if (spec.params[k] != null) MapEntry(k, spec.params[k]!),
+          ]
+        : spec.params.entries.toList();
     final linhas = <Widget>[];
     for (var i = 0; i < entradas.length; i++) {
       final entry = entradas[i];
@@ -870,8 +890,17 @@ class _EffectCard extends StatelessWidget {
             // Recolhido: nem constroi o corpo.
             if (expanded) ...[
               const SizedBox(height: 8),
+              if (effect.spec.temProfundidades) ...[
+                _ProntoRow(effect: effect, onPronto: onPronto),
+                const SizedBox(height: 8),
+                _CaminhoRow(depth: effect.depth, onDepth: onDepth),
+                if (effect.depth != EffectDepth.pronto)
+                  const SizedBox(height: 10),
+              ],
               ..._linhas(),
-              if (effect.spec.hasColor)
+              if (effect.spec.hasColor &&
+                  (!effect.spec.temProfundidades ||
+                      effect.depth == EffectDepth.avancado))
                 _ColorRow(effect: effect, onColor: onColor),
               for (var i = 0; i < effect.spec.extraColors; i++)
                 _ColorRow(
@@ -1482,6 +1511,110 @@ class _BotaoAnalisarState extends State<_BotaoAnalisar> {
           ),
         );
       },
+    );
+  }
+}
+
+/// PRONTO: os tres presets. Um toque e acabou — e a primeira das tres
+/// profundidades (constituicao, regra 2).
+class _ProntoRow extends StatelessWidget {
+  const _ProntoRow({required this.effect, required this.onPronto});
+
+  final EffectInstance effect;
+  final ValueChanged<EffectPronto> onPronto;
+
+  /// O preset esta aceso quando TODOS os numeros dele batem com os de
+  /// agora — assim a pessoa ve de onde partiu mesmo depois de ajustar.
+  bool _bate(EffectPronto p) {
+    for (final e in p.valores.entries) {
+      final t = effect.params[e.key];
+      if (t == null || (t.base - e.value).abs() > 0.001) return false;
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final p in effect.spec.presets) ...[
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onPronto(p),
+              child: Container(
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _bate(p) ? AmColors.accentDim : AmColors.chip,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  p.nome,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _bate(p) ? AmColors.accent : AmColors.text,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (p != effect.spec.presets.last) const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+}
+
+/// O CAMINHO entre as profundidades: "Ajustar" e "Avancado", sempre com
+/// esses nomes. Tocar na profundidade em que ja se esta volta ao pronto,
+/// e nada do que foi feito se perde no caminho.
+class _CaminhoRow extends StatelessWidget {
+  const _CaminhoRow({required this.depth, required this.onDepth});
+
+  final EffectDepth depth;
+  final ValueChanged<EffectDepth> onDepth;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget botao(String texto, EffectDepth alvo) {
+      final aceso = depth == alvo;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () =>
+              onDepth(aceso ? EffectDepth.pronto : alvo),
+          child: Container(
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: aceso ? AmColors.accent : Colors.transparent,
+              border: Border.all(
+                  color: aceso ? AmColors.accent : AmColors.hairline),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Text(
+              texto,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: aceso ? const Color(0xFF0B0E12) : AmColors.muted,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        botao('Ajustar', EffectDepth.montar),
+        const SizedBox(width: 8),
+        botao('Avancado', EffectDepth.avancado),
+      ],
     );
   }
 }

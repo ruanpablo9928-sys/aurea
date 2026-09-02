@@ -105,6 +105,9 @@ const effectParamAliases = <EffectType, Map<String, String>>{
     'cantos': 'style',
     'semente': 'seed',
   },
+  // NIVEL 3: o raio virou pixel de verdade, com o nome do documento.
+  EffectType.gaussianBlur: {'amount': 'raio'},
+  EffectType.lightGlow: {'diffusion': 'raio'},
   EffectType.pixelSort: {
     'limiar': 'threshold',
     'comprimento': 'radius_length',
@@ -131,6 +134,32 @@ const effectParamAliases = <EffectType, Map<String, String>>{
 /// A chave de hoje para uma chave que pode ser de ontem.
 String resolveParamKey(EffectType type, String key) =>
     effectParamAliases[type]?[key] ?? key;
+
+/// VERSAO DO EFEITO NO ARQUIVO. Sobe quando um numero muda de UNIDADE —
+/// nao basta renomear a chave, o valor tambem tem de ser convertido.
+const kEffectVersion = 3;
+
+/// Fator que converte o numero da versao anterior para a de agora.
+///
+/// Nivel 3: o desfoque e o glow deixaram de ser fracao 0..1 e passaram a
+/// ser raio em pixel (pensado em 1080p); limite e intensidade do glow
+/// viraram porcentagem. Projeto antigo abre com o MESMO resultado.
+const effectParamRescale = <EffectType, Map<String, double>>{
+  EffectType.gaussianBlur: {'raio': 43.2},
+  EffectType.lightGlow: {
+    'raio': 59.4,
+    'threshold': 100.0,
+    'intensity': 100.0,
+  },
+};
+
+/// Converte os numeros de um efeito lido de um arquivo na versao [versao].
+double migrateParamValue(
+    EffectType type, String key, double value, int versao) {
+  if (versao >= kEffectVersion) return value;
+  final fator = effectParamRescale[type]?[key];
+  return fator == null ? value : value * fator;
+}
 
 /// O identificador de um tipo.
 String effectIdOf(EffectType t) => effectSpecs[t]!.id;
@@ -181,6 +210,26 @@ class EffectParam {
   final bool relative;
 }
 
+/// AS TRES PROFUNDIDADES (constituicao, regra 2).
+///
+/// `pronto` toca e acabou (tres presets). `montar` sao ate tres numeros
+/// com nome humano na superficie de arrasto. `avancado` e a ficha
+/// inteira, com o nome tecnico. Descer e subir NUNCA perde o que ja foi
+/// feito: e sempre o mesmo efeito, os mesmos parametros; muda so quanto
+/// se ve. Por isso o avancado ja abre com o que o montar deixou.
+enum EffectDepth { pronto, montar, avancado }
+
+/// Um preset da camada `pronto`: um nome e os numeros que ele crava.
+class EffectPronto {
+  const EffectPronto(this.nome, this.valores, {this.cor});
+
+  final String nome;
+  final Map<String, double> valores;
+
+  /// Preset que tambem manda na cor do efeito (glow, vinheta).
+  final Color? cor;
+}
+
 class EffectSpec {
   const EffectSpec({
     required this.id,
@@ -192,6 +241,8 @@ class EffectSpec {
     this.synonyms = const [],
     this.cost = 1,
     this.procedural = false,
+    this.montar = const [],
+    this.presets = const [],
   });
 
   /// IDENTIFICADOR ESTAVEL, em snake_case e em ingles.
@@ -227,6 +278,15 @@ class EffectSpec {
 
   /// Movimento gerado por procedimento — pode ser ASSADO em keyframes.
   final bool procedural;
+
+  /// As chaves que aparecem em `montar` — no maximo tres (regra 2).
+  final List<String> montar;
+
+  /// Os tres presets de `pronto`.
+  final List<EffectPronto> presets;
+
+  /// Efeito com as tres profundidades prontas (nivel 3).
+  bool get temProfundidades => presets.isNotEmpty && montar.isNotEmpty;
 }
 
 const effectSpecs = <EffectType, EffectSpec>{
@@ -236,8 +296,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     category: 'Blur',
     synonyms: ['desfoque', 'gaussiano', 'blur', 'gaussian', 'suavizar'],
     params: {
-      'amount': EffectParam('Intensidade', 0.25, 0.0, 1.0),
+      // O raio E em pixel (pensado em 1080p): e o numero que a pessoa
+      // reconhece de qualquer outro programa.
+      'raio': EffectParam('Radius', 24.0, 0.0, 500.0, relative: true),
+      'borda': EffectParam('Borda', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice,
+          options: ['Transparente', 'Repetir', 'Espelhar']),
+      'qualidade': EffectParam('Qualidade', 1.0, 0.0, 1.0,
+          kind: ParamKind.choice, options: ['Rapida', 'Alta']),
     },
+    montar: ['raio'],
+    presets: [
+      EffectPronto('Leve', {'raio': 8}),
+      EffectPronto('Medio', {'raio': 32}),
+      EffectPronto('Forte', {'raio': 110}),
+    ],
   ),
   EffectType.lightGlow: EffectSpec(
     id: 'glow',
@@ -245,11 +318,32 @@ const effectSpecs = <EffectType, EffectSpec>{
     category: 'Light',
     synonyms: ['brilho', 'luz', 'glow', 'bloom', 'brilho'],
     params: {
-      'diffusion': EffectParam('Difusao', 0.25, 0.0, 1.0),
-      'threshold': EffectParam('Limite', 0.70, 0.0, 1.0),
-      'intensity': EffectParam('Intensidade', 1.0, 0.0, 1.0),
+      'threshold': EffectParam('Threshold', 70.0, 0.0, 100.0),
+      'raio': EffectParam('Radius', 30.0, 0.0, 500.0, relative: true),
+      // Passa de 100%: brilho estourado e uma escolha, nao um limite.
+      'intensity': EffectParam('Intensity', 100.0, 0.0, 400.0),
+      'mesclagem': EffectParam('Mesclagem', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice, options: ['Somar', 'Tela', 'Clarear']),
+      // Piramide: quantas passadas de desfoque em escalas dobradas —
+      // e o que faz o halo grande sem custar o raio inteiro.
+      'piramide': EffectParam('Piramide', 3.0, 1.0, 5.0),
+      'mult_r': EffectParam('Mult R', 1.0, 0.0, 2.0),
+      'mult_g': EffectParam('Mult G', 1.0, 0.0, 2.0),
+      'mult_b': EffectParam('Mult B', 1.0, 0.0, 2.0),
     },
     hasColor: true,
+    montar: ['threshold', 'raio', 'intensity'],
+    presets: [
+      EffectPronto('Suave',
+          {'threshold': 75, 'raio': 26, 'intensity': 70, 'piramide': 3},
+          cor: Color(0xFFFFFFFF)),
+      EffectPronto('Neon',
+          {'threshold': 55, 'raio': 60, 'intensity': 240, 'piramide': 4},
+          cor: Color(0xFF35C4E7)),
+      EffectPronto('Sonho',
+          {'threshold': 30, 'raio': 150, 'intensity': 130, 'piramide': 5},
+          cor: Color(0xFFFFD8F0)),
+    ],
   ),
   EffectType.tint: EffectSpec(
     id: 'tint',
@@ -409,6 +503,18 @@ const effectSpecs = <EffectType, EffectSpec>{
       'rgb_randomness': EffectParam('RGB Randomness', 0.0, 0.0, 1.0),
       'rgb_frequency': EffectParam('RGB Frequency', 2.0, 0.0, 30.0),
     },
+    montar: ['amplitude', 'frequency', 'seed'],
+    presets: [
+      EffectPronto('Camera na mao',
+          {'style': 0, 'amplitude': 1.4, 'frequency': 3.5, 'stillness': 0.55,
+           'drift': 0.45, 'twitch_frequency': 1.2}),
+      EffectPronto('Impacto',
+          {'style': 1, 'amplitude': 8.0, 'frequency': 14.0, 'stillness': 0.85,
+           'drift': 0.1, 'twitch_frequency': 6.0}),
+      EffectPronto('Nervoso',
+          {'style': 0, 'amplitude': 3.2, 'frequency': 26.0, 'stillness': 0.2,
+           'drift': 0.15, 'twitch_frequency': 9.0}),
+    ],
   ),
   // Seis operadores sincronizados por um modulador mestre (quantidade +
   // velocidade); tiques deterministicos e seekaveis.
@@ -440,9 +546,19 @@ const effectSpecs = <EffectType, EffectSpec>{
     synonyms: ['separacao', 'rgb', 'rgb split', 'chromatic', 'canal'],
     params: {
       'deslocamento':
-          EffectParam('Deslocamento', 20.0, 0.0, 100.0, relative: true),
-      'angulo': EffectParam('Angulo', 0.0, -180.0, 180.0),
+          EffectParam('Amount', 20.0, 0.0, 100.0, relative: true),
+      'angulo': EffectParam('Angle', 0.0, -180.0, 180.0),
+      // Quais canais se afastam: o par decide a cor das franjas.
+      'canais': EffectParam('Canais', 0.0, 0.0, 2.0,
+          kind: ParamKind.choice, options: ['R / B', 'R / G', 'G / B']),
+      'suavizar': EffectParam('Suavizar borda', 0.0, 0.0, 1.0),
     },
+    montar: ['deslocamento', 'angulo'],
+    presets: [
+      EffectPronto('Sutil', {'deslocamento': 6, 'suavizar': 0.2}),
+      EffectPronto('Edit', {'deslocamento': 22, 'suavizar': 0.0}),
+      EffectPronto('Extremo', {'deslocamento': 64, 'suavizar': 0.35}),
+    ],
   ),
   // Eco: re-renderiza a camada em tempos anteriores (deterministico —
   // trilhas de movimento de keyframes/transform). Matiz > 0 = RASTRO
@@ -499,12 +615,20 @@ const effectSpecs = <EffectType, EffectSpec>{
     category: 'Color',
     synonyms: ['niveis', 'levels', 'contraste', 'gama', 'brilho'],
     params: {
-      'entradaMin': EffectParam('Entrada min', 0.0, 0.0, 1.0),
-      'entradaMax': EffectParam('Entrada max', 1.0, 0.0, 1.0),
+      'entradaMin': EffectParam('Preto', 0.0, 0.0, 1.0),
+      'entradaMax': EffectParam('Branco', 1.0, 0.0, 1.0),
       'gama': EffectParam('Gama', 1.0, 0.2, 3.0),
       'saidaMin': EffectParam('Saida min', 0.0, 0.0, 1.0),
       'saidaMax': EffectParam('Saida max', 1.0, 0.0, 1.0),
+      'canal': EffectParam('Canal', 0.0, 0.0, 3.0,
+          kind: ParamKind.choice, options: ['RGB', 'R', 'G', 'B']),
     },
+    montar: ['entradaMin', 'entradaMax', 'gama'],
+    presets: [
+      EffectPronto('Contraste', {'entradaMin': 0.08, 'entradaMax': 0.92, 'gama': 1.0}),
+      EffectPronto('Clarear', {'entradaMin': 0.0, 'entradaMax': 0.88, 'gama': 1.35}),
+      EffectPronto('Escurecer', {'entradaMin': 0.10, 'entradaMax': 1.0, 'gama': 0.78}),
+    ],
   ),
   EffectType.curves: EffectSpec(
     id: 'curves',
@@ -573,11 +697,23 @@ const effectSpecs = <EffectType, EffectSpec>{
     category: 'Lens',
     synonyms: ['vinheta', 'vignette', 'borda escura'],
     params: {
-      'quantidade': EffectParam('Quantidade', 0.5, 0.0, 1.0),
-      'raio': EffectParam('Raio', 0.7, 0.1, 1.5, relative: true),
-      'suavidade': EffectParam('Suavidade', 0.5, 0.0, 1.0),
+      'quantidade': EffectParam('Amount', 0.5, 0.0, 1.0),
+      'raio': EffectParam('Radius', 0.7, 0.1, 1.5, relative: true),
+      'suavidade': EffectParam('Softness', 0.5, 0.0, 1.0),
+      'forma': EffectParam('Forma', 0.0, 0.0, 1.0,
+          kind: ParamKind.choice, options: ['Circulo', 'Retangulo']),
+      'centroX': EffectParam('Centro X', 0.5, 0.0, 1.0,
+          kind: ParamKind.point),
+      'centroY': EffectParam('Centro Y', 0.5, 0.0, 1.0,
+          kind: ParamKind.point),
     },
     hasColor: true,
+    montar: ['quantidade', 'raio', 'suavidade'],
+    presets: [
+      EffectPronto('Suave', {'quantidade': 0.35, 'raio': 0.95, 'suavidade': 0.75}),
+      EffectPronto('Cinema', {'quantidade': 0.62, 'raio': 0.72, 'suavidade': 0.55}),
+      EffectPronto('Dura', {'quantidade': 0.9, 'raio': 0.55, 'suavidade': 0.2}),
+    ],
   ),
   EffectType.directionalBlur: EffectSpec(
     id: 'directional_blur',
@@ -1194,6 +1330,7 @@ class EffectInstance {
     Map<String, AnimatedDouble>? params,
     this.color = const Color(0xFFFF5566),
     this.enabled = true,
+    this.depth = EffectDepth.pronto,
     List<Color>? extraColors,
   })  : id = id ?? const Uuid().v4(),
         extraColors = List.unmodifiable(extraColors ??
@@ -1210,6 +1347,9 @@ class EffectInstance {
   final Map<String, AnimatedDouble> params;
   final Color color;
   final bool enabled;
+
+  /// Onde a pessoa parou: pronto, montar ou avancado (regra 2).
+  final EffectDepth depth;
 
   /// Cores alem da principal, na ordem da ficha ([EffectSpec.extraColors]).
   final List<Color> extraColors;
@@ -1246,6 +1386,7 @@ class EffectInstance {
     Color? color,
     bool? enabled,
     List<Color>? extraColors,
+    EffectDepth? depth,
   }) {
     return EffectInstance(
       id: id,
@@ -1254,7 +1395,22 @@ class EffectInstance {
       color: color ?? this.color,
       enabled: enabled ?? this.enabled,
       extraColors: extraColors ?? this.extraColors,
+      depth: depth ?? this.depth,
     );
+  }
+
+  /// Desce ou sobe de profundidade sem tocar em nenhum numero.
+  EffectInstance withDepth(EffectDepth d) => copyWith(depth: d);
+
+  /// Aplica um preset de `pronto`: crava os numeros dele e deixa o
+  /// resto como estava (o preset e um ponto de partida, nao um reset).
+  EffectInstance withPreset(EffectPronto preset) {
+    final novos = <String, AnimatedDouble>{...params};
+    for (final e in preset.valores.entries) {
+      novos[e.key] = AnimatedDouble(e.value);
+    }
+    return copyWith(
+        params: novos, color: preset.cor ?? color, depth: EffectDepth.pronto);
   }
 
   /// Edita valor: keyframe automatico se o parametro ja anima.
@@ -1329,5 +1485,6 @@ class EffectInstance {
       params: params,
       color: color,
       enabled: enabled,
-      extraColors: extraColors);
+      extraColors: extraColors,
+      depth: depth);
 }
