@@ -2554,6 +2554,41 @@ class EditorController extends Notifier<VideoProject> {
     ]));
   }
 
+  /// CURVA DO EFEITO: o easing do trecho que comeca em [segStartLocal],
+  /// em TODOS os parametros. O keyframe e universal; a curva tambem.
+  void setEffectSegmentEase(String layerId, String effectId,
+      Duration segStartLocal, Easing ease) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    _replace(layer.copyLayer(effects: [
+      for (final e in layer.effects)
+        e.id == effectId
+            ? e.copyWith(params: {
+                for (final p in e.params.entries)
+                  p.key: p.value.hasKeyframeAt(segStartLocal)
+                      ? p.value.withEase(segStartLocal, ease)
+                      : p.value,
+              })
+            : e,
+    ]));
+  }
+
+  /// A mesma curva em todos os trechos de todos os parametros do efeito.
+  void applyEaseToAllEffectSegments(
+      String layerId, String effectId, Easing ease) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    _replace(layer.copyLayer(effects: [
+      for (final e in layer.effects)
+        e.id == effectId
+            ? e.copyWith(params: {
+                for (final p in e.params.entries)
+                  p.key: p.value.withEaseAll(ease),
+              })
+            : e,
+    ]));
+  }
+
   /// Diamante do parametro do efeito.
   void toggleEffectParamKeyframe(
       String layerId, String effectId, String key, Duration globalTime) {

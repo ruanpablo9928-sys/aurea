@@ -1005,8 +1005,13 @@ class MotionTilePainter extends _FxPainter {
     // volta inteira (360) desloca a fileira em um ladrilho.
     final desloc = phase / 360.0;
 
+    // O RECORTE E A AREA DE SAIDA, nao a caixa da camada. Output
+    // Width/Height acima de 100% e justamente a camada crescendo para
+    // fora da propria caixa (o After Effects faz assim); recortar na
+    // caixa jogava fora tudo que o efeito produzia alem dela — e o
+    // Motion Tile parecia nao fazer nada.
     canvas.save();
-    canvas.clipRect(_dst(offset, size));
+    canvas.clipRect(area);
     for (var j = -ny ~/ 2; j <= ny ~/ 2; j++) {
       for (var i = -nx ~/ 2; i <= nx ~/ 2; i++) {
         final shift = horizontalPhase

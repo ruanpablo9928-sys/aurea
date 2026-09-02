@@ -9,6 +9,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/blend_extra.dart';
 import '../../domain/caption.dart';
 import '../../domain/effect_preset.dart';
+import '../../application/effect_preset_store.dart';
 import '../../domain/element3d.dart';
 import '../../domain/grid_rig.dart';
 import '../../domain/keyframe.dart';
@@ -2593,67 +2594,103 @@ Future<void> showCaptionCuesSheet(BuildContext context, WidgetRef ref,
 Future<void> showEffectPresetsSheet(BuildContext context, WidgetRef ref,
     String layerId, PlaybackController playback) async {
   final controller = ref.read(editorControllerProvider.notifier);
-  final presets = factoryPresets();
+  final fabrica = factoryPresets();
+  // Os presets DA PESSOA vem de fora do projeto: a mesma lista em todo
+  // projeto, e o que se salvou num aparece nos outros.
+  final store = EffectPresetStore.instance;
+  await store.load();
+  if (!context.mounted) return;
 
   await showParamSheet(
     context,
     title: 'Presets de efeito',
     heightFactor: 0.5,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 12, 18, 6),
-            child: Row(
-              children: [
-                Icon(CupertinoIcons.square_stack_3d_down_right,
-                    size: 18, color: AmColors.accent),
-                SizedBox(width: 8),
-                Text('Presets de efeito',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
-              ],
-            ),
-          ),
-          Expanded(
-            // PREGUICOSO (builder): so o visivel existe; a lista e longa
-            // e meia duzia cabe na tela.
-            child: ListView.builder(
-              itemCount: presets.length,
-              itemBuilder: (_, i) {
-                final p = presets[i];
-                return Material(
-                  color: Colors.transparent,
-                  child: ListTile(
-                    leading: const Icon(
-                        CupertinoIcons.square_stack_3d_down_right,
-                        size: 20,
-                        color: AmColors.accent),
-                    title: Text(p.name,
-                        style: const TextStyle(
-                            fontSize: 14, color: AmColors.text)),
-                    subtitle: Text(
-                      '${p.category} · ${p.effects.length} efeito(s)',
-                      style: const TextStyle(
-                          fontSize: 11, color: AmColors.muted),
-                    ),
-                    onTap: () {
-                      controller.applyPreset(layerId, p,
-                          at: playback.time.value);
-                      AureaSnack.show(context, 'Preset "${p.name}" aplicado',
-                          actionLabel: 'Desfazer',
-                          onAction: controller.undo);
-                    },
+    builder: (sheetContext) => ValueListenableBuilder<int>(
+      valueListenable: store.revision,
+      builder: (sheetContext, _, _) {
+        final meus = store.presets;
+        final todos = [...meus, ...fabrica];
+        return SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(18, 12, 18, 6),
+                child: Row(
+                  children: [
+                    Icon(CupertinoIcons.square_stack_3d_down_right,
+                        size: 18, color: AmColors.accent),
+                    SizedBox(width: 8),
+                    Text('Presets de efeito',
+                        style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AmColors.text)),
+                  ],
+                ),
+              ),
+              if (meus.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(18, 0, 18, 6),
+                  child: Text(
+                    'Para guardar um efeito seu: no cartao do efeito, '
+                    'menu (...) > "Salvar como preset".',
+                    style: TextStyle(fontSize: 11, color: AmColors.muted),
                   ),
-                );
-              },
-            ),
+                ),
+              Expanded(
+                // PREGUICOSO (builder): so o visivel existe; a lista e
+                // longa e meia duzia cabe na tela.
+                child: ListView.builder(
+                  itemCount: todos.length,
+                  itemBuilder: (_, i) {
+                    final p = todos[i];
+                    final meu = i < meus.length;
+                    return Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        leading: Icon(
+                            meu
+                                ? CupertinoIcons.person_crop_circle
+                                : CupertinoIcons.square_stack_3d_down_right,
+                            size: 20,
+                            color: AmColors.accent),
+                        title: Text(p.name,
+                            style: const TextStyle(
+                                fontSize: 14, color: AmColors.text)),
+                        subtitle: Text(
+                          '${meu ? 'Meu preset' : p.category} · '
+                          '${p.effects.length} efeito(s)',
+                          style: const TextStyle(
+                              fontSize: 11, color: AmColors.muted),
+                        ),
+                        trailing: meu
+                            ? GestureDetector(
+                                onTap: () => store.remove(p.id),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(6),
+                                  child: Icon(CupertinoIcons.trash,
+                                      size: 18, color: AmColors.muted),
+                                ),
+                              )
+                            : null,
+                        onTap: () {
+                          controller.applyPreset(layerId, p,
+                              at: playback.time.value);
+                          AureaSnack.show(
+                              context, 'Preset "${p.name}" aplicado',
+                              actionLabel: 'Desfazer',
+                              onAction: controller.undo);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     ),
   );
 }

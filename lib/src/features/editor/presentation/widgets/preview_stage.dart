@@ -1929,10 +1929,20 @@ sigmaX: math.max(0.1, sx),
           // sacode e a borda continua parecendo imagem, em vez de virar
           // faixa preta.
           final bordas = effect.paramAt('edges', local).round().clamp(0, 2);
+          // As copias ficam FORA da caixa, coladas a cada lado: e o que
+          // preenche o vao que o tremor abre na borda. Espelhar sobre o
+          // proprio centro (como era) punha a copia EM CIMA da original —
+          // texto saia com um gemeo invertido por cima.
           Widget comBorda(Widget c) => switch (bordas) {
                 0 => Stack(clipBehavior: Clip.none, children: [
-                    Transform.scale(scaleX: -1, child: c),
-                    Transform.scale(scaleY: -1, child: c),
+                    Transform.scale(
+                        scaleX: -1, alignment: Alignment.centerLeft, child: c),
+                    Transform.scale(
+                        scaleX: -1, alignment: Alignment.centerRight, child: c),
+                    Transform.scale(
+                        scaleY: -1, alignment: Alignment.topCenter, child: c),
+                    Transform.scale(
+                        scaleY: -1, alignment: Alignment.bottomCenter, child: c),
                     c,
                   ]),
                 1 => Stack(clipBehavior: Clip.none, children: [
@@ -1940,6 +1950,10 @@ sigmaX: math.max(0.1, sx),
                         offset: Offset(-fxWidth.toDouble(), 0), child: c),
                     Transform.translate(
                         offset: Offset(fxWidth.toDouble(), 0), child: c),
+                    Transform.translate(
+                        offset: Offset(0, -fxHeight.toDouble()), child: c),
+                    Transform.translate(
+                        offset: Offset(0, fxHeight.toDouble()), child: c),
                     c,
                   ]),
                 _ => c,

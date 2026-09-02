@@ -69,7 +69,11 @@ class ParamSheetShell extends StatefulWidget {
 
 class _ParamSheetShellState extends State<ParamSheetShell> {
   /// 0 = espiada, 1 = metade, 2 = cheia.
-  int _nivel = 1;
+  ///
+  /// Abre CHEIA: quem abre um parametro quer mexer nele agora, e na
+  /// metade o grafico de curva e as reguas ficavam fora da vista.
+  /// Espiar continua a um arrasto da alca.
+  int _nivel = 2;
 
   static const _fracoes = [0.42, 0.72, 1.0];
 

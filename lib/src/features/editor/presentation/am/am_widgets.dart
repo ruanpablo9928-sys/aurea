@@ -110,7 +110,13 @@ double _sheetMaxHeight(BuildContext context, double heightFactor) {
       maxH = 180;
     }
   }
-  return maxH;
+  // PISO. "Nunca cobrir o preview" virava, em tela baixa, uma folha em
+  // que so cabiam o titulo e o transporte — o grafico de curva e as
+  // reguas ficavam escondidos num scroll que ninguem via. Abaixo de 42%
+  // da tela a folha nao serve para mexer em nada; cobrir um pedaco do
+  // preview e o preco certo.
+  final piso = size.height * 0.42;
+  return maxH < piso ? piso : maxH;
 }
 
 /// Sheet de PARAMETROS que nunca cobre o preview e NAO bloqueia o app:

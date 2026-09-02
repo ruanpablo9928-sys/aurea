@@ -1954,3 +1954,10 @@ VideoProject projectFromJson(Map<String, dynamic> m) => VideoProject(
           ),
       ],
     );
+
+/// A serializacao do efeito, para quem guarda efeitos fora do projeto
+/// (presets da pessoa). E a MESMA do projeto: o que o projeto sabe
+/// guardar, o preset sabe.
+Map<String, dynamic> effectToJson(EffectInstance e) => _effect(e);
+
+EffectInstance effectFromJson(Map<String, dynamic> m) => _asEffect(m);

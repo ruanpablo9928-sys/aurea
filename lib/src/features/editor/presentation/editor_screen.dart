@@ -14,6 +14,7 @@ import '../domain/layer.dart';
 import 'am/align_sheet.dart';
 import '../../../core/ui/snack.dart';
 import 'am/am_colors.dart';
+import 'am/layer_look.dart';
 import 'am/export_sheet.dart';
 import 'am/am_widgets.dart';
 import 'am/am_timeline.dart';
@@ -318,6 +319,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   isMain: _mode == _Mode.main,
                   onBack: _back,
                   onLayerMenu: _onTapLayer,
+                  playback: _playback,
                 ),
                 // RepaintBoundary: palco, timeline e painel pintam em
                 // camadas separadas — repintar um nao repinta os outros.
@@ -519,6 +521,67 @@ void _agruparSelecao(WidgetRef ref, Set<String> targets) {
   ref.read(multiSelectProvider.notifier).state = const {};
 }
 
+/// VINCULAR A SELECAO INTEIRA a um objeto: cada camada selecionada passa
+/// a seguir o alvo, de uma vez.
+Future<void> _vincularSelecao(BuildContext context, WidgetRef ref,
+    Set<String> targets, Duration t) async {
+  final project = ref.read(editorControllerProvider);
+  final candidatos = [
+    for (final l in project.layers)
+      if (!targets.contains(l.id)) l,
+  ];
+  if (candidatos.isEmpty) {
+    AureaSnack.show(context, 'Nao ha outra camada para seguir');
+    return;
+  }
+  final controller = ref.read(editorControllerProvider.notifier);
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AmColors.panel,
+    builder: (sheetContext) => SafeArea(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+              child: Text(
+                '${targets.length} camadas seguirem...',
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text),
+              ),
+            ),
+            for (final other in candidatos)
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  leading: Icon(layerTypeIcon(other),
+                      size: 20, color: AmColors.muted),
+                  title: Text(other.name,
+                      style: const TextStyle(color: AmColors.text)),
+                  onTap: () {
+                    for (final id in targets) {
+                      controller.linkProperty(
+                          id, LayerProp.parent, other.id, t);
+                    }
+                    Navigator.of(sheetContext).pop();
+                    ref.read(multiSelectProvider.notifier).state = const {};
+                    AureaSnack.show(context,
+                        '${targets.length} camadas seguindo ${other.name}',
+                        actionLabel: 'Desfazer', onAction: controller.undo);
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Cabecalho contextual SOBRE o preview: uma faixa chapada, sempre na
 /// mesma altura, que troca de conteudo (e de cor) conforme o contexto.
 /// Os watches de selecao ficam AQUI, e nao no build da tela, para um
@@ -529,12 +592,14 @@ class _TopBar extends ConsumerWidget {
     required this.isMain,
     required this.onBack,
     required this.onLayerMenu,
+    required this.playback,
   });
 
   final String title;
   final bool isMain;
   final VoidCallback onBack;
   final ValueChanged<Layer> onLayerMenu;
+  final PlaybackController playback;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -676,6 +741,14 @@ class _TopBar extends ConsumerWidget {
                   onPressed: () => _agruparSelecao(ref, targets),
                   child: Icon(CupertinoIcons.square_stack_3d_up,
                       size: 22, color: tinta),
+                ),
+                // VINCULAR TUDO DE UMA VEZ: a selecao inteira passa a
+                // seguir um objeto, em vez de abrir camada por camada.
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  onPressed: () => _vincularSelecao(
+                      context, ref, targets, playback.time.value),
+                  child: Icon(CupertinoIcons.link, size: 22, color: tinta),
                 ),
                 CupertinoButton(
                   padding: const EdgeInsets.symmetric(horizontal: 12),

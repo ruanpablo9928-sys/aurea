@@ -13,6 +13,8 @@ import '../../domain/keyframe.dart';
 import 'am_colors.dart';
 import 'color_picker_sheet.dart';
 import 'am_widgets.dart';
+import 'curve_panel.dart';
+import '../../application/effect_preset_store.dart';
 
 /// Painel "Efeitos": LISTA VERTICAL de blocos colapsaveis, um por efeito.
 /// Cabecalho = chevron (colapsa) + nome + "..." (menu) + lixeira. Cada
@@ -53,6 +55,56 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   /// Menu "..." do efeito: SO o que o controller sabe fazer de verdade
   /// (mover, ligar/desligar, resetar, remover). Duplicar e curva de
   /// parametro ficam de fora porque nao existem no EditorController.
+  /// Pede o nome e guarda o efeito como preset da pessoa.
+  Future<void> _salvarComoPreset(
+      BuildContext context, String layerId, EffectInstance effect) async {
+    final nome = await _pedirNome(context, effect.spec.name);
+    if (nome == null || nome.trim().isEmpty || !context.mounted) return;
+    final project = ref.read(editorControllerProvider);
+    final layer = project.layerById(layerId);
+    if (layer == null) return;
+    final controller = ref.read(editorControllerProvider.notifier);
+    final preset = saveEffectPreset(
+      name: nome.trim(),
+      effects: [effect],
+      layerStart: layer.startTime,
+      layerDuration: layer.duration,
+      layerSize: controller.layerBoxSize(layer, widget.playback.time.value),
+    );
+    await EffectPresetStore.instance.add(preset);
+    if (!context.mounted) return;
+    AureaSnack.show(context, 'Preset "${preset.name}" salvo para todos os projetos');
+  }
+
+  Future<String?> _pedirNome(BuildContext context, String inicial) {
+    final campo = TextEditingController(text: inicial);
+    return showCupertinoDialog<String>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Nome do preset'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: campo,
+            autofocus: true,
+            onSubmitted: (v) => Navigator.of(dialogContext).pop(v),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(campo.text),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _menuDoEfeito(
     BuildContext context,
     String layerId,
@@ -156,6 +208,17 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                   controller.setEffectColor(
                       layerId, effect.id, const Color(0xFFFF5566));
                 }
+              },
+            ),
+            // PRESET DA PESSOA: a receita deste efeito, com keyframes,
+            // guardada fora do projeto — aparece em qualquer outro.
+            ListTile(
+              leading: const Icon(CupertinoIcons.square_stack_3d_down_right,
+                  color: AmColors.muted, size: 20),
+              title: const Text('Salvar como preset', style: estilo),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await _salvarComoPreset(context, layerId, effect);
               },
             ),
             ListTile(
@@ -464,6 +527,39 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                             id, sel!.id, t),
                     child: AmDiamondAdd(
                         active: selAnimado, filled: selKfAqui),
+                  ),
+                  // CURVA DO EFEITO: o mesmo editor de curvas dos outros
+                  // paineis, sobre o keyframe universal — o easing do
+                  // trecho vale para todos os parametros de uma vez.
+                  AmRailButton(
+                    onTap: sel == null || !sel.hasAnimation
+                        ? null
+                        : () => showTrackCurveSheet(
+                              context,
+                              ref,
+                              widget.playback,
+                              label: sel!.spec.name,
+                              layerId: id,
+                              trackOf: (layer) {
+                                for (final e in layer.effects) {
+                                  if (e.id != sel!.id) continue;
+                                  for (final t in e.params.values) {
+                                    if (t.isAnimated) return t;
+                                  }
+                                }
+                                return null;
+                              },
+                              onSetEase: (seg, e) => controller
+                                  .setEffectSegmentEase(id, sel!.id, seg, e),
+                              onSetEaseAll: (e) => controller
+                                  .applyEaseToAllEffectSegments(
+                                      id, sel!.id, e),
+                            ),
+                    child: Opacity(
+                      opacity: selAnimado ? 1 : 0.32,
+                      child: AmCurveIcon(
+                          color: selAnimado ? AmColors.text : AmColors.muted),
+                    ),
                   ),
                 ],
               ),

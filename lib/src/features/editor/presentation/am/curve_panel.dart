@@ -14,6 +14,15 @@ import 'am_widgets.dart';
 
 /// Painel "Curva de gradacao": grafico tempo->tempo com grade, alcas
 /// grandes, thumbnails de preset a direita e navegacao entre segmentos.
+/// AREA DE TRANSFERENCIA DE CURVA: copiar o easing de um trecho e colar
+/// em outro — de outro parametro, de outra camada, de outro efeito.
+/// Uma so, global, em memoria: e assim que se usa (copia, vai la, cola).
+class EasingClipboard {
+  EasingClipboard._();
+
+  static Easing? valor;
+}
+
 class CurvePanel extends ConsumerStatefulWidget {
   const CurvePanel({
     super.key,
@@ -237,7 +246,7 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                           color: _velocidade ? AmColors.accent : AmColors.text),
                     ),
                     AmRailButton(
-                      onTap: () => _showMenu(context, id, ease),
+                      onTap: () => _showMenu(context, id, ease, segment?.$1),
                       child: const Icon(CupertinoIcons.ellipsis,
                           size: 20, color: AmColors.text),
                     ),
@@ -352,8 +361,8 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
         (a.y2 - b.y2).abs() < 0.01;
   }
 
-  Future<void> _showMenu(
-      BuildContext context, String layerId, Easing ease) async {
+  Future<void> _showMenu(BuildContext context, String layerId, Easing ease,
+      Duration? segStart) async {
     final controller = ref.read(editorControllerProvider.notifier);
     await showModalBottomSheet<void>(
       context: context,
@@ -369,6 +378,36 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
               value: _overshoot,
               onChanged: (v) {
                 setState(() => _overshoot = v);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            // COPIAR / COLAR a curva: o mesmo timing em outro trecho, outro
+            // parametro, outra camada — sem redesenhar a alca.
+            ListTile(
+              leading: const Icon(CupertinoIcons.doc_on_doc,
+                  color: AmColors.muted, size: 20),
+              title: const Text('Copiar curva',
+                  style: TextStyle(color: AmColors.text, fontSize: 15)),
+              onTap: () {
+                EasingClipboard.valor = ease;
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+            ListTile(
+              enabled: EasingClipboard.valor != null && segStart != null,
+              leading: const Icon(CupertinoIcons.doc_on_clipboard,
+                  color: AmColors.muted, size: 20),
+              title: Text('Colar curva',
+                  style: TextStyle(
+                      color: EasingClipboard.valor != null && segStart != null
+                          ? AmColors.text
+                          : AmColors.muted,
+                      fontSize: 15)),
+              onTap: () {
+                final v = EasingClipboard.valor;
+                if (v != null && segStart != null) {
+                  controller.setSegmentEase(layerId, widget.prop, segStart, v);
+                }
                 Navigator.of(sheetContext).pop();
               },
             ),
@@ -591,6 +630,30 @@ Future<void> showTrackCurveSheet(
                                 style: TextStyle(
                                     fontSize: 12,
                                     color: AmColors.accent)),
+                          ),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10),
+                            onPressed: () {
+                              EasingClipboard.valor = ease;
+                              setSheetState(() {});
+                            },
+                            child: const Text('Copiar',
+                                style: TextStyle(
+                                    fontSize: 12, color: AmColors.accent)),
+                          ),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10),
+                            onPressed: EasingClipboard.valor == null
+                                ? null
+                                : () {
+                                    onSetEase(seg!.$1, EasingClipboard.valor!);
+                                    setSheetState(() {});
+                                  },
+                            child: const Text('Colar',
+                                style: TextStyle(
+                                    fontSize: 12, color: AmColors.accent)),
                           ),
                         ],
                       ),

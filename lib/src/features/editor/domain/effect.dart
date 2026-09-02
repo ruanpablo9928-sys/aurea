@@ -344,7 +344,11 @@ const effectSpecs = <EffectType, EffectSpec>{
           kind: ParamKind.toggle),
       'blur_length': EffectParam('Blur Length', 1.0, 0.0, 10.0),
       'seed': EffectParam('Seed', 0.0, 0.0, 100.0, kind: ParamKind.seed),
-      'edges': EffectParam('X / Y Edges', 0.0, 0.0, 2.0,
+      // Padrao NONE: refletir/repetir so faz sentido em camada que
+      // enche o quadro (video). Numa forma ou texto, a "borda" e a
+      // caixa da propria camada — e o reflexo virava uma copia
+      // espelhada colada ao lado, lida como camada duplicada.
+      'edges': EffectParam('X / Y Edges', 2.0, 0.0, 2.0,
           kind: ParamKind.choice,
           options: ['Reflect', 'Tile', 'None']),
 
