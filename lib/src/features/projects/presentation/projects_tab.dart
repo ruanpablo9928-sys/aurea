@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/aurea_logo.dart';
 import '../../editor/application/editor_controller.dart';
+import '../domain/notes_motion_template.dart';
 import '../../editor/domain/video_project.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../../user/application/user_profile_controller.dart';
@@ -30,6 +31,18 @@ class ProjectsTab extends ConsumerWidget {
         await showNewProjectSheet(context, presetAspectKey: presetAspectKey);
     if (project == null || !context.mounted) return;
 
+    ref.read(projectsControllerProvider.notifier).add(project);
+    ref.read(editorControllerProvider.notifier).openProject(project);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const EditorScreen()),
+    );
+  }
+
+  /// MODELO PRONTO: um projeto montado por codigo, com id novo a cada
+  /// abertura — o mesmo cuidado do template em arquivo.
+  Future<void> _abrirModelo(
+      BuildContext context, WidgetRef ref, VideoProject modelo) async {
+    final project = modelo.comIdNovo();
     ref.read(projectsControllerProvider.notifier).add(project);
     ref.read(editorControllerProvider.notifier).openProject(project);
     Navigator.of(context).push(
@@ -130,6 +143,16 @@ class ProjectsTab extends ConsumerWidget {
                   ),
                 ),
             ],
+          ),
+          const SizedBox(height: 26),
+          // MODELOS PRONTOS: motions inteiros montados camada por camada
+          // — abrir um e ver como cada coisa foi feita.
+          Text('Modelos prontos', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          _ModeloTile(
+            titulo: 'Notes',
+            detalhe: 'Motion de app: icone, botao, listas, whip e glow',
+            onTap: () => _abrirModelo(context, ref, buildNotesMotionTemplate()),
           ),
           const SizedBox(height: 20),
           const BetaBanner(),
@@ -339,6 +362,64 @@ class _EmptyProjects extends StatelessWidget {
             style: TextStyle(color: AppColors.muted, fontSize: 14),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Cartao de um modelo pronto.
+class _ModeloTile extends StatelessWidget {
+  const _ModeloTile({
+    required this.titulo,
+    required this.detalhe,
+    required this.onTap,
+  });
+
+  final String titulo;
+  final String detalhe;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5C400),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.sticky_note_2_rounded,
+                    color: Color(0xFF1C1C1E)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titulo, style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(detalhe, style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
       ),
     );
   }

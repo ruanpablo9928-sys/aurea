@@ -33,6 +33,14 @@ class FontService {
 
   bool has(String family) => _familias.containsKey(family);
 
+  /// Para a bancada de render (testes): declara uma familia que ja foi
+  /// carregada por fora (FontLoader), sem arquivo na pasta do app.
+  @visibleForTesting
+  void registrarSemArquivo(String familia) {
+    _familias[familia] = '';
+    revision.value++;
+  }
+
   Future<Directory> _pasta() async {
     final base = await getApplicationSupportDirectory();
     final d = Directory('${base.path}/fontes');
