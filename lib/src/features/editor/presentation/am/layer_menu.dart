@@ -30,6 +30,7 @@ import 'beats_sheet.dart';
 import 'beat_pulse_sheet.dart';
 import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
+import 'layer_look.dart';
 import 'cameras_sheet.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
@@ -2090,41 +2091,73 @@ Future<void> showParentSheet(
               ),
             ),
           ),
+          // NENHUM vem primeiro: desvincular tem de custar o mesmo que
+          // vincular, e ate aqui so dava para soltar por outro caminho.
+          Material(
+            color: Colors.transparent,
+            child: ListTile(
+              leading: const Icon(CupertinoIcons.clear_circled,
+                  size: 20, color: AmColors.muted),
+              title: const Text('Nenhum',
+                  style: TextStyle(color: AmColors.text)),
+              subtitle: const Text(
+                'Solta a camada do pai',
+                style: TextStyle(fontSize: 11, color: AmColors.muted),
+              ),
+              onTap: () {
+                controller.unlinkProperty(child.id, LayerProp.parent);
+                Navigator.of(sheetContext).pop();
+              },
+            ),
+          ),
           for (final other in candidates)
-            if (other.id != child.id)
-              Material(
-                color: Colors.transparent,
+            Material(
+              color: Colors.transparent,
+              child: Opacity(
+                // A PROPRIA CAMADA aparece esmaecida em vez de sumir da
+                // lista: sumir faz procurar o que nao existe. Parentear em
+                // si mesma nao da, e a lista diz isso.
+                opacity: other.id == child.id ? 0.35 : 1,
                 child: ListTile(
-                  leading: Icon(
-                    other is NullLayer
-                        ? CupertinoIcons.viewfinder
-                        : CupertinoIcons.square_on_square,
-                    size: 20,
-                    color: other is NullLayer
-                        ? AmColors.tealBright
-                        : AmColors.muted,
+                  leading: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: layerTypeColor(other),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
                   title: Text(
                     other.name,
                     style: const TextStyle(color: AmColors.text),
                   ),
-                  subtitle: other is NullLayer
+                  subtitle: other.id == child.id
                       ? const Text(
-                          'Objeto nulo',
-                          style: TextStyle(fontSize: 11, color: AmColors.muted),
+                          'E a propria camada',
+                          style:
+                              TextStyle(fontSize: 11, color: AmColors.muted),
                         )
-                      : null,
-                  onTap: () {
-                    controller.linkProperty(
-                      child.id,
-                      LayerProp.parent,
-                      other.id,
-                      t,
-                    );
-                    Navigator.of(sheetContext).pop();
-                  },
+                      : other is NullLayer
+                          ? const Text(
+                              'Objeto nulo',
+                              style: TextStyle(
+                                  fontSize: 11, color: AmColors.muted),
+                            )
+                          : null,
+                  onTap: other.id == child.id
+                      ? null
+                      : () {
+                          controller.linkProperty(
+                            child.id,
+                            LayerProp.parent,
+                            other.id,
+                            t,
+                          );
+                          Navigator.of(sheetContext).pop();
+                        },
                 ),
               ),
+            ),
           const SizedBox(height: 8),
         ],
       ),

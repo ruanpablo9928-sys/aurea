@@ -1003,12 +1003,36 @@ class _TopBar extends ConsumerWidget {
             // um so lugar para as acoes da camada, alcancavel sem mirar
             // na barra.
             _HeaderKind.camada => [
+              // VINCULAR AO PAI mora no cabecalho, nao na grade de secoes:
+              // e relacao estrutural entre camadas, nao editor de
+              // aparencia. E e o que faz o nulo funcionar.
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                onPressed: () {
+                  final layer = ref
+                      .read(editorControllerProvider)
+                      .layerById(selectedId);
+                  if (layer != null) {
+                    showParentSheet(context, ref, layer, playback.time.value);
+                  }
+                },
+                child: Icon(
+                  ref
+                              .watch(editorControllerProvider)
+                              .linkFor(selectedId!, LayerProp.parent) ==
+                          null
+                      ? CupertinoIcons.link
+                      : CupertinoIcons.link_circle_fill,
+                  size: 22,
+                  color: tinta,
+                ),
+              ),
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 onPressed: () {
                   final layer = ref
                       .read(editorControllerProvider)
-                      .layerById(selectedId!);
+                      .layerById(selectedId);
                   if (layer != null) onLayerMenu(layer);
                 },
                 child: Icon(CupertinoIcons.ellipsis, size: 24, color: tinta),
