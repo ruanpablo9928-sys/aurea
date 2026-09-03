@@ -15,6 +15,7 @@ import '../../../core/feature_access.dart';
 import '../../editor/application/preview_stats.dart';
 import '../../editor/domain/am_sections.dart';
 import '../../editor/domain/effect.dart';
+import '../../editor/domain/layer.dart' as camadas;
 import '../../editor/domain/shape_library.dart';
 import '../domain/acceptance_task.dart';
 import '../domain/laboratory_mesh_seed.dart';
@@ -123,10 +124,47 @@ class LaboratoryAppBridge implements LaboratoryRuntimeBridge {
       LaboratoryLevelId.nullAndClone => true,
       // O nivel 6 (Apple) ainda nao existe em lugar nenhum do app.
       LaboratoryLevelId.apple => false,
-      // A UI final nao tem tela propria: o que se verifica e que a grade
-      // continua cabendo em sete secoes.
-      LaboratoryLevelId.uiFinal => AmSecao.values.length <= kAmMaximoSecoes,
+      // A UI final nao tem tela propria: o que se verifica e que nenhum
+      // tipo de camada estoura a grade.
+      LaboratoryLevelId.uiFinal => _gradeCabe(),
+      // O audio so esta ligado de verdade quando a camada de som mostra
+      // as tres secoes do documento — e nenhuma das inertes.
+      LaboratoryLevelId.audio => _audioTemAsTresSecoes(),
     };
+  }
+
+  /// Nenhum tipo de camada pode passar do teto da grade.
+  static bool _gradeCabe() {
+    for (final camada in _umaDeCada()) {
+      if (AmNiveis.tudo.visiveisPara(camada).length > kAmMaximoSecoes) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _audioTemAsTresSecoes() {
+    final som = camadas.AudioLayer(
+      name: 'a',
+      startTime: Duration.zero,
+      duration: const Duration(seconds: 1),
+      sourcePath: '',
+    );
+    return const AmNiveis(audio: true).visiveisPara(som).length == 3;
+  }
+
+  static List<camadas.Layer> _umaDeCada() {
+    const d = Duration(seconds: 1);
+    return [
+      camadas.VideoLayer(name: 'v', startTime: Duration.zero, duration: d,
+          sourcePath: ''),
+      camadas.TextLayer(name: 't', startTime: Duration.zero, duration: d, text: 'a'),
+      camadas.ShapeLayer(name: 's', startTime: Duration.zero, duration: d),
+      camadas.AudioLayer(name: 'a', startTime: Duration.zero, duration: d,
+          sourcePath: ''),
+      camadas.NullLayer(name: 'n', startTime: Duration.zero, duration: d),
+      camadas.Scene3DLayer(name: 'c', startTime: Duration.zero, duration: d),
+    ];
   }
 
   static bool _seisEfeitosProntos() {

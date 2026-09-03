@@ -55,22 +55,42 @@ Future<void> showAddLayerSheet(
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 34,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
+              // O FECHAR mora no cabecalho, ao lado da alca, e nao no fim
+              // do trilho: la ele obrigava o trilho a ser mais alto que o
+              // conteudo, e era o trilho que definia a altura da folha.
+              Row(
+                children: [
+                  const SizedBox(width: 28),
+                  Expanded(
+                    child: Center(
+                      child: Container(
+                        width: 34,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(sheetContext).pop(),
+                    child: const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Icon(CupertinoIcons.xmark,
+                          size: 20, color: AmColors.accent),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               if (menuPorTipo)
                 _AddMenuAm(
                   sheetContext: sheetContext,
@@ -931,20 +951,27 @@ class _AddOption extends StatelessWidget {
         child: Opacity(
           opacity: enabled ? 1 : 0.35,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   color: AmColors.chip,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(icon, color: AmColors.accent, size: 24),
+                child: Icon(icon, color: AmColors.accent, size: 28),
               ),
               const SizedBox(height: 6),
+              // 12 e nao 13: em 13 o rotulo mais longo (Elementos 3D)
+              // quebra em duas linhas e a fileira inteira cresce com ele,
+              // empurrando a folha por cima da linha do tempo.
               Text(
                 label,
-                style: const TextStyle(fontSize: 11, color: AmColors.text),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AmColors.text),
               ),
             ],
           ),
@@ -995,7 +1022,12 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   int _pagina = 0;
   final _pager = PageController();
 
-  static const int _porPagina = 21;
+  /// Cinco por fileira, tres fileiras. Eram sete por fileira: numa tela
+  /// de celular isso dava tiles de 40 px, pequenos demais para reconhecer
+  /// a forma e pequenos demais para acertar o toque.
+  static const int _porLinha = 5;
+  static const int _linhas = 3;
+  static const int _porPagina = _porLinha * _linhas;
 
   EditorController get _controller =>
       ref.read(editorControllerProvider.notifier);
@@ -1036,26 +1068,30 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
 
   @override
   Widget build(BuildContext context) {
-    final alto = MediaQuery.of(context).size.height;
-    return SizedBox(
-      height: (alto * 0.40).clamp(300.0, 360.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _abas(),
-                const SizedBox(height: 10),
-                Expanded(child: _conteudo()),
-              ],
-            ),
+    // A FOLHA TEM A ALTURA DO QUE HA DENTRO DELA.
+    //
+    // Antes era uma fracao fixa da tela (40%, no minimo 300 px): a aba de
+    // Objeto tem duas fileiras e sobrava meia tela vazia embaixo, e a
+    // folha cobria a linha do tempo — que a regra 4 diz que nunca pode
+    // ser coberta. Sem altura fixa, cada aba ocupa o que precisa, e o que
+    // era espaco morto virou tamanho de item.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _abas(),
+              const SizedBox(height: 12),
+              _conteudo(),
+            ],
           ),
-          const SizedBox(width: 8),
-          _trilho(),
-        ],
-      ),
+        ),
+        const SizedBox(width: 8),
+        _trilho(),
+      ],
     );
   }
 
@@ -1112,14 +1148,14 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 20, color: AmColors.accent),
-                const SizedBox(height: 2),
+                Icon(icon, size: 24, color: AmColors.accent),
+                const SizedBox(height: 3),
                 Text(
                   label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 9,
-                    height: 1.1,
+                    fontSize: 11,
+                    height: 1.15,
                     color: AmColors.muted,
                   ),
                 ),
@@ -1128,8 +1164,9 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
           ),
         );
     return SizedBox(
-      width: 64,
+      width: 66,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.shapesEnabled) ...[
             item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
@@ -1157,8 +1194,6 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
               _fecha();
               _controller.addTextLayer(widget.playhead);
             }),
-          const Spacer(),
-          item(CupertinoIcons.xmark, '', _fecha),
         ],
       ),
     );
@@ -1218,6 +1253,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
         );
       case _AbaAdd.objeto:
         return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
@@ -1250,7 +1286,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Row(
               children: [
                 if (widget.fullStudio)
@@ -1304,7 +1340,14 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   Widget _formas() {
     final total = shapeLibrary.length;
     final paginas = (total / _porPagina).ceil();
-    return Column(
+    // A altura sai da largura: cinco tiles quadrados por fileira, tres
+    // fileiras. Medir em vez de chutar e o que permite a folha encolher.
+    return LayoutBuilder(builder: (context, limites) {
+      final tile = (limites.maxWidth - 6 * (_porLinha - 1)) / _porLinha;
+      final altura = tile * _linhas + 6 * (_linhas - 1) + 20;
+      return SizedBox(
+        height: altura,
+        child: Column(
       children: [
         Expanded(
           child: PageView.builder(
@@ -1315,7 +1358,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
               final ini = pagina * _porPagina;
               final fim = (ini + _porPagina).clamp(0, total);
               return GridView.count(
-                crossAxisCount: 7,
+                crossAxisCount: _porLinha,
                 mainAxisSpacing: 6,
                 crossAxisSpacing: 6,
                 physics: const NeverScrollableScrollPhysics(),
@@ -1351,7 +1394,9 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
           ],
         ),
       ],
-    );
+        ),
+      );
+    });
   }
 }
 

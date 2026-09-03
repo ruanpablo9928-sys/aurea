@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../editor/domain/cut.dart';
 import '../../editor/domain/cut_ops.dart';
+import '../../editor/domain/audio_mix.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/domain/mask.dart';
 import '../../editor/domain/video_project.dart';
@@ -31,10 +32,20 @@ import 'platform_encoder.dart';
 /// o x264: e hardware, e nao arrasta a GPL para dentro do aplicativo. O
 /// FFmpeg segue no app so para DECODIFICAR e para juntar o audio.
 class ExportEngine {
-  ExportEngine(this.project, [this.settings = const ExportSettings()]);
+  ExportEngine(
+    this.project, [
+    this.settings = const ExportSettings(),
+    this.duckEnvelopes = const <String, DuckEnvelope>{},
+  ]);
 
   final VideoProject project;
   final ExportSettings settings;
+
+  /// O ENVELOPE DE DUCKING de cada trilha, ja calculado pelo mesmo codigo
+  /// que o preview usa. Vem de fora de proposito: o motor de exportacao
+  /// nao pode CALCULAR o abaixamento, senao calcularia diferente do
+  /// tocador — o contrato e que os dois leiam os mesmos pontos.
+  final Map<String, DuckEnvelope> duckEnvelopes;
 
   Directory? _work;
   bool _cancelled = false;
@@ -628,34 +639,46 @@ class ExportEngine {
       idx++;
     }
 
-    // ABAIXAR PELA VOZ. O compressor de cadeia lateral e a ferramenta
-    // certa: a musica desce quando a voz entra e volta quando ela para,
-    // sem ninguem desenhar envelope na mao.
+    // ABAIXAR PELA VOZ, pelo envelope pre-calculado.
+    //
+    // O sidechaincompress do FFmpeg fazia isso sozinho, com o ataque e o
+    // repouso DELE — e o preview fazia com os do aplicativo. Duas contas
+    // para a mesma coisa e a musica cedendo de um jeito no aparelho e de
+    // outro no arquivo. Agora os dois leem os mesmos pontos, e o filtro
+    // so desenha a curva que ja foi decidida.
     for (final entry in duckAlvo.entries) {
-      final vozLabel = entry.value == null ? null : porCamada[entry.value];
+      if (entry.value == null) continue;
       final musicaLabel = porCamada[entry.key];
-      if (vozLabel == null || musicaLabel == null) continue;
-      final amt = _duckAmountOf(entry.key);
-      // A voz e usada como referencia SEM ser consumida: asplit deixa
-      // ela seguir para a mixagem tambem.
-      final ref = 'ref_${entry.key.hashCode.abs()}';
+      if (musicaLabel == null) continue;
+      final env = duckEnvelopes[entry.key];
+      if (env == null || env.isNeutral) continue;
+      final expr = ffmpegVolumeExpr(env);
+      if (expr == null) continue;
       final saida = 'dk_${entry.key.hashCode.abs()}';
-      chains.add('[$vozLabel]asplit=2[$vozLabel~a][$ref]');
-      chains.add(
-        '[$musicaLabel][$ref]sidechaincompress='
-        'threshold=0.05:ratio=${(1 + amt * 19).toStringAsFixed(1)}'
-        ':attack=80:release=400[$saida]',
-      );
+      chains.add("[$musicaLabel]volume=volume='$expr':eval=frame[$saida]");
       final i = labels.indexOf('[$musicaLabel]');
       if (i >= 0) labels[i] = '[$saida]';
-      final j = labels.indexOf('[$vozLabel]');
-      if (j >= 0) labels[j] = '[$vozLabel~a]';
     }
 
-    final mix = labels.length == 1
-        ? '${labels.first}anull[aout]'
-        : '${labels.join()}amix=inputs=${labels.length}'
-              ':duration=longest:dropout_transition=0[aout]';
+    // A soma NAO e dividida pelo numero de trilhas (normalize=0): dividir
+    // faz cada trilha nova baixar as anteriores, e o volume que a pessoa
+    // ajustou deixa de valer. Quem cuida do estouro e o limitador.
+    final somaLabel = labels.length == 1 ? null : 'amixed';
+    if (somaLabel != null) {
+      chains.add(
+        '${labels.join()}amix=inputs=${labels.length}:normalize=0'
+        ':duration=longest:dropout_transition=0[$somaLabel]',
+      );
+    }
+    final entrada = somaLabel == null ? labels.first : '[$somaLabel]';
+
+    // LIMITADOR NO FIM, e so quando pode fazer falta: uma trilha unica em
+    // 0 dB tem de sair do arquivo identica ao que entrou, amostra por
+    // amostra, e um limitador sempre ligado quebraria isso.
+    final mix = _precisaLimitador(sources)
+        ? '${entrada}alimiter=limit=$kTetoDoBarramento'
+            ':attack=5:release=50:level=disabled[aout]'
+        : '${entrada}anull[aout]';
 
     return (
       inputs: inputs,
@@ -666,12 +689,21 @@ class ExportEngine {
 
   double get _total => project.duration.inMicroseconds / 1000000.0;
 
-  double _duckAmountOf(String layerId) {
-    for (final l in project.layers) {
-      if (l.id != layerId) continue;
-      return (_specOf(l)?.duckAmount ?? 0.7).clamp(0.0, 1.0);
+  /// So entra limitador quando a soma pode passar do teto: mais de uma
+  /// trilha, ou alguma com ganho acima de 0 dB.
+  static bool _precisaLimitador(List<Layer> sources) {
+    if (sources.length > 1) return true;
+    for (final l in sources) {
+      final spec = _specOf(l);
+      if (spec != null && spec.gain > 1.0) return true;
+      final v = switch (l) {
+        AudioLayer a => a.volume,
+        VideoLayer v => v.volume,
+        _ => 1.0,
+      };
+      if (v > 1.0) return true;
     }
-    return 0.7;
+    return false;
   }
 
   // ------------------------------------------------------ codificar

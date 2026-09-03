@@ -260,9 +260,30 @@ void main() {
       expect(find.text('Desenho\nlivre'), findsOneWidget);
       expect(find.text('Desenho\nvetorial'), findsOneWidget);
       expect(find.text('Texto'), findsOneWidget);
-      // Primeira pagina: 21 tiles.
+      // Primeira pagina: quinze tiles, cinco por fileira.
       expect(find.byTooltip('Circulo'), findsOneWidget);
       expect(find.byTooltip('Quadrado arredondado'), findsOneWidget);
+
+      // REGRA 4: a folha nao pode cobrir a linha do tempo. Antes tinha
+      // altura fixa de 40% da tela com o minimo de 300 px e sobrava meia
+      // tela vazia na aba de Objeto.
+      final tela = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      for (final aba in ['Forma', 'Midia', 'Audio', 'Objeto']) {
+        // A fileira de abas rola: com o estudio inteiro ligado sao cinco,
+        // e a ultima nasce fora da tela.
+        await tester.ensureVisible(find.text(aba));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(aba));
+        await tester.pumpAndSettle();
+        final altura = tester.getSize(find.byType(BottomSheet)).height;
+        expect(altura, lessThan(tela * 0.40),
+            reason: 'a aba $aba cobre demais: $altura de $tela');
+      }
+
+      await tester.ensureVisible(find.text('Forma'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Forma'));
+      await tester.pumpAndSettle();
 
       // Tocar um tile cria a camada de forma e fecha.
       await tester.tap(find.byTooltip('Quadrado arredondado'));

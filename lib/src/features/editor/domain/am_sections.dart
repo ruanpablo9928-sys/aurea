@@ -16,12 +16,18 @@ enum AmSecao {
   corPreenchimento,
   bordaSombra,
   mesclarOpacidade,
+  // As duas do som. Nao sao uma oitava e uma nona secao na grade: sao
+  // secoes DE TIPO DE CAMADA, a saida que a propria regra do minimalismo
+  // preve. Nenhum tipo passa de sete.
+  volume,
+  fade,
   editarForma,
   presets,
   efeitos,
 }
 
-/// O teto da grade. Nao e decoracao: o teste falha se alguem passar disso.
+/// O teto da grade PARA UM TIPO DE CAMADA. Nao e decoracao: o teste falha
+/// se alguem passar disso.
 const int kAmMaximoSecoes = 7;
 
 /// Quais niveis estao ligados no momento em que o menu abre.
@@ -36,6 +42,7 @@ class AmNiveis {
     this.captions = false,
     this.scene3d = false,
     this.nullAndClone = false,
+    this.audio = false,
   });
 
   /// Modo Nucleo puro: nenhum nivel ligado.
@@ -51,6 +58,7 @@ class AmNiveis {
     captions: true,
     scene3d: true,
     nullAndClone: true,
+    audio: true,
   );
 
   factory AmNiveis.de(
@@ -66,6 +74,7 @@ class AmNiveis {
     captions: liberado(LaboratoryLevelId.captions),
     scene3d: liberado(LaboratoryLevelId.scene3d),
     nullAndClone: liberado(LaboratoryLevelId.nullAndClone),
+    audio: liberado(LaboratoryLevelId.audio),
   );
 
   final bool completo;
@@ -77,6 +86,7 @@ class AmNiveis {
   final bool captions;
   final bool scene3d;
   final bool nullAndClone;
+  final bool audio;
 
   /// No Nucleo puro a grade encolhe para movimentacao e opacidade; qualquer
   /// nivel ligado ja pede a grade inteira.
@@ -88,7 +98,8 @@ class AmNiveis {
       apple ||
       captions ||
       scene3d ||
-      nullAndClone;
+      nullAndClone ||
+      audio;
 
   /// AS SECOES QUE APARECEM PARA ESTA CAMADA.
   ///
@@ -101,6 +112,12 @@ class AmNiveis {
         AmSecao.moverTransformar,
         if (layer is! NullLayer) AmSecao.mesclarOpacidade,
       };
+    }
+    // A CAMADA DE AUDIO nao tem posicao, nem opacidade, nem cor: mover um
+    // som na tela nao faz nada, e um controle que nao faz nada nao pode
+    // aparecer. Ela mostra tres secoes, as do documento.
+    if (audio && layer is AudioLayer) {
+      return {AmSecao.volume, AmSecao.fade, AmSecao.efeitos};
     }
     return {
       AmSecao.moverTransformar,
@@ -115,11 +132,17 @@ class AmNiveis {
               (captions && layer is CaptionLayer)))
         AmSecao.bordaSombra,
       if (layer is! NullLayer) AmSecao.mesclarOpacidade,
+      // Video com som ganha as duas do audio — e a razao de a grade do
+      // video bater exatamente em sete, e nao em oito.
+      if (audio && layer is VideoLayer) ...[AmSecao.volume, AmSecao.fade],
       if (shapes && layer is ShapeLayer) AmSecao.editarForma,
       if (layer is! NullLayer &&
           (completo || effects || apple || (text && layer is TextLayer)))
         AmSecao.presets,
-      if (effects && layer is! NullLayer) AmSecao.efeitos,
+      // Efeito visual em camada de som nao desenha nada; a secao de
+      // Efeitos do audio e outra, e vem com o nivel 11.
+      if (effects && layer is! NullLayer && layer is! AudioLayer)
+        AmSecao.efeitos,
     };
   }
 }

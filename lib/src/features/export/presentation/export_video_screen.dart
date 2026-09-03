@@ -17,6 +17,8 @@ import '../../editor/domain/layer.dart';
 import '../../editor/presentation/am/am_colors.dart';
 import '../../editor/presentation/widgets/dither_layer.dart';
 import '../../editor/presentation/widgets/preview_stage.dart';
+import '../../editor/application/duck_service.dart';
+import '../../editor/application/media_preview_service.dart';
 import '../application/export_engine.dart';
 import '../domain/export_settings.dart';
 
@@ -94,7 +96,16 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
 
   Future<void> _rodar() async {
     final project = ref.read(editorControllerProvider);
-    final engine = ExportEngine(project, widget.settings);
+    // Os mesmos envelopes que o preview usou: o arquivo tem de sair com
+    // o abaixamento que a pessoa acabou de ouvir, nao com um recalculado.
+    final engine = ExportEngine(
+      project,
+      widget.settings,
+      buildProjectDuckEnvelopes(
+        project.layers,
+        MediaPreviewService.instance.peaksOf,
+      ),
+    );
     _engine = engine;
 
     try {

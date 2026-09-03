@@ -423,6 +423,49 @@ abstract final class LaboratoryAcceptanceCatalog {
         _step('n101-export', 'Exportar.'),
       ],
     ),
+    AcceptanceTaskDefinition(
+      level: LaboratoryLevelId.audio,
+      title: 'Audio',
+      steps: [
+        _step(
+          'n11-importar',
+          'Importar o video com fala e a musica.',
+          assets: [
+            LaboratoryTestAssets.spokenVideo,
+            LaboratoryTestAssets.beatTrack,
+          ],
+        ),
+        _step('n11-normalizar', 'Normalizar as duas trilhas.'),
+        _step(
+          'n11-abaixar',
+          'Na musica, Abaixar sob a fala. Ouvir a musica cedendo quando a '
+              'locucao entra e voltando entre as frases.',
+        ),
+        _step(
+          'n11-decupagem',
+          'Puxar a forma de onda ate a altura de decupagem, achar um '
+              'trecho ruim pela onda e cortar ali.',
+          screenshot: true,
+        ),
+        _step(
+          'n11-batidas',
+          'Detectar batidas na musica; elas viram marcadores.',
+        ),
+        _step(
+          'n11-keyframe-na-batida',
+          'Encaixar um keyframe de escala numa batida.',
+        ),
+        _step('n11-fade', 'Fade Suave no fim da musica.'),
+        _step('n11-voz', 'Melhorar voz na trilha da fala.'),
+        _step(
+          'n11-exportar',
+          'Exportar e conferir que o audio do arquivo e o do preview: '
+              'mesmo ganho, mesmos fades, musica cedendo nos mesmos '
+              'lugares.',
+          screenshot: true,
+        ),
+      ],
+    ),
   ]);
 
   static AcceptanceTaskDefinition forLevel(LaboratoryLevelId level) =>

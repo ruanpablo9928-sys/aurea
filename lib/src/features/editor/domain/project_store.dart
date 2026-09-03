@@ -801,8 +801,37 @@ Map<String, dynamic>? _audioSpec(AudioSpec a) => a.isNeutral
         'mute': a.muted,
         if (a.duckAgainstId != null) 'duck': a.duckAgainstId,
         'duckAmt': a.duckAmount,
+        if (a.duckAttack != const Duration(milliseconds: 120))
+          'duckAtk': a.duckAttack.inMicroseconds,
+        if (a.duckRelease != const Duration(milliseconds: 450))
+          'duckRel': a.duckRelease.inMicroseconds,
+        if (a.duckThreshold != 0.05) 'duckThr': a.duckThreshold,
+        if (a.normalizeTargetLufs != null) 'lufs': a.normalizeTargetLufs,
+        if (!a.processing.isNeutral) 'proc': _processing(a.processing),
         if (!a.preservePitch) 'pitch': false,
       };
+
+Map<String, dynamic> _processing(AudioProcessing p) => {
+  if (p.denoise != 0) 'dn': p.denoise,
+  if (p.voice != 0) 'voz': p.voice,
+  if (p.deEsser != 0) 'ess': p.deEsser,
+  if (p.lowDb != 0) 'lo': p.lowDb,
+  if (p.midDb != 0) 'mid': p.midDb,
+  if (p.highDb != 0) 'hi': p.highDb,
+};
+
+AudioProcessing _asProcessing(Object? raw) {
+  if (raw is! Map) return const AudioProcessing();
+  final m = raw.cast<String, dynamic>();
+  return AudioProcessing(
+    denoise: (m['dn'] as num?)?.toDouble() ?? 0,
+    voice: (m['voz'] as num?)?.toDouble() ?? 0,
+    deEsser: (m['ess'] as num?)?.toDouble() ?? 0,
+    lowDb: (m['lo'] as num?)?.toDouble() ?? 0,
+    midDb: (m['mid'] as num?)?.toDouble() ?? 0,
+    highDb: (m['hi'] as num?)?.toDouble() ?? 0,
+  );
+}
 
 AudioSpec _asAudioSpec(Object? raw) {
   if (raw is! Map) return const AudioSpec();
@@ -814,6 +843,13 @@ AudioSpec _asAudioSpec(Object? raw) {
     muted: m['mute'] as bool? ?? false,
     duckAgainstId: m['duck'] as String?,
     duckAmount: (m['duckAmt'] as num?)?.toDouble() ?? 0.7,
+    duckAttack: Duration(
+        microseconds: (m['duckAtk'] as num?)?.toInt() ?? 120000),
+    duckRelease: Duration(
+        microseconds: (m['duckRel'] as num?)?.toInt() ?? 450000),
+    duckThreshold: (m['duckThr'] as num?)?.toDouble() ?? 0.05,
+    normalizeTargetLufs: (m['lufs'] as num?)?.toDouble(),
+    processing: _asProcessing(m['proc']),
     preservePitch: m['pitch'] as bool? ?? true,
   );
 }

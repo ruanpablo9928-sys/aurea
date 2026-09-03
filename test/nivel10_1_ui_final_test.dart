@@ -34,8 +34,14 @@ List<Layer> _todasAsCamadas() => [
 
 void main() {
   group('Nivel 10.1 - a grade nao cresce', () {
-    test('existem sete secoes, nunca uma oitava', () {
-      expect(AmSecao.values.length, kAmMaximoSecoes);
+    test('nenhum tipo de camada ve mais de sete secoes', () {
+      // O teto e por TIPO, nao no total de nomes: uma secao que so existe
+      // para um tipo de camada e a saida que a propria regra preve.
+      for (final camada in _todasAsCamadas()) {
+        expect(AmNiveis.tudo.visiveisPara(camada).length,
+            lessThanOrEqualTo(kAmMaximoSecoes),
+            reason: '${camada.runtimeType}');
+      }
     });
 
     test('com os dez niveis ligados nenhum tipo passa de sete', () {
@@ -117,10 +123,12 @@ void main() {
       final selecao = LaboratoryLevelSelection().enable(
         LaboratoryLevelId.uiFinal,
       );
-      expect(selecao.enabled.length, LaboratoryLevelId.values.length);
+      // Os dez sao do 0 ao 9; o 11 vem depois e nao entra por tabela.
       for (final nivel in LaboratoryLevelId.values) {
+        if (nivel == LaboratoryLevelId.audio) continue;
         expect(selecao.isEnabled(nivel), isTrue, reason: nivel.name);
       }
+      expect(selecao.isEnabled(LaboratoryLevelId.audio), isFalse);
     });
 
     test('a tarefa cobre os seis parametros medidos em toques', () {

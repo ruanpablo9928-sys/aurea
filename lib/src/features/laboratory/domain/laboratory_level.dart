@@ -15,6 +15,7 @@ enum LaboratoryLevelId {
   panorama,
   nullAndClone,
   uiFinal,
+  audio,
 }
 
 extension LaboratoryLevelIdX on LaboratoryLevelId {
@@ -31,6 +32,7 @@ extension LaboratoryLevelIdX on LaboratoryLevelId {
     LaboratoryLevelId.panorama => '8.1',
     LaboratoryLevelId.nullAndClone => '9',
     LaboratoryLevelId.uiFinal => '10.1',
+    LaboratoryLevelId.audio => '11',
   };
 
   int get sortOrder => switch (this) {
@@ -46,6 +48,7 @@ extension LaboratoryLevelIdX on LaboratoryLevelId {
     LaboratoryLevelId.panorama => 81,
     LaboratoryLevelId.nullAndClone => 90,
     LaboratoryLevelId.uiFinal => 101,
+    LaboratoryLevelId.audio => 110,
   };
 
   static LaboratoryLevelId? tryParse(String value) {
@@ -163,6 +166,13 @@ abstract final class LaboratoryLevelCatalog {
         LaboratoryLevelId.panorama,
         LaboratoryLevelId.nullAndClone,
       },
+    ),
+    // 11 nao depende da UI final: depende de a UI final estar PASSANDO,
+    // que e coisa que so a tarefa de aceite responde, nao o interruptor.
+    LaboratoryLevelId.audio: LaboratoryLevelDefinition(
+      id: LaboratoryLevelId.audio,
+      title: 'Audio',
+      expectedUi: 'Volume, Fade e Efeitos na camada de audio',
     ),
   };
 

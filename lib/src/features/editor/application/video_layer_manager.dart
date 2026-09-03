@@ -5,8 +5,11 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 
+import '../domain/audio_mix.dart';
 import '../domain/cut_ops.dart';
+import 'duck_service.dart';
 import '../domain/layer.dart';
+import 'media_preview_service.dart';
 import 'preview_stats.dart';
 import 'proxy_service.dart';
 
@@ -24,6 +27,12 @@ class VideoLayerManager {
   /// plataforma — repeti-la a cada tick (30x/s por camada) derruba o
   /// preview. So chama quando o valor realmente muda.
   final Map<String, double> _appliedVolume = {};
+
+  /// OS ENVELOPES DE DUCKING, calculados fora e entregues prontos. Quem
+  /// os monta e quem tem os picos da voz na mao; aqui so se le. E o mesmo
+  /// mapa que vai para a exportacao — e por isso que o arquivo sai com o
+  /// abaixamento que se ouviu no preview.
+  Map<String, DuckEnvelope> duckEnvelopes = const {};
   final Map<String, double> _appliedRate = {};
   final Map<String, double> _failedNativeRate = {};
 
@@ -181,6 +190,14 @@ class VideoLayerManager {
               ),
         ]);
 
+      // O envelope de abaixamento e PRE-CALCULADO aqui, uma vez por
+      // mudanca de cena — nunca por tique. Decidir em tempo real gastaria
+      // CPU na reproducao e daria um resultado por execucao.
+      duckEnvelopes = buildProjectDuckEnvelopes(
+        layers,
+        MediaPreviewService.instance.peaksOf,
+      );
+
       // Descarta controllers de camadas removidas.
       final liveIds = {for (final m in _media) m.id};
       final dead = _controllerPath.keys
@@ -237,7 +254,15 @@ class VideoLayerManager {
         t,
         contexts: transitions,
       );
-      var effectiveVolume = m.volume;
+      // O GANHO VEM DA MESMA CONTA QUE A EXPORTACAO USA: volume, ganho,
+      // mudo, fade e o envelope de ducking ja calculado. Ate aqui o
+      // preview tocava so o volume da camada, e o arquivo saia com fade e
+      // abaixamento que ninguem tinha ouvido antes de exportar.
+      var effectiveVolume = layerAudioGainAt(
+        layer,
+        t,
+        duck: duckEnvelopes[layer.id] ?? DuckEnvelope.neutro,
+      );
       for (final transition in layerTransitions) {
         if (!transition.transition.crossfadeAudio) continue;
         final angle = transition.progress * math.pi / 2;
@@ -365,7 +390,7 @@ class VideoLayerManager {
             }
           }
         }
-      } else if (_scrubbing && active && m.volume > 0.001) {
+      } else if (_scrubbing && active && effectiveVolume > 0.001) {
         // SCRUB DE AUDIO: enquanto a pessoa arrasta a regua, o som toca
         // em lasquinhas. Ouvir onde se esta e o que torna a decupagem
         // rapida — procurar a silaba no olho, na forma de onda, e muito

@@ -222,6 +222,78 @@ sealed class Layer {
   Layer duplicated();
 }
 
+/// O TRATAMENTO DO SOM — limpeza e voz.
+///
+/// Fica separado do resto da ficha porque e a unica parte que muda as
+/// AMOSTRAS, e nao o ganho: ela nao pode ser decidida quadro a quadro na
+/// reproducao. O resultado e renderizado uma vez e guardado, e preview e
+/// exportacao leem o mesmo arquivo tratado — que e como os dois soam
+/// igual sem ninguem repetir a conta de dois jeitos.
+class AudioProcessing {
+  const AudioProcessing({
+    this.denoise = 0,
+    this.voice = 0,
+    this.deEsser = 0,
+    this.lowDb = 0,
+    this.midDb = 0,
+    this.highDb = 0,
+  });
+
+  /// Tirar ruido de fundo, 0..1.
+  final double denoise;
+
+  /// Melhorar voz, 0..1.
+  final double voice;
+
+  /// Tirar o excesso de S, 0..1.
+  final double deEsser;
+
+  /// Equalizador de tres bandas, em dB.
+  final double lowDb;
+  final double midDb;
+  final double highDb;
+
+  bool get isNeutral =>
+      denoise == 0 &&
+      voice == 0 &&
+      deEsser == 0 &&
+      lowDb == 0 &&
+      midDb == 0 &&
+      highDb == 0;
+
+  /// A CHAVE DO CACHE. Duas fichas iguais tem de dar a mesma chave, ou o
+  /// audio seria reprocessado a cada abertura do projeto.
+  String get cacheKey => 'd${denoise.toStringAsFixed(3)}'
+      'v${voice.toStringAsFixed(3)}'
+      's${deEsser.toStringAsFixed(3)}'
+      'l${lowDb.toStringAsFixed(2)}'
+      'm${midDb.toStringAsFixed(2)}'
+      'h${highDb.toStringAsFixed(2)}';
+
+  AudioProcessing copyWith({
+    double? denoise,
+    double? voice,
+    double? deEsser,
+    double? lowDb,
+    double? midDb,
+    double? highDb,
+  }) => AudioProcessing(
+    denoise: denoise ?? this.denoise,
+    voice: voice ?? this.voice,
+    deEsser: deEsser ?? this.deEsser,
+    lowDb: lowDb ?? this.lowDb,
+    midDb: midDb ?? this.midDb,
+    highDb: highDb ?? this.highDb,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is AudioProcessing && other.cacheKey == cacheKey;
+
+  @override
+  int get hashCode => cacheKey.hashCode;
+}
+
 /// AJUSTES DE SOM de uma camada que carrega audio.
 ///
 /// Vive fora da camada porque video e audio compartilham exatamente os
@@ -235,6 +307,11 @@ class AudioSpec {
     this.muted = false,
     this.duckAgainstId,
     this.duckAmount = 0.7,
+    this.duckAttack = const Duration(milliseconds: 120),
+    this.duckRelease = const Duration(milliseconds: 450),
+    this.duckThreshold = 0.05,
+    this.normalizeTargetLufs,
+    this.processing = const AudioProcessing(),
     this.preservePitch = true,
   });
 
@@ -254,6 +331,23 @@ class AudioSpec {
   /// 0..1 — quanto desce no meio da voz.
   final double duckAmount;
 
+  /// Quanto tempo leva para sair da frente e para voltar. O ataque e
+  /// curto porque a musica precisa ceder ANTES da silaba; o repouso e
+  /// longo porque voltar depressa soa como bombeamento.
+  final Duration duckAttack;
+  final Duration duckRelease;
+
+  /// A partir de que pico a voz conta como voz.
+  final double duckThreshold;
+
+  /// O ALVO da normalizacao, em LUFS. Nulo significa "ainda nao
+  /// normalizou" — guardar o alvo e o que permite renormalizar depois de
+  /// cortar sem a pessoa ter de lembrar qual era.
+  final double? normalizeTargetLufs;
+
+  /// Limpeza e voz. Ver [AudioProcessing].
+  final AudioProcessing processing;
+
   /// Time-stretch mantem o tom por padrao. Desligado imita fita/disco:
   /// acelerar sobe o tom e desacelerar o abaixa.
   final bool preservePitch;
@@ -264,6 +358,7 @@ class AudioSpec {
       gain == 1.0 &&
       !muted &&
       duckAgainstId == null &&
+      processing.isNeutral &&
       preservePitch;
 
   AudioSpec copyWith({
@@ -274,6 +369,11 @@ class AudioSpec {
     String? duckAgainstId,
     bool clearDuck = false,
     double? duckAmount,
+    Duration? duckAttack,
+    Duration? duckRelease,
+    double? duckThreshold,
+    double? normalizeTargetLufs,
+    AudioProcessing? processing,
     bool? preservePitch,
   }) => AudioSpec(
     fadeIn: fadeIn ?? this.fadeIn,
@@ -282,6 +382,11 @@ class AudioSpec {
     muted: muted ?? this.muted,
     duckAgainstId: clearDuck ? null : (duckAgainstId ?? this.duckAgainstId),
     duckAmount: duckAmount ?? this.duckAmount,
+    duckAttack: duckAttack ?? this.duckAttack,
+    duckRelease: duckRelease ?? this.duckRelease,
+    duckThreshold: duckThreshold ?? this.duckThreshold,
+    normalizeTargetLufs: normalizeTargetLufs ?? this.normalizeTargetLufs,
+    processing: processing ?? this.processing,
     preservePitch: preservePitch ?? this.preservePitch,
   );
 }
