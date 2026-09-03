@@ -97,7 +97,30 @@ void main() {
 
     test('o Nulo nao mostra cor, efeito, borda nem opacidade', () {
       final nulo = NullLayer(name: 'n', startTime: Duration.zero, duration: _d);
-      expect(AmNiveis.tudo.visiveisPara(nulo), {AmSecao.moverTransformar});
+      expect(AmNiveis.tudo.visiveisPara(nulo),
+          {AmSecao.moverTransformar, AmSecao.clonar});
+    });
+
+    test('o Modulo Grade e uma secao VISIVEL do nulo, nao um item de menu',
+        () {
+      // A regressao: o Grid Builder so existia dentro do "Mais" e o app
+      // passou a abrir no nucleo, onde o nulo nem aparece. A conta do rig
+      // nunca quebrou — o caminho ate ela e que sumiu.
+      final nulo = NullLayer(name: 'n', startTime: Duration.zero, duration: _d);
+      expect(const AmNiveis(nullAndClone: true).visiveisPara(nulo),
+          contains(AmSecao.clonar));
+      // Com o nivel 9 desligado ele fica escondido, mas escondido de
+      // proposito e num lugar so.
+      expect(const AmNiveis(shapes: true).visiveisPara(nulo),
+          isNot(contains(AmSecao.clonar)));
+    });
+
+    test('Clonar so existe no nulo', () {
+      for (final camada in _todasAsCamadas()) {
+        expect(AmNiveis.tudo.visiveisPara(camada).contains(AmSecao.clonar),
+            camada is NullLayer,
+            reason: '${camada.runtimeType}');
+      }
     });
 
     test('cor e preenchimento nao aparece em video nem em audio', () {

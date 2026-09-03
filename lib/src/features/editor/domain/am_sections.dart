@@ -22,6 +22,9 @@ enum AmSecao {
   volume,
   fade,
   editarForma,
+  /// O Modulo Grade do nulo. Nao e secao nova na grade de ninguem: e
+  /// secao DE TIPO, e o nulo e o unico tipo que a mostra.
+  clonar,
   presets,
   efeitos,
 }
@@ -118,6 +121,15 @@ class AmNiveis {
     // aparecer. Ela mostra tres secoes, as do documento.
     if (audio && layer is AudioLayer) {
       return {AmSecao.volume, AmSecao.fade, AmSecao.efeitos};
+    }
+    // O NULO nao tem aparencia nenhuma: nao tem cor, borda, opacidade nem
+    // efeito. Tem o transform (que e para o que ele existe) e a grade de
+    // clones que ele controla.
+    if (layer is NullLayer) {
+      return {
+        AmSecao.moverTransformar,
+        if (nullAndClone) AmSecao.clonar,
+      };
     }
     return {
       AmSecao.moverTransformar,

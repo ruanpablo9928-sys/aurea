@@ -616,6 +616,27 @@ Future<LayerMenuAction?> showLayerMenu(
                             Navigator.of(sheetContext)
                                 .pop(LayerMenuAction.effects),
                       ),
+                      const SizedBox(width: 8),
+                      // MODULO GRADE. Ficava so dentro de "Mais" — um menu
+                      // escondido — e por isso sumiu do mapa quando o app
+                      // passou a abrir no nucleo. Funcao nenhuma pode
+                      // existir apenas dentro de menu escondido.
+                      _MenuTile(
+                        icon: CupertinoIcons.circle_grid_3x3,
+                        label: 'Clonar',
+                        visible: secoes.contains(AmSecao.clonar),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          abrirDepois(
+                            () => showGridSheet(
+                              context,
+                              ref,
+                              layer.id,
+                              playback,
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
               ],
@@ -687,15 +708,6 @@ Future<LayerMenuAction?> _showMoreSheet(
                 },
               ),
             ],
-            if (layer is NullLayer)
-              item(CupertinoIcons.circle_grid_3x3, 'Modulo Grade', () {
-                Navigator.of(moreContext).pop();
-                Future.microtask(() {
-                  if (context.mounted) {
-                    showGridSheet(context, ref, layer.id, playback);
-                  }
-                });
-              }),
             if (layer is ParticlesLayer)
               item(CupertinoIcons.sparkles, 'Particulas', () {
                 Navigator.of(moreContext).pop();

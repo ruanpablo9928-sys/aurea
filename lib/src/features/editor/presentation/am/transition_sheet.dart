@@ -398,11 +398,14 @@ class _EffectParamRow extends StatelessWidget {
         ),
       ),
       Expanded(
-        child: CupertinoSlider(
+        // Trackpad, nao slider: alvo grande, marcas dando precisao e o
+        // mesmo controle de todo numero do aplicativo.
+        child: AmTickRuler(
           value: value.clamp(min, max),
           min: min,
           max: max,
-          activeColor: AmColors.accent,
+          unitsPerPixel: (max - min) / 420,
+          height: 40,
           onChanged: onChanged,
         ),
       ),

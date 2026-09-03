@@ -259,14 +259,6 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                         color: _velocidade ? AmColors.accent : AmColors.text,
                       ),
                     ),
-                    AmRailButton(
-                      onTap: () => _showMenu(context, id, ease, segment?.$1),
-                      child: const Icon(
-                        CupertinoIcons.ellipsis,
-                        size: 20,
-                        color: AmColors.text,
-                      ),
-                    ),
                     const SizedBox(height: 4),
                   ],
                 ),
@@ -347,6 +339,53 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                           ],
                         ),
                       ),
+                      // OS QUATRO COMANDOS, VISIVEIS.
+                      //
+                      // No Alight Motion eles moram num menu de tres
+                      // pontinhos. Copiar a estrutura nao e copiar o
+                      // defeito: aqui ficam no rodape, e o overshoot diz
+                      // se esta ligado sem ninguem precisar abrir nada.
+                      SizedBox(
+                        height: 38,
+                        child: Row(
+                          children: [
+                            _ComandoChip(
+                              rotulo: 'Copiar',
+                              icone: CupertinoIcons.doc_on_doc,
+                              onTap: () => setState(
+                                  () => EasingClipboard.valor = ease),
+                            ),
+                            const SizedBox(width: 6),
+                            _ComandoChip(
+                              rotulo: 'Colar',
+                              icone: CupertinoIcons.doc_on_clipboard,
+                              onTap: EasingClipboard.valor == null
+                                  ? null
+                                  : () => controller.setSegmentEase(
+                                        id,
+                                        widget.prop,
+                                        segment!.$1,
+                                        EasingClipboard.valor!,
+                                      ),
+                            ),
+                            const SizedBox(width: 6),
+                            _ComandoChip(
+                              rotulo: 'Em todos',
+                              icone: CupertinoIcons.square_stack_3d_down_right,
+                              onTap: () => controller.applyEaseToAllSegments(
+                                  id, widget.prop, ease),
+                            ),
+                            const SizedBox(width: 6),
+                            _ComandoChip(
+                              rotulo: 'Overshoot',
+                              icone: CupertinoIcons.arrow_up_right,
+                              ligado: _overshoot,
+                              onTap: () =>
+                                  setState(() => _overshoot = !_overshoot),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -418,89 +457,6 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
         (a.y2 - b.y2).abs() < 0.01;
   }
 
-  Future<void> _showMenu(
-    BuildContext context,
-    String layerId,
-    Easing ease,
-    Duration? segStart,
-  ) async {
-    final controller = ref.read(editorControllerProvider.notifier);
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SwitchListTile(
-              title: const Text(
-                'Ativar overshoot',
-                style: TextStyle(color: AmColors.text, fontSize: 15),
-              ),
-              activeTrackColor: AmColors.accent,
-              value: _overshoot,
-              onChanged: (v) {
-                setState(() => _overshoot = v);
-                Navigator.of(sheetContext).pop();
-              },
-            ),
-            // COPIAR / COLAR a curva: o mesmo timing em outro trecho, outro
-            // parametro, outra camada — sem redesenhar a alca.
-            ListTile(
-              leading: const Icon(
-                CupertinoIcons.doc_on_doc,
-                color: AmColors.muted,
-                size: 20,
-              ),
-              title: const Text(
-                'Copiar curva',
-                style: TextStyle(color: AmColors.text, fontSize: 15),
-              ),
-              onTap: () {
-                EasingClipboard.valor = ease;
-                Navigator.of(sheetContext).pop();
-              },
-            ),
-            ListTile(
-              enabled: EasingClipboard.valor != null && segStart != null,
-              leading: const Icon(
-                CupertinoIcons.doc_on_clipboard,
-                color: AmColors.muted,
-                size: 20,
-              ),
-              title: Text(
-                'Colar curva',
-                style: TextStyle(
-                  color: EasingClipboard.valor != null && segStart != null
-                      ? AmColors.text
-                      : AmColors.muted,
-                  fontSize: 15,
-                ),
-              ),
-              onTap: () {
-                final v = EasingClipboard.valor;
-                if (v != null && segStart != null) {
-                  controller.setSegmentEase(layerId, widget.prop, segStart, v);
-                }
-                Navigator.of(sheetContext).pop();
-              },
-            ),
-            ListTile(
-              title: const Text(
-                'Aplicar curva a todos os keyframes',
-                style: TextStyle(color: AmColors.text, fontSize: 15),
-              ),
-              onTap: () {
-                controller.applyEaseToAllSegments(layerId, widget.prop, ease);
-                Navigator.of(sheetContext).pop();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Curve editor de uma trilha do MODULO GRADE (inclui 'transition', o
@@ -1302,4 +1258,65 @@ class _PresetThumbPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PresetThumbPainter old) =>
       old.ease != ease || old.selected != selected;
+}
+
+
+/// UM COMANDO VISIVEL do rodape. Chip preenchido, sem borda — a
+/// identidade da Aurea nao tem caixa com contorno.
+///
+/// Desligado nao some: some troca o lugar dos vizinhos, e a memoria
+/// muscular vira chute. Fica esmaecido dizendo por que nao da.
+class _ComandoChip extends StatelessWidget {
+  const _ComandoChip({
+    required this.rotulo,
+    required this.icone,
+    required this.onTap,
+    this.ligado = false,
+  });
+
+  final String rotulo;
+  final IconData icone;
+  final VoidCallback? onTap;
+
+  /// Interruptor: o chip mostra o estado sem ninguem abrir nada.
+  final bool ligado;
+
+  @override
+  Widget build(BuildContext context) {
+    final ativo = onTap != null;
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Opacity(
+          opacity: ativo ? 1 : 0.35,
+          child: Container(
+            decoration: BoxDecoration(
+              color: ligado ? AmColors.accentDim : AmColors.chip,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icone,
+                    size: 15,
+                    color: ligado ? AmColors.accent : AmColors.text),
+                const SizedBox(height: 2),
+                Text(
+                  rotulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: ligado ? AmColors.accent : AmColors.text,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

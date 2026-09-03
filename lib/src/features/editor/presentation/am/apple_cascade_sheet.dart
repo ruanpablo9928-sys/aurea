@@ -5,6 +5,7 @@ import '../../domain/apple_motion.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/video_project.dart' show LayerProp;
 import 'am_colors.dart';
+import 'am_widgets.dart';
 
 typedef ApplyCascade = void Function(
   Duration interval,
@@ -153,13 +154,14 @@ Future<void> showAppleCascadeSheet(
                         ),
                       ),
                       Expanded(
-                        child: CupertinoSlider(
+                        child: AmTickRuler(
                           value: intervalMs,
                           min: 0,
                           max: 200,
-                          divisions: 200,
-                          activeColor: AmColors.accent,
-                          onChanged: (v) => setSheetState(() => intervalMs = v),
+                          unitsPerPixel: 0.5,
+                          height: 40,
+                          onChanged: (v) =>
+                              setSheetState(() => intervalMs = v),
                         ),
                       ),
                       SizedBox(

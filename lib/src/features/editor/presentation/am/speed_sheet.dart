@@ -348,11 +348,12 @@ class _RemapRow extends StatelessWidget {
         ),
       ),
       Expanded(
-        child: CupertinoSlider(
+        child: AmTickRuler(
           value: value.clamp(0.0, max),
           min: 0,
           max: max,
-          activeColor: AmColors.accent,
+          unitsPerPixel: max / 420,
+          height: 40,
           onChanged: onChanged,
         ),
       ),
