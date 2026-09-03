@@ -151,7 +151,8 @@ void main() {
       final g = e.audioGraph(1);
       expect(e.audioSources.length, 1);
       // O corte da fonte vira -ss; a posicao na timeline vira adelay.
-      expect(g.inputs, contains('2.500'));
+      // Seis casas: o corte precisa cair no quadro certo, nao no milesimo.
+      expect(g.inputs, contains('2.500000'));
       expect(g.filter, contains('adelay=1000|1000'));
       expect(g.filter, contains('volume=0.800'));
     });

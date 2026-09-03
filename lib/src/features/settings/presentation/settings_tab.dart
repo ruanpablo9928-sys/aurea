@@ -3,13 +3,16 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../editor/application/proxy_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../../../core/ui/snack.dart';
+
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/app_mode.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../laboratory/presentation/laboratory_screen.dart';
 import '../../projects/domain/project_presets.dart';
 import '../application/settings_controller.dart';
 
@@ -117,6 +120,16 @@ class SettingsTab extends ConsumerWidget {
                 onChanged: (v) => ref
                     .read(appModeProvider.notifier)
                     .set(v ? AppMode.full : AppMode.core),
+              ),
+              const _GroupDivider(),
+              _TapRow(
+                title: 'Laboratório',
+                subtitle: 'Ligue níveis e rode as tarefas de aceite',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LaboratoryScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -316,14 +329,19 @@ class _TapRow extends StatelessWidget {
                   Text(title, style: Theme.of(context).textTheme.bodyLarge),
                   if (subtitle != null) ...[
                     const SizedBox(height: 1),
-                    Text(subtitle!,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      subtitle!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ],
               ),
             ),
-            const Icon(CupertinoIcons.chevron_right,
-                size: 16, color: AppColors.muted),
+            const Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: AppColors.muted,
+            ),
           ],
         ),
       ),

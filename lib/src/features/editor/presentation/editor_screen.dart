@@ -13,6 +13,7 @@ import '../domain/gear.dart';
 import '../domain/layer.dart';
 import 'am/align_sheet.dart';
 import '../../../core/app_mode.dart';
+import '../../../core/feature_access.dart';
 import '../domain/shape.dart';
 import 'am/points_panel.dart';
 import 'am/shape_panel.dart';
@@ -73,6 +74,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   LayerProp _curveProp = LayerProp.position;
   _Mode _curveReturn = _Mode.transform;
   TransformTool _tool = TransformTool.rotation;
+  bool _previewExpanded = false;
 
   @override
   void initState() {
@@ -250,7 +252,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       case LayerMenuAction.blending:
         // NUCLEO: opacidade e uma sub-aba do transform (quatro
         // propriedades num painel so); mesclagem e matte sao estudio.
-        if (ref.read(appModeProvider).isCore) {
+        if (!ref.read(featureAccessProvider(LaboratoryLevelId.mask))) {
           setState(() {
             _tool = TransformTool.opacity;
             _mode = _Mode.transform;
@@ -478,21 +480,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           children: [
             Column(
               children: [
-                _TopBar(
-                  title: _title,
-                  isMain: _mode == _Mode.main,
-                  onBack: _back,
-                  onLayerMenu: _onTapLayer,
-                  playback: _playback,
-                  trailing: _mode == _Mode.editPoints
-                      ? _PointsHeaderActions(
-                          playback: _playback,
-                          onKeyframe: () =>
-                              _pointsKey.currentState?.toggleKeyframe(),
-                          onAdd: () => _pointsKey.currentState?.addPoint(),
-                        )
-                      : null,
-                ),
+                if (!_previewExpanded)
+                  _TopBar(
+                    title: _title,
+                    isMain: _mode == _Mode.main,
+                    onBack: _back,
+                    onLayerMenu: _onTapLayer,
+                    playback: _playback,
+                    trailing: _mode == _Mode.editPoints
+                        ? _PointsHeaderActions(
+                            playback: _playback,
+                            onKeyframe: () =>
+                                _pointsKey.currentState?.toggleKeyframe(),
+                            onAdd: () => _pointsKey.currentState?.addPoint(),
+                          )
+                        : null,
+                  ),
                 // RepaintBoundary: palco, timeline e painel pintam em
                 // camadas separadas — repintar um nao repinta os outros.
                 Expanded(
@@ -501,42 +504,51 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     child: PreviewStage(playback: _playback, videos: _videos),
                   ),
                 ),
-                _TransportBar(playback: _playback),
+                _TransportBar(
+                  playback: _playback,
+                  previewExpanded: _previewExpanded,
+                  onTogglePreview: () =>
+                      setState(() => _previewExpanded = !_previewExpanded),
+                ),
                 // Barra de ACOES fixa (spec barra-de-acoes): comandos
                 // estruturais sempre no mesmo lugar; desabilitado fica
                 // esmaecido, nunca some.
-                _ActionBar(playback: _playback),
-                RepaintBoundary(
-                  child: AmTimeline(
-                    playback: _playback,
-                    height: _mode == _Mode.main ? 280 : 116,
-                    singleLayerId: _mode == _Mode.main ? null : selectedId,
-                    playheadColor: pinkPlayhead ? AmColors.pink : Colors.white,
-                    onTapLayer: _onTapLayer,
-                    onScrub: _videos.scrub,
-                    activeTimesUs: activeTimesUs,
-                    onForeignKeyframe: _mode == _Mode.main
-                        ? null
-                        : _onForeignKeyframe,
-                  ),
-                ),
-                // ALTURA CONSTANTE, a mesma para todo painel.
-                //
-                // Antes cada painel pedia a sua: o de animadores de texto
-                // era bem mais alto que o de transformacao. Trocar de
-                // secao redimensionava o preview, e o enquadramento
-                // pulava debaixo do dedo bem no momento de conferir o
-                // enquadramento. O teto de 40% da tela continua, para o
-                // palco nunca sumir em aparelho baixo; todo painel tem
-                // rolagem interna.
-                if (panel != null)
-                  SizedBox(
-                    height: math.min(
-                      372.0,
-                      MediaQuery.sizeOf(context).height * 0.40,
+                if (!_previewExpanded) ...[
+                  _ActionBar(playback: _playback),
+                  RepaintBoundary(
+                    child: AmTimeline(
+                      playback: _playback,
+                      height: _mode == _Mode.main ? 280 : 116,
+                      singleLayerId: _mode == _Mode.main ? null : selectedId,
+                      playheadColor: pinkPlayhead
+                          ? AmColors.pink
+                          : Colors.white,
+                      onTapLayer: _onTapLayer,
+                      onScrub: _videos.scrub,
+                      activeTimesUs: activeTimesUs,
+                      onForeignKeyframe: _mode == _Mode.main
+                          ? null
+                          : _onForeignKeyframe,
                     ),
-                    child: RepaintBoundary(child: panel),
                   ),
+                  // ALTURA CONSTANTE, a mesma para todo painel.
+                  //
+                  // Antes cada painel pedia a sua: o de animadores de texto
+                  // era bem mais alto que o de transformacao. Trocar de
+                  // secao redimensionava o preview, e o enquadramento
+                  // pulava debaixo do dedo bem no momento de conferir o
+                  // enquadramento. O teto de 40% da tela continua, para o
+                  // palco nunca sumir em aparelho baixo; todo painel tem
+                  // rolagem interna.
+                  if (panel != null)
+                    SizedBox(
+                      height: math.min(
+                        372.0,
+                        MediaQuery.sizeOf(context).height * 0.40,
+                      ),
+                      child: RepaintBoundary(child: panel),
+                    ),
+                ],
               ],
             ),
             // O "+" agora vive na barra de acoes fixa (spec
@@ -1145,6 +1157,9 @@ class _ActionBar extends ConsumerWidget {
     final targets = <String>{...multi, ?selId};
     final n = targets.length;
     final completo = ref.watch(appModeProvider).isFull;
+    final parenting = ref.watch(
+      featureAccessProvider(LaboratoryLevelId.nullAndClone),
+    );
 
     Widget btn({
       required IconData icon,
@@ -1224,7 +1239,7 @@ class _ActionBar extends ConsumerWidget {
                     }
                   },
                 ),
-                if (completo)
+                if (parenting)
                   btn(
                     icon: CupertinoIcons.square_stack_3d_up,
                     enabled: n >= 2,
@@ -1233,7 +1248,7 @@ class _ActionBar extends ConsumerWidget {
                     // senao o "N camadas" ficava aceso com ids mortos.
                     onTap: () => _agruparSelecao(ref, targets),
                   ),
-                if (completo)
+                if (parenting)
                   btn(
                     icon: CupertinoIcons.link,
                     enabled: n == 1,
@@ -1348,15 +1363,24 @@ class _ActionBar extends ConsumerWidget {
 }
 
 class _TransportBar extends ConsumerWidget {
-  const _TransportBar({required this.playback});
+  const _TransportBar({
+    required this.playback,
+    required this.previewExpanded,
+    required this.onTogglePreview,
+  });
 
   final PlaybackController playback;
+  final bool previewExpanded;
+  final VoidCallback onTogglePreview;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final duration = ref.watch(editorControllerProvider).duration;
     final selectedId = ref.watch(selectedLayerProvider);
-    final completo = ref.watch(appModeProvider).isFull;
+    final shapes = ref.watch(featureAccessProvider(LaboratoryLevelId.shapes));
+    final nullAndClone = ref.watch(
+      featureAccessProvider(LaboratoryLevelId.nullAndClone),
+    );
 
     final controller = ref.read(editorControllerProvider.notifier);
     return SizedBox(
@@ -1442,7 +1466,7 @@ class _TransportBar extends ConsumerWidget {
               ),
             ),
           ),
-          if (completo)
+          if (nullAndClone)
             GestureDetector(
               onTap: selectedId == null
                   ? null
@@ -1457,7 +1481,7 @@ class _TransportBar extends ConsumerWidget {
             ),
           // CASCA DE CEBOLA: toque cicla 0 -> 1 -> 2 -> 0. Animar a mao
           // sem ver o quadro anterior e desenhar no escuro.
-          if (completo)
+          if (shapes)
             Builder(
               builder: (context) {
                 final onion = ref.watch(onionSkinProvider);
@@ -1472,7 +1496,22 @@ class _TransportBar extends ConsumerWidget {
                 );
               },
             ),
-          const Icon(Icons.fullscreen, size: 24, color: AmColors.text),
+          Tooltip(
+            message: previewExpanded ? 'Voltar ao editor' : 'Expandir preview',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTogglePreview,
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(
+                  previewExpanded ? Icons.fullscreen_exit : Icons.fullscreen,
+                  size: 24,
+                  color: previewExpanded ? AmColors.accent : AmColors.text,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

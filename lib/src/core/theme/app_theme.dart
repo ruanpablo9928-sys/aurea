@@ -12,6 +12,10 @@ abstract final class AppColors {
   static const Color muted = Color(0xFF8B94A3);
   static const Color outline = Color(0xFF2A313C);
 
+  /// O verde da marca APAGADO, para fundo de chip aceso — o mesmo papel
+  /// que `AmColors.accentDim` faz no editor.
+  static const Color accentDim = Color(0xFF2A3A16);
+
   /// Linha fina estilo iOS (separadores e borda do chrome translucido).
   static final Color hairline = Colors.white.withValues(alpha: 0.08);
 }

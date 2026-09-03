@@ -8,6 +8,7 @@ import '../../domain/mesh_import.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/feature_access.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
@@ -18,6 +19,7 @@ import '../../application/effect_preset_store.dart';
 import '../../domain/element3d.dart';
 import '../../domain/grid_rig.dart';
 import '../../domain/keyframe.dart';
+import '../../domain/am_sections.dart';
 import '../../domain/layer.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
@@ -41,6 +43,7 @@ import 'scene3d_sheet.dart';
 import 'speed_sheet.dart';
 import 'text_path_sheet.dart';
 import 'scene3d_studio.dart';
+import '../widgets/add_layer_sheet.dart' show showCaptionCreationSheet;
 
 /// Acao escolhida no menu da camada.
 enum LayerMenuAction {
@@ -66,6 +69,38 @@ Future<LayerMenuAction?> showLayerMenu(
   PlaybackController playback,
 ) {
   final completo = ref.read(appModeProvider).isFull;
+  final shapes = ref.read(featureAccessProvider(LaboratoryLevelId.shapes));
+  final text = ref.read(featureAccessProvider(LaboratoryLevelId.text));
+  final effects = ref.read(featureAccessProvider(LaboratoryLevelId.effects));
+  final masks = ref.read(featureAccessProvider(LaboratoryLevelId.mask));
+  final cuts = ref.read(featureAccessProvider(LaboratoryLevelId.cut));
+  final apple = ref.read(featureAccessProvider(LaboratoryLevelId.apple));
+  final captions = ref.read(featureAccessProvider(LaboratoryLevelId.captions));
+  final scene3d = ref.read(featureAccessProvider(LaboratoryLevelId.scene3d));
+  final nullAndClone = ref.read(
+    featureAccessProvider(LaboratoryLevelId.nullAndClone),
+  );
+  final niveis = AmNiveis(
+    completo: completo,
+    shapes: shapes,
+    text: text,
+    effects: effects,
+    masks: masks,
+    apple: apple,
+    captions: captions,
+    scene3d: scene3d,
+    nullAndClone: nullAndClone,
+  );
+  final gradeCompleta = niveis.gradeCompleta;
+  // Quem decide o que aparece na grade e o contrato das sete secoes, nao
+  // este widget: e assim que "no maximo sete" e "nada inerte" viram teste.
+  final secoes = niveis.visiveisPara(layer);
+  final temMaisContextual =
+      completo ||
+      (text && layer is TextLayer) ||
+      (captions && (layer is CaptionLayer || layer is VideoLayer)) ||
+      (scene3d && (layer is Element3DLayer || layer is Scene3DLayer)) ||
+      (nullAndClone && layer is NullLayer);
   final controller = ref.read(editorControllerProvider.notifier);
 
   return showModalBottomSheet<LayerMenuAction>(
@@ -132,15 +167,21 @@ Future<LayerMenuAction?> showLayerMenu(
                 // Motion): UMA fileira de UTILIDADES (icones pequenos:
                 // acoes rapidas e sheets que nao trocam a pagina do
                 // editor; so as que se aplicam ao tipo, com "Mais" fixo
-                // no fim) + GRADE FIXA de 7 editores em 2 fileiras (3
-                // largos + 4). A grade nao muda de forma por tipo para o
-                // dedo aprender o lugar: o que nao se aplica fica
-                // ESMAECIDO (opacity 0.32) com a razao ao toque — nenhum
-                // controle visivel pode ser inerte. Comandos estruturais
+                // no fim) + no maximo 7 editores em 2 fileiras (3
+                // largos + 4). A grade conserva os lugares, mas um editor
+                // que nao se aplica ao tipo fica vazio — nenhum controle
+                // visivel pode ser inerte. Comandos estruturais
                 // (dividir/duplicar/agrupar/excluir) vivem na barra de
                 // acoes, nao aqui.
                 // NUCLEO: a fileira so existe se tem algo nela (som).
-                if (completo || temSom)
+                if (completo ||
+                    temSom ||
+                    cuts ||
+                    apple ||
+                    effects ||
+                    scene3d ||
+                    nullAndClone ||
+                    (captions && layer is VideoLayer))
                   SizedBox(
                     height: 40,
                     child: Row(
@@ -151,7 +192,7 @@ Future<LayerMenuAction?> showLayerMenu(
                             child: Row(
                               children: [
                                 if (temSom) ...[
-                                  if (completo)
+                                  if (cuts)
                                     _UtilIcon(
                                       icon: CupertinoIcons.speedometer,
                                       label: 'Velocidade',
@@ -163,7 +204,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                         ),
                                       ),
                                     ),
-                                  if (completo)
+                                  if (cuts)
                                     _UtilIcon(
                                       icon: CupertinoIcons.scissors,
                                       label: 'Cortes',
@@ -203,7 +244,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                       ),
                                     ),
                                   ),
-                                  if (completo)
+                                  if (apple)
                                     _UtilIcon(
                                       icon: CupertinoIcons.metronome,
                                       label: 'Batidas',
@@ -216,6 +257,22 @@ Future<LayerMenuAction?> showLayerMenu(
                                       ),
                                     ),
                                 ],
+                                if (captions && layer is VideoLayer)
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.captions_bubble,
+                                    label: 'Legendar',
+                                    onTap: () {
+                                      Navigator.of(sheetContext).pop();
+                                      Future.microtask(() {
+                                        if (context.mounted) {
+                                          showCaptionCreationSheet(
+                                            context,
+                                            ref,
+                                          );
+                                        }
+                                      });
+                                    },
+                                  ),
                                 if (completo && layer is VideoLayer) ...[
                                   _UtilIcon(
                                     icon: CupertinoIcons.crop,
@@ -280,7 +337,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                 // opacidade, sem criar uma oitava secao.
                                 // Tudo daqui em diante e ESTUDIO (fora do
                                 // nucleo).
-                                if (completo) ...[
+                                if (scene3d)
                                   _UtilIcon(
                                     icon: layer.is3D
                                         ? CupertinoIcons.cube_fill
@@ -294,6 +351,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                       setSheetState(() {});
                                     },
                                   ),
+                                if (effects)
                                   _UtilIcon(
                                     icon: CupertinoIcons.speedometer,
                                     label: 'Motion blur',
@@ -308,27 +366,29 @@ Future<LayerMenuAction?> showLayerMenu(
                                       setSheetState(() {});
                                     },
                                   ),
-                                  if (layer is! NullLayer &&
-                                      layer is! VideoLayer &&
-                                      layer is! ParticlesLayer &&
-                                      layer is! Element3DLayer)
-                                    _UtilIcon(
-                                      icon: CupertinoIcons.cube,
-                                      label: 'Extrude 3D',
-                                      aceso:
-                                          ref
-                                              .read(editorControllerProvider)
-                                              .metaOf(layer.id)
-                                              .extrude >
-                                          0,
-                                      onTap: () => abrirDepois(
-                                        () => showExtrudeSheet(
-                                          context,
-                                          ref,
-                                          layer.id,
-                                        ),
+                                if (scene3d &&
+                                    layer is! NullLayer &&
+                                    layer is! VideoLayer &&
+                                    layer is! ParticlesLayer &&
+                                    layer is! Element3DLayer)
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.cube,
+                                    label: 'Extrude 3D',
+                                    aceso:
+                                        ref
+                                            .read(editorControllerProvider)
+                                            .metaOf(layer.id)
+                                            .extrude >
+                                        0,
+                                    onTap: () => abrirDepois(
+                                      () => showExtrudeSheet(
+                                        context,
+                                        ref,
+                                        layer.id,
                                       ),
                                     ),
+                                  ),
+                                if (apple)
                                   _UtilIcon(
                                     icon: CupertinoIcons.music_note_2,
                                     label: 'Pulsar na batida',
@@ -340,6 +400,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                       ),
                                     ),
                                   ),
+                                if (apple)
                                   _UtilIcon(
                                     icon: CupertinoIcons.repeat,
                                     label: 'Loop de keyframes',
@@ -348,6 +409,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                           showLoopSheet(context, ref, layer.id),
                                     ),
                                   ),
+                                if (completo)
                                   _UtilIcon(
                                     icon: CupertinoIcons.tag,
                                     label: 'Organizar (rotulo, solo, timida)',
@@ -359,6 +421,7 @@ Future<LayerMenuAction?> showLayerMenu(
                                       ),
                                     ),
                                   ),
+                                if (nullAndClone)
                                   _UtilIcon(
                                     icon: pai != null
                                         ? CupertinoIcons.link_circle_fill
@@ -386,14 +449,13 @@ Future<LayerMenuAction?> showLayerMenu(
                                       );
                                     },
                                   ),
-                                ],
                               ],
                             ),
                           ),
                         ),
                         // "Mais" fixo no fim, discreto: guarda editores sem
                         // lugar na grade (raros ou especificos do tipo).
-                        if (completo)
+                        if (temMaisContextual)
                           _UtilIcon(
                             icon: CupertinoIcons.ellipsis,
                             label: 'Mais',
@@ -416,7 +478,7 @@ Future<LayerMenuAction?> showLayerMenu(
                 const SizedBox(height: 12),
                 // NUCLEO: so o transform e a opacidade. O resto da grade
                 // e estudio.
-                if (!completo)
+                if (!gradeCompleta)
                   Row(
                     children: [
                       _MenuTile(
@@ -430,8 +492,7 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.circle_lefthalf_fill,
                         label: 'Opacidade',
-                        enabled: layer is! NullLayer,
-                        disabledReason: 'Objeto nulo nao tem opacidade',
+                        visible: secoes.contains(AmSecao.mesclarOpacidade),
                         onTap: () =>
                             Navigator.of(sheetContext)
                                 .pop(LayerMenuAction.blending),
@@ -439,20 +500,13 @@ Future<LayerMenuAction?> showLayerMenu(
                     ],
                   ),
                 // Fileira 1 da grade: 3 botoes largos (aparencia).
-                if (completo)
+                if (gradeCompleta)
                   Row(
                     children: [
                       _MenuTile(
                         icon: CupertinoIcons.paintbrush,
                         label: 'Cor e\npreench.',
-                        enabled:
-                            layer is ShapeLayer ||
-                            layer is TextLayer ||
-                            layer is Element3DLayer ||
-                            layer is Scene3DLayer,
-                        disabledReason: layer is AdjustmentLayer
-                            ? 'Camada de ajuste nao tem preenchimento proprio'
-                            : 'Este tipo de camada nao tem cor editavel',
+                        visible: secoes.contains(AmSecao.corPreenchimento),
                         onTap: () {
                           // Cena 3D: a cor mora no material de cada objeto.
                           if (layer is Scene3DLayer) {
@@ -480,8 +534,7 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.square_on_square,
                         label: 'Borda e\nsombra',
-                        enabled: layer is! NullLayer,
-                        disabledReason: 'Objeto nulo nao renderiza',
+                        visible: secoes.contains(AmSecao.bordaSombra),
                         onTap: () {
                           // Forma: o traco vetorial (espessura, cor,
                           // tracejado animavel) mora no painel da forma;
@@ -505,17 +558,16 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.circle_lefthalf_fill,
                         label: 'Mesclar e\nopacidade',
-                        enabled: layer is! NullLayer,
-                        disabledReason: 'Objeto nulo nao tem mesclagem',
+                        visible: secoes.contains(AmSecao.mesclarOpacidade),
                         onTap: () =>
                             Navigator.of(sheetContext)
                                 .pop(LayerMenuAction.blending),
                       ),
                     ],
                   ),
-                if (completo) const SizedBox(height: 8),
+                if (gradeCompleta) const SizedBox(height: 8),
                 // Fileira 2 da grade: 4 botoes (geometria e efeitos).
-                if (completo)
+                if (gradeCompleta)
                   Row(
                     children: [
                       _MenuTile(
@@ -534,9 +586,7 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.slider_horizontal_below_rectangle,
                         label: 'Editar\nforma',
-                        enabled: layer is ShapeLayer,
-                        disabledReason:
-                            'So camadas de forma tem geometria editavel',
+                        visible: secoes.contains(AmSecao.editarForma),
                         // Painel de baixo (modelo AM), nao sheet: a barra da
                         // camada com os keyframes fica visivel.
                         onTap: () =>
@@ -547,8 +597,7 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.square_stack_3d_down_right,
                         label: 'Presets',
-                        enabled: layer is! NullLayer,
-                        disabledReason: 'Objeto nulo nao renderiza efeitos',
+                        visible: secoes.contains(AmSecao.presets),
                         onTap: () => abrirDepois(
                           () => showEffectPresetsSheet(
                             context,
@@ -562,8 +611,7 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.wand_stars,
                         label: 'Efeitos',
-                        enabled: layer is! NullLayer,
-                        disabledReason: 'Objeto nulo nao renderiza efeitos',
+                        visible: secoes.contains(AmSecao.efeitos),
                         onTap: () =>
                             Navigator.of(sheetContext)
                                 .pop(LayerMenuAction.effects),
@@ -4066,59 +4114,48 @@ class _MenuTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.enabled = true,
-    this.disabledReason,
+    this.visible = true,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  /// Matriz de aplicabilidade: desabilitado fica ESMAECIDO no mesmo
-  /// lugar, e o toque explica a razao (nunca some, nunca e inerte).
-  final bool enabled;
-  final String? disabledReason;
+  /// O lugar continua reservado para a grade nao se reorganizar quando o
+  /// tipo muda, mas controles sem funcao para a camada nao aparecem.
+  final bool visible;
 
   @override
   Widget build(BuildContext context) {
+    if (!visible) return const Spacer();
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: enabled
-            ? onTap
-            : () => showReasonToast(
-                context,
-                disabledReason ?? 'Indisponivel para esta camada',
-              ),
-        // Opacity DENTRO do GestureDetector: o toque no esmaecido
-        // continua chegando e mostra a razao.
-        child: Opacity(
-          opacity: enabled ? 1 : 0.32,
-          child: Container(
-            height: 68,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: AmColors.chip,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 22, color: AmColors.accent),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    height: 1.1,
-                    fontWeight: FontWeight.w600,
-                    color: AmColors.text,
-                  ),
+        onTap: onTap,
+        child: Container(
+          height: 68,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: AmColors.chip,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 22, color: AmColors.accent),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: const TextStyle(
+                  fontSize: 11,
+                  height: 1.1,
+                  fontWeight: FontWeight.w600,
+                  color: AmColors.text,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

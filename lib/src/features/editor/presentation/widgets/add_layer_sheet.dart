@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/app_mode.dart';
+import '../../../../core/feature_access.dart';
 import '../../application/editor_controller.dart';
 import '../../application/iconify_service.dart';
 import '../../application/transcription_service.dart';
@@ -28,6 +29,15 @@ Future<void> showAddLayerSheet(
   Duration playhead,
 ) {
   final completo = ref.read(appModeProvider).isFull;
+  final shapes = ref.read(featureAccessProvider(LaboratoryLevelId.shapes));
+  final text = ref.read(featureAccessProvider(LaboratoryLevelId.text));
+  final captions = ref.read(featureAccessProvider(LaboratoryLevelId.captions));
+  final scene3d = ref.read(featureAccessProvider(LaboratoryLevelId.scene3d));
+  final nullAndClone = ref.read(
+    featureAccessProvider(LaboratoryLevelId.nullAndClone),
+  );
+  final menuPorTipo =
+      completo || shapes || text || captions || scene3d || nullAndClone;
   final controller = ref.read(editorControllerProvider.notifier);
   // FORMA NA MESMA FOLHA. Criar um retangulo era "+", folha de tipos,
   // OUTRA folha com quinze formas, toque — e a segunda folha subindo por
@@ -38,165 +48,177 @@ Future<void> showAddLayerSheet(
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AmColors.panel,
-    isScrollControlled: completo,
+    isScrollControlled: menuPorTipo,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 34,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            if (completo)
-              _AddMenuAm(
-                sheetContext: sheetContext,
-                ref: ref,
-                playhead: playhead,
-              )
-            else if (mostrarFormas)
-              _SecaoFormas(
-                onVoltar: () => setSheetState(() => mostrarFormas = false),
-                onEscolher: (build, nome) {
-                  Navigator.of(sheetContext).pop();
-                  controller.addShapeLayer(playhead,
-                      contents: build(), name: nome);
-                },
-              )
-            else ...[
-            const Text('Adicionar camada',
-                style: TextStyle(
+              const SizedBox(height: 14),
+              if (menuPorTipo)
+                _AddMenuAm(
+                  sheetContext: sheetContext,
+                  ref: ref,
+                  playhead: playhead,
+                  fullStudio: completo,
+                  shapesEnabled: shapes,
+                  textEnabled: text,
+                  captionsEnabled: captions,
+                  scene3dEnabled: scene3d,
+                  nullAndCloneEnabled: nullAndClone,
+                )
+              else if (mostrarFormas)
+                _SecaoFormas(
+                  onVoltar: () => setSheetState(() => mostrarFormas = false),
+                  onEscolher: (build, nome) {
+                    Navigator.of(sheetContext).pop();
+                    controller.addShapeLayer(
+                      playhead,
+                      contents: build(),
+                      name: nome,
+                    );
+                  },
+                )
+              else ...[
+                const Text(
+                  'Adicionar camada',
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
-            const SizedBox(height: 18),
-            // NUCLEO: video, imagem e audio. O resto so no estudio
-            // completo (interruptor AppMode).
-            Row(
-              children: [
-                _AddOption(
-                  icon: CupertinoIcons.videocam_fill,
-                  label: 'Video',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.importVideoFromGallery(playhead);
-                  },
+                    color: AmColors.text,
+                  ),
                 ),
-                _AddOption(
-                  icon: CupertinoIcons.photo_fill,
-                  label: 'Imagem',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.importImageFromGallery(playhead);
-                  },
+                const SizedBox(height: 18),
+                // NUCLEO: video, imagem e audio. O resto so no estudio
+                // completo (interruptor AppMode).
+                Row(
+                  children: [
+                    _AddOption(
+                      icon: CupertinoIcons.videocam_fill,
+                      label: 'Video',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        controller.importVideoFromGallery(playhead);
+                      },
+                    ),
+                    _AddOption(
+                      icon: CupertinoIcons.photo_fill,
+                      label: 'Imagem',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        controller.importImageFromGallery(playhead);
+                      },
+                    ),
+                    if (completo)
+                      _AddOption(
+                        icon: CupertinoIcons.textformat,
+                        label: 'Texto',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          controller.addTextLayer(playhead);
+                        },
+                      ),
+                    if (completo)
+                      _AddOption(
+                        icon: CupertinoIcons.circle_fill,
+                        label: 'Forma',
+                        onTap: () => setSheetState(() => mostrarFormas = true),
+                      ),
+                    if (completo)
+                      _AddOption(
+                        icon: CupertinoIcons.captions_bubble,
+                        label: 'Legendas',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          showCaptionCreationSheet(context, ref);
+                        },
+                      ),
+                    _AddOption(
+                      icon: CupertinoIcons.music_note,
+                      label: 'Audio',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        controller.importAudioFile(playhead);
+                      },
+                    ),
+                    if (!completo) const Spacer(flex: 3),
+                  ],
                 ),
+                if (completo) const SizedBox(height: 12),
                 if (completo)
-                _AddOption(
-                  icon: CupertinoIcons.textformat,
-                  label: 'Texto',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.addTextLayer(playhead);
-                  },
-                ),
-                if (completo)
-                _AddOption(
-                  icon: CupertinoIcons.circle_fill,
-                  label: 'Forma',
-                  onTap: () => setSheetState(() => mostrarFormas = true),
-                ),
-                if (completo)
-                _AddOption(
-                  icon: CupertinoIcons.captions_bubble,
-                  label: 'Legendas',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _showSrtSheet(context, ref);
-                  },
-                ),
-                _AddOption(
-                  icon: CupertinoIcons.music_note,
-                  label: 'Audio',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.importAudioFile(playhead);
-                  },
-                ),
-                if (!completo) const Spacer(flex: 3),
+                  Row(
+                    children: [
+                      _AddOption(
+                        icon: CupertinoIcons.viewfinder,
+                        label: 'Nulo 3D',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          controller.addNullLayer(playhead);
+                        },
+                      ),
+                      _AddOption(
+                        icon: CupertinoIcons.sparkles,
+                        label: 'Particulas',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          controller.addParticlesLayer(playhead);
+                        },
+                      ),
+                      _AddOption(
+                        icon: CupertinoIcons.square_grid_2x2,
+                        label: 'Icones',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _showIconSheet(context, ref, playhead);
+                        },
+                      ),
+                      _AddOption(
+                        icon: CupertinoIcons.slider_horizontal_3,
+                        label: 'Ajuste',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          controller.addAdjustmentLayer(playhead);
+                        },
+                      ),
+                      _AddOption(
+                        icon: CupertinoIcons.cube,
+                        label: 'Elementos 3D',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _showElement3DPickerSheet(context, ref, playhead);
+                        },
+                      ),
+                      _AddOption(
+                        icon: CupertinoIcons.cube_box,
+                        label: 'Cena 3D',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          controller.addScene3DLayer(playhead);
+                        },
+                      ),
+                      const Spacer(),
+                    ],
+                  ),
               ],
-            ),
-            if (completo) const SizedBox(height: 12),
-            if (completo)
-            Row(
-              children: [
-                _AddOption(
-                  icon: CupertinoIcons.viewfinder,
-                  label: 'Nulo 3D',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.addNullLayer(playhead);
-                  },
-                ),
-                _AddOption(
-                  icon: CupertinoIcons.sparkles,
-                  label: 'Particulas',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.addParticlesLayer(playhead);
-                  },
-                ),
-                _AddOption(
-                  icon: CupertinoIcons.square_grid_2x2,
-                  label: 'Icones',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _showIconSheet(context, ref, playhead);
-                  },
-                ),
-                _AddOption(
-                  icon: CupertinoIcons.slider_horizontal_3,
-                  label: 'Ajuste',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.addAdjustmentLayer(playhead);
-                  },
-                ),
-                _AddOption(
-                  icon: CupertinoIcons.cube,
-                  label: 'Elementos 3D',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    _showElement3DPickerSheet(context, ref, playhead);
-                  },
-                ),
-                _AddOption(
-                  icon: CupertinoIcons.cube_box,
-                  label: 'Cena 3D',
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.addScene3DLayer(playhead);
-                  },
-                ),
-                const Spacer(),
-              ],
-            ),
             ],
-          ],
+          ),
         ),
-      ),
       ),
     ),
   );
@@ -206,7 +228,10 @@ Future<void> showAddLayerSheet(
 /// giram de verdade no espaco e se vinculam a nulos como qualquer
 /// camada. Cada tile mostra o proprio solido renderizado.
 Future<void> _showElement3DPickerSheet(
-    BuildContext context, WidgetRef ref, Duration playhead) async {
+  BuildContext context,
+  WidgetRef ref,
+  Duration playhead,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   await showModalBottomSheet<void>(
     context: context,
@@ -221,11 +246,14 @@ Future<void> _showElement3DPickerSheet(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Elementos 3D',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
+            const Text(
+              'Elementos 3D',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
             const SizedBox(height: 4),
             const Text(
               'Solidos de verdade: giram no espaco e seguem um nulo 3D.',
@@ -269,9 +297,13 @@ Future<void> _showElement3DPickerSheet(
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(element3DLabel(kind),
-                              style: const TextStyle(
-                                  fontSize: 12, color: AmColors.text)),
+                          Text(
+                            element3DLabel(kind),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AmColors.text,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -291,8 +323,7 @@ class _SecaoFormas extends StatefulWidget {
   const _SecaoFormas({required this.onVoltar, required this.onEscolher});
 
   final VoidCallback onVoltar;
-  final void Function(List<ShapeItem> Function() build, String nome)
-      onEscolher;
+  final void Function(List<ShapeItem> Function() build, String nome) onEscolher;
 
   @override
   State<_SecaoFormas> createState() => _SecaoFormasState();
@@ -334,15 +365,21 @@ class _SecaoFormasState extends State<_SecaoFormas> {
               behavior: HitTestBehavior.opaque,
               child: const Padding(
                 padding: EdgeInsets.only(right: 10),
-                child: Icon(CupertinoIcons.chevron_back,
-                    size: 22, color: AmColors.text),
+                child: Icon(
+                  CupertinoIcons.chevron_back,
+                  size: 22,
+                  color: AmColors.text,
+                ),
               ),
             ),
-            const Text('Forma',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
+            const Text(
+              'Forma',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 14),
@@ -366,14 +403,20 @@ class _SecaoFormasState extends State<_SecaoFormas> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Mais formas',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AmColors.accent)),
+                  Text(
+                    'Mais formas',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AmColors.accent,
+                    ),
+                  ),
                   SizedBox(width: 4),
-                  Icon(CupertinoIcons.chevron_down,
-                      size: 14, color: AmColors.accent),
+                  Icon(
+                    CupertinoIcons.chevron_down,
+                    size: 14,
+                    color: AmColors.accent,
+                  ),
                 ],
               ),
             ),
@@ -388,7 +431,9 @@ class _SecaoFormasState extends State<_SecaoFormas> {
                   onTap: () => widget.onEscolher(build, nome),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AmColors.chip,
                       borderRadius: BorderRadius.circular(10),
@@ -398,9 +443,13 @@ class _SecaoFormasState extends State<_SecaoFormas> {
                       children: [
                         Icon(icone, size: 15, color: AmColors.accent),
                         const SizedBox(width: 6),
-                        Text(nome,
-                            style: const TextStyle(
-                                fontSize: 13, color: AmColors.text)),
+                        Text(
+                          nome,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AmColors.text,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -415,7 +464,10 @@ class _SecaoFormasState extends State<_SecaoFormas> {
 /// Aba de ICONES (Iconify): busca com filtro de licenca; o icone entra na
 /// cena como FORMA vetorial editavel, nunca como imagem.
 Future<void> _showIconSheet(
-    BuildContext context, WidgetRef ref, Duration playhead) async {
+  BuildContext context,
+  WidgetRef ref,
+  Duration playhead,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   final service = ref.read(iconifyServiceProvider);
   final queryController = TextEditingController();
@@ -438,8 +490,10 @@ Future<void> _showIconSheet(
             status = 'Buscando...';
           });
           try {
-            final found =
-                await service.search(q, permissiveOnly: permissiveOnly);
+            final found = await service.search(
+              q,
+              permissiveOnly: permissiveOnly,
+            );
             final data = await service.pathDataFor(found);
             if (!sheetContext.mounted) return;
             setSheetState(() {
@@ -451,7 +505,7 @@ Future<void> _showIconSheet(
               status = results.isEmpty
                   ? 'Nada encontrado — sem internet? Tente de novo.'
                   : '${results.length} icone(s) — toque para inserir.'
-                      '${service.collectionsLoaded ? '' : '  (licencas indisponiveis)'}';
+                        '${service.collectionsLoaded ? '' : '  (licencas indisponiveis)'}';
             });
           } catch (e) {
             if (sheetContext.mounted) {
@@ -466,16 +520,23 @@ Future<void> _showIconSheet(
 
         return SafeArea(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                14 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              14,
+              18,
+              14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Icones (Iconify)',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Icones (Iconify)',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -484,9 +545,13 @@ Future<void> _showIconSheet(
                         controller: queryController,
                         placeholder: 'buscar...',
                         style: const TextStyle(
-                            fontSize: 14, color: AmColors.text),
+                          fontSize: 14,
+                          color: AmColors.text,
+                        ),
                         placeholderStyle: const TextStyle(
-                            fontSize: 14, color: AmColors.muted),
+                          fontSize: 14,
+                          color: AmColors.muted,
+                        ),
                         padding: const EdgeInsets.all(11),
                         decoration: BoxDecoration(
                           color: AmColors.chip,
@@ -498,15 +563,20 @@ Future<void> _showIconSheet(
                     const SizedBox(width: 8),
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       color: AmColors.accent,
                       borderRadius: BorderRadius.circular(11),
                       onPressed: busy ? null : doSearch,
-                      child: const Text('Buscar',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0B0E12))),
+                      child: const Text(
+                        'Buscar',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0B0E12),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -521,24 +591,26 @@ Future<void> _showIconSheet(
                             setSheetState(() => permissiveOnly = v),
                       ),
                     ),
-                    const Text('So conjuntos sem exigencia de credito',
-                        style: TextStyle(
-                            fontSize: 12, color: AmColors.muted)),
+                    const Text(
+                      'So conjuntos sem exigencia de credito',
+                      style: TextStyle(fontSize: 12, color: AmColors.muted),
+                    ),
                   ],
                 ),
-                Text(status,
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.muted)),
+                Text(
+                  status,
+                  style: const TextStyle(fontSize: 12, color: AmColors.muted),
+                ),
                 const SizedBox(height: 8),
                 Expanded(
                   child: GridView.builder(
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 0.8,
-                    ),
+                          crossAxisCount: 5,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 0.8,
+                        ),
                     itemCount: results.length,
                     itemBuilder: (context, i) {
                       final (prefix, name) = results[i];
@@ -548,8 +620,7 @@ Future<void> _showIconSheet(
                         onTap: d == null
                             ? null
                             : () {
-                                controller.addIconLayer(
-                                    playhead, d, name);
+                                controller.addIconLayer(playhead, d, name);
                                 Navigator.of(sheetContext).pop();
                               },
                         child: Column(
@@ -564,7 +635,8 @@ Future<void> _showIconSheet(
                               child: d == null
                                   ? null
                                   : CustomPaint(
-                                      painter: _IconPreviewPainter(d)),
+                                      painter: _IconPreviewPainter(d),
+                                    ),
                             ),
                             const SizedBox(height: 3),
                             Text(
@@ -572,10 +644,11 @@ Future<void> _showIconSheet(
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 8,
-                                  color: lic.permissive
-                                      ? AmColors.muted
-                                      : const Color(0xFFFFB020)),
+                                fontSize: 8,
+                                color: lic.permissive
+                                    ? AmColors.muted
+                                    : const Color(0xFFFFB020),
+                              ),
                             ),
                           ],
                         ),
@@ -601,19 +674,23 @@ class _IconPreviewPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = _cache ??=
-        fitPathToBox(parseSvgPathData(pathData), size.shortestSide * 0.7);
+    final path = _cache ??= fitPathToBox(
+      parseSvgPathData(pathData),
+      size.shortestSide * 0.7,
+    );
     canvas.translate(size.width / 2, size.height / 2);
     canvas.drawPath(path, Paint()..color = AmColors.accent);
   }
 
   @override
-  bool shouldRepaint(_IconPreviewPainter old) =>
-      old.pathData != pathData;
+  bool shouldRepaint(_IconPreviewPainter old) => old.pathData != pathData;
 }
 
 /// Legendas: transcricao automatica no aparelho (Whisper) ou SRT colado.
-Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
+Future<void> showCaptionCreationSheet(
+  BuildContext context,
+  WidgetRef ref,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   final textController = TextEditingController();
   var busy = false;
@@ -628,7 +705,11 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) => Padding(
         padding: EdgeInsets.fromLTRB(
-            20, 16, 20, 16 + MediaQuery.of(sheetContext).viewInsets.bottom),
+          20,
+          16,
+          20,
+          16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,17 +717,23 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
             Row(
               children: [
                 const Expanded(
-                  child: Text('Legendas',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
+                  child: Text(
+                    'Legendas',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
                 ),
                 if (!busy)
                   GestureDetector(
                     onTap: () => Navigator.of(sheetContext).pop(),
-                    child: const Icon(CupertinoIcons.xmark,
-                        size: 18, color: AmColors.muted),
+                    child: const Icon(
+                      CupertinoIcons.xmark,
+                      size: 18,
+                      color: AmColors.muted,
+                    ),
                   ),
               ],
             ),
@@ -658,21 +745,23 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
               children: [
                 for (final m in CaptionMode.values)
                   GestureDetector(
-                    onTap: busy
-                        ? null
-                        : () => setSheetState(() => mode = m),
+                    onTap: busy ? null : () => setSheetState(() => mode = m),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: mode == m
-                            ? AmColors.accentDim
-                            : AmColors.chip,
+                        color: mode == m ? AmColors.accentDim : AmColors.chip,
                         borderRadius: BorderRadius.circular(9),
                       ),
-                      child: Text(captionModeLabel(m),
-                          style: const TextStyle(
-                              fontSize: 12, color: AmColors.accent)),
+                      child: Text(
+                        captionModeLabel(m),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AmColors.accent,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -687,11 +776,12 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
                 onPressed: busy
                     ? null
                     : () async {
-                        final media =
-                            controller.firstTranscribableMediaPath();
+                        final media = controller.firstTranscribableMediaPath();
                         if (media == null) {
-                          setSheetState(() => status =
-                              'Adicione um video ao projeto primeiro.');
+                          setSheetState(
+                            () => status =
+                                'Adicione um video ao projeto primeiro.',
+                          );
                           return;
                         }
                         setSheetState(() {
@@ -712,8 +802,7 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
                             if (n == 0) {
                               setSheetState(() {
                                 busy = false;
-                                status =
-                                    'Nenhuma fala detectada no audio.';
+                                status = 'Nenhuma fala detectada no audio.';
                               });
                             } else {
                               Navigator.of(sheetContext).pop();
@@ -733,22 +822,27 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
                       const Padding(
                         padding: EdgeInsets.only(right: 10),
                         child: CupertinoActivityIndicator(
-                            color: Color(0xFF0B0E12)),
+                          color: Color(0xFF0B0E12),
+                        ),
                       )
                     else
                       const Padding(
                         padding: EdgeInsets.only(right: 8),
-                        child: Icon(CupertinoIcons.waveform,
-                            size: 18, color: Color(0xFF0B0E12)),
+                        child: Icon(
+                          CupertinoIcons.waveform,
+                          size: 18,
+                          color: Color(0xFF0B0E12),
+                        ),
                       ),
                     Text(
                       busy
                           ? 'Transcrevendo...'
                           : 'Transcrever com Whisper (no aparelho)',
                       style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0B0E12)),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0B0E12),
+                      ),
                     ),
                   ],
                 ),
@@ -757,13 +851,16 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
             if (status.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(status,
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.muted)),
+                child: Text(
+                  status,
+                  style: const TextStyle(fontSize: 12, color: AmColors.muted),
+                ),
               ),
             const SizedBox(height: 14),
-            const Text('ou cole um SRT:',
-                style: TextStyle(fontSize: 12, color: AmColors.muted)),
+            const Text(
+              'ou cole um SRT:',
+              style: TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
             const SizedBox(height: 8),
             CupertinoTextField(
               controller: textController,
@@ -773,8 +870,10 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
               placeholder:
                   '1\n00:00:00,000 --> 00:00:02,000\nSua primeira fala...',
               style: const TextStyle(fontSize: 13, color: AmColors.text),
-              placeholderStyle:
-                  const TextStyle(fontSize: 13, color: AmColors.muted),
+              placeholderStyle: const TextStyle(
+                fontSize: 13,
+                color: AmColors.muted,
+              ),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: AmColors.chip,
@@ -790,15 +889,17 @@ Future<void> _showSrtSheet(BuildContext context, WidgetRef ref) async {
                 onPressed: busy
                     ? null
                     : () {
-                        controller
-                            .addCaptionLayerFromSrt(textController.text);
+                        controller.addCaptionLayerFromSrt(textController.text);
                         Navigator.of(sheetContext).pop();
                       },
-                child: const Text('Criar do SRT colado',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.accent)),
+                child: const Text(
+                  'Criar do SRT colado',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.accent,
+                  ),
+                ),
               ),
             ),
           ],
@@ -841,9 +942,10 @@ class _AddOption extends StatelessWidget {
                 child: Icon(icon, color: AmColors.accent, size: 24),
               ),
               const SizedBox(height: 6),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 11, color: AmColors.text)),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: AmColors.text),
+              ),
             ],
           ),
         ),
@@ -866,11 +968,23 @@ class _AddMenuAm extends ConsumerStatefulWidget {
     required this.sheetContext,
     required this.ref,
     required this.playhead,
+    required this.fullStudio,
+    required this.shapesEnabled,
+    required this.textEnabled,
+    required this.captionsEnabled,
+    required this.scene3dEnabled,
+    required this.nullAndCloneEnabled,
   });
 
   final BuildContext sheetContext;
   final WidgetRef ref;
   final Duration playhead;
+  final bool fullStudio;
+  final bool shapesEnabled;
+  final bool textEnabled;
+  final bool captionsEnabled;
+  final bool scene3dEnabled;
+  final bool nullAndCloneEnabled;
 
   @override
   ConsumerState<_AddMenuAm> createState() => _AddMenuAmState();
@@ -886,11 +1000,27 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   EditorController get _controller =>
       ref.read(editorControllerProvider.notifier);
 
+  List<_AbaAdd> get _abasVisiveis => [
+    if (widget.shapesEnabled) _AbaAdd.forma,
+    _AbaAdd.midia,
+    _AbaAdd.audio,
+    if (widget.fullStudio ||
+        widget.scene3dEnabled ||
+        widget.nullAndCloneEnabled)
+      _AbaAdd.objeto,
+    if (widget.fullStudio) _AbaAdd.modelo,
+  ];
+
+  _AbaAdd get _abaVisivel =>
+      _abasVisiveis.contains(_aba) ? _aba : _abasVisiveis.first;
+
   void _fecha() => Navigator.of(widget.sheetContext).pop();
 
   /// Cria a camada e devolve o id dela (a nova e a que nao existia).
   String? _criaForma(List<ShapeItem> Function() build, String nome) {
-    final antes = {for (final l in ref.read(editorControllerProvider).layers) l.id};
+    final antes = {
+      for (final l in ref.read(editorControllerProvider).layers) l.id,
+    };
     _controller.addShapeLayer(widget.playhead, contents: build(), name: nome);
     for (final l in ref.read(editorControllerProvider).layers) {
       if (!antes.contains(l.id)) return l.id;
@@ -941,26 +1071,33 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
       height: 36,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          for (final a in _AbaAdd.values)
-            GestureDetector(
-              onTap: () => setState(() => _aba = a),
-              child: Container(
-                margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _aba == a ? AmColors.accentDim : AmColors.chip,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(nomes[a]!,
+        child: Row(
+          children: [
+            for (final a in _abasVisiveis)
+              GestureDetector(
+                onTap: () => setState(() => _aba = a),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _abaVisivel == a
+                        ? AmColors.accentDim
+                        : AmColors.chip,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    nomes[a]!,
                     style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _aba == a ? AmColors.accent : AmColors.text)),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _abaVisivel == a ? AmColors.accent : AmColors.text,
+                    ),
+                  ),
+                ),
               ),
-            ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -977,10 +1114,15 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
               children: [
                 Icon(icon, size: 20, color: AmColors.accent),
                 const SizedBox(height: 2),
-                Text(label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 9, height: 1.1, color: AmColors.muted)),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    height: 1.1,
+                    color: AmColors.muted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -989,23 +1131,32 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
       width: 64,
       child: Column(
         children: [
-          item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
-            _fecha();
-            ref.read(freehandRequestProvider.notifier).state = true;
-          }),
-          item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
-            final id = _criaForma(
-                () => [ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(10))],
-                'Desenho');
-            _fecha();
-            if (id != null) {
-              ref.read(editPointsRequestProvider.notifier).state = id;
-            }
-          }),
-          item(CupertinoIcons.textformat, 'Texto', () {
-            _fecha();
-            _controller.addTextLayer(widget.playhead);
-          }),
+          if (widget.shapesEnabled) ...[
+            item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
+              _fecha();
+              ref.read(freehandRequestProvider.notifier).state = true;
+            }),
+            item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
+              final id = _criaForma(
+                () => [
+                  ShapeStroke(
+                    color: const Color(0xFFFFFFFF),
+                    width: AnimatedDouble(10),
+                  ),
+                ],
+                'Desenho',
+              );
+              _fecha();
+              if (id != null) {
+                ref.read(editPointsRequestProvider.notifier).state = id;
+              }
+            }),
+          ],
+          if (widget.textEnabled)
+            item(CupertinoIcons.textformat, 'Texto', () {
+              _fecha();
+              _controller.addTextLayer(widget.playhead);
+            }),
           const Spacer(),
           item(CupertinoIcons.xmark, '', _fecha),
         ],
@@ -1014,7 +1165,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   }
 
   Widget _conteudo() {
-    switch (_aba) {
+    switch (_abaVisivel) {
       case _AbaAdd.forma:
         return _formas();
       case _AbaAdd.midia:
@@ -1038,14 +1189,15 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
                 _controller.importImageFromGallery(widget.playhead);
               },
             ),
-            _AddOption(
-              icon: CupertinoIcons.captions_bubble,
-              label: 'Legendas',
-              onTap: () {
-                _fecha();
-                _showSrtSheet(context, widget.ref);
-              },
-            ),
+            if (widget.captionsEnabled)
+              _AddOption(
+                icon: CupertinoIcons.captions_bubble,
+                label: 'Legendas',
+                onTap: () {
+                  _fecha();
+                  showCaptionCreationSheet(context, widget.ref);
+                },
+              ),
             const Spacer(flex: 3),
           ],
         );
@@ -1067,59 +1219,73 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
       case _AbaAdd.objeto:
         return Column(
           children: [
-            Row(children: [
-            _AddOption(
-              icon: CupertinoIcons.viewfinder,
-              label: 'Nulo 3D',
-              onTap: () {
-                _fecha();
-                _controller.addNullLayer(widget.playhead);
-              },
+            Row(
+              children: [
+                if (widget.nullAndCloneEnabled)
+                  _AddOption(
+                    icon: CupertinoIcons.viewfinder,
+                    label: 'Nulo 3D',
+                    onTap: () {
+                      _fecha();
+                      _controller.addNullLayer(widget.playhead);
+                    },
+                  ),
+                if (widget.fullStudio)
+                  _AddOption(
+                    icon: CupertinoIcons.sparkles,
+                    label: 'Particulas',
+                    onTap: () {
+                      _fecha();
+                      _controller.addParticlesLayer(widget.playhead);
+                    },
+                  ),
+                if (widget.fullStudio)
+                  _AddOption(
+                    icon: CupertinoIcons.square_grid_2x2,
+                    label: 'Icones',
+                    onTap: () {
+                      _fecha();
+                      _showIconSheet(context, widget.ref, widget.playhead);
+                    },
+                  ),
+              ],
             ),
-            _AddOption(
-              icon: CupertinoIcons.sparkles,
-              label: 'Particulas',
-              onTap: () {
-                _fecha();
-                _controller.addParticlesLayer(widget.playhead);
-              },
-            ),
-            _AddOption(
-              icon: CupertinoIcons.square_grid_2x2,
-              label: 'Icones',
-              onTap: () {
-                _fecha();
-                _showIconSheet(context, widget.ref, widget.playhead);
-              },
-            ),
-            ]),
             const SizedBox(height: 8),
-            Row(children: [
-            _AddOption(
-              icon: CupertinoIcons.slider_horizontal_3,
-              label: 'Ajuste',
-              onTap: () {
-                _fecha();
-                _controller.addAdjustmentLayer(widget.playhead);
-              },
+            Row(
+              children: [
+                if (widget.fullStudio)
+                  _AddOption(
+                    icon: CupertinoIcons.slider_horizontal_3,
+                    label: 'Ajuste',
+                    onTap: () {
+                      _fecha();
+                      _controller.addAdjustmentLayer(widget.playhead);
+                    },
+                  ),
+                if (widget.scene3dEnabled)
+                  _AddOption(
+                    icon: CupertinoIcons.cube,
+                    label: 'Elementos 3D',
+                    onTap: () {
+                      _fecha();
+                      _showElement3DPickerSheet(
+                        context,
+                        widget.ref,
+                        widget.playhead,
+                      );
+                    },
+                  ),
+                if (widget.scene3dEnabled)
+                  _AddOption(
+                    icon: CupertinoIcons.cube_box,
+                    label: 'Cena 3D',
+                    onTap: () {
+                      _fecha();
+                      _controller.addScene3DLayer(widget.playhead);
+                    },
+                  ),
+              ],
             ),
-            _AddOption(
-              icon: CupertinoIcons.cube,
-              label: 'Elementos 3D',
-              onTap: () {
-                _fecha();
-                _showElement3DPickerSheet(context, widget.ref, widget.playhead);
-              },
-            ),
-            _AddOption(
-              icon: CupertinoIcons.cube_box,
-              label: 'Cena 3D',
-              onTap: () {
-                _fecha();
-                _controller.addScene3DLayer(widget.playhead);
-              },
-            ),
-            ]),
           ],
         );
       case _AbaAdd.modelo:
