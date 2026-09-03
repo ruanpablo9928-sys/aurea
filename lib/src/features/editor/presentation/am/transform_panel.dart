@@ -115,7 +115,15 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
       onCravar: () =>
           controller.toggleKeyframe(id, widget.playback.time.value, _prop),
       onCurva: () => widget.onOpenCurve(_prop),
-      onMais: () => _menuMais(context, controller, id),
+      // RESETAR era o unico item do `...`; agora e botao, com o nome do
+      // que vai ser resetado escrito nele.
+      acoes: [
+        AmPanelAcao(
+          rotulo: 'Resetar',
+          icone: CupertinoIcons.arrow_counterclockwise,
+          onTap: () => controller.resetProp(id, _prop),
+        ),
+      ],
       abas: [
         ParamTab(
             id: TransformTool.position.name,
@@ -177,39 +185,6 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
   }
 
   /// O "mais" do trilho: o que nao merece botao proprio.
-  Future<void> _menuMais(
-      BuildContext context, EditorController controller, String id) async {
-    final nome = switch (widget.tool) {
-      TransformTool.position => 'posicao',
-      TransformTool.rotation => 'rotacao',
-      TransformTool.scale => 'escala',
-      TransformTool.skew => 'inclinacao',
-      TransformTool.pivot => 'pivo',
-      TransformTool.opacity => 'opacidade',
-    };
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(CupertinoIcons.arrow_counterclockwise,
-                  size: 19, color: AmColors.text),
-              title: Text('Resetar $nome',
-                  style: const TextStyle(color: AmColors.text, fontSize: 15)),
-              onTap: () {
-                controller.resetProp(id, _prop);
-                Navigator.of(sheetContext).pop();
-              },
-            ),
-            const SizedBox(height: 6),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _PositionControl extends ConsumerStatefulWidget {

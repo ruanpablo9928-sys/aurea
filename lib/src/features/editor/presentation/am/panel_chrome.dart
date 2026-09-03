@@ -30,10 +30,10 @@ class AmPanelChrome extends StatelessWidget {
     required this.temKfAqui,
     required this.onCravar,
     this.onCurva,
-    this.onMais,
     this.abas = const [],
     this.abaAtiva,
     this.onAba,
+    this.acoes = const [],
   });
 
   final VoidCallback onBack;
@@ -44,11 +44,17 @@ class AmPanelChrome extends StatelessWidget {
   final bool temKfAqui;
   final VoidCallback onCravar;
   final VoidCallback? onCurva;
-  final VoidCallback? onMais;
 
   final List<ParamTab> abas;
   final String? abaAtiva;
   final ValueChanged<String>? onAba;
+
+  /// COMANDOS VISIVEIS do painel, fixos no fim da fileira de abas.
+  ///
+  /// E o lugar do que antes morava no `⋯`: resetar, apagar ponto, fechar
+  /// caminho. Fica preso a direita e nao rola junto com as abas, para
+  /// estar sempre no mesmo pixel.
+  final List<Widget> acoes;
 
   @override
   Widget build(BuildContext context) {
@@ -65,16 +71,22 @@ class AmPanelChrome extends StatelessWidget {
             temKfAqui: temKfAqui,
             onCravar: onCravar,
             onCurva: onCurva,
-            onMais: onMais,
           ),
           Expanded(
             child: Column(
               children: [
                 if (abas.isNotEmpty)
-                  AmParamTabs(
-                    abas: abas,
-                    ativa: abaAtiva,
-                    onAba: onAba ?? (_) {},
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AmParamTabs(
+                          abas: abas,
+                          ativa: abaAtiva,
+                          onAba: onAba ?? (_) {},
+                        ),
+                      ),
+                      ...acoes,
+                    ],
                   ),
                 Expanded(child: corpo),
               ],
@@ -86,7 +98,10 @@ class AmPanelChrome extends StatelessWidget {
   }
 }
 
-/// O TRILHO ESQUERDO: `← ◆ ⌇ ⋯`, na mesma posicao em todo painel.
+/// O TRILHO ESQUERDO: `← ◆ ⌇`, na mesma posicao em todo painel.
+///
+/// Tres itens, nao quatro: o `⋯` era um menu escondido, e o que ele abria
+/// virou botao visivel do proprio painel.
 ///
 /// Voltar, cravar keyframe, curva de easing, mais. Acao indisponivel
 /// fica esmaecida, nunca some: botao que aparece e some troca o lugar
@@ -100,7 +115,6 @@ class AmLeftRail extends StatelessWidget {
     required this.temKfAqui,
     required this.onCravar,
     this.onCurva,
-    this.onMais,
   });
 
   final VoidCallback onBack;
@@ -108,7 +122,6 @@ class AmLeftRail extends StatelessWidget {
   final bool temKfAqui;
   final VoidCallback onCravar;
   final VoidCallback? onCurva;
-  final VoidCallback? onMais;
 
   @override
   Widget build(BuildContext context) {
@@ -131,15 +144,6 @@ class AmLeftRail extends StatelessWidget {
               opacity: animado && onCurva != null ? 1 : 0.32,
               child: AmCurveIcon(
                   color: animado ? AmColors.text : AmColors.muted),
-            ),
-          ),
-          const Spacer(),
-          AmRailButton(
-            onTap: onMais,
-            child: Opacity(
-              opacity: onMais != null ? 1 : 0.32,
-              child: const Icon(CupertinoIcons.ellipsis,
-                  size: 20, color: AmColors.text),
             ),
           ),
         ],
@@ -356,6 +360,65 @@ class _Aba extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// UM COMANDO VISIVEL do painel, preso no fim da fileira de abas.
+///
+/// Chip preenchido, sem contorno. Desligado fica esmaecido em vez de
+/// sumir: botao que some troca o lugar dos vizinhos.
+class AmPanelAcao extends StatelessWidget {
+  const AmPanelAcao({
+    super.key,
+    required this.rotulo,
+    required this.icone,
+    required this.onTap,
+    this.ligado = false,
+  });
+
+  final String rotulo;
+  final IconData icone;
+  final VoidCallback? onTap;
+  final bool ligado;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6, right: 8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Opacity(
+          opacity: onTap == null ? 0.35 : 1,
+          child: Container(
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: ligado ? AmColors.accentDim : AmColors.chip,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icone,
+                    size: 14,
+                    color: ligado ? AmColors.accent : AmColors.text),
+                const SizedBox(width: 5),
+                Text(
+                  rotulo,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: ligado ? AmColors.accent : AmColors.text,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

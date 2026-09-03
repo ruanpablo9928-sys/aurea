@@ -66,6 +66,22 @@ void main() {
       expect(codigo.contains("item(CupertinoIcons.circle_grid_3x3"), isFalse);
     });
 
+    test('o trilho esquerdo tem tres itens, sem tres pontinhos', () {
+      final f = File(
+          'lib/src/features/editor/presentation/am/panel_chrome.dart');
+      final codigo = _semComentarios(f);
+      expect(codigo.contains('onMais'), isFalse);
+      expect(codigo.contains('CupertinoIcons.ellipsis'), isFalse);
+    });
+
+    test('o painel de transformacao nao tem mais menu escondido', () {
+      final f = File(
+          'lib/src/features/editor/presentation/am/transform_panel.dart');
+      final codigo = _semComentarios(f);
+      expect(codigo.contains('_menuMais'), isFalse);
+      expect(codigo, contains("rotulo: 'Resetar'"));
+    });
+
     test('nenhuma gaveta no aplicativo', () {
       final culpados = <String>[];
       for (final f in _fontes()) {
