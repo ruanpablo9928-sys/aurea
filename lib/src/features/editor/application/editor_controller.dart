@@ -9,6 +9,7 @@ import '../domain/blend_extra.dart';
 import 'blob_track_service.dart';
 import '../domain/blob_track.dart';
 import '../domain/caption.dart';
+import '../domain/caption_highlight.dart';
 import '../domain/camera3d.dart';
 import '../domain/camera_cuts.dart';
 import '../domain/cut.dart';
@@ -4211,6 +4212,20 @@ class EditorController extends Notifier<VideoProject> {
   // -------------------------------------------------------------- legendas
 
   /// Cria uma camada de legendas: UMA camada, muitos cues.
+  /// TROCA O ESTILO DESTAQUE da camada de legenda.
+  ///
+  /// O estilo e da CAMADA, nao da fala: um toque muda as 47 falas de uma
+  /// vez, sem percorrer cue por cue.
+  void updateCaptionHighlight(
+    String id,
+    CaptionHighlightStyle Function(CaptionHighlightStyle) fn,
+  ) {
+    final layer = _layer(id);
+    if (layer is! CaptionLayer) return;
+    _replace(layer.copyLayer(highlight: fn(layer.highlight)));
+    _push(layer);
+  }
+
   int addCaptionLayer(List<Cue> cues) {
     if (cues.isEmpty) return 0;
     final end = cues.last.end + const Duration(milliseconds: 300);

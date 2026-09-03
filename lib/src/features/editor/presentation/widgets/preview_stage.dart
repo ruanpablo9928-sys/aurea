@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+
+import 'caption_highlight_painter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
@@ -20,6 +22,7 @@ import '../../domain/effect.dart';
 import '../../domain/fx.dart';
 import '../../domain/gear.dart';
 import '../../domain/text_animator.dart' show valueNoise01;
+import '../../domain/caption_highlight.dart';
 import '../../domain/grid_rig.dart';
 import '../../domain/layer.dart';
 import '../../domain/layer_meta.dart';
@@ -4318,6 +4321,28 @@ class _LayerContent extends StatelessWidget {
       ),
       CaptionLayer l => Builder(
         builder: (context) {
+          // ESTILO DESTAQUE: a frase inteira na tela, com a palavra dita
+          // inflando no lugar dela. Precisa de tempo POR PALAVRA — sem
+          // ele, cai para a legenda comum, que e falhar com dignidade.
+          if (l.highlight.ativo && !l.highlight.isNeutro) {
+            final frases = agruparEmFrases(l.cues);
+            final frase = fraseEm(frases, localTime);
+            if (frase != null) {
+              return SizedBox(
+                width: compWidth,
+                height: project.outputHeight.toDouble(),
+                child: CustomPaint(
+                  painter: CaptionHighlightPainter(
+                    frase: frase,
+                    tempo: localTime,
+                    estilo: l.highlight,
+                    corpo: l.style.fontSize,
+                  ),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          }
           final cue = l.cueAt(localTime);
           if (cue == null) return const SizedBox.shrink();
           return Container(

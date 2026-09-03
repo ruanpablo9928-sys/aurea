@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'camera3d.dart';
 import 'camera_cuts.dart';
 import 'caption.dart';
+import 'caption_highlight.dart';
 import 'cut.dart';
 import 'effect.dart';
 import 'element3d.dart';
@@ -1202,6 +1203,7 @@ class CaptionLayer extends Layer {
     required super.duration,
     List<Cue>? cues,
     this.style = const CaptionStyle(),
+    this.highlight = const CaptionHighlightStyle(),
     super.position,
     super.scaleX,
     super.scaleY,
@@ -1223,6 +1225,10 @@ class CaptionLayer extends Layer {
   }) : cues = List.unmodifiable(cues ?? const <Cue>[]);
 
   final List<Cue> cues;
+
+  /// O ESTILO DESTAQUE (nivel 12.1). E da CAMADA, nao da fala: trocar o
+  /// preset muda as 47 falas de uma vez.
+  final CaptionHighlightStyle highlight;
   final CaptionStyle style;
 
   Cue? cueAt(Duration local) => activeCueAt(cues, local);
@@ -1254,6 +1260,7 @@ class CaptionLayer extends Layer {
     bool clearMatteSource = false,
     List<Cue>? cues,
     CaptionStyle? style,
+    CaptionHighlightStyle? highlight,
   }) {
     return CaptionLayer(
       id: id,
@@ -1262,6 +1269,7 @@ class CaptionLayer extends Layer {
       duration: duration ?? this.duration,
       cues: cues ?? this.cues,
       style: style ?? this.style,
+      highlight: highlight ?? this.highlight,
       position: position ?? this.position,
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
@@ -1292,6 +1300,7 @@ class CaptionLayer extends Layer {
     duration: duration,
     cues: cues,
     style: style,
+    highlight: highlight,
     position: position,
     scaleX: scaleX,
     scaleY: scaleY,

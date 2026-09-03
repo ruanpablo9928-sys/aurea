@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'camera3d.dart';
 import 'caption.dart';
+import 'caption_highlight.dart';
 import 'cut.dart';
 import 'effect.dart';
 import 'element3d.dart';
@@ -854,6 +855,46 @@ AudioSpec _asAudioSpec(Object? raw) {
   );
 }
 
+Map<String, dynamic> _highlight(CaptionHighlightStyle h) => {
+  'on': h.ativo,
+  'lay': h.layout.name,
+  'sz': h.destaque,
+  'cd': h.corDestaque.toARGB32(),
+  'cc': h.corContexto.toARGB32(),
+  if (h.fonteDestaque != null) 'fd': h.fonteDestaque,
+  if (h.fonteContexto != null) 'fc': h.fonteContexto,
+  'up': h.maiusculas,
+  'tr': h.tracking,
+  'lh': h.entrelinha,
+  'dur': h.duracaoInflar.inMicroseconds,
+  'ctx': h.contextoPorLado,
+  if (h.atrasDaPessoa) 'atras': true,
+};
+
+CaptionHighlightStyle _asHighlight(Object? raw) {
+  if (raw is! Map) return const CaptionHighlightStyle();
+  final m = raw.cast<String, dynamic>();
+  return CaptionHighlightStyle(
+    ativo: m['on'] as bool? ?? false,
+    layout: HighlightLayout.values.firstWhere(
+      (l) => l.name == m['lay'],
+      orElse: () => HighlightLayout.atravessada,
+    ),
+    destaque: (m['sz'] as num?)?.toDouble() ?? 1.9,
+    corDestaque: Color((m['cd'] as num?)?.toInt() ?? 0xFFE23B3B),
+    corContexto: Color((m['cc'] as num?)?.toInt() ?? 0xFFFFFFFF),
+    fonteDestaque: m['fd'] as String?,
+    fonteContexto: m['fc'] as String?,
+    maiusculas: m['up'] as bool? ?? true,
+    tracking: (m['tr'] as num?)?.toDouble() ?? 0,
+    entrelinha: (m['lh'] as num?)?.toDouble() ?? 1.05,
+    duracaoInflar: Duration(
+        microseconds: (m['dur'] as num?)?.toInt() ?? 220000),
+    contextoPorLado: (m['ctx'] as num?)?.toInt() ?? kMaxContextoPorLado,
+    atrasDaPessoa: m['atras'] as bool? ?? false,
+  );
+}
+
 Map<String, dynamic> _transition(ClipTransition t) => {
   'out': t.outgoingLayerId,
   'type': t.type.name,
@@ -1084,6 +1125,7 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'caption';
       base['cues'] = [for (final q in c.cues) _cue(q)];
       base['style'] = _capStyle(c.style);
+      if (!c.highlight.isNeutro) base['hi'] = _highlight(c.highlight);
     case AudioLayer a:
       base['kind'] = 'audio';
       base['src'] = a.sourcePath;
@@ -1934,6 +1976,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
             _asCue(c as Map<String, dynamic>),
         ],
         style: _asCapStyle(m['style'] as Map<String, dynamic>),
+        highlight: _asHighlight(m['hi']),
         position: pos,
         scaleX: sx,
         scaleY: sy,

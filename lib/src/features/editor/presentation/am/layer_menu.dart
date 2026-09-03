@@ -30,6 +30,7 @@ import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
 import 'layer_look.dart';
 import 'cameras_sheet.dart';
+import 'caption_style_sheet.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'decupagem_screen.dart';
@@ -3705,13 +3706,54 @@ Future<void> showCaptionCuesSheet(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Legendas — ${cues.length} cues',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Legendas — ${cues.length} cues',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AmColors.text,
+                        ),
+                      ),
+                    ),
+                    // ESTILO, visivel no cabecalho do editor de legendas.
+                    // O estilo Destaque (nivel 12.1) mora aqui, com as
+                    // tres profundidades.
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        Future.microtask(() {
+                          if (context.mounted) {
+                            showCaptionStyleSheet(context, ref, layerId);
+                          }
+                        });
+                      },
+                      child: Container(
+                        height: 30,
+                        padding: const EdgeInsets.symmetric(horizontal: 11),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: layer.highlight.ativo
+                              ? AmColors.accentDim
+                              : AmColors.chip,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(
+                          'Estilo',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: layer.highlight.ativo
+                                ? AmColors.accent
+                                : AmColors.text,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 SheetTransport(
                   playback: playback,
