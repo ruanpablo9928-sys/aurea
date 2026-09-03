@@ -444,6 +444,7 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
     'ang': g.angleDeg,
     'radial': g.radial,
     'op': g.opacity,
+    if (g.extras.isNotEmpty) 'mid': [for (final c in g.extras) _col(c)],
   },
   ShapeSvgPath p => {
     'kind': 'svg',
@@ -582,6 +583,9 @@ ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
     angleDeg: (m['ang'] as num).toDouble(),
     radial: m['radial'] as bool,
     opacity: (m['op'] as num).toDouble(),
+    extras: [
+      for (final c in (m['mid'] as List? ?? const [])) _asCol(c),
+    ],
   ),
   'svg' => ShapeSvgPath(
     id: m['id'] as String,

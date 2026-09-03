@@ -17,6 +17,7 @@ import '../application/projects_controller.dart';
 import '../application/thumbnail_service.dart';
 import '../domain/alight_xml_import.dart';
 import '../domain/notes_motion_template.dart';
+import '../domain/pindown_motion_template.dart';
 import '../domain/project_presets.dart';
 import 'new_project_sheet.dart';
 import 'whats_new.dart';
@@ -365,6 +366,13 @@ class ProjectsTab extends ConsumerWidget {
                     detalhe: 'Icone, botao, listas, whip e glow',
                     onTap: () => _abrirModelo(
                         context, ref, buildNotesMotionTemplate()),
+                  ),
+                  _CartaoModelo(
+                    imagem: 'assets/templates/notes.jpg',
+                    titulo: 'Pindown',
+                    detalhe: 'Casa, faisca medida e coroas 3D',
+                    onTap: () => _abrirModelo(
+                        context, ref, buildPindownMotionTemplate()),
                   ),
                 ],
               ),

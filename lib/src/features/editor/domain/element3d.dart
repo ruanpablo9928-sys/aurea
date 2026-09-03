@@ -20,6 +20,7 @@ enum Element3DKind {
   octahedron,
   wedge,
   dome,
+  crown,
 }
 
 /// AMBIENTE que os objetos refletem — e que colore o reflexo.
@@ -255,6 +256,9 @@ Element3DMesh _build(Element3DKind kind) {
     case Element3DKind.tube:
       return _tube(segments: 24, inner: 0.62);
 
+    case Element3DKind.crown:
+      return crownMesh(vale: 0.32);
+
     case Element3DKind.octahedron:
       return Element3DMesh(
         [
@@ -390,6 +394,69 @@ Element3DMesh _dome({required int slices, required int arcos}) {
 }
 
 /// TUBO: cilindro oco. Parede de fora, parede de dentro e os dois aneis.
+/// A COROA — um tubo cuja borda de cima sobe e desce em dentes.
+///
+/// Nao e um solido de ocasiao: e o tubo com a aresta superior modulada.
+/// Com [dentes] em 0 ela volta a ser um tubo; em 5 e a coroa; em 20, um
+/// anel serrilhado. O que faltava para desenhar coroa, ameia e engrenagem
+/// em 3D era exatamente isto.
+///
+/// [vale] e a altura da parte baixa entre as pontas, de 0 (dente ate o
+/// chao) a 1 (sem dente).
+Element3DMesh crownMesh({
+  int segments = 48,
+  double inner = 0.82,
+  int dentes = 5,
+  double vale = 0.5,
+  double altura = 0.55,
+}) {
+  if (dentes <= 0) return _tube(segments: segments, inner: inner);
+  final n = math.max(12, segments);
+
+  /// A altura do topo neste angulo. O dente e triangular, nao senoidal:
+  /// a referencia tem pontas retas, e o seno daria uma onda.
+  double topo(int i) {
+    final fase = (i / n * dentes) % 1.0;
+    // Sobe ate o meio do dente e desce ate o fim — ponta no meio.
+    final t = fase < 0.5 ? fase * 2 : (1 - fase) * 2;
+    // A banda e BAIXA E LARGA: a referencia e uma faixa, nao um copo.
+    // O vale desce ate a metade da banda; a ponta chega no topo dela.
+    return -altura + 2 * altura * (vale + (1 - vale) * t);
+  }
+
+  final verts = <List<double>>[];
+  // Quatro aneis: fora-baixo, fora-topo, dentro-topo, dentro-baixo.
+  for (var i = 0; i < n; i++) {
+    final a = 2 * math.pi * i / n;
+    verts.add([math.cos(a), -altura, math.sin(a)]);
+  }
+  for (var i = 0; i < n; i++) {
+    final a = 2 * math.pi * i / n;
+    verts.add([math.cos(a), topo(i), math.sin(a)]);
+  }
+  for (var i = 0; i < n; i++) {
+    final a = 2 * math.pi * i / n;
+    verts.add([inner * math.cos(a), topo(i), inner * math.sin(a)]);
+  }
+  for (var i = 0; i < n; i++) {
+    final a = 2 * math.pi * i / n;
+    verts.add([inner * math.cos(a), -altura, inner * math.sin(a)]);
+  }
+
+  int at(int anel, int i) => anel * n + i % n;
+  final faces = <List<int>>[
+    for (var i = 0; i < n; i++) ...[
+      // Parede de fora, aresta de cima (a que faz o dente), parede de
+      // dentro e o fundo.
+      [at(0, i), at(0, i + 1), at(1, i + 1), at(1, i)],
+      [at(1, i), at(1, i + 1), at(2, i + 1), at(2, i)],
+      [at(2, i), at(2, i + 1), at(3, i + 1), at(3, i)],
+      [at(3, i), at(3, i + 1), at(0, i + 1), at(0, i)],
+    ],
+  ];
+  return Element3DMesh(verts, faces);
+}
+
 Element3DMesh _tube({required int segments, required double inner}) {
   final verts = <List<double>>[];
   // 0: fora-baixo, 1: fora-cima, 2: dentro-cima, 3: dentro-baixo.
@@ -557,6 +624,7 @@ String element3DLabel(Element3DKind kind) => switch (kind) {
   Element3DKind.octahedron => 'Octaedro',
   Element3DKind.wedge => 'Rampa',
   Element3DKind.dome => 'Cupula',
+  Element3DKind.crown => 'Coroa',
 };
 
 /// CUBO COM CHANFRO nas arestas.

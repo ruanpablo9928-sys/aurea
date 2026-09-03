@@ -801,13 +801,26 @@ class ShapeGradientFill extends ShapeItem {
     this.angleDeg = 0,
     this.radial = false,
     this.opacity = 1,
-  });
+    List<Color>? extras,
+  }) : extras = List.unmodifiable(extras ?? const <Color>[]);
 
   final Color colorA;
   final Color colorB;
+
+  /// PARADAS DO MEIO, entre [colorA] e [colorB].
+  ///
+  /// Duas cores nao desenham uma faixa de horizonte: azul-marinho ate
+  /// ciano ate verde ate branco sao quatro paradas, e com duas o meio
+  /// vira uma mistura suja que nao existe na referencia. Vazio mantem o
+  /// gradiente de duas cores de sempre.
+  final List<Color> extras;
+
   final double angleDeg;
   final bool radial;
   final double opacity;
+
+  /// Todas as paradas na ordem em que o pincel as usa.
+  List<Color> get paradas => [colorA, ...extras, colorB];
 
   ShapeGradientFill copyWith({
     Color? colorA,
@@ -815,6 +828,7 @@ class ShapeGradientFill extends ShapeItem {
     double? angleDeg,
     bool? radial,
     double? opacity,
+    List<Color>? extras,
   }) {
     return ShapeGradientFill(
       id: id,
@@ -823,6 +837,7 @@ class ShapeGradientFill extends ShapeItem {
       angleDeg: angleDeg ?? this.angleDeg,
       radial: radial ?? this.radial,
       opacity: opacity ?? this.opacity,
+      extras: extras ?? this.extras,
     );
   }
 }
@@ -1552,17 +1567,28 @@ List<ShapeDraw> evaluateShape(
           final dir = Offset(math.cos(rad), math.sin(rad));
           final half = Offset(dir.dx * b.width / 2, dir.dy * b.height / 2);
           final colors = [
-            g.colorA.withValues(alpha: g.colorA.a * g.opacity * opacity),
-            g.colorB.withValues(alpha: g.colorB.a * g.opacity * opacity),
+            for (final c in g.paradas)
+              c.withValues(alpha: c.a * g.opacity * opacity),
           ];
+          // Com mais de duas paradas o Gradient exige as POSICOES: sem
+          // elas ele nem desenha. Espacadas por igual e o que a faixa do
+          // horizonte quer — cada cor manda num pedaco do mesmo tamanho.
+          final stops = colors.length == 2
+              ? null
+              : [
+                  for (var i = 0; i < colors.length; i++)
+                    i / (colors.length - 1),
+                ];
           draws.add(
             ShapeDraw(
               path: path,
               paint: Paint()
                 ..style = PaintingStyle.fill
                 ..shader = g.radial
-                    ? Gradient.radial(b.center, b.longestSide / 2, colors)
-                    : Gradient.linear(b.center - half, b.center + half, colors),
+                    ? Gradient.radial(
+                        b.center, b.longestSide / 2, colors, stops)
+                    : Gradient.linear(
+                        b.center - half, b.center + half, colors, stops),
             ),
           );
         }
