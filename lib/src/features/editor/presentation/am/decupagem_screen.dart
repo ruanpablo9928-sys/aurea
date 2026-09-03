@@ -12,6 +12,7 @@ import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
 import '../../application/media_preview_service.dart';
 import '../../application/scene_cut_service.dart';
+import '../../domain/cut_ops.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
@@ -83,7 +84,10 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
       _service.ensureWaveform(l.sourcePath);
     } else if (l is VideoLayer) {
       _service.ensureWaveform(l.sourcePath);
-      _service.ensureFilmstrip(l.sourcePath, l.sourceOffset + l.duration);
+      _service.ensureFilmstrip(
+        l.sourcePath,
+        l.sourceOffset + videoSourceSpan(l),
+      );
     }
   }
 
@@ -97,16 +101,31 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
       ref.read(editorControllerProvider).layerById(widget.layerId);
 
   Duration get _fonteInicio => switch (_layer) {
-        VideoLayer v => v.sourceOffset,
-        AudioLayer a => a.sourceOffset,
-        _ => Duration.zero,
-      };
+    VideoLayer v => v.sourceOffset,
+    AudioLayer a => a.sourceOffset,
+    _ => Duration.zero,
+  };
+
+  Duration get _fonteFim => switch (_layer) {
+    VideoLayer v => v.sourceOffset + videoSourceSpan(v),
+    AudioLayer a => a.sourceOffset + a.sourceSpan,
+    Layer l => _fonteInicio + l.duration,
+    _ => Duration.zero,
+  };
+
+  Duration _fonteEm(Duration local) => switch (_layer) {
+    VideoLayer v => videoAbsoluteSourceTimeAt(v, local),
+    AudioLayer a =>
+      a.sourceOffset +
+          Duration(microseconds: (local.inMicroseconds * a.speed).round()),
+    _ => _fonteInicio + local,
+  };
 
   String? get _caminho => switch (_layer) {
-        VideoLayer v => v.sourcePath,
-        AudioLayer a => a.sourcePath,
-        _ => null,
-      };
+    VideoLayer v => v.sourcePath,
+    AudioLayer a => a.sourcePath,
+    _ => null,
+  };
 
   Duration get _quadro => ref.read(editorControllerProvider).frameDuration;
 
@@ -135,13 +154,13 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     if (l == null) return const [];
     final r = ref
         .read(editorControllerProvider.notifier)
-        .silenceRangesOf(widget.layerId,
-            threshold: _limiar,
-            minSilence: Duration(milliseconds: _minPausa.round()));
+        .silenceRangesOf(
+          widget.layerId,
+          threshold: _limiar,
+          minSilence: Duration(milliseconds: _minPausa.round()),
+        );
     if (r == null) return const [];
-    return [
-      for (final p in r) (p.$1 - l.startTime, p.$2 - l.startTime)
-    ];
+    return [for (final p in r) (p.$1 - l.startTime, p.$2 - l.startTime)];
   }
 
   void _aplicarSilencio() {
@@ -153,9 +172,11 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
       return;
     }
     final total = pausas.fold<Duration>(
-        Duration.zero, (a, p) => a + (p.$2 - p.$1));
+      Duration.zero,
+      (a, p) => a + (p.$2 - p.$1),
+    );
     final naLinha = [
-      for (final p in pausas) (l.startTime + p.$1, l.startTime + p.$2)
+      for (final p in pausas) (l.startTime + p.$1, l.startTime + p.$2),
     ];
     ref
         .read(editorControllerProvider.notifier)
@@ -188,13 +209,15 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     final cortes = await SceneCutService.instance.detect(
       l.sourcePath,
       start: l.sourceOffset,
-      duration: l.duration,
+      duration: videoSourceSpan(l),
       threshold: limiar,
     );
     if (!mounted || id != _pedido) return;
     setState(() {
       _buscando = false;
-      _cortes = cortes;
+      _cortes = [
+        for (final sourceTime in cortes) videoLocalTimeForSource(l, sourceTime),
+      ]..sort();
     });
   }
 
@@ -206,7 +229,7 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
       for (final c in lista)
         if (c > const Duration(milliseconds: 100) &&
             c < l.duration - const Duration(milliseconds: 100))
-          c
+          c,
     ];
   }
 
@@ -215,8 +238,9 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     final cortes = _cortesValidos;
     if (l == null || cortes.isEmpty) return;
     final ctrl = ref.read(editorControllerProvider.notifier);
-    final pedacos = ctrl.splitLayerAtTimes(
-        widget.layerId, [for (final c in cortes) l.startTime + c]);
+    final pedacos = ctrl.splitLayerAtTimes(widget.layerId, [
+      for (final c in cortes) l.startTime + c,
+    ]);
     if (!mounted) return;
     Navigator.of(context).pop();
     AureaSnack.show(
@@ -235,8 +259,12 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     final ctrl = ref.read(editorControllerProvider.notifier);
     ctrl.addMarkers([for (final c in cortes) l.startTime + c], label: 'Cena');
     if (!mounted) return;
-    AureaSnack.show(context, '${cortes.length} marcas na regua',
-        actionLabel: 'Desfazer', onAction: ctrl.undo);
+    AureaSnack.show(
+      context,
+      '${cortes.length} marcas na regua',
+      actionLabel: 'Desfazer',
+      onAction: ctrl.undo,
+    );
   }
 
   // ------------------------------------------------------------ trecho
@@ -253,20 +281,14 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     final ctrl = ref.read(editorControllerProvider.notifier);
     if (manter) {
       // Ficar so com o miolo: tira as duas pontas.
-      ctrl.cutRangesOf(
-        widget.layerId,
-        [
-          if (de > Duration.zero) (l.startTime, l.startTime + de),
-          if (ate < l.duration) (l.startTime + ate, l.endTime),
-        ],
-        ripple: _arrasto,
-      );
+      ctrl.cutRangesOf(widget.layerId, [
+        if (de > Duration.zero) (l.startTime, l.startTime + de),
+        if (ate < l.duration) (l.startTime + ate, l.endTime),
+      ], ripple: _arrasto);
     } else {
-      ctrl.cutRangesOf(
-        widget.layerId,
-        [(l.startTime + de, l.startTime + ate)],
-        ripple: _arrasto,
-      );
+      ctrl.cutRangesOf(widget.layerId, [
+        (l.startTime + de, l.startTime + ate),
+      ], ripple: _arrasto);
     }
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -291,8 +313,12 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).pop();
-    AureaSnack.show(context, 'Dividido em ${formatTime(_cursor)}',
-        actionLabel: 'Desfazer', onAction: ctrl.undo);
+    AureaSnack.show(
+      context,
+      'Dividido em ${formatTime(_cursor)}',
+      actionLabel: 'Desfazer',
+      onAction: ctrl.undo,
+    );
   }
 
   // ------------------------------------------------------------- build
@@ -306,8 +332,9 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
     final dur = l.duration;
     final path = _caminho;
     final quadro = _quadro;
-    final pausas =
-        _auto == _Auto.silencio ? _pausas() : const <(Duration, Duration)>[];
+    final pausas = _auto == _Auto.silencio
+        ? _pausas()
+        : const <(Duration, Duration)>[];
     final cortes = _auto == _Auto.cena ? _cortesValidos : const <Duration>[];
 
     return Scaffold(
@@ -322,15 +349,20 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Decupagem',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
-            Text(l.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: AmColors.muted)),
+            const Text(
+              'Decupagem',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
+            Text(
+              l.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: AmColors.muted),
+            ),
           ],
         ),
       ),
@@ -346,7 +378,8 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                 child: _Visor(
                   frames: strip,
                   sourceStart: _fonteInicio,
-                  sourceEnd: _fonteInicio + dur,
+                  sourceEnd: _fonteFim,
+                  sourceAt: _fonteEm,
                   cursor: _cursor,
                   duration: dur,
                   temVideo: l is VideoLayer,
@@ -356,7 +389,8 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                 frames: strip,
                 peaks: peaks,
                 sourceStart: _fonteInicio,
-                sourceEnd: _fonteInicio + dur,
+                sourceEnd: _fonteFim,
+                sourceAt: _fonteEm,
                 duration: dur,
                 quadro: quadro,
                 cursor: _cursor,
@@ -411,13 +445,13 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                           Expanded(
                             child: _Botao(
                               rotulo: 'Saida aqui',
-                              detalhe:
-                                  _saida == null ? '—' : formatTime(_saida!),
+                              detalhe: _saida == null
+                                  ? '—'
+                                  : formatTime(_saida!),
                               aceso: _saida != null,
                               onTap: () => setState(() {
                                 _saida = _naGrade(_cursor);
-                                if (_entrada != null &&
-                                    _entrada! >= _cursor) {
+                                if (_entrada != null && _entrada! >= _cursor) {
                                   _entrada = null;
                                 }
                               }),
@@ -440,18 +474,26 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: _Acao('Dividir', _dividirNoCursor,
-                                icone: CupertinoIcons.scissors, destaque: true),
+                            child: _Acao(
+                              'Dividir',
+                              _dividirNoCursor,
+                              icone: CupertinoIcons.scissors,
+                              destaque: true,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: _Acao('Manter trecho',
-                                () => _aplicarTrecho(manter: true)),
+                            child: _Acao(
+                              'Manter trecho',
+                              () => _aplicarTrecho(manter: true),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: _Acao('Remover trecho',
-                                () => _aplicarTrecho(manter: false)),
+                            child: _Acao(
+                              'Remover trecho',
+                              () => _aplicarTrecho(manter: false),
+                            ),
                           ),
                         ],
                       ),
@@ -460,14 +502,21 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                       const Divider(color: AmColors.hairline, height: 1),
                       const SizedBox(height: 10),
 
-                      const Text('Cortar sozinho',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AmColors.text)),
+                      const Text(
+                        'Cortar sozinho',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AmColors.text,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       _ChipRow(
-                        opcoes: const ['Desligado', 'Mudanca de cena', 'Silencio'],
+                        opcoes: const [
+                          'Desligado',
+                          'Mudanca de cena',
+                          'Silencio',
+                        ],
                         indice: _auto.index,
                         onChanged: (i) {
                           setState(() => _auto = _Auto.values[i]);
@@ -484,7 +533,9 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                             child: Text(
                               'Mudanca de cena e so para video.',
                               style: TextStyle(
-                                  fontSize: 11, color: AmColors.muted),
+                                fontSize: 11,
+                                color: AmColors.muted,
+                              ),
                             ),
                           )
                         else ...[
@@ -503,29 +554,35 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                             _buscando
                                 ? 'Procurando onde a cena muda...'
                                 : cortes.isEmpty
-                                    ? (_cortes == null
-                                        ? ''
-                                        : 'Nenhuma mudanca de cena nessa sensibilidade.')
-                                    : '${cortes.length} '
-                                        '${cortes.length == 1 ? "corte" : "cortes"}'
-                                        ' — ${cortes.length + 1} pedacos',
+                                ? (_cortes == null
+                                      ? ''
+                                      : 'Nenhuma mudanca de cena nessa sensibilidade.')
+                                : '${cortes.length} '
+                                      '${cortes.length == 1 ? "corte" : "cortes"}'
+                                      ' — ${cortes.length + 1} pedacos',
                             style: const TextStyle(
-                                fontSize: 11, color: AmColors.muted),
+                              fontSize: 11,
+                              color: AmColors.muted,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Row(
                             children: [
                               Expanded(
-                                child: _Acao('Cortar nas cenas',
-                                    cortes.isEmpty ? null : _cortarNasCenas,
-                                    icone: CupertinoIcons.scissors,
-                                    destaque: cortes.isNotEmpty),
+                                child: _Acao(
+                                  'Cortar nas cenas',
+                                  cortes.isEmpty ? null : _cortarNasCenas,
+                                  icone: CupertinoIcons.scissors,
+                                  destaque: cortes.isNotEmpty,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: _Acao('So marcar',
-                                    cortes.isEmpty ? null : _marcarCenas,
-                                    icone: CupertinoIcons.bookmark),
+                                child: _Acao(
+                                  'So marcar',
+                                  cortes.isEmpty ? null : _marcarCenas,
+                                  icone: CupertinoIcons.bookmark,
+                                ),
                               ),
                             ],
                           ),
@@ -539,7 +596,9 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                             child: Text(
                               'Lendo o som do arquivo...',
                               style: TextStyle(
-                                  fontSize: 11, color: AmColors.muted),
+                                fontSize: 11,
+                                color: AmColors.muted,
+                              ),
                             ),
                           )
                         else ...[
@@ -563,17 +622,21 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                             pausas.isEmpty
                                 ? 'Nenhuma pausa nesse limiar.'
                                 : '${pausas.length} '
-                                    '${pausas.length == 1 ? "pausa" : "pausas"}'
-                                    ' — sai ${formatTime(pausas.fold<Duration>(Duration.zero, (a, p) => a + (p.$2 - p.$1)))}'
-                                    ' de ${formatTime(dur)}',
+                                      '${pausas.length == 1 ? "pausa" : "pausas"}'
+                                      ' — sai ${formatTime(pausas.fold<Duration>(Duration.zero, (a, p) => a + (p.$2 - p.$1)))}'
+                                      ' de ${formatTime(dur)}',
                             style: const TextStyle(
-                                fontSize: 11, color: AmColors.muted),
+                              fontSize: 11,
+                              color: AmColors.muted,
+                            ),
                           ),
                           const SizedBox(height: 6),
-                          _Acao('Remover as pausas',
-                              pausas.isEmpty ? null : _aplicarSilencio,
-                              icone: CupertinoIcons.scissors,
-                              destaque: pausas.isNotEmpty),
+                          _Acao(
+                            'Remover as pausas',
+                            pausas.isEmpty ? null : _aplicarSilencio,
+                            icone: CupertinoIcons.scissors,
+                            destaque: pausas.isNotEmpty,
+                          ),
                         ],
                       ],
 
@@ -588,7 +651,10 @@ class _DecupagemScreenState extends ConsumerState<DecupagemScreen> {
                         'quer quando outra trilha tem de continuar no '
                         'mesmo lugar.',
                         style: TextStyle(
-                            fontSize: 11, height: 1.35, color: AmColors.muted),
+                          fontSize: 11,
+                          height: 1.35,
+                          color: AmColors.muted,
+                        ),
                       ),
                     ],
                   ),
@@ -608,6 +674,7 @@ class _Visor extends StatelessWidget {
     required this.frames,
     required this.sourceStart,
     required this.sourceEnd,
+    required this.sourceAt,
     required this.cursor,
     required this.duration,
     required this.temVideo,
@@ -616,6 +683,7 @@ class _Visor extends StatelessWidget {
   final List<ui.Image>? frames;
   final Duration sourceStart;
   final Duration sourceEnd;
+  final Duration Function(Duration) sourceAt;
   final Duration cursor;
   final Duration duration;
   final bool temVideo;
@@ -646,7 +714,7 @@ class _Visor extends StatelessWidget {
     // As miniaturas cobrem o arquivo inteiro; o cursor anda dentro do
     // pedaco que a camada usa.
     final totalUs = sourceEnd.inMicroseconds;
-    final noArquivo = sourceStart + cursor;
+    final noArquivo = sourceAt(cursor);
     final f = totalUs <= 0 ? 0.0 : noArquivo.inMicroseconds / totalUs;
     final i = (f * lista.length).floor().clamp(0, lista.length - 1);
 
@@ -667,6 +735,7 @@ class _Tira extends StatefulWidget {
     required this.peaks,
     required this.sourceStart,
     required this.sourceEnd,
+    required this.sourceAt,
     required this.duration,
     required this.quadro,
     required this.cursor,
@@ -684,6 +753,7 @@ class _Tira extends StatefulWidget {
   final Float32List? peaks;
   final Duration sourceStart;
   final Duration sourceEnd;
+  final Duration Function(Duration) sourceAt;
   final Duration duration;
   final Duration quadro;
   final Duration cursor;
@@ -714,113 +784,112 @@ class _TiraState extends State<_Tira> {
 
   Duration _t(double x, double w) {
     final f = (x / w).clamp(0.0, 1.0);
-    return Duration(
-        microseconds: (widget.duration.inMicroseconds * f).round());
+    return Duration(microseconds: (widget.duration.inMicroseconds * f).round());
   }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, c) {
-          final w = c.maxWidth - 20;
+    builder: (context, c) {
+      final w = c.maxWidth - 20;
 
-          _Alvo alvoEm(double x) {
-            final e = widget.entrada, s = widget.saida;
-            if (e != null && (x - _x(e, w)).abs() <= _pegada) {
-              return _Alvo.entrada;
-            }
-            if (s != null && (x - _x(s, w)).abs() <= _pegada) {
-              return _Alvo.saida;
-            }
-            return _Alvo.cursor;
-          }
+      _Alvo alvoEm(double x) {
+        final e = widget.entrada, s = widget.saida;
+        if (e != null && (x - _x(e, w)).abs() <= _pegada) {
+          return _Alvo.entrada;
+        }
+        if (s != null && (x - _x(s, w)).abs() <= _pegada) {
+          return _Alvo.saida;
+        }
+        return _Alvo.cursor;
+      }
 
-          void mover(_Alvo alvo, double x) {
-            final t = _t(x, w);
-            switch (alvo) {
-              case _Alvo.cursor:
-                widget.onCursor(t);
-              case _Alvo.entrada:
-                final s = widget.saida;
-                final lim = s == null ? widget.duration : s - widget.quadro;
-                widget.onEntrada(t > lim ? lim : t);
-                widget.onCursor(t > lim ? lim : t);
-              case _Alvo.saida:
-                final e = widget.entrada;
-                final lim = e == null ? Duration.zero : e + widget.quadro;
-                widget.onSaida(t < lim ? lim : t);
-                widget.onCursor(t < lim ? lim : t);
-            }
-          }
+      void mover(_Alvo alvo, double x) {
+        final t = _t(x, w);
+        switch (alvo) {
+          case _Alvo.cursor:
+            widget.onCursor(t);
+          case _Alvo.entrada:
+            final s = widget.saida;
+            final lim = s == null ? widget.duration : s - widget.quadro;
+            widget.onEntrada(t > lim ? lim : t);
+            widget.onCursor(t > lim ? lim : t);
+          case _Alvo.saida:
+            final e = widget.entrada;
+            final lim = e == null ? Duration.zero : e + widget.quadro;
+            widget.onSaida(t < lim ? lim : t);
+            widget.onCursor(t < lim ? lim : t);
+        }
+      }
 
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown: (d) {
-              final x = d.localPosition.dx - 10;
-              if (alvoEm(x) == _Alvo.cursor) widget.onCursor(_t(x, w));
-            },
-            onHorizontalDragStart: (d) =>
-                _alvo = alvoEm(d.localPosition.dx - 10),
-            onHorizontalDragUpdate: (d) =>
-                mover(_alvo ?? _Alvo.cursor, d.localPosition.dx - 10),
-            onHorizontalDragEnd: (_) => _alvo = null,
-            onHorizontalDragCancel: () => _alvo = null,
-            child: Container(
-              height: _altura,
-              margin: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: AmColors.panel,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                children: [
-                  if (widget.temVideo)
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _TiraPainter(
-                          frames: widget.frames,
-                          sourceStart: widget.sourceStart,
-                          sourceEnd: widget.sourceEnd,
-                          duration: widget.duration,
-                        ),
-                      ),
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (d) {
+          final x = d.localPosition.dx - 10;
+          if (alvoEm(x) == _Alvo.cursor) widget.onCursor(_t(x, w));
+        },
+        onHorizontalDragStart: (d) => _alvo = alvoEm(d.localPosition.dx - 10),
+        onHorizontalDragUpdate: (d) =>
+            mover(_alvo ?? _Alvo.cursor, d.localPosition.dx - 10),
+        onHorizontalDragEnd: (_) => _alvo = null,
+        onHorizontalDragCancel: () => _alvo = null,
+        child: Container(
+          height: _altura,
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: AmColors.panel,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              if (widget.temVideo)
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _TiraPainter(
+                      frames: widget.frames,
+                      sourceStart: widget.sourceStart,
+                      sourceEnd: widget.sourceEnd,
+                      sourceAt: widget.sourceAt,
+                      duration: widget.duration,
                     ),
-                  if (widget.peaks != null && widget.peaks!.isNotEmpty)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: widget.temVideo ? 34 : _altura,
-                      child: Opacity(
-                        opacity: widget.temVideo ? 0.75 : 1,
-                        child: CustomPaint(
-                          painter: WaveformPainter(
-                            peaks: widget.peaks!,
-                            start: widget.sourceStart,
-                            end: widget.sourceEnd,
-                            color: AmColors.tealBright,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned.fill(
+                  ),
+                ),
+              if (widget.peaks != null && widget.peaks!.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: widget.temVideo ? 34 : _altura,
+                  child: Opacity(
+                    opacity: widget.temVideo ? 0.75 : 1,
                     child: CustomPaint(
-                      painter: _MarcasPainter(
-                        duration: widget.duration,
-                        cursor: widget.cursor,
-                        entrada: widget.entrada,
-                        saida: widget.saida,
-                        pausas: widget.pausas,
-                        cortes: widget.cortes,
+                      painter: WaveformPainter(
+                        peaks: widget.peaks!,
+                        start: widget.sourceStart,
+                        end: widget.sourceEnd,
+                        color: AmColors.tealBright,
                       ),
                     ),
                   ),
-                ],
+                ),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _MarcasPainter(
+                    duration: widget.duration,
+                    cursor: widget.cursor,
+                    entrada: widget.entrada,
+                    saida: widget.saida,
+                    pausas: widget.pausas,
+                    cortes: widget.cortes,
+                  ),
+                ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       );
+    },
+  );
 }
 
 /// As miniaturas lado a lado, cada uma no seu instante.
@@ -829,12 +898,14 @@ class _TiraPainter extends CustomPainter {
     required this.frames,
     required this.sourceStart,
     required this.sourceEnd,
+    required this.sourceAt,
     required this.duration,
   });
 
   final List<ui.Image>? frames;
   final Duration sourceStart;
   final Duration sourceEnd;
+  final Duration Function(Duration) sourceAt;
   final Duration duration;
 
   @override
@@ -843,14 +914,16 @@ class _TiraPainter extends CustomPainter {
     if (lista == null || lista.isEmpty) return;
     final primeira = lista.first;
     final h = size.height;
-    var tileW = primeira.height <= 0 ? 48.0 : h * primeira.width / primeira.height;
+    var tileW = primeira.height <= 0
+        ? 48.0
+        : h * primeira.width / primeira.height;
     if (tileW < 24) tileW = 24;
     final n = (size.width / tileW).ceil();
     final totalUs = sourceEnd.inMicroseconds;
     final paint = Paint()..filterQuality = FilterQuality.low;
     for (var k = 0; k < n; k++) {
       final t = duration * ((k + 0.5) / n);
-      final noArquivo = sourceStart + t;
+      final noArquivo = sourceAt(t);
       final f = totalUs <= 0 ? 0.0 : noArquivo.inMicroseconds / totalUs;
       final i = (f * lista.length).floor().clamp(0, lista.length - 1);
       final img = lista[i];
@@ -868,6 +941,7 @@ class _TiraPainter extends CustomPainter {
       old.frames != frames ||
       old.sourceStart != sourceStart ||
       old.sourceEnd != sourceEnd ||
+      old.sourceAt != sourceAt ||
       old.duration != duration;
 }
 
@@ -958,6 +1032,7 @@ class _MarcasPainter extends CustomPainter {
             ..strokeCap = StrokeCap.round,
         );
       }
+
       if (entrada != null) alca(a, true);
       if (saida != null) alca(b, false);
     }
@@ -973,8 +1048,9 @@ class _MarcasPainter extends CustomPainter {
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(x, 6), width: 10, height: 12),
-          const Radius.circular(3)),
+        Rect.fromCenter(center: Offset(x, 6), width: 10, height: 12),
+        const Radius.circular(3),
+      ),
       Paint()..color = Colors.white,
     );
   }
@@ -1017,16 +1093,16 @@ class _Transporte extends StatelessWidget {
         ? 0
         : (cursor.inMicroseconds / quadro.inMicroseconds).round();
     Widget botao(IconData icone, VoidCallback onTap) => GestureDetector(
-          onTap: () {
-            onTap();
-            HapticFeedback.selectionClick();
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Icon(icone, size: 22, color: AmColors.text),
-          ),
-        );
+      onTap: () {
+        onTap();
+        HapticFeedback.selectionClick();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Icon(icone, size: 22, color: AmColors.text),
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
       child: Row(
@@ -1036,13 +1112,18 @@ class _Transporte extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                Text(formatTime(cursor),
-                    style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.accent)),
-                Text('quadro $q  ·  ${formatTime(duration)}',
-                    style: const TextStyle(fontSize: 11, color: AmColors.muted)),
+                Text(
+                  formatTime(cursor),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.accent,
+                  ),
+                ),
+                Text(
+                  'quadro $q  ·  ${formatTime(duration)}',
+                  style: const TextStyle(fontSize: 11, color: AmColors.muted),
+                ),
               ],
             ),
           ),
@@ -1069,26 +1150,31 @@ class _Botao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: aceso ? AmColors.accentDim : AmColors.chip,
-            borderRadius: BorderRadius.circular(9),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: aceso ? AmColors.accentDim : AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Column(
+        children: [
+          Text(
+            rotulo,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: aceso ? AmColors.accent : AmColors.text,
+            ),
           ),
-          child: Column(
-            children: [
-              Text(rotulo,
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: aceso ? AmColors.accent : AmColors.text)),
-              Text(detalhe,
-                  style: const TextStyle(fontSize: 10, color: AmColors.muted)),
-            ],
+          Text(
+            detalhe,
+            style: const TextStyle(fontSize: 10, color: AmColors.muted),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class _Acao extends StatelessWidget {
@@ -1105,8 +1191,8 @@ class _Acao extends StatelessWidget {
     final cor = !ativo
         ? AmColors.muted
         : destaque
-            ? AmColors.accent
-            : AmColors.text;
+        ? AmColors.accent
+        : AmColors.text;
     return GestureDetector(
       onTap: onTap,
       child: Opacity(
@@ -1127,11 +1213,16 @@ class _Acao extends StatelessWidget {
                 const SizedBox(width: 6),
               ],
               Flexible(
-                child: Text(rotulo,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600, color: cor)),
+                child: Text(
+                  rotulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cor,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1154,28 +1245,30 @@ class _ChipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (var i = 0; i < opcoes.length; i++)
-            GestureDetector(
-              onTap: () => onChanged(i),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: i == indice ? AmColors.accentDim : AmColors.chip,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(opcoes[i],
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: i == indice ? AmColors.accent : AmColors.text)),
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (var i = 0; i < opcoes.length; i++)
+        GestureDetector(
+          onTap: () => onChanged(i),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: i == indice ? AmColors.accentDim : AmColors.chip,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Text(
+              opcoes[i],
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: i == indice ? AmColors.accent : AmColors.text,
               ),
             ),
-        ],
-      );
+          ),
+        ),
+    ],
+  );
 }
 
 class _Chave extends StatelessWidget {
@@ -1191,18 +1284,20 @@ class _Chave extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          Expanded(
-            child: Text(rotulo,
-                style: const TextStyle(fontSize: 13, color: AmColors.text)),
-          ),
-          CupertinoSwitch(
-            value: valor,
-            activeTrackColor: AmColors.accent,
-            onChanged: onChanged,
-          ),
-        ],
-      );
+    children: [
+      Expanded(
+        child: Text(
+          rotulo,
+          style: const TextStyle(fontSize: 13, color: AmColors.text),
+        ),
+      ),
+      CupertinoSwitch(
+        value: valor,
+        activeTrackColor: AmColors.accent,
+        onChanged: onChanged,
+      ),
+    ],
+  );
 }
 
 class _Deslize extends StatelessWidget {
@@ -1224,28 +1319,32 @@ class _Deslize extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          SizedBox(
-            width: 92,
-            child: Text(rotulo,
-                style: const TextStyle(fontSize: 12, color: AmColors.muted)),
-          ),
-          Expanded(
-            child: AmTickRuler(
-              value: valor.clamp(min, max),
-              min: min,
-              max: max,
-              unitsPerPixel: (max - min) / 420,
-              height: 40,
-              onChanged: onChanged,
-            ),
-          ),
-          SizedBox(
-            width: 62,
-            child: Text(texto,
-                textAlign: TextAlign.right,
-                style: const TextStyle(fontSize: 11, color: AmColors.text)),
-          ),
-        ],
-      );
+    children: [
+      SizedBox(
+        width: 92,
+        child: Text(
+          rotulo,
+          style: const TextStyle(fontSize: 12, color: AmColors.muted),
+        ),
+      ),
+      Expanded(
+        child: AmTickRuler(
+          value: valor.clamp(min, max),
+          min: min,
+          max: max,
+          unitsPerPixel: (max - min) / 420,
+          height: 40,
+          onChanged: onChanged,
+        ),
+      ),
+      SizedBox(
+        width: 62,
+        child: Text(
+          texto,
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontSize: 11, color: AmColors.text),
+        ),
+      ),
+    ],
+  );
 }

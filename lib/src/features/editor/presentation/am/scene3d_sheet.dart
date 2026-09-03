@@ -1,22 +1,59 @@
-﻿import 'dart:io';
+import 'dart:io';
+import 'dart:convert';
+import 'dart:isolate';
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../domain/glb_import.dart';
 import '../../../../core/ui/snack.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
+import '../../application/panorama_cache.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/element3d.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
+import '../../domain/panorama3d.dart';
 import '../../domain/scene3d.dart';
 import '../widgets/element3d_painter.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 import 'scene3d_studio.dart';
+
+Future<GlbResult> _readModelFile(String path) =>
+    Isolate.run(() => _readModelFileWorker(path));
+
+Future<GlbResult> _readModelFileWorker(String path) async {
+  final file = File(path);
+  if (path.toLowerCase().endsWith('.glb')) {
+    return parseGlb(await file.readAsBytes());
+  }
+  final source = await file.readAsString();
+  final document = jsonDecode(source);
+  final binaries = <Uint8List?>[];
+  if (document is Map) {
+    final buffers = document['buffers'] as List?;
+    if (buffers != null) {
+      for (final entry in buffers) {
+        final uri = (entry as Map)['uri'] as String?;
+        if (uri == null || uri.startsWith('data:')) {
+          binaries.add(null);
+        } else {
+          final buffer = File.fromUri(file.parent.uri.resolve(uri));
+          binaries.add(await buffer.readAsBytes());
+        }
+      }
+    }
+  }
+  return parseGltf(source, binaries: binaries);
+}
 
 /// SHEET DA CENA 3D: estrutura da cena, materiais, luzes, camera com os
 /// tres jeitos de ver a mesma grandeza (focal, angulo, zoom), a
@@ -40,8 +77,10 @@ Future<void> showScene3DSheet(
         final layer = ref.read(editorControllerProvider).layerById(layerId);
         if (layer is! Scene3DLayer) return const SizedBox.shrink();
         final controller = ref.read(editorControllerProvider.notifier);
-        final compWidth =
-            ref.read(editorControllerProvider).outputWidth.toDouble();
+        final compWidth = ref
+            .read(editorControllerProvider)
+            .outputWidth
+            .toDouble();
 
         void redraw() => setSheetState(() {});
 
@@ -53,11 +92,14 @@ Future<void> showScene3DSheet(
                 padding: const EdgeInsets.fromLTRB(18, 12, 12, 4),
                 child: Row(
                   children: [
-                    const Text('Cena 3D',
-                        style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: AmColors.text)),
+                    const Text(
+                      'Cena 3D',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text,
+                      ),
+                    ),
                     const SizedBox(width: 10),
                     _BudgetBadge(layer: layer),
                     const Spacer(),
@@ -74,12 +116,19 @@ Future<void> showScene3DSheet(
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(CupertinoIcons.viewfinder,
-                              size: 18, color: AmColors.accent),
+                          Icon(
+                            CupertinoIcons.viewfinder,
+                            size: 18,
+                            color: AmColors.accent,
+                          ),
                           SizedBox(width: 5),
-                          Text('Estudio',
-                              style: TextStyle(
-                                  fontSize: 13, color: AmColors.accent)),
+                          Text(
+                            'Estudio',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -90,6 +139,7 @@ Future<void> showScene3DSheet(
                 labels: const [
                   'Objetos',
                   'Luzes',
+                  'Ambiente',
                   'Camera',
                   'Foco',
                   'Ajudas',
@@ -99,38 +149,46 @@ Future<void> showScene3DSheet(
               ),
               Flexible(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(18, 10, 18,
-                      16 + MediaQuery.of(sheetContext).viewInsets.bottom),
+                  padding: EdgeInsets.fromLTRB(
+                    18,
+                    10,
+                    18,
+                    16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+                  ),
                   child: switch (tab) {
                     0 => _ObjectsTab(
-                        layer: layer,
-                        controller: controller,
-                        selected: selectedNode,
-                        onSelect: (id) =>
-                            setSheetState(() => selectedNode = id),
-                        onChanged: redraw,
-                      ),
+                      layer: layer,
+                      controller: controller,
+                      selected: selectedNode,
+                      onSelect: (id) => setSheetState(() => selectedNode = id),
+                      onChanged: redraw,
+                    ),
                     1 => _LightsTab(
-                        layer: layer,
-                        controller: controller,
-                        onChanged: redraw,
-                      ),
-                    2 => _CameraTab(
-                        layer: layer,
-                        controller: controller,
-                        compWidth: compWidth,
-                        onChanged: redraw,
-                      ),
-                    3 => _DofTab(
-                        layer: layer,
-                        controller: controller,
-                        onChanged: redraw,
-                      ),
+                      layer: layer,
+                      controller: controller,
+                      onChanged: redraw,
+                    ),
+                    2 => _EnvironmentTab(
+                      layer: layer,
+                      controller: controller,
+                      onChanged: redraw,
+                    ),
+                    3 => _CameraTab(
+                      layer: layer,
+                      controller: controller,
+                      compWidth: compWidth,
+                      onChanged: redraw,
+                    ),
+                    4 => _DofTab(
+                      layer: layer,
+                      controller: controller,
+                      onChanged: redraw,
+                    ),
                     _ => _HelpersTab(
-                        layer: layer,
-                        controller: controller,
-                        onChanged: redraw,
-                      ),
+                      layer: layer,
+                      controller: controller,
+                      onChanged: redraw,
+                    ),
                   },
                 ),
               ),
@@ -163,21 +221,35 @@ class _ObjectsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final scene = layer.scene;
     final node = scene.nodes.where((n) => n.id == selected).firstOrNull;
+    final project = ProviderScope.containerOf(context)
+        .read(editorControllerProvider);
+    final textureLayers = project.layers
+        .whereType<ImageLayer>()
+        .where((candidate) => candidate.id != layer.id)
+        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Hint(
-            'Estrutura da cena. Cada objeto e uma malha de verdade — dois '
-            'que se cruzam mostram a intersecao correta.'),
+          'Estrutura da cena. Cada objeto e uma malha de verdade — dois '
+          'que se cruzam mostram a intersecao correta.',
+        ),
         for (final n in scene.nodes)
           _NodeRow(
             node: n,
             selected: n.id == selected,
             onTap: () => onSelect(n.id == selected ? null : n.id),
             onVisible: () {
-              controller.updateSceneNode(layer.id, n.id,
-                  (x) => x.copyWith(visible: !x.visible));
+              controller.updateSceneNode(
+                layer.id,
+                n.id,
+                (x) => x.copyWith(visible: !x.visible),
+              );
+              onChanged();
+            },
+            onLock: () {
+              controller.setSceneNodeLocked(layer.id, n.id, !n.locked);
               onChanged();
             },
             onIsolate: () {
@@ -185,6 +257,7 @@ class _ObjectsTab extends StatelessWidget {
               onChanged();
             },
             onDelete: () {
+              if (n.locked) return;
               controller.removeSceneNode(layer.id, n.id);
               if (selected == n.id) onSelect(null);
               onChanged();
@@ -194,70 +267,84 @@ class _ObjectsTab extends StatelessWidget {
 
         // EXTRUDAR: a forma plana do projeto vira volume. E o caminho de
         // logo chapado para logo girando, sem modelar nada.
-        Builder(builder: (context) {
-          final project = ProviderScope.containerOf(context)
-              .read(editorControllerProvider);
-          final formas = project.layers.whereType<ShapeLayer>().toList();
-          if (formas.isEmpty) {
-            return const _Hint(
+        Builder(
+          builder: (context) {
+            final project = ProviderScope.containerOf(context)
+                .read(editorControllerProvider);
+            final formas = project.layers.whereType<ShapeLayer>().toList();
+            if (formas.isEmpty) {
+              return const _Hint(
                 'Desenhe uma camada de forma para poder extrudar ela em '
-                '3D.');
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _SectionTitle('Extrudar uma forma'),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final f in formas)
-                    GestureDetector(
-                      onTap: () {
-                        final id = controller.extrudeShapeIntoScene(
-                            layer.id, f.id);
-                        if (id != null) onSelect(id);
-                        onChanged();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 11, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: AmColors.chip,
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(CupertinoIcons.cube,
-                                size: 13, color: AmColors.accent),
-                            const SizedBox(width: 6),
-                            Text(f.name,
+                '3D.',
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SectionTitle('Extrudar uma forma'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final f in formas)
+                      GestureDetector(
+                        onTap: () {
+                          final id = controller.extrudeShapeIntoScene(
+                            layer.id,
+                            f.id,
+                          );
+                          if (id != null) onSelect(id);
+                          onChanged();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AmColors.chip,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                CupertinoIcons.cube,
+                                size: 13,
+                                color: AmColors.accent,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                f.name,
                                 style: const TextStyle(
-                                    fontSize: 11, color: AmColors.text)),
-                          ],
+                                  fontSize: 11,
+                                  color: AmColors.text,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-              if (node?.outline != null) ...[
-                const SizedBox(height: 6),
-                _Num(
-                  label: 'Espessura',
-                  track: AnimatedDouble(node!.extrudeDepth),
-                  min: 2,
-                  max: 300,
-                  onChanged: (v) {
-                    controller.setExtrudeDepth(layer.id, node.id, v);
-                    onChanged();
-                  },
+                  ],
                 ),
+                if (node?.outline != null) ...[
+                  const SizedBox(height: 6),
+                  _Num(
+                    label: 'Espessura',
+                    track: AnimatedDouble(node!.extrudeDepth),
+                    min: 2,
+                    max: 300,
+                    onChanged: (v) {
+                      controller.setExtrudeDepth(layer.id, node.id, v);
+                      onChanged();
+                    },
+                  ),
+                ],
+                const SizedBox(height: 10),
               ],
-              const SizedBox(height: 10),
-            ],
-          );
-        }),
+            );
+          },
+        ),
 
         // NULO 3D e o rig que ele destrava. Sem nulo dentro da cena nao
         // ha rigging la dentro: nao da para girar um conjunto junto,
@@ -302,72 +389,92 @@ class _ObjectsTab extends StatelessWidget {
                 : (() {
                     final outros = [
                       for (final n in scene.nodes)
-                        if (n.id != node.id) n
+                        if (n.id != node.id) n,
                     ];
-                    final i =
-                        outros.indexWhere((n) => n.id == node.parentId);
+                    final i = outros.indexWhere((n) => n.id == node.parentId);
                     return i < 0 ? 0 : i + 1;
                   })(),
             onChanged: (i) {
               final outros = [
                 for (final n in scene.nodes)
-                  if (n.id != node.id) n
+                  if (n.id != node.id) n,
               ];
-              controller.setSceneNodeParent(layer.id, node.id,
-                  i == 0 ? null : outros[i - 1].id);
+              controller.setSceneNodeParent(
+                layer.id,
+                node.id,
+                i == 0 ? null : outros[i - 1].id,
+              );
               onChanged();
             },
           ),
           const _Hint(
-              'Girar o pai orbita o filho em torno do pivo dele. Um ciclo '
-              '(A pai de B e B pai de A) e recusado.'),
+            'Girar o pai orbita o filho em torno do pivo dele. Um ciclo '
+            '(A pai de B e B pai de A) e recusado.',
+          ),
           const SizedBox(height: 6),
         ],
 
         _Chips(
           label: 'Camera segue',
-          options: [
-            'Nada',
-            for (final n in scene.nodes) n.name,
-          ],
+          options: ['Nada', for (final n in scene.nodes) n.name],
           index: scene.cameraParentId == null
               ? 0
               : (() {
-                  final i = scene.nodes
-                      .indexWhere((n) => n.id == scene.cameraParentId);
+                  final i = scene.nodes.indexWhere(
+                    (n) => n.id == scene.cameraParentId,
+                  );
                   return i < 0 ? 0 : i + 1;
                 })(),
           onChanged: (i) {
             controller.setSceneCameraParent(
-                layer.id, i == 0 ? null : scene.nodes[i - 1].id);
+              layer.id,
+              i == 0 ? null : scene.nodes[i - 1].id,
+            );
             onChanged();
           },
         ),
         const _Hint(
-            'A camera herda posicao e rotacao do pai — nunca escala. '
-            'Camera nao tem escala, e herdar e o que faz o enquadramento '
-            'explodir.'),
+          'A camera herda posicao e rotacao do pai — nunca escala. '
+          'Camera nao tem escala, e herdar e o que faz o enquadramento '
+          'explodir.',
+        ),
         const SizedBox(height: 10),
 
         // MODELO PRONTO: modelar em celular ninguem vai fazer; baixar um
-        // .glb, sim. Sem isso a cena 3D fica presa nos oito solidos.
+        // .glb/.gltf, sim. Acima do orcamento abre com aviso e LOD, nunca
+        // bloqueia o trabalho.
         _AcaoLarga(
-          rotulo: 'Trazer modelo .glb',
+          rotulo: 'Importar modelo .glb / .gltf',
           onTap: () async {
             final r = await FilePicker.platform.pickFiles(
               type: FileType.custom,
-              allowedExtensions: const ['glb'],
+              allowedExtensions: const ['glb', 'gltf'],
             );
             final caminho = r?.files.single.path;
             if (caminho == null || !context.mounted) return;
             try {
-              final modelo =
-                  parseGlb(await File(caminho).readAsBytes());
-              final id = controller.addGlbNode(layer.id, modelo);
-              if (id.isNotEmpty) onSelect(id);
+              final modelo = await _readModelFile(caminho);
+              final id = controller.addGlbNode(
+                layer.id,
+                modelo,
+                sourcePath: caminho,
+              );
+              if (id.isNotEmpty) {
+                onSelect(id);
+              }
               onChanged();
-              if (context.mounted && modelo.warning != null) {
-                AureaSnack.show(context, modelo.warning!);
+              if (context.mounted) {
+                final report = modelo.report;
+                final summary =
+                    '${report.triangles} triangulos · '
+                    '${report.materials} materiais · '
+                    '${report.textures} texturas · ${report.nodes} nos';
+                AureaSnack.show(
+                  context,
+                  modelo.warning == null
+                      ? summary
+                      : '$summary · ${modelo.warning}',
+                );
               }
             } on GlbException catch (e) {
               if (context.mounted) {
@@ -394,7 +501,9 @@ class _ObjectsTab extends StatelessWidget {
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 7),
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: AmColors.chip,
                     borderRadius: BorderRadius.circular(9),
@@ -402,12 +511,19 @@ class _ObjectsTab extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(CupertinoIcons.plus,
-                          size: 12, color: AmColors.accent),
+                      const Icon(
+                        CupertinoIcons.plus,
+                        size: 12,
+                        color: AmColors.accent,
+                      ),
                       const SizedBox(width: 5),
-                      Text(element3DLabel(kind),
-                          style: const TextStyle(
-                              fontSize: 12, color: AmColors.accent)),
+                      Text(
+                        element3DLabel(kind),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AmColors.accent,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -417,14 +533,32 @@ class _ObjectsTab extends StatelessWidget {
         if (node != null) ...[
           const SizedBox(height: 16),
           _SectionTitle(node.name),
+          _ColorRow(
+            color: node.colorTag,
+            onColor: (color) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(colorTag: color),
+              );
+              onChanged();
+            },
+          ),
+          if (node.locked)
+            const _Hint(
+              'Objeto bloqueado: o gizmo e a exclusao ficam protegidos.',
+            ),
           _Num(
             label: 'Posicao X',
             track: node.x,
             min: -1500,
             max: 1500,
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(x: n.x.withBase(v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(x: n.x.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -434,8 +568,11 @@ class _ObjectsTab extends StatelessWidget {
             min: -1500,
             max: 1500,
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(y: n.y.withBase(v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(y: n.y.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -445,8 +582,11 @@ class _ObjectsTab extends StatelessWidget {
             min: -1500,
             max: 1500,
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(z: n.z.withBase(v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(z: n.z.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -457,8 +597,11 @@ class _ObjectsTab extends StatelessWidget {
             max: 360,
             suffix: '°',
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(rotX: n.rotX.withBase(v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(rotX: n.rotX.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -469,8 +612,11 @@ class _ObjectsTab extends StatelessWidget {
             max: 360,
             suffix: '°',
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(rotY: n.rotY.withBase(v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(rotY: n.rotY.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -481,8 +627,11 @@ class _ObjectsTab extends StatelessWidget {
             max: 360,
             suffix: '°',
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(rotZ: n.rotZ.withBase(v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(rotZ: n.rotZ.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -493,31 +642,111 @@ class _ObjectsTab extends StatelessWidget {
             max: 600,
             onChanged: (v) {
               controller.updateSceneNode(
-                  layer.id, node.id, (n) => n.copyWith(size: v));
+                layer.id,
+                node.id,
+                (n) => n.copyWith(size: v),
+              );
               onChanged();
             },
           ),
+          _Chips(
+            label: 'LOD',
+            options: const ['Auto', 'Alto', 'Medio', 'Baixo'],
+            index: node.lod.index,
+            onChanged: (i) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(lod: MeshLod3D.values[i]),
+              );
+              onChanged();
+            },
+          ),
+          _Plain(
+            label: 'Subdivisoes',
+            value: node.subdivisions.toDouble(),
+            min: 0,
+            max: 4,
+            onChanged: (v) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(subdivisions: v.round()),
+              );
+              onChanged();
+            },
+          ),
+          if (node.modelSource?.animationNames.isNotEmpty ?? false)
+            _Chips(
+              label: 'Clipe',
+              options: ['Nenhum', ...node.modelSource!.animationNames],
+              index: node.animationClip == null
+                  ? 0
+                  : node.modelSource!.animationNames.indexOf(
+                          node.animationClip!,
+                        ) +
+                        1,
+              onChanged: (i) {
+                controller.updateSceneNode(
+                  layer.id,
+                  node.id,
+                  (n) => i == 0
+                      ? n.copyWith(clearAnimationClip: true)
+                      : n.copyWith(
+                          animationClip: n.modelSource!.animationNames[i - 1],
+                        ),
+                );
+                onChanged();
+              },
+            ),
+          if (node.modelSource?.nodeNames.isNotEmpty ?? false)
+            _Hint(
+              'Hierarquia importada: '
+              '${node.modelSource!.nodeNames.take(6).join(' › ')}',
+            ),
           const SizedBox(height: 10),
           _SectionTitle('Material'),
+          _Chips(
+            label: 'Pronto',
+            options: [
+              for (final preset in MaterialPreset3D.values)
+                materialPresetLabel(preset),
+            ],
+            index: -1,
+            onChanged: (i) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(
+                  material: materialFromPreset(MaterialPreset3D.values[i]),
+                ),
+              );
+              onChanged();
+            },
+          ),
           _Chips(
             label: 'Tipo',
             options: const ['PBR', 'Sem luz', 'Vidro', 'Recorte'],
             index: node.material.kind.index,
             onChanged: (i) {
               controller.updateSceneNode(
-                  layer.id,
-                  node.id,
-                  (n) => n.copyWith(
-                      material: n.material
-                          .copyWith(kind: MaterialKind.values[i])));
+                layer.id,
+                node.id,
+                (n) => n.copyWith(
+                  material: n.material.copyWith(kind: MaterialKind.values[i]),
+                ),
+              );
               onChanged();
             },
           ),
           _ColorRow(
             color: node.material.baseColor,
             onColor: (c) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(material: n.material.copyWith(baseColor: c)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(material: n.material.copyWith(baseColor: c)),
+              );
               onChanged();
             },
           ),
@@ -528,8 +757,11 @@ class _ObjectsTab extends StatelessWidget {
             max: 1,
             decimals: 2,
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(material: n.material.copyWith(metallic: v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(material: n.material.copyWith(metallic: v)),
+              );
               onChanged();
             },
           ),
@@ -541,10 +773,10 @@ class _ObjectsTab extends StatelessWidget {
             decimals: 2,
             onChanged: (v) {
               controller.updateSceneNode(
-                  layer.id,
-                  node.id,
-                  (n) => n.copyWith(
-                      material: n.material.copyWith(roughness: v)));
+                layer.id,
+                node.id,
+                (n) => n.copyWith(material: n.material.copyWith(roughness: v)),
+              );
               onChanged();
             },
           ),
@@ -558,10 +790,11 @@ class _ObjectsTab extends StatelessWidget {
             decimals: 2,
             onChanged: (v) {
               controller.updateSceneNode(
-                  layer.id,
-                  node.id,
-                  (n) => n.copyWith(
-                      material: n.material.copyWith(reflectivity: v)));
+                layer.id,
+                node.id,
+                (n) =>
+                    n.copyWith(material: n.material.copyWith(reflectivity: v)),
+              );
               onChanged();
             },
           ),
@@ -572,10 +805,12 @@ class _ObjectsTab extends StatelessWidget {
             child: Row(
               children: [
                 const SizedBox(
-                    width: 92,
-                    child: Text('Imagem',
-                        style: TextStyle(
-                            fontSize: 12, color: AmColors.muted))),
+                  width: 92,
+                  child: Text(
+                    'Imagem',
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
+                  ),
+                ),
                 Expanded(
                   child: Text(
                     node.material.imagePath == null
@@ -583,49 +818,127 @@ class _ObjectsTab extends StatelessWidget {
                         : node.material.imagePath!.split(RegExp(r'[\\/]')).last,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.text),
+                    style: const TextStyle(fontSize: 12, color: AmColors.text),
                   ),
                 ),
                 GestureDetector(
                   onTap: () async {
-                    final r = await FilePicker.platform
-                        .pickFiles(type: FileType.image);
+                    final r = await FilePicker.platform.pickFiles(
+                      type: FileType.image,
+                    );
                     final caminho = r?.files.single.path;
                     if (caminho == null) return;
                     controller.updateSceneNode(
-                        layer.id,
-                        node.id,
-                        (n) => n.copyWith(
-                            material:
-                                n.material.copyWith(imagePath: caminho)));
+                      layer.id,
+                      node.id,
+                      (n) => n.copyWith(
+                        material: n.material.copyWith(imagePath: caminho),
+                      ),
+                    );
                     onChanged();
                   },
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(CupertinoIcons.photo,
-                        size: 20, color: AmColors.accent),
+                    child: Icon(
+                      CupertinoIcons.photo,
+                      size: 20,
+                      color: AmColors.accent,
+                    ),
                   ),
                 ),
                 if (node.material.imagePath != null)
                   GestureDetector(
                     onTap: () {
                       controller.updateSceneNode(
-                          layer.id,
-                          node.id,
-                          (n) => n.copyWith(
-                              material:
-                                  n.material.copyWith(clearImage: true)));
+                        layer.id,
+                        node.id,
+                        (n) => n.copyWith(
+                          material: n.material.copyWith(clearImage: true),
+                        ),
+                      );
                       onChanged();
                     },
                     child: const Padding(
                       padding: EdgeInsets.only(left: 4),
-                      child: Icon(CupertinoIcons.xmark_circle,
-                          size: 20, color: AmColors.muted),
+                      child: Icon(
+                        CupertinoIcons.xmark_circle,
+                        size: 20,
+                        color: AmColors.muted,
+                      ),
                     ),
                   ),
               ],
             ),
+          ),
+          if (textureLayers.isNotEmpty)
+            _Chips(
+              label: 'Da camada',
+              options: [
+                'Nenhuma',
+                for (final candidate in textureLayers) candidate.name,
+              ],
+              index: node.material.textureLayerId == null
+                  ? 0
+                  : textureLayers.indexWhere(
+                          (candidate) =>
+                              candidate.id == node.material.textureLayerId,
+                        ) +
+                        1,
+              onChanged: (i) {
+                controller.updateSceneNode(layer.id, node.id, (n) {
+                  if (i == 0) {
+                    return n.copyWith(
+                      material: n.material.copyWith(
+                        clearTextureLayer: true,
+                        clearImage: n.material.textureLayerId != null,
+                      ),
+                    );
+                  }
+                  final source = textureLayers[i - 1];
+                  return n.copyWith(
+                    material: n.material.copyWith(
+                      textureLayerId: source.id,
+                      imagePath: source.sourcePath,
+                    ),
+                  );
+                });
+                onChanged();
+              },
+            ),
+          const _Hint(
+            'Camadas de imagem e arquivos fixos usam projecao por caixa.',
+          ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (var face = 0; face < 6; face++)
+                _Action(
+                  icon: node.material.faceImagePaths.containsKey(face)
+                      ? CupertinoIcons.photo_fill
+                      : CupertinoIcons.photo,
+                  label: 'Face ${face + 1}',
+                  onTap: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.image,
+                    );
+                    final path = result?.files.single.path;
+                    if (path == null) return;
+                    final faces = <int, String>{
+                      ...node.material.faceImagePaths,
+                      face: path,
+                    };
+                    controller.updateSceneNode(
+                      layer.id,
+                      node.id,
+                      (n) => n.copyWith(
+                        material: n.material.copyWith(faceImagePaths: faces),
+                      ),
+                    );
+                    onChanged();
+                  },
+                ),
+            ],
           ),
           _Plain(
             label: 'Emissivo',
@@ -635,10 +948,10 @@ class _ObjectsTab extends StatelessWidget {
             decimals: 2,
             onChanged: (v) {
               controller.updateSceneNode(
-                  layer.id,
-                  node.id,
-                  (n) => n.copyWith(
-                      material: n.material.copyWith(emissive: v)));
+                layer.id,
+                node.id,
+                (n) => n.copyWith(material: n.material.copyWith(emissive: v)),
+              );
               onChanged();
             },
           ),
@@ -649,16 +962,98 @@ class _ObjectsTab extends StatelessWidget {
             max: 1,
             decimals: 2,
             onChanged: (v) {
-              controller.updateSceneNode(layer.id, node.id,
-                  (n) => n.copyWith(material: n.material.copyWith(opacity: v)));
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(material: n.material.copyWith(opacity: v)),
+              );
+              onChanged();
+            },
+          ),
+          _Plain(
+            label: 'Normal',
+            value: node.material.normalStrength,
+            min: 0,
+            max: 2,
+            decimals: 2,
+            onChanged: (v) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(
+                  material: n.material.copyWith(normalStrength: v),
+                ),
+              );
+              onChanged();
+            },
+          ),
+          _Plain(
+            label: 'Oclusao',
+            value: node.material.occlusionStrength,
+            min: 0,
+            max: 1,
+            decimals: 2,
+            onChanged: (v) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(
+                  material: n.material.copyWith(occlusionStrength: v),
+                ),
+              );
+              onChanged();
+            },
+          ),
+          if (node.material.kind == MaterialKind.cutout)
+            _Plain(
+              label: 'Recorte',
+              value: node.material.alphaCutoff,
+              min: 0,
+              max: 1,
+              decimals: 2,
+              onChanged: (v) {
+                controller.updateSceneNode(
+                  layer.id,
+                  node.id,
+                  (n) =>
+                      n.copyWith(material: n.material.copyWith(alphaCutoff: v)),
+                );
+                onChanged();
+              },
+            ),
+          _Toggle(
+            label: 'Dupla face',
+            value: node.material.doubleSided,
+            onChanged: (v) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) =>
+                    n.copyWith(material: n.material.copyWith(doubleSided: v)),
+              );
+              onChanged();
+            },
+          ),
+          _Toggle(
+            label: 'Canais empacotados',
+            value: node.material.packedChannels,
+            onChanged: (v) {
+              controller.updateSceneNode(
+                layer.id,
+                node.id,
+                (n) => n.copyWith(
+                  material: n.material.copyWith(packedChannels: v),
+                ),
+              );
               onChanged();
             },
           ),
           const SizedBox(height: 12),
           _SectionTitle('Duplicar em array (Grade 3D)'),
           const _Hint(
-              'Todas as copias sao INSTANCIAS da mesma malha: 200 objetos '
-              'continuam sendo uma chamada de desenho.'),
+            'Todas as copias sao INSTANCIAS da mesma malha: 200 objetos '
+            'continuam sendo uma chamada de desenho.',
+          ),
           _ArrayControls(
             node: node,
             onApply: (x, y, z, spacing) {
@@ -694,8 +1089,28 @@ class _ObjectsTab extends StatelessWidget {
                   onChanged();
                 },
               ),
+              _Action(
+                icon: CupertinoIcons.doc_on_doc,
+                label: 'Duplicar',
+                onTap: () {
+                  final copy = node.duplicate();
+                  controller.updateScene3D(
+                    layer.id,
+                    (s) => s.copyWith(nodes: [...s.nodes, copy]),
+                  );
+                  onSelect(copy.id);
+                  onChanged();
+                },
+              ),
             ],
           ),
+          if (!node.credit.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Modelo · ${node.credit.badge}',
+              style: const TextStyle(fontSize: 10, color: AmColors.muted),
+            ),
+          ],
         ],
       ],
     );
@@ -710,22 +1125,25 @@ class _AcaoLarga extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(rotulo,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AmColors.accent)),
+    onTap: onTap,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        rotulo,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AmColors.accent,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _NodeRow extends StatelessWidget {
@@ -734,6 +1152,7 @@ class _NodeRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onVisible,
+    required this.onLock,
     required this.onIsolate,
     required this.onDelete,
   });
@@ -742,6 +1161,7 @@ class _NodeRow extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onVisible;
+  final VoidCallback onLock;
   final VoidCallback onIsolate;
   final VoidCallback onDelete;
 
@@ -751,11 +1171,12 @@ class _NodeRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 3),
+        margin: EdgeInsets.fromLTRB(node.parentId == null ? 0 : 16, 3, 0, 3),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? AmColors.accentDim : AmColors.chip,
           borderRadius: BorderRadius.circular(10),
+          border: Border(left: BorderSide(color: node.colorTag, width: 3)),
         ),
         child: Row(
           children: [
@@ -792,9 +1213,10 @@ class _NodeRow extends StatelessWidget {
             if (node.instances.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
-                child: Text('${node.instances.length}x',
-                    style: const TextStyle(
-                        fontSize: 11, color: AmColors.accent)),
+                child: Text(
+                  '${node.instances.length}x',
+                  style: const TextStyle(fontSize: 11, color: AmColors.accent),
+                ),
               ),
             CupertinoButton(
               padding: EdgeInsets.zero,
@@ -809,16 +1231,34 @@ class _NodeRow extends StatelessWidget {
             CupertinoButton(
               padding: EdgeInsets.zero,
               minimumSize: const Size(30, 30),
+              onPressed: onLock,
+              child: Icon(
+                node.locked
+                    ? CupertinoIcons.lock_fill
+                    : CupertinoIcons.lock_open,
+                size: 15,
+                color: node.locked ? AmColors.accent : AmColors.muted,
+              ),
+            ),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(30, 30),
               onPressed: onIsolate,
-              child: const Icon(CupertinoIcons.rectangle_dock,
-                  size: 16, color: AmColors.muted),
+              child: const Icon(
+                CupertinoIcons.rectangle_dock,
+                size: 16,
+                color: AmColors.muted,
+              ),
             ),
             CupertinoButton(
               padding: EdgeInsets.zero,
               minimumSize: const Size(30, 30),
               onPressed: onDelete,
-              child: const Icon(CupertinoIcons.trash,
-                  size: 15, color: AmColors.muted),
+              child: const Icon(
+                CupertinoIcons.trash,
+                size: 15,
+                color: AmColors.muted,
+              ),
             ),
           ],
         ),
@@ -899,6 +1339,379 @@ class _ArrayControlsState extends State<_ArrayControls> {
   }
 }
 
+// ------------------------------------------------------------ ambiente
+
+class _EnvironmentTab extends StatelessWidget {
+  const _EnvironmentTab({
+    required this.layer,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final Scene3DLayer layer;
+  final EditorController controller;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scene = layer.scene;
+    final panorama = scene.panorama;
+    final probe = scene.reflectionProbe;
+    final project = ProviderScope.containerOf(context)
+        .read(editorControllerProvider);
+    final sourceLayers = project.layers
+        .whereType<ImageLayer>()
+        .where((candidate) => candidate.id != layer.id)
+        .toList(growable: false);
+
+    void setPanorama(Panorama3D next, {EnvironmentKind? environment}) {
+      if (next.hasImage) PanoramaCache.instance.samplerFor(next);
+      controller.updateScene3D(
+        layer.id,
+        (s) => s.copyWith(
+          panorama: next,
+          environment: environment ?? s.environment,
+        ),
+      );
+      onChanged();
+    }
+
+    void setProbe(ReflectionProbe3D next) {
+      controller.updateScene3D(
+        layer.id,
+        (s) => s.copyWith(reflectionProbe: next),
+      );
+      onChanged();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Hint(
+          'O panorama ilumina e aparece nos materiais. A mesma rotacao '
+          'gira luz e reflexo para os dois continuarem coerentes.',
+        ),
+        _SectionTitle('Panorama estatico'),
+        _Chips(
+          label: 'Preset',
+          options: [
+            for (final preset in PanoramaPreset.values)
+              panoramaPresetLabel(preset),
+          ],
+          index: panorama.preset.index,
+          onChanged: (index) {
+            final preset = PanoramaPreset.values[index];
+            setPanorama(
+              panorama.copyWith(
+                preset: preset,
+                source: PanoramaSource.preset,
+                clearSource: true,
+                clearLayer: true,
+                approximate: false,
+                coverageDegrees: 360,
+                mirrorTo360: false,
+                seamSoftness: 0,
+                fillZenithNadir: false,
+                convertedAtImport: false,
+              ),
+              environment: environmentForPanorama(preset),
+            );
+          },
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _Action(
+              icon: CupertinoIcons.photo,
+              label: 'Importar panorama',
+              onTap: () async {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.image,
+                );
+                final path = result?.files.single.path;
+                if (path == null) return;
+                setPanorama(preparePanorama(path: path));
+              },
+            ),
+            _Action(
+              icon: CupertinoIcons.camera,
+              label: 'Fotografar ambiente',
+              onTap: () async {
+                final file = await ImagePicker().pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 100,
+                );
+                if (file == null) return;
+                setPanorama(
+                  preparePanorama(
+                    path: file.path,
+                    coverageDegrees: 150,
+                    capturedWithPhone: true,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        if (panorama.hasImage) ...[
+          const SizedBox(height: 6),
+          Text(
+            panorama.sourcePath!.split(RegExp(r'[\\/]')).last,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: AmColors.text),
+          ),
+          _Plain(
+            label: 'Cobertura',
+            value: panorama.coverageDegrees,
+            min: 120,
+            max: 360,
+            suffix: '°',
+            onChanged: (value) {
+              final incomplete = value < 300;
+              setPanorama(
+                panorama.copyWith(
+                  coverageDegrees: value,
+                  mirrorTo360: incomplete,
+                  seamSoftness: incomplete ? 0.16 : 0.02,
+                  fillZenithNadir: incomplete,
+                  approximate:
+                      panorama.source == PanoramaSource.camera || incomplete,
+                ),
+              );
+            },
+          ),
+        ],
+        if (sourceLayers.isNotEmpty)
+          _Chips(
+            label: 'Da camada',
+            options: [
+              'Nenhuma',
+              for (final source in sourceLayers) source.name,
+            ],
+            index: panorama.sourceLayerId == null
+                ? 0
+                : sourceLayers.indexWhere(
+                        (source) => source.id == panorama.sourceLayerId,
+                      ) +
+                      1,
+            onChanged: (index) {
+              if (index == 0) {
+                setPanorama(
+                  panorama.copyWith(
+                    source: PanoramaSource.preset,
+                    clearLayer: true,
+                  ),
+                );
+              } else {
+                final source = sourceLayers[index - 1];
+                setPanorama(
+                  panorama.copyWith(
+                    source: PanoramaSource.layer,
+                    sourceLayerId: source.id,
+                    sourcePath: source.sourcePath,
+                    approximate: false,
+                  ),
+                );
+              }
+            },
+          ),
+        if (panorama.approximate)
+          const _Hint(
+            'Aproximado · espelhado para 360°, costura suavizada, teto e '
+            'chao preenchidos e realce pseudo-HDR.',
+          ),
+        _Plain(
+          label: 'Rotacao',
+          value: panorama.rotationDegrees,
+          min: -180,
+          max: 180,
+          suffix: '°',
+          onChanged: (value) =>
+              setPanorama(panorama.copyWith(rotationDegrees: value)),
+        ),
+        _Plain(
+          label: 'Intensidade',
+          value: panorama.intensity,
+          min: 0,
+          max: 2,
+          decimals: 2,
+          onChanged: (value) =>
+              setPanorama(panorama.copyWith(intensity: value)),
+        ),
+        _Plain(
+          label: 'Desfocar fundo',
+          value: panorama.backgroundBlur,
+          min: 0,
+          max: 30,
+          onChanged: (value) =>
+              setPanorama(panorama.copyWith(backgroundBlur: value)),
+        ),
+        _Toggle(
+          label: 'Mostrar panorama no fundo',
+          value: panorama.showBackground,
+          onChanged: (value) =>
+              setPanorama(panorama.copyWith(showBackground: value)),
+        ),
+        _Plain(
+          label: 'Altas luzes',
+          value: panorama.highlightBoost,
+          min: 0,
+          max: 2,
+          decimals: 2,
+          onChanged: (value) =>
+              setPanorama(panorama.copyWith(highlightBoost: value)),
+        ),
+        _Plain(
+          label: 'Reflexo global',
+          value: scene.envReflect,
+          min: 0,
+          max: 1,
+          decimals: 2,
+          onChanged: (value) {
+            controller.updateScene3D(
+              layer.id,
+              (s) => s.copyWith(envReflect: value),
+            );
+            onChanged();
+          },
+        ),
+        const SizedBox(height: 12),
+        _SectionTitle('Reflexo em tempo real'),
+        _Toggle(
+          label: 'Refletir a cena',
+          value: probe.enabled,
+          onChanged: (value) => setProbe(probe.copyWith(enabled: value)),
+        ),
+        if (probe.enabled) ...[
+          _Chips(
+            label: 'Qualidade',
+            options: [for (final q in ProbeQuality.values) q.label],
+            index: probe.quality.index,
+            onChanged: (index) =>
+                setProbe(probe.copyWith(quality: ProbeQuality.values[index])),
+          ),
+          _Chips(
+            label: 'Atualizar',
+            options: [for (final mode in ProbeUpdateMode.values) mode.label],
+            index: probe.updateMode.index,
+            onChanged: (index) {
+              final mode = ProbeUpdateMode.values[index];
+              setProbe(probe.copyWith(updateMode: mode));
+              if (mode == ProbeUpdateMode.continuous) {
+                AureaSnack.show(
+                  context,
+                  'Continuo atualiza uma face por quadro e usa mais bateria.',
+                );
+              }
+            },
+          ),
+          const _Hint(
+            'Ao mover refaz uma face por quadro e para apos seis; com a '
+            'cena parada o custo da sonda e zero.',
+          ),
+          _Toggle(
+            label: 'Sonda por objeto',
+            value: probe.perObject,
+            onChanged: (value) => setProbe(probe.copyWith(perObject: value)),
+          ),
+          if (!probe.perObject) ...[
+            _Plain(
+              label: 'Sonda X',
+              value: probe.position.x,
+              min: -1500,
+              max: 1500,
+              onChanged: (value) => setProbe(
+                probe.copyWith(
+                  position: ProbePoint3D(
+                    value,
+                    probe.position.y,
+                    probe.position.z,
+                  ),
+                ),
+              ),
+            ),
+            _Plain(
+              label: 'Sonda Y',
+              value: probe.position.y,
+              min: -1500,
+              max: 1500,
+              onChanged: (value) => setProbe(
+                probe.copyWith(
+                  position: ProbePoint3D(
+                    probe.position.x,
+                    value,
+                    probe.position.z,
+                  ),
+                ),
+              ),
+            ),
+            _Plain(
+              label: 'Sonda Z',
+              value: probe.position.z,
+              min: -1500,
+              max: 1500,
+              onChanged: (value) => setProbe(
+                probe.copyWith(
+                  position: ProbePoint3D(
+                    probe.position.x,
+                    probe.position.y,
+                    value,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const _SectionTitle('Entram no reflexo'),
+          for (final node in scene.nodes)
+            _Toggle(
+              label: node.name,
+              value: !probe.excludeNodeIds.contains(node.id),
+              onChanged: (value) {
+                final excluded = <String>{...probe.excludeNodeIds};
+                if (value) {
+                  excluded.remove(node.id);
+                } else {
+                  excluded.add(node.id);
+                }
+                setProbe(probe.copyWith(excludeNodeIds: excluded));
+              },
+            ),
+        ],
+        const SizedBox(height: 10),
+        _SectionTitle('Piso'),
+        _Toggle(
+          label: 'Reflexo planar no chao',
+          value: scene.planarFloorReflection,
+          onChanged: (value) {
+            controller.updateScene3D(
+              layer.id,
+              (s) => s.copyWith(planarFloorReflection: value),
+            );
+            onChanged();
+          },
+        ),
+        if (scene.planarFloorReflection)
+          _Plain(
+            label: 'Rugosidade',
+            value: scene.planarFloorRoughness,
+            min: 0,
+            max: 1,
+            decimals: 2,
+            onChanged: (value) {
+              controller.updateScene3D(
+                layer.id,
+                (s) => s.copyWith(planarFloorRoughness: value),
+              );
+              onChanged();
+            },
+          ),
+      ],
+    );
+  }
+}
+
 // -------------------------------------------------------------- luzes
 
 class _LightsTab extends StatelessWidget {
@@ -919,8 +1732,9 @@ class _LightsTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Hint(
-            'Iluminacao direta com poucas luzes. Cada malha so recebe as '
-            'luzes que a alcancam — luz fora do alcance nem entra na conta.'),
+          'Iluminacao direta com poucas luzes. Cada malha so recebe as '
+          'luzes que a alcancam — luz fora do alcance nem entra na conta.',
+        ),
         _Plain(
           label: 'Ambiente',
           value: layer.scene.ambient,
@@ -933,45 +1747,12 @@ class _LightsTab extends StatelessWidget {
           },
         ),
         const SizedBox(height: 8),
-        // O AMBIENTE que os materiais refletem. Nao e luz: e o que um
-        // espelho apontado para la veria — ceu, chao, horizonte, e no
-        // estudio a softbox. Sem ele, "reflexo" no material nao mostra
-        // nada, porque espelho de nada e preto.
-        _SectionTitle('Ambiente refletido'),
-        _Chips(
-          label: 'Ambiente',
-          options: [
-            for (final k in EnvironmentKind.values) environmentLabel(k),
-          ],
-          index: layer.scene.environment.index,
-          onChanged: (i) {
-            controller.updateScene3D(
-                layer.id,
-                (s) => s.copyWith(environment: EnvironmentKind.values[i]));
-            onChanged();
-          },
-        ),
-        _Plain(
-          label: 'Reflexo',
-          value: layer.scene.envReflect,
-          min: 0,
-          max: 1,
-          decimals: 2,
-          onChanged: (v) {
-            controller.updateScene3D(
-                layer.id, (s) => s.copyWith(envReflect: v));
-            onChanged();
-          },
-        ),
-        const _Hint(
-            'A forca aqui multiplica o "Reflexo" de cada material: zero '
-            'apaga todo reflexo da cena de uma vez.'),
-        const SizedBox(height: 8),
         for (final l in lights) ...[
           _SectionTitle(switch (l.kind) {
             Light3DKind.directional => 'Direcional',
             Light3DKind.point => 'Ponto',
             Light3DKind.ambient => 'Ambiente',
+            Light3DKind.spot => 'Spot',
           }),
           _Num(
             label: 'Intensidade',
@@ -980,12 +1761,116 @@ class _LightsTab extends StatelessWidget {
             max: 4,
             decimals: 2,
             onChanged: (v) {
-              controller.updateSceneLight(layer.id, l.id,
-                  (x) => x.copyWith(intensity: x.intensity.withBase(v)));
+              controller.updateSceneLight(
+                layer.id,
+                l.id,
+                (x) => x.copyWith(intensity: x.intensity.withBase(v)),
+              );
               onChanged();
             },
           ),
-          if (l.kind == Light3DKind.point)
+          if (l.kind == Light3DKind.directional ||
+              l.kind == Light3DKind.spot) ...[
+            _Plain(
+              label: 'Direcao X',
+              value: l.direction.x,
+              min: -1,
+              max: 1,
+              decimals: 2,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) => x.copyWith(
+                    direction: Vec3(v, x.direction.y, x.direction.z),
+                  ),
+                );
+                onChanged();
+              },
+            ),
+            _Plain(
+              label: 'Direcao Y',
+              value: l.direction.y,
+              min: -1,
+              max: 1,
+              decimals: 2,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) => x.copyWith(
+                    direction: Vec3(x.direction.x, v, x.direction.z),
+                  ),
+                );
+                onChanged();
+              },
+            ),
+            _Plain(
+              label: 'Direcao Z',
+              value: l.direction.z,
+              min: -1,
+              max: 1,
+              decimals: 2,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) => x.copyWith(
+                    direction: Vec3(x.direction.x, x.direction.y, v),
+                  ),
+                );
+                onChanged();
+              },
+            ),
+          ],
+          if (l.kind == Light3DKind.point || l.kind == Light3DKind.spot) ...[
+            _Plain(
+              label: 'Posicao X',
+              value: l.position.x,
+              min: -3000,
+              max: 3000,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) =>
+                      x.copyWith(position: Vec3(v, x.position.y, x.position.z)),
+                );
+                onChanged();
+              },
+            ),
+            _Plain(
+              label: 'Posicao Y',
+              value: l.position.y,
+              min: -3000,
+              max: 3000,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) =>
+                      x.copyWith(position: Vec3(x.position.x, v, x.position.z)),
+                );
+                onChanged();
+              },
+            ),
+            _Plain(
+              label: 'Posicao Z',
+              value: l.position.z,
+              min: -3000,
+              max: 3000,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) =>
+                      x.copyWith(position: Vec3(x.position.x, x.position.y, v)),
+                );
+                onChanged();
+              },
+            ),
+          ],
+          if (l.kind == Light3DKind.point || l.kind == Light3DKind.spot)
             _Plain(
               label: 'Alcance',
               value: l.range,
@@ -993,15 +1878,53 @@ class _LightsTab extends StatelessWidget {
               max: 4000,
               onChanged: (v) {
                 controller.updateSceneLight(
-                    layer.id, l.id, (x) => x.copyWith(range: v));
+                  layer.id,
+                  l.id,
+                  (x) => x.copyWith(range: v),
+                );
                 onChanged();
               },
             ),
+          if (l.kind == Light3DKind.spot) ...[
+            _Plain(
+              label: 'Cone',
+              value: l.coneDegrees,
+              min: 5,
+              max: 170,
+              suffix: '°',
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) => x.copyWith(coneDegrees: v),
+                );
+                onChanged();
+              },
+            ),
+            _Plain(
+              label: 'Suavidade',
+              value: l.softness,
+              min: 0,
+              max: 1,
+              decimals: 2,
+              onChanged: (v) {
+                controller.updateSceneLight(
+                  layer.id,
+                  l.id,
+                  (x) => x.copyWith(softness: v),
+                );
+                onChanged();
+              },
+            ),
+          ],
           _ColorRow(
             color: l.color,
             onColor: (c) {
               controller.updateSceneLight(
-                  layer.id, l.id, (x) => x.copyWith(color: c));
+                layer.id,
+                l.id,
+                (x) => x.copyWith(color: c),
+              );
               onChanged();
             },
           ),
@@ -1011,8 +1934,17 @@ class _LightsTab extends StatelessWidget {
                 label: 'Sombra',
                 value: l.castsShadow,
                 onChanged: (v) {
-                  controller.updateSceneLight(
-                      layer.id, l.id, (x) => x.copyWith(castsShadow: v));
+                  controller.updateScene3D(
+                    layer.id,
+                    (scene) => scene.copyWith(
+                      lights: [
+                        for (final light in scene.lights)
+                          light.copyWith(
+                            castsShadow: light.id == l.id ? v : false,
+                          ),
+                      ],
+                    ),
+                  );
                   onChanged();
                 },
               ),
@@ -1039,6 +1971,7 @@ class _LightsTab extends StatelessWidget {
                   Light3DKind.directional => 'Direcional',
                   Light3DKind.point => 'Ponto',
                   Light3DKind.ambient => 'Ambiente',
+                  Light3DKind.spot => 'Spot',
                 },
                 onTap: () {
                   controller.addSceneLight(layer.id, k);
@@ -1075,8 +2008,10 @@ class _CameraTab extends StatelessWidget {
     final zoom = cam.zoomAt(Duration.zero, compWidth);
 
     void setFocal(double mm) {
-      controller.updateScene3DCamera(layer.id,
-          (c) => c.copyWith(focalLength: c.focalLength.withBase(mm)));
+      controller.updateScene3DCamera(
+        layer.id,
+        (c) => c.copyWith(focalLength: c.focalLength.withBase(mm)),
+      );
       onChanged();
     }
 
@@ -1091,15 +2026,16 @@ class _CameraTab extends StatelessWidget {
             // Converter NUNCA pode fazer a cena pular: o enquadramento
             // atual vira ponto de interesse (ou orientacao) equivalente.
             controller.updateScene3DCamera(
-                layer.id,
-                (c) => c.convertedTo(
-                    CameraKind.values[i], Duration.zero));
+              layer.id,
+              (c) => c.convertedTo(CameraKind.values[i], Duration.zero),
+            );
             onChanged();
           },
         ),
         const _Hint(
-            'Dois nos olha sempre para o ponto de interesse. Um no e livre. '
-            'Trocar preserva o enquadramento.'),
+          'Dois nos olha sempre para o ponto de interesse. Um no e livre. '
+          'Trocar preserva o enquadramento.',
+        ),
         const SizedBox(height: 6),
         _SectionTitle('Lente'),
         Wrap(
@@ -1111,16 +2047,22 @@ class _CameraTab extends StatelessWidget {
                 onTap: () => setFocal(mm),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: (focal - mm).abs() < 0.5
                         ? AmColors.accentDim
                         : AmColors.chip,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('${mm.toInt()}mm',
-                      style: const TextStyle(
-                          fontSize: 12, color: AmColors.accent)),
+                  child: Text(
+                    '${mm.toInt()}mm',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AmColors.accent,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -1151,8 +2093,9 @@ class _CameraTab extends StatelessWidget {
           min: 100,
           max: 20000,
           decimals: 0,
-          onChanged: (v) => setFocal(focalFromZoom(v, compWidth,
-              filmWidth: layer.camera.filmWidth)),
+          onChanged: (v) => setFocal(
+            focalFromZoom(v, compWidth, filmWidth: layer.camera.filmWidth),
+          ),
         ),
         _Plain(
           label: 'Filme (mm)',
@@ -1162,7 +2105,9 @@ class _CameraTab extends StatelessWidget {
           decimals: 1,
           onChanged: (v) {
             controller.updateScene3DCamera(
-                layer.id, (c) => c.copyWith(filmWidth: v));
+              layer.id,
+              (c) => c.copyWith(filmWidth: v),
+            );
             onChanged();
           },
         ),
@@ -1171,7 +2116,9 @@ class _CameraTab extends StatelessWidget {
           value: cam.orthographic,
           onChanged: (v) {
             controller.updateScene3DCamera(
-                layer.id, (c) => c.copyWith(orthographic: v));
+              layer.id,
+              (c) => c.copyWith(orthographic: v),
+            );
             onChanged();
           },
         ),
@@ -1184,7 +2131,9 @@ class _CameraTab extends StatelessWidget {
           max: 3000,
           onChanged: (v) {
             controller.updateScene3DCamera(
-                layer.id, (c) => c.copyWith(posX: c.posX.withBase(v)));
+              layer.id,
+              (c) => c.copyWith(posX: c.posX.withBase(v)),
+            );
             onChanged();
           },
         ),
@@ -1195,7 +2144,9 @@ class _CameraTab extends StatelessWidget {
           max: 3000,
           onChanged: (v) {
             controller.updateScene3DCamera(
-                layer.id, (c) => c.copyWith(posY: c.posY.withBase(v)));
+              layer.id,
+              (c) => c.copyWith(posY: c.posY.withBase(v)),
+            );
             onChanged();
           },
         ),
@@ -1206,7 +2157,9 @@ class _CameraTab extends StatelessWidget {
           max: 3000,
           onChanged: (v) {
             controller.updateScene3DCamera(
-                layer.id, (c) => c.copyWith(posZ: c.posZ.withBase(v)));
+              layer.id,
+              (c) => c.copyWith(posZ: c.posZ.withBase(v)),
+            );
             onChanged();
           },
         ),
@@ -1220,7 +2173,9 @@ class _CameraTab extends StatelessWidget {
             max: 3000,
             onChanged: (v) {
               controller.updateScene3DCamera(
-                  layer.id, (c) => c.copyWith(poiX: c.poiX.withBase(v)));
+                layer.id,
+                (c) => c.copyWith(poiX: c.poiX.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -1231,7 +2186,9 @@ class _CameraTab extends StatelessWidget {
             max: 3000,
             onChanged: (v) {
               controller.updateScene3DCamera(
-                  layer.id, (c) => c.copyWith(poiY: c.poiY.withBase(v)));
+                layer.id,
+                (c) => c.copyWith(poiY: c.poiY.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -1242,7 +2199,9 @@ class _CameraTab extends StatelessWidget {
             max: 3000,
             onChanged: (v) {
               controller.updateScene3DCamera(
-                  layer.id, (c) => c.copyWith(poiZ: c.poiZ.withBase(v)));
+                layer.id,
+                (c) => c.copyWith(poiZ: c.poiZ.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -1256,8 +2215,10 @@ class _CameraTab extends StatelessWidget {
             max: 180,
             suffix: '°',
             onChanged: (v) {
-              controller.updateScene3DCamera(layer.id,
-                  (c) => c.copyWith(orientX: c.orientX.withBase(v)));
+              controller.updateScene3DCamera(
+                layer.id,
+                (c) => c.copyWith(orientX: c.orientX.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -1268,8 +2229,10 @@ class _CameraTab extends StatelessWidget {
             max: 180,
             suffix: '°',
             onChanged: (v) {
-              controller.updateScene3DCamera(layer.id,
-                  (c) => c.copyWith(orientY: c.orientY.withBase(v)));
+              controller.updateScene3DCamera(
+                layer.id,
+                (c) => c.copyWith(orientY: c.orientY.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -1282,7 +2245,9 @@ class _CameraTab extends StatelessWidget {
             suffix: '°',
             onChanged: (v) {
               controller.updateScene3DCamera(
-                  layer.id, (c) => c.copyWith(rotY: c.rotY.withBase(v)));
+                layer.id,
+                (c) => c.copyWith(rotY: c.rotY.withBase(v)),
+              );
               onChanged();
             },
           ),
@@ -1293,16 +2258,19 @@ class _CameraTab extends StatelessWidget {
           options: const ['Desligado', 'Seguir caminho', 'Para o alvo'],
           index: cam.autoOrient.index,
           onChanged: (i) {
-            controller.updateScene3DCamera(layer.id,
-                (c) => c.copyWith(autoOrient: AutoOrient.values[i]));
+            controller.updateScene3DCamera(
+              layer.id,
+              (c) => c.copyWith(autoOrient: AutoOrient.values[i]),
+            );
             onChanged();
           },
         ),
         const SizedBox(height: 12),
         _SectionTitle('Rigs em um toque'),
         const _Hint(
-            'Cada rig gera KEYFRAMES REAIS na camera, editaveis depois. '
-            'Nenhum e caixa-preta.'),
+          'Cada rig gera KEYFRAMES REAIS na camera, editaveis depois. '
+          'Nenhum e caixa-preta.',
+        ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1367,16 +2335,14 @@ class _DofTab extends StatelessWidget {
   final VoidCallback onChanged;
 
   void _dof(DepthOfField Function(DepthOfField) fn) {
-    controller.updateScene3DCamera(
-        layer.id, (c) => c.copyWith(dof: fn(c.dof)));
+    controller.updateScene3DCamera(layer.id, (c) => c.copyWith(dof: fn(c.dof)));
     onChanged();
   }
 
   @override
   Widget build(BuildContext context) {
     final d = layer.camera.dof;
-    final fStop =
-        d.fStopFor(layer.camera.focalLength.base, Duration.zero);
+    final fStop = d.fStopFor(layer.camera.focalLength.base, Duration.zero);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1387,15 +2353,17 @@ class _DofTab extends StatelessWidget {
           onChanged: (v) => _dof((x) => x.copyWith(enabled: v)),
         ),
         const _Hint(
-            'Usa a PROFUNDIDADE que a cena exporta — por isso o desfoque '
-            'respeita a distancia real de cada objeto.'),
+          'Usa a PROFUNDIDADE que a cena exporta — por isso o desfoque '
+          'respeita a distancia real de cada objeto.',
+        ),
         _Num(
           label: 'Foco',
           track: d.focusDistance,
           min: 10,
           max: 5000,
           onChanged: (v) => _dof(
-              (x) => x.copyWith(focusDistance: x.focusDistance.withBase(v))),
+            (x) => x.copyWith(focusDistance: x.focusDistance.withBase(v)),
+          ),
         ),
         _Toggle(
           label: 'Travar no zoom',
@@ -1412,8 +2380,10 @@ class _DofTab extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 6),
-          child: Text('Diafragma f/${fStop.toStringAsFixed(1)}',
-              style: const TextStyle(fontSize: 12, color: AmColors.muted)),
+          child: Text(
+            'Diafragma f/${fStop.toStringAsFixed(1)}',
+            style: const TextStyle(fontSize: 12, color: AmColors.muted),
+          ),
         ),
         _Num(
           label: 'Desfoque',
@@ -1439,8 +2409,8 @@ class _DofTab extends StatelessWidget {
           min: -180,
           max: 180,
           suffix: '°',
-          onChanged: (v) => _dof(
-              (x) => x.copyWith(irisRotation: x.irisRotation.withBase(v))),
+          onChanged: (v) =>
+              _dof((x) => x.copyWith(irisRotation: x.irisRotation.withBase(v))),
         ),
         _Num(
           label: 'Arredondar',
@@ -1448,7 +2418,8 @@ class _DofTab extends StatelessWidget {
           min: -100,
           max: 100,
           onChanged: (v) => _dof(
-              (x) => x.copyWith(irisRoundness: x.irisRoundness.withBase(v))),
+            (x) => x.copyWith(irisRoundness: x.irisRoundness.withBase(v)),
+          ),
         ),
         _Num(
           label: 'Proporcao',
@@ -1464,21 +2435,25 @@ class _DofTab extends StatelessWidget {
           track: d.diffractionFringe,
           min: 0,
           max: 100,
-          onChanged: (v) => _dof((x) =>
-              x.copyWith(diffractionFringe: x.diffractionFringe.withBase(v))),
+          onChanged: (v) => _dof(
+            (x) =>
+                x.copyWith(diffractionFringe: x.diffractionFringe.withBase(v)),
+          ),
         ),
         const SizedBox(height: 10),
         _SectionTitle('Realce — o que separa lente de borrao'),
         const _Hint(
-            'Sem ganho e limiar, luz fora de foco vira mancha cinza. Com '
-            'eles, vira a bola brilhante que a gente reconhece como foto.'),
+          'Sem ganho e limiar, luz fora de foco vira mancha cinza. Com '
+          'eles, vira a bola brilhante que a gente reconhece como foto.',
+        ),
         _Num(
           label: 'Ganho',
           track: d.highlightGain,
           min: 0,
           max: 100,
           onChanged: (v) => _dof(
-              (x) => x.copyWith(highlightGain: x.highlightGain.withBase(v))),
+            (x) => x.copyWith(highlightGain: x.highlightGain.withBase(v)),
+          ),
         ),
         _Num(
           label: 'Limiar',
@@ -1486,8 +2461,11 @@ class _DofTab extends StatelessWidget {
           min: 0,
           max: 1,
           decimals: 2,
-          onChanged: (v) => _dof((x) => x.copyWith(
-              highlightThreshold: x.highlightThreshold.withBase(v))),
+          onChanged: (v) => _dof(
+            (x) => x.copyWith(
+              highlightThreshold: x.highlightThreshold.withBase(v),
+            ),
+          ),
         ),
         _Num(
           label: 'Saturacao',
@@ -1495,8 +2473,11 @@ class _DofTab extends StatelessWidget {
           min: 0,
           max: 2,
           decimals: 2,
-          onChanged: (v) => _dof((x) => x.copyWith(
-              highlightSaturation: x.highlightSaturation.withBase(v))),
+          onChanged: (v) => _dof(
+            (x) => x.copyWith(
+              highlightSaturation: x.highlightSaturation.withBase(v),
+            ),
+          ),
         ),
       ],
     );
@@ -1523,8 +2504,9 @@ class _HelpersTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Hint(
-            'Nenhuma ajuda aparece na exportacao — grade, frustum, eixos e '
-            'plano de foco existem so no preview.'),
+          'Nenhuma ajuda aparece na exportacao — grade, frustum, eixos e '
+          'plano de foco existem so no preview.',
+        ),
         _Toggle(
           label: 'Ajudas de cena',
           value: layer.showHelpers,
@@ -1538,7 +2520,9 @@ class _HelpersTab extends StatelessWidget {
           value: s.showFloorGrid,
           onChanged: (v) {
             controller.updateScene3D(
-                layer.id, (x) => x.copyWith(showFloorGrid: v));
+              layer.id,
+              (x) => x.copyWith(showFloorGrid: v),
+            );
             onChanged();
           },
         ),
@@ -1554,14 +2538,14 @@ class _HelpersTab extends StatelessWidget {
           label: 'Modo rascunho 3D',
           value: s.draftMode,
           onChanged: (v) {
-            controller.updateScene3D(
-                layer.id, (x) => x.copyWith(draftMode: v));
+            controller.updateScene3D(layer.id, (x) => x.copyWith(draftMode: v));
             onChanged();
           },
         ),
         const _Hint(
-            'Rascunho desliga sombra, profundidade de campo e ambiente por '
-            'imagem SO no preview. Liga sozinho durante o gesto no estudio.'),
+          'Rascunho desliga sombra, profundidade de campo e ambiente por '
+          'imagem SO no preview. Liga sozinho durante o gesto no estudio.',
+        ),
         const SizedBox(height: 12),
         _SectionTitle('Vistas salvas'),
         if (s.savedViews.isEmpty)
@@ -1577,9 +2561,11 @@ class _HelpersTab extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                    child: Text(s.savedViews[i].name,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.text))),
+                  child: Text(
+                    s.savedViews[i].name,
+                    style: const TextStyle(fontSize: 13, color: AmColors.text),
+                  ),
+                ),
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(30, 30),
@@ -1587,8 +2573,11 @@ class _HelpersTab extends StatelessWidget {
                     controller.applySavedView(layer.id, s.savedViews[i]);
                     onChanged();
                   },
-                  child: const Icon(CupertinoIcons.camera_viewfinder,
-                      size: 17, color: AmColors.accent),
+                  child: const Icon(
+                    CupertinoIcons.camera_viewfinder,
+                    size: 17,
+                    color: AmColors.accent,
+                  ),
                 ),
                 CupertinoButton(
                   padding: EdgeInsets.zero,
@@ -1597,8 +2586,11 @@ class _HelpersTab extends StatelessWidget {
                     controller.removeSceneView(layer.id, i);
                     onChanged();
                   },
-                  child: const Icon(CupertinoIcons.trash,
-                      size: 15, color: AmColors.muted),
+                  child: const Icon(
+                    CupertinoIcons.trash,
+                    size: 15,
+                    color: AmColors.muted,
+                  ),
                 ),
               ],
             ),
@@ -1639,11 +2631,14 @@ class _Tabs extends StatelessWidget {
               color: i == index ? AmColors.accentDim : AmColors.chip,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(labels[i],
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: i == index ? FontWeight.w700 : FontWeight.w400,
-                    color: i == index ? AmColors.accent : AmColors.muted)),
+            child: Text(
+              labels[i],
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: i == index ? FontWeight.w700 : FontWeight.w400,
+                color: i == index ? AmColors.accent : AmColors.muted,
+              ),
+            ),
           ),
         ),
       ),
@@ -1658,13 +2653,16 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 6, bottom: 4),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AmColors.text)),
-      );
+    padding: const EdgeInsets.only(top: 6, bottom: 4),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: AmColors.text,
+      ),
+    ),
+  );
 }
 
 class _Hint extends StatelessWidget {
@@ -1674,11 +2672,12 @@ class _Hint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 11, height: 1.35, color: AmColors.muted)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 11, height: 1.35, color: AmColors.muted),
+    ),
+  );
 }
 
 /// Linha de parametro ANIMAVEL (tem base e keyframes).
@@ -1703,15 +2702,15 @@ class _Num extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _Plain(
-        label: label,
-        value: track.base,
-        min: min,
-        max: max,
-        decimals: decimals,
-        suffix: suffix,
-        animated: track.isAnimated,
-        onChanged: onChanged,
-      );
+    label: label,
+    value: track.base,
+    min: min,
+    max: max,
+    decimals: decimals,
+    suffix: suffix,
+    animated: track.isAnimated,
+    onChanged: onChanged,
+  );
 }
 
 class _Plain extends StatelessWidget {
@@ -1748,8 +2747,9 @@ class _Plain extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                  fontSize: 12,
-                  color: animated ? AmColors.accent : AmColors.muted),
+                fontSize: 12,
+                color: animated ? AmColors.accent : AmColors.muted,
+              ),
             ),
           ),
           Expanded(
@@ -1797,10 +2797,12 @@ class _Chips extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-              width: 92,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, color: AmColors.muted))),
+            width: 92,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
+          ),
           Expanded(
             child: Wrap(
               spacing: 6,
@@ -1811,15 +2813,20 @@ class _Chips extends StatelessWidget {
                     onTap: () => onChanged(i),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
-                        color:
-                            i == index ? AmColors.accentDim : AmColors.chip,
+                        color: i == index ? AmColors.accentDim : AmColors.chip,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(options[i],
-                          style: const TextStyle(
-                              fontSize: 11, color: AmColors.accent)),
+                      child: Text(
+                        options[i],
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AmColors.accent,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -1849,8 +2856,10 @@ class _Toggle extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: const TextStyle(fontSize: 13, color: AmColors.text)),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AmColors.text),
+            ),
           ),
           CupertinoSwitch(
             value: value,
@@ -1864,11 +2873,7 @@ class _Toggle extends StatelessWidget {
 }
 
 class _Action extends StatelessWidget {
-  const _Action({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _Action({required this.icon, required this.label, required this.onTap});
 
   final IconData icon;
   final String label;
@@ -1889,9 +2894,10 @@ class _Action extends StatelessWidget {
           children: [
             Icon(icon, size: 14, color: AmColors.accent),
             const SizedBox(width: 6),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AmColors.accent)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: AmColors.accent),
+            ),
           ],
         ),
       ),
@@ -1923,10 +2929,12 @@ class _ColorRow extends StatelessWidget {
       child: Row(
         children: [
           const SizedBox(
-              width: 92,
-              child: Text('Cor',
-                  style:
-                      TextStyle(fontSize: 12, color: AmColors.muted))),
+            width: 92,
+            child: Text(
+              'Cor',
+              style: TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
+          ),
           // Espectro completo — qualquer cor, nao so a paleta.
           ColorWell(color: color, onChanged: onColor, size: 28),
           const SizedBox(width: 10),
@@ -1976,8 +2984,10 @@ class _BudgetBadge extends StatelessWidget {
       const Size(1080, 1920),
       Duration.zero,
     );
-    final over = frame.drawCalls > lowProfileBudget.maxDrawCalls ||
-        frame.triangles > lowProfileBudget.maxTriangles;
+    final over =
+        frame.drawCalls > lowProfileBudget.maxDrawCalls ||
+        frame.triangles > lowProfileBudget.maxTriangles ||
+        estimateSceneMemoryMb(layer.scene) > lowProfileBudget.maxMemoryMb;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -1985,7 +2995,8 @@ class _BudgetBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(7),
       ),
       child: Text(
-        '${frame.drawCalls} chamadas · ${frame.triangles} tri',
+        '${frame.drawCalls} chamadas · ${frame.triangles} tri · '
+        '${estimateSceneMemoryMb(layer.scene).toStringAsFixed(1)} MB',
         style: TextStyle(
           fontSize: 10,
           color: over ? AmColors.pink : AmColors.muted,

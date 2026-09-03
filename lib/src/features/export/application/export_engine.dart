@@ -1,10 +1,13 @@
 import 'dart:io';
-import 'dart:ui' show BlendMode;
+import 'dart:math' as math;
+import 'dart:ui' show BlendMode, Offset;
 
 import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../editor/domain/cut.dart';
+import '../../editor/domain/cut_ops.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/domain/mask.dart';
 import '../../editor/domain/video_project.dart';
@@ -48,7 +51,8 @@ class ExportEngine {
   /// Tamanho de SAIDA (pode ser diferente do projeto). A composicao
   /// continua sendo desenhada no tamanho dela; quem redimensiona e o
   /// codificador, com a proporcao preservada.
-  int get width => settings.resolve(project.outputWidth, project.outputHeight).$1;
+  int get width =>
+      settings.resolve(project.outputWidth, project.outputHeight).$1;
   int get height =>
       settings.resolve(project.outputWidth, project.outputHeight).$2;
 
@@ -91,27 +95,60 @@ class ExportEngine {
     final l = project.layers.first;
     if (l is! VideoLayer) return null;
 
-    if (l.effects.any((e) => e.enabled)) return null;
+    // O remux nao desenha a composicao: o clipe precisa cobrir exatamente
+    // todo o relogio. Sem isto, um clipe deslocado perderia o preto inicial
+    // (ou o preenchimento final imposto pela duracao minima do projeto).
+    if (l.startTime != Duration.zero || l.endTime != project.duration) {
+      return null;
+    }
+
+    // Conservador de proposito: qualquer estado visual que o remux nao
+    // consegue reproduzir manda a exportacao para o compositor de quadros.
+    if (l.effects.isNotEmpty) return null;
     if (l.masks.isNotEmpty) return null;
-    if (l.matteMode != MatteMode.none) return null;
-    if (l.blendMode != BlendMode.srcOver) return null;
+    if (l.matteMode != MatteMode.none || l.matteSourceId != null) return null;
+    if (l.blendMode != BlendMode.srcOver || l.customBlend != null) return null;
     // Velocidade diferente de 1 nao e copia: tem de renderizar.
     if (l.speed != 1.0) return null;
-    // Vinculo de propriedade tambem muda o quadro.
-    if (project.links.any((k) => k.targetLayerId == l.id)) return null;
+    if (l.reverse || l.speedBlur || hasTimeRemap(l)) return null;
+    if (l.transitionIn != null) return null;
+
+    // Remux tambem copiaria o audio original sem estes ajustes.
+    if (l.volume != 1.0 || !l.audio.isNeutral) return null;
+
+    // Vinculos, dados e metadados podem mudar o resultado fora da camada.
+    if (project.links.isNotEmpty) return null;
+    if (project.bindings.any((binding) => binding.layerId == l.id)) return null;
+    if (!project.metaOf(l.id).isEmpty) return null;
 
     // Qualquer transformacao mexida muda o quadro: nao e mais copia.
     if (l.opacity.isAnimated || l.opacity.base != 1) return null;
+    if (l.position.base != Offset.zero) return null;
     if (l.scaleX.isAnimated || l.scaleX.base != 1) return null;
     if (l.scaleY.isAnimated || l.scaleY.base != 1) return null;
     if (l.rotation.isAnimated || l.rotation.base != 0) return null;
     if (l.position.isAnimated) return null;
+    if (l.rotationX.isAnimated || l.rotationX.base != 0) return null;
+    if (l.rotationY.isAnimated || l.rotationY.base != 0) return null;
+    if (l.skewX.isAnimated || l.skewX.base != 0) return null;
+    if (l.skewY.isAnimated || l.skewY.base != 0) return null;
+    if (l.pivot.isAnimated || l.pivot.base != Offset.zero) return null;
+    if (l.is3D || l.positionZ.isAnimated || l.positionZ.base != 0) return null;
 
     return l;
   }
 
   /// Tenta o caminho rapido. Devolve o arquivo, ou null se nao coube.
   Future<File?> tryPureCut() async {
+    // A tela faz a mesma triagem, mas o motor tambem se protege para que
+    // nenhum outro chamador remuxe ignorando resolucao, fps ou codec pedidos.
+    if (settings.format != ExportFormat.mp4 ||
+        settings.size != ExportSize.original ||
+        settings.codec != ExportCodec.h264 ||
+        settings.fps != null ||
+        settings.bitrateMbps != null) {
+      return null;
+    }
     final l = pureCutSource;
     if (l == null) return null;
     if (!await PlatformEncoder.available) return null;
@@ -141,35 +178,106 @@ class ExportEngine {
     final dir = Directory('${work.path}/v_${layer.id}');
     dir.createSync(recursive: true);
 
-    final start = layer.sourceOffset.inMicroseconds / 1000000.0;
-    // Le [speed] segundos de fonte para cada segundo de linha, e depois
-    // reescreve o relogio dos quadros com setpts: e assim que camera
-    // lenta vira quadros de verdade em vez de quadro repetido.
-    final vel = layer.speed <= 0 ? 1.0 : layer.speed;
-    final dur = layer.sourceSpan.inMicroseconds / 1000000.0;
+    final range = videoFrameRange(layer);
+    final start = range.$1.inMicroseconds / 1000000.0;
+    final dur = (range.$2 - range.$1).inMicroseconds / 1000000.0;
 
     // Escala para caber na composicao mantendo proporcao — quadro maior
     // que isso e memoria jogada fora.
     final session = await FFmpegKit.executeWithArguments([
       '-y',
-      '-ss', start.toStringAsFixed(3),
-      '-t', dur.toStringAsFixed(3),
-      '-i', layer.sourcePath,
+      '-ss',
+      start.toStringAsFixed(6),
+      '-t',
+      dur.toStringAsFixed(6),
+      '-i',
+      layer.sourcePath,
       '-vf',
-      '${vel == 1.0 ? '' : 'setpts=PTS/${vel.toStringAsFixed(4)},'}'
-          'fps=$fps,scale=$width:$height:force_original_aspect_ratio='
+      'fps=$fps,scale=$width:$height:force_original_aspect_ratio='
           'decrease',
-      '-q:v', '3',
-      '-start_number', '0',
+      '-q:v',
+      '3',
+      '-start_number',
+      '0',
       '${dir.path}/%06d.jpg',
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {
       final log = await session.getAllLogsAsString();
       throw ExportException(
-          'Falha ao ler o video "${layer.name}".\n${_tail(log)}');
+        'Falha ao ler o video "${layer.name}".\n${_tail(log)}',
+      );
     }
     onProgress?.call(1);
     return dir;
+  }
+
+  /// Trecho bruto necessario. A escolha de quadro fica para a funcao pura
+  /// de Time Remap; extrair sem setpts cobre rampa, reverso e handles.
+  (Duration, Duration) videoFrameRange(VideoLayer layer) {
+    var firstLocal = Duration.zero;
+    var lastLocal = layer.duration;
+    final incoming = layer.transitionIn;
+    if (incoming != null &&
+        incoming.enabled &&
+        videoAfter(project.layers, incoming.outgoingLayerId)?.id == layer.id) {
+      final w = incoming.windowAt(layer.startTime);
+      if (w.start < layer.startTime && !incoming.freezeEdges) {
+        firstLocal = w.start - layer.startTime;
+      }
+    }
+    for (final candidate in project.layers.whereType<VideoLayer>()) {
+      final transition = candidate.transitionIn;
+      if (transition?.outgoingLayerId != layer.id ||
+          transition == null ||
+          !transition.enabled ||
+          videoAfter(project.layers, layer.id)?.id != candidate.id) {
+        continue;
+      }
+      final w = transition.windowAt(candidate.startTime);
+      if (w.end > layer.endTime && !transition.freezeEdges) {
+        lastLocal = w.end - layer.startTime;
+      }
+    }
+
+    Duration? lo;
+    Duration? hi;
+
+    void include(Duration value) {
+      if (lo == null || value < lo!) lo = value;
+      if (hi == null || value > hi!) hi = value;
+    }
+
+    // Usa exatamente a mesma grade global que sera desenhada. Uma rampa
+    // curta (ou um hold entre dois keyframes proximos) pode desaparecer
+    // numa amostragem fixa de 96 pontos; percorrer os quadros de saida
+    // garante que todo source-time pedido pela tela foi extraido.
+    final globalStart = layer.startTime + firstLocal;
+    final globalEnd = layer.startTime + lastLocal;
+    final firstFrame = math
+        .max(0, (globalStart.inMicroseconds * fps / 1000000).floor() - 1)
+        .toInt();
+    final lastFrame = math
+        .min(
+          math.max(0, frameCount - 1),
+          (globalEnd.inMicroseconds * fps / 1000000).ceil() + 1,
+        )
+        .toInt();
+    for (var i = firstFrame; i <= lastFrame; i++) {
+      final global = timeOfFrame(i);
+      if (!visibleForCut(project.layers, layer, global)) continue;
+      final transition = transitionContextAt(project.layers, global);
+      final local = localTimeForCut(layer, global, transition);
+      include(videoAbsoluteSourceTimeAt(layer, local));
+    }
+    // Fallback para camadas menores que um quadro e inclui os limites
+    // matematicos usados por handles fora da area visivel.
+    include(videoAbsoluteSourceTimeAt(layer, firstLocal));
+    include(videoAbsoluteSourceTimeAt(layer, lastLocal));
+
+    final frame = Duration(microseconds: (1000000 / fps).ceil());
+    final start = lo! < Duration.zero ? Duration.zero : lo!;
+    final end = hi! + frame;
+    return (start, end <= start ? start + frame : end);
   }
 
   // --------------------------------------------------------- audio
@@ -184,11 +292,11 @@ class ExportEngine {
     if (v <= 0 || (v - 1).abs() < 0.001) return '';
     var resto = v;
     final etapas = <String>[];
-    while (resto > 2.0 && etapas.length < 6) {
+    while (resto > 2.0 && etapas.length < 12) {
       etapas.add('atempo=2.0');
       resto /= 2.0;
     }
-    while (resto < 0.5 && etapas.length < 6) {
+    while (resto < 0.5 && etapas.length < 12) {
       etapas.add('atempo=0.5');
       resto /= 0.5;
     }
@@ -196,25 +304,79 @@ class ExportEngine {
     return '${etapas.join(',')},';
   }
 
+  static String _retimeAudio(double speed, bool preservePitch) {
+    final v = speed.abs();
+    if (v <= 0 || (v - 1).abs() < 0.001) return '';
+    if (preservePitch) return _atempo(v);
+    return 'asetrate=${(44100 * v).round()},aresample=44100,';
+  }
+
+  /// Aproxima a curva fonte-tempo em trechos curtos. Keyframes entram
+  /// obrigatoriamente na particao; amostras intermediarias acompanham o
+  /// easing sem depender de filtros de tempo variavel do dispositivo.
+  List<({Duration timelineDuration, Duration sourceStart, Duration sourceEnd})>
+  _audioRemapSegments(
+    VideoLayer layer,
+    Duration localStart,
+    Duration localEnd, {
+    bool freezeBefore = false,
+    bool freezeAfter = false,
+  }) {
+    if (localEnd <= localStart) return const [];
+    final times = <Duration>{localStart, localEnd};
+    final track = timeRemapTrackOf(layer);
+    if (track != null) {
+      for (final keyframe in track.keyframes) {
+        if (keyframe.time > localStart && keyframe.time < localEnd) {
+          times.add(keyframe.time);
+        }
+      }
+    }
+    final spanUs = (localEnd - localStart).inMicroseconds;
+    final steps = math.max(1, (spanUs / 200000).ceil());
+    for (var i = 1; i < steps; i++) {
+      times.add(
+        localStart + Duration(microseconds: (spanUs * i / steps).round()),
+      );
+    }
+    final sorted = times.toList()..sort();
+    Duration sourceAt(Duration local) {
+      var value = local;
+      if (freezeBefore && value < Duration.zero) value = Duration.zero;
+      if (freezeAfter && value > layer.duration) value = layer.duration;
+      return videoAbsoluteSourceTimeAt(layer, value);
+    }
+
+    return [
+      for (var i = 0; i + 1 < sorted.length; i++)
+        (
+          timelineDuration: sorted[i + 1] - sorted[i],
+          sourceStart: sourceAt(sorted[i]),
+          sourceEnd: sourceAt(sorted[i + 1]),
+        ),
+    ];
+  }
+
   /// Camadas que carregam som. Mudo sai da conta aqui — nao adianta
   /// mixar uma faixa em volume zero e pagar por ela.
   List<Layer> get audioSources => [
-        for (final l in project.layers)
-          if (_specOf(l) != null && !_specOf(l)!.muted)
-            if (l is AudioLayer || (l is VideoLayer && l.volume > 0.001)) l,
-      ];
+    for (final l in project.layers)
+      if (_specOf(l) != null && !_specOf(l)!.muted)
+        if (l is AudioLayer || (l is VideoLayer && l.volume > 0.001)) l,
+  ];
 
   static AudioSpec? _specOf(Layer l) => switch (l) {
-        AudioLayer a => a.audio,
-        VideoLayer v => v.audio,
-        _ => null,
-      };
+    AudioLayer a => a.audio,
+    VideoLayer v => v.audio,
+    _ => null,
+  };
 
   /// Monta as entradas e o grafo de mixagem. Cada faixa e cortada no
   /// trecho usado, atrasada ate a posicao dela na linha do tempo e
   /// ajustada no volume.
   ({List<String> inputs, String? filter, String? outLabel}) audioGraph(
-      int firstInputIndex) {
+    int firstInputIndex,
+  ) {
     final sources = audioSources;
     if (sources.isEmpty) {
       return (inputs: <String>[], filter: null, outLabel: null);
@@ -228,18 +390,99 @@ class ExportEngine {
     var idx = firstInputIndex;
 
     for (final l in sources) {
-      final path =
-          l is AudioLayer ? l.sourcePath : (l as VideoLayer).sourcePath;
+      final path = l is AudioLayer
+          ? l.sourcePath
+          : (l as VideoLayer).sourcePath;
       final volume = l is AudioLayer ? l.volume : (l as VideoLayer).volume;
-      final offset =
-          l is VideoLayer ? l.sourceOffset : (l as AudioLayer).sourceOffset;
-      final dur = l.duration.inMicroseconds / 1000000.0;
-      final delayMs = l.startTime.inMilliseconds;
+      var offset = l is VideoLayer
+          ? l.sourceOffset
+          : (l as AudioLayer).sourceOffset;
+      var timelineStart = l.startTime;
+      var timelineEnd = l.endTime;
+      var sourceDuration = switch (l) {
+        VideoLayer v => videoSourceSpan(v),
+        AudioLayer a => a.sourceSpan,
+        _ => l.duration,
+      };
+      List<
+        ({Duration timelineDuration, Duration sourceStart, Duration sourceEnd})
+      >?
+      remapSegments;
+      ClipTransition? transitionIn;
+      ClipTransition? transitionOut;
+      if (l is VideoLayer) {
+        final linkedIncoming = l.transitionIn;
+        transitionIn =
+            linkedIncoming != null &&
+                linkedIncoming.enabled &&
+                linkedIncoming.crossfadeAudio &&
+                videoAfter(
+                      project.layers,
+                      linkedIncoming.outgoingLayerId,
+                    )?.id ==
+                    l.id
+            ? linkedIncoming
+            : null;
+        if (transitionIn != null && transitionIn.enabled) {
+          final w = transitionIn.windowAt(l.startTime);
+          if (w.start < timelineStart) timelineStart = w.start;
+        }
+        for (final incoming in project.layers.whereType<VideoLayer>()) {
+          final candidate = incoming.transitionIn;
+          if (candidate?.outgoingLayerId == l.id &&
+              candidate!.crossfadeAudio &&
+              candidate.enabled &&
+              videoAfter(project.layers, l.id)?.id == incoming.id) {
+            transitionOut = candidate;
+            final w = candidate.windowAt(incoming.startTime);
+            if (w.end > timelineEnd) timelineEnd = w.end;
+            break;
+          }
+        }
+        var localStart = timelineStart - l.startTime;
+        var localEnd = timelineEnd - l.startTime;
+        final freezeBefore = transitionIn?.freezeEdges == true;
+        final freezeAfter = transitionOut?.freezeEdges == true;
+        if (hasTimeRemap(l) || l.reverse || freezeBefore || freezeAfter) {
+          remapSegments = _audioRemapSegments(
+            l,
+            localStart,
+            localEnd,
+            freezeBefore: freezeBefore,
+            freezeAfter: freezeAfter,
+          );
+          if (remapSegments.isNotEmpty) {
+            var lo = remapSegments.first.sourceStart;
+            var hi = lo;
+            for (final segment in remapSegments) {
+              for (final value in [segment.sourceStart, segment.sourceEnd]) {
+                if (value < lo) lo = value;
+                if (value > hi) hi = value;
+              }
+            }
+            offset = lo;
+            sourceDuration = hi - lo;
+          }
+        } else {
+          final sourceA = videoAbsoluteSourceTimeAt(l, localStart);
+          final sourceB = videoAbsoluteSourceTimeAt(l, localEnd);
+          offset = sourceA <= sourceB ? sourceA : sourceB;
+          sourceDuration = (sourceB - sourceA).abs();
+        }
+        if (sourceDuration < const Duration(milliseconds: 34)) {
+          sourceDuration = const Duration(milliseconds: 34);
+        }
+      }
+      final dur = (timelineEnd - timelineStart).inMicroseconds / 1000000.0;
+      final delayMs = timelineStart.inMilliseconds.clamp(0, 1 << 31);
 
       inputs.addAll([
-        '-ss', (offset.inMicroseconds / 1000000.0).toStringAsFixed(3),
-        '-t', dur.toStringAsFixed(3),
-        '-i', path,
+        '-ss',
+        (offset.inMicroseconds / 1000000.0).toStringAsFixed(6),
+        '-t',
+        (sourceDuration.inMicroseconds / 1000000.0).toStringAsFixed(6),
+        '-i',
+        path,
       ]);
 
       final spec = _specOf(l) ?? const AudioSpec();
@@ -255,28 +498,130 @@ class ExportEngine {
       if (spec.fadeOut > Duration.zero) {
         final d = spec.fadeOut.inMilliseconds / 1000.0;
         final st = (dur - d).clamp(0.0, dur);
-        fades.add('afade=t=out:st=${st.toStringAsFixed(3)}'
-            ':d=${d.toStringAsFixed(3)}:curve=qsin');
+        fades.add(
+          'afade=t=out:st=${st.toStringAsFixed(3)}'
+          ':d=${d.toStringAsFixed(3)}:curve=qsin',
+        );
+      }
+      if (transitionIn != null) {
+        final w = transitionIn.windowAt(l.startTime);
+        final st = (w.start - timelineStart).inMicroseconds / 1000000.0;
+        final d = w.duration.inMicroseconds / 1000000.0;
+        fades.add(
+          'afade=t=in:st=${st.toStringAsFixed(3)}'
+          ':d=${d.toStringAsFixed(3)}:curve=qsin',
+        );
+      }
+      if (transitionOut != null) {
+        VideoLayer? incoming;
+        for (final candidate in project.layers.whereType<VideoLayer>()) {
+          if (candidate.transitionIn == transitionOut) incoming = candidate;
+        }
+        if (incoming != null) {
+          final w = transitionOut.windowAt(incoming.startTime);
+          final st = (w.start - timelineStart).inMicroseconds / 1000000.0;
+          final d = w.duration.inMicroseconds / 1000000.0;
+          fades.add(
+            'afade=t=out:st=${st.toStringAsFixed(3)}'
+            ':d=${d.toStringAsFixed(3)}:curve=qsin',
+          );
+        }
       }
 
       final vel = switch (l) {
-        VideoLayer v => v.speed,
+        VideoLayer _ =>
+          sourceDuration.inMicroseconds /
+              math.max(1, (timelineEnd - timelineStart).inMicroseconds),
         AudioLayer a => a.speed,
         _ => 1.0,
       };
-      // atempo so aceita 0,5..2 por etapa; velocidades maiores viram
-      // uma corrente de etapas.
-      final tempo = _atempo(vel);
-
       final label = 'a$idx';
-      chains.add(
-        '[$idx:a]aresample=44100,'
-        '$tempo'
-        'volume=${ganho.toStringAsFixed(3)}'
-        '${fades.isEmpty ? '' : ',${fades.join(',')}'},'
-        'adelay=$delayMs|$delayMs,'
-        'apad=whole_dur=${_total.toStringAsFixed(3)}[$label]',
-      );
+      final post =
+          'volume=${ganho.toStringAsFixed(3)}'
+          '${fades.isEmpty ? '' : ',${fades.join(',')}'},'
+          'adelay=$delayMs|$delayMs,'
+          'apad=whole_dur=${_total.toStringAsFixed(3)}';
+      if (l is VideoLayer &&
+          remapSegments != null &&
+          remapSegments.isNotEmpty) {
+        final mediaSegments = [
+          for (final segment in remapSegments)
+            if ((segment.sourceEnd - segment.sourceStart).abs() >=
+                const Duration(microseconds: 24))
+              segment,
+        ];
+        final rawLabels = <String>[];
+        if (mediaSegments.length == 1) {
+          rawLabels.add('araw_${idx}_0');
+          chains.add(
+            '[$idx:a]aresample=44100,asetpts=PTS-STARTPTS,'
+            'aformat=sample_rates=44100:channel_layouts=stereo'
+            '[${rawLabels.first}]',
+          );
+        } else if (mediaSegments.length > 1) {
+          for (var i = 0; i < mediaSegments.length; i++) {
+            rawLabels.add('araw_${idx}_$i');
+          }
+          chains.add(
+            '[$idx:a]aresample=44100,asetpts=PTS-STARTPTS,'
+            'aformat=sample_rates=44100:channel_layouts=stereo,'
+            'asplit=${rawLabels.length}'
+            '${rawLabels.map((name) => '[$name]').join()}',
+          );
+        }
+
+        final segmentLabels = <String>[];
+        var mediaIndex = 0;
+        for (var i = 0; i < remapSegments.length; i++) {
+          final segment = remapSegments[i];
+          final dt = segment.timelineDuration.inMicroseconds / 1000000.0;
+          final sourceDelta = segment.sourceEnd - segment.sourceStart;
+          final ds = sourceDelta.inMicroseconds.abs() / 1000000.0;
+          final segmentLabel = 'aseg_${idx}_$i';
+          segmentLabels.add(segmentLabel);
+          // Hold nao repete uma amostra (o que produziria um tom); ele
+          // gera silencio com a duracao exata. O limiar e uma amostra em
+          // 44,1 kHz, preservando inclusive rampas muito lentas.
+          if (ds < 0.000024 || dt <= 0) {
+            chains.add(
+              'anullsrc=r=44100:cl=stereo:d=${dt.toStringAsFixed(6)}'
+              '[$segmentLabel]',
+            );
+            continue;
+          }
+          final sourceFirst = segment.sourceStart <= segment.sourceEnd
+              ? segment.sourceStart
+              : segment.sourceEnd;
+          final sourceLast = segment.sourceStart <= segment.sourceEnd
+              ? segment.sourceEnd
+              : segment.sourceStart;
+          final relativeFirst =
+              (sourceFirst - offset).inMicroseconds / 1000000.0;
+          final relativeLast = (sourceLast - offset).inMicroseconds / 1000000.0;
+          final rate = ds / dt;
+          final direction = sourceDelta < Duration.zero ? 'areverse,' : '';
+          final tempo = _retimeAudio(rate, spec.preservePitch);
+          final raw = rawLabels[mediaIndex++];
+          chains.add(
+            '[$raw]atrim=start=${relativeFirst.toStringAsFixed(6)}:'
+            'end=${relativeLast.toStringAsFixed(6)},'
+            'asetpts=PTS-STARTPTS,$direction$tempo'
+            'atrim=duration=${dt.toStringAsFixed(6)},'
+            'apad=whole_dur=${dt.toStringAsFixed(6)}[$segmentLabel]',
+          );
+        }
+        final remapped = 'aremapped_$idx';
+        chains.add(
+          '${segmentLabels.map((name) => '[$name]').join()}'
+          'concat=n=${segmentLabels.length}:v=0:a=1[$remapped]',
+        );
+        chains.add('[$remapped]$post[$label]');
+      } else {
+        // atempo so aceita 0,5..2 por etapa; velocidades maiores viram
+        // uma corrente de etapas.
+        final tempo = _retimeAudio(vel, spec.preservePitch);
+        chains.add('[$idx:a]aresample=44100,$tempo$post[$label]');
+      }
       labels.add('[$label]');
       porCamada[l.id] = label;
       duckAlvo[l.id] = spec.duckAgainstId;
@@ -310,7 +655,7 @@ class ExportEngine {
     final mix = labels.length == 1
         ? '${labels.first}anull[aout]'
         : '${labels.join()}amix=inputs=${labels.length}'
-            ':duration=longest:dropout_transition=0[aout]';
+              ':duration=longest:dropout_transition=0[aout]';
 
     return (
       inputs: inputs,
@@ -338,8 +683,10 @@ class ExportEngine {
     final stamp = project.name
         .replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')
         .toLowerCase();
-    final file = File('${out.path}/aurea_'
-        '${stamp.isEmpty ? 'video' : stamp}_${frameCount}f.mp4');
+    final file = File(
+      '${out.path}/aurea_'
+      '${stamp.isEmpty ? 'video' : stamp}_${frameCount}f.mp4',
+    );
     if (file.existsSync()) file.deleteSync();
     return file;
   }
@@ -356,12 +703,13 @@ class ExportEngine {
     if (destino.existsSync()) destino.deleteSync(recursive: true);
     destino.createSync(recursive: true);
 
-    final frames = framesDir
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.png'))
-        .toList()
-      ..sort((a, b) => a.path.compareTo(b.path));
+    final frames =
+        framesDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.png'))
+            .toList()
+          ..sort((a, b) => a.path.compareTo(b.path));
     if (frames.isEmpty) {
       throw ExportException('Nenhum quadro foi desenhado.');
     }
@@ -380,18 +728,20 @@ class ExportEngine {
     void Function(double p)? onProgress,
   }) async {
     final file = await _outputFile();
-    final frames = framesDir
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.png'))
-        .map((f) => f.path)
-        .toList()
-      ..sort();
+    final frames =
+        framesDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.png'))
+            .map((f) => f.path)
+            .toList()
+          ..sort();
     if (frames.isEmpty) {
       throw ExportException('Nenhum quadro foi desenhado.');
     }
 
-    final bitrate = settings.bitrateMbps != null ||
+    final bitrate =
+        settings.bitrateMbps != null ||
             settings.codec == ExportCodec.hevc ||
             settings.size != ExportSize.original
         ? settings.bitrateFor(width, height, fps)
@@ -437,16 +787,25 @@ class ExportEngine {
     // Junta o audio SEM recodificar o video.
     final session = await FFmpegKit.executeWithArguments([
       '-y',
-      '-i', silent.path,
+      '-i',
+      silent.path,
       ...audio.inputs,
-      '-filter_complex', audio.filter!,
-      '-map', '0:v',
-      '-map', audio.outLabel!,
-      '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-movflags', '+faststart',
-      '-t', _total.toStringAsFixed(3),
+      '-filter_complex',
+      audio.filter!,
+      '-map',
+      '0:v',
+      '-map',
+      audio.outLabel!,
+      '-c:v',
+      'copy',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-movflags',
+      '+faststart',
+      '-t',
+      _total.toStringAsFixed(3),
       file.path,
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {
@@ -457,16 +816,26 @@ class ExportEngine {
     return file;
   }
 
-  Future<void> _encodeFallback(List<String> frames, Directory framesDir,
-      File target, int bitrate) async {
+  Future<void> _encodeFallback(
+    List<String> frames,
+    Directory framesDir,
+    File target,
+    int bitrate,
+  ) async {
     final session = await FFmpegKit.executeWithArguments([
       '-y',
-      '-framerate', '$fps',
-      '-i', '${framesDir.path}/%06d.png',
-      '-c:v', 'mpeg4',
-      '-b:v', '$bitrate',
-      '-pix_fmt', 'yuv420p',
-      '-r', '$fps',
+      '-framerate',
+      '$fps',
+      '-i',
+      '${framesDir.path}/%06d.png',
+      '-c:v',
+      'mpeg4',
+      '-b:v',
+      '$bitrate',
+      '-pix_fmt',
+      'yuv420p',
+      '-r',
+      '$fps',
       target.path,
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {

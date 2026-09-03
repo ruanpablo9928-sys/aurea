@@ -8,12 +8,17 @@ import '../../../../core/ui/snack.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import '../../domain/mask.dart';
+import '../../domain/cut.dart';
+import '../../domain/cut_ops.dart';
 import '../../domain/video_project.dart' as proj;
 import '../../application/media_preview_service.dart';
 import '../../application/proxy_service.dart';
 import 'am_colors.dart';
 import 'layer_look.dart';
 import 'clip_preview_painters.dart';
+import 'freeze_sheet.dart';
+import 'transition_sheet.dart';
 
 // Mais baixas do que eram (46/38): num celular, tres camadas ja
 // tomavam a tela; e o que se le numa barra e nome e keyframe.
@@ -198,6 +203,11 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
               project.layerById(widget.singleLayerId!)!,
           ]
         : project.layers;
+    final matteSourceIds = <String>{
+      for (final layer in project.layers)
+        if (layer.matteMode != MatteMode.none && layer.matteSourceId != null)
+          layer.matteSourceId!,
+    };
     final totalWidth = _timeToPx(project.duration);
 
     return SizedBox(
@@ -208,8 +218,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
           return GestureDetector(
             onScaleStart: (d) {
               _ppsAtGestureStart = _pps;
-              _scrollAtGestureStart =
-                  _scroll.hasClients ? _scroll.offset : 0;
+              _scrollAtGestureStart = _scroll.hasClients ? _scroll.offset : 0;
               _focalAtGestureStart = d.localFocalPoint.dx;
             },
             onScaleUpdate: (d) {
@@ -217,11 +226,13 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
               setState(() {
                 // Zoom ancorado no CENTROIDE da pinca (AUREA §3.1-5):
                 // o conteudo sob os dedos fica sob os dedos.
-                final newPps =
-                    (_ppsAtGestureStart * d.scale).clamp(16.0, 400.0);
+                final newPps = (_ppsAtGestureStart * d.scale).clamp(
+                  16.0,
+                  400.0,
+                );
                 final k = newPps / _ppsAtGestureStart;
-                final contentAtFocal = _scrollAtGestureStart +
-                    (_focalAtGestureStart - pad);
+                final contentAtFocal =
+                    _scrollAtGestureStart + (_focalAtGestureStart - pad);
                 final newOffset =
                     contentAtFocal * k - (_focalAtGestureStart - pad);
                 _pps = newPps;
@@ -229,8 +240,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                   if (_scroll.hasClients) {
                     // Sem suprimir o seek: o tempo sob o playhead central
                     // continua verdadeiro durante o zoom.
-                    _scroll.jumpTo(newOffset.clamp(
-                        0.0, _scroll.position.maxScrollExtent));
+                    _scroll.jumpTo(
+                      newOffset.clamp(0.0, _scroll.position.maxScrollExtent),
+                    );
                   }
                 });
               });
@@ -274,12 +286,14 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                           _xDoDuploToque = d.localPosition.dx,
                                       onDoubleTap: () {
                                         final t = Duration(
-                                            microseconds:
-                                                (_xDoDuploToque / _pps * 1e6)
-                                                    .round());
+                                          microseconds:
+                                              (_xDoDuploToque / _pps * 1e6)
+                                                  .round(),
+                                        );
                                         ref
-                                            .read(editorControllerProvider
-                                                .notifier)
+                                            .read(
+                                              editorControllerProvider.notifier,
+                                            )
                                             .toggleMarker(t);
                                         HapticFeedback.selectionClick();
                                       },
@@ -303,15 +317,17 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                       marca: m,
                                       pps: _pps,
                                       onMover: (dx) => ref
-                                          .read(editorControllerProvider
-                                              .notifier)
+                                          .read(
+                                            editorControllerProvider.notifier,
+                                          )
                                           .moveMarker(
-                                              m.time,
-                                              m.time +
-                                                  Duration(
-                                                      microseconds:
-                                                          (dx / _pps * 1e6)
-                                                              .round())),
+                                            m.time,
+                                            m.time +
+                                                Duration(
+                                                  microseconds:
+                                                      (dx / _pps * 1e6).round(),
+                                                ),
+                                          ),
                                       onMenu: () =>
                                           _menuDaMarca(context, ref, m),
                                     ),
@@ -329,21 +345,18 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                         layer: layer,
                                         pps: _pps,
                                         totalWidth: totalWidth,
-                                        selected: layer.id == selectedId ||
+                                        selected:
+                                            layer.id == selectedId ||
                                             multi.contains(layer.id) ||
                                             widget.singleLayerId != null,
-                                        compact:
-                                            widget.singleLayerId != null,
+                                        compact: widget.singleLayerId != null,
                                         playback: widget.playback,
                                         onTapLayer: widget.onTapLayer,
-                                        activeTimesUs:
-                                            widget.activeTimesUs,
+                                        activeTimesUs: widget.activeTimesUs,
                                         onForeignKeyframe:
                                             widget.onForeignKeyframe,
-                                        onEditStart: () =>
-                                            _editingBar = true,
-                                        onEditEnd: () =>
-                                            _editingBar = false,
+                                        onEditStart: () => _editingBar = true,
+                                        onEditEnd: () => _editingBar = false,
                                       ),
                                   ],
                                 ),
@@ -365,7 +378,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                       valueListenable: widget.playback.time,
                       builder: (context, t, _) => Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 1),
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
                         color: AmColors.bg,
                         child: Text(
                           formatTimecode(t, project.fps),
@@ -385,10 +400,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                 // Playhead central.
                 IgnorePointer(
                   child: Center(
-                    child: Container(
-                      width: 1.6,
-                      color: widget.playheadColor,
-                    ),
+                    child: Container(width: 1.6, color: widget.playheadColor),
                   ),
                 ),
                 if (widget.playheadColor != Colors.white)
@@ -406,33 +418,64 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                       ),
                     ),
                   ),
-                // Tesoura no CABECOTE: divide a camada selecionada onde
-                // a mao ja esta (spec barra-de-acoes §3).
+                // Corte e CONGELAR moram no cabecote: os dois usam o
+                // instante que ja esta sob a mao, sem abrir nova secao.
                 if (widget.singleLayerId == null)
                   Align(
                     alignment: Alignment.bottomCenter,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        final id = ref.read(selectedLayerProvider);
-                        if (id == null) return;
-                        ref
-                            .read(editorControllerProvider.notifier)
-                            .splitLayer(id, widget.playback.time.value);
-                        HapticFeedback.selectionClick();
-                      },
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        margin: const EdgeInsets.only(bottom: 4),
-                        decoration: BoxDecoration(
-                          color: AmColors.panelHigh,
-                          shape: BoxShape.circle,
-                          border:
-                              Border.all(color: AmColors.hairline),
-                        ),
-                        child: const Icon(CupertinoIcons.scissors,
-                            size: 17, color: AmColors.text),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _PlayheadAction(
+                            label: 'Dividir no cabecote',
+                            icon: CupertinoIcons.scissors,
+                            onTap: () {
+                              final id = ref.read(selectedLayerProvider);
+                              if (id == null) return;
+                              ref
+                                  .read(editorControllerProvider.notifier)
+                                  .splitLayer(id, widget.playback.time.value);
+                              HapticFeedback.selectionClick();
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _PlayheadAction(
+                            label: 'Congelar aqui',
+                            icon: CupertinoIcons.pause_fill,
+                            onTap: () {
+                              final id = ref.read(selectedLayerProvider);
+                              if (id == null) return;
+                              final ok = ref
+                                  .read(editorControllerProvider.notifier)
+                                  .freezeFrame(id, widget.playback.time.value);
+                              if (ok) {
+                                AureaSnack.show(
+                                  context,
+                                  'Quadro congelado por 1 segundo',
+                                );
+                                HapticFeedback.selectionClick();
+                              } else {
+                                AureaSnack.show(
+                                  context,
+                                  'Selecione um video e leve o cabecote para dentro dele',
+                                );
+                              }
+                            },
+                            onLongPress: () {
+                              final id = ref.read(selectedLayerProvider);
+                              if (id != null) {
+                                showFreezeSheet(
+                                  context,
+                                  ref,
+                                  id,
+                                  widget.playback.time.value,
+                                );
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -443,7 +486,10 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                   child: Column(
                     children: [
                       for (final layer in layers)
-                        _AmLayerPill(layer: layer),
+                        _AmLayerPill(
+                          layer: layer,
+                          isMatteSource: matteSourceIds.contains(layer.id),
+                        ),
                     ],
                   ),
                 ),
@@ -456,26 +502,62 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 }
 
+class _PlayheadAction extends StatelessWidget {
+  const _PlayheadAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    button: true,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: AmColors.panelHigh,
+          shape: BoxShape.circle,
+          border: Border.all(color: AmColors.hairline),
+        ),
+        child: Icon(icon, size: 17, color: AmColors.text),
+      ),
+    ),
+  );
+}
+
 /// Pilula fixa: olho + miniatura da camada.
 class _AmLayerPill extends StatelessWidget {
-  const _AmLayerPill({required this.layer});
+  const _AmLayerPill({required this.layer, required this.isMatteSource});
 
   final Layer layer;
+  final bool isMatteSource;
 
   Color get _thumbColor => switch (layer) {
-        ShapeLayer l => l.primaryColor,
-        TextLayer _ => Colors.white,
-        VideoLayer _ => const Color(0xFF3D6BB3),
-        ImageLayer _ => const Color(0xFF8A5BA0),
-        AudioLayer _ => const Color(0xFF2E8B62),
-        CaptionLayer _ => const Color(0xFFE8B93E),
-        GroupLayer _ => const Color(0xFF6B7A94),
-        NullLayer _ => const Color(0xFF9F8CFF),
-        ParticlesLayer l => l.color,
-        Element3DLayer l => l.color,
-        AdjustmentLayer _ => const Color(0xFF56D1C4),
-        Scene3DLayer _ => const Color(0xFF35C4E7),
-      };
+    ShapeLayer l => l.primaryColor,
+    TextLayer _ => Colors.white,
+    VideoLayer _ => const Color(0xFF3D6BB3),
+    ImageLayer _ => const Color(0xFF8A5BA0),
+    AudioLayer _ => const Color(0xFF2E8B62),
+    CaptionLayer _ => const Color(0xFFE8B93E),
+    GroupLayer _ => const Color(0xFF6B7A94),
+    NullLayer _ => const Color(0xFF9F8CFF),
+    ParticlesLayer l => l.color,
+    Element3DLayer l => l.color,
+    AdjustmentLayer _ => const Color(0xFF56D1C4),
+    Scene3DLayer _ => const Color(0xFF35C4E7),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -496,21 +578,37 @@ class _AmLayerPill extends StatelessWidget {
           children: [
             const Icon(CupertinoIcons.eye, size: 18, color: AmColors.text),
             const SizedBox(width: 8),
+            if (isMatteSource) ...[
+              Semantics(
+                label: 'Fonte de recorte por camada',
+                child: const Icon(
+                  CupertinoIcons.scope,
+                  size: 15,
+                  color: AmColors.accent,
+                ),
+              ),
+              const SizedBox(width: 7),
+            ],
             Container(
               width: 26,
               height: 26,
               decoration: BoxDecoration(
                 color: _thumbColor,
                 borderRadius: BorderRadius.circular(
-                    layer is ShapeLayer ? 13 : 5),
+                  layer is ShapeLayer ? 13 : 5,
+                ),
               ),
               child: layer is TextLayer
                   ? const Center(
-                      child: Text('T',
-                          style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700)))
+                      child: Text(
+                        'T',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
                   : null,
             ),
           ],
@@ -601,7 +699,9 @@ class _MarcaNaReguaState extends State<_MarcaNaRegua> {
         },
         child: CustomPaint(
           painter: _UmaMarcaPainter(
-              color: widget.marca.color, label: widget.marca.label),
+            color: widget.marca.color,
+            label: widget.marca.label,
+          ),
         ),
       ),
     );
@@ -644,7 +744,10 @@ class _UmaMarcaPainter extends CustomPainter {
 /// O menu da marca: nomear, pintar, apagar. Toque longo, como em tudo
 /// que e destrutivo por aqui.
 Future<void> _menuDaMarca(
-    BuildContext context, WidgetRef ref, proj.Marker m) async {
+  BuildContext context,
+  WidgetRef ref,
+  proj.Marker m,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   const cores = [
     Color(0xFFB8FF3D),
@@ -660,7 +763,8 @@ Future<void> _menuDaMarca(
     isScrollControlled: true,
     builder: (sheetContext) => Padding(
       padding: EdgeInsets.only(
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+      ),
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -708,10 +812,15 @@ Future<void> _menuDaMarca(
               ),
             ),
             ListTile(
-              leading: const Icon(CupertinoIcons.delete,
-                  color: AmColors.pink, size: 20),
-              title: const Text('Apagar a marca',
-                  style: TextStyle(color: AmColors.pink, fontSize: 15)),
+              leading: const Icon(
+                CupertinoIcons.delete,
+                color: AmColors.pink,
+                size: 20,
+              ),
+              title: const Text(
+                'Apagar a marca',
+                style: TextStyle(color: AmColors.pink, fontSize: 15),
+              ),
               onTap: () {
                 controller.removeMarker(m.time);
                 Navigator.of(sheetContext).pop();
@@ -821,8 +930,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
   VoidCallback get onEditEnd => widget.onEditEnd;
   void Function(Layer layer)? get onTapLayer => widget.onTapLayer;
   Set<int>? get activeTimesUs => widget.activeTimesUs;
-  void Function(Duration)? get onForeignKeyframe =>
-      widget.onForeignKeyframe;
+  void Function(Duration)? get onForeignKeyframe => widget.onForeignKeyframe;
 
   // Arrasto acumulado desde o inicio do gesto: o snap nao "prende" a
   // barra, porque a posicao desejada e recalculada do ponto de origem.
@@ -830,6 +938,8 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
   double _accumPx = 0;
   Duration _trimStart0 = Duration.zero;
   double _trimAccumPx = 0;
+  Duration _transitionDuration0 = Duration.zero;
+  double _transitionAccumPx = 0;
 
   /// Ultimo alvo de snap: o tique haptico dispara UMA vez por encaixe.
   Duration? _lastSnapTarget;
@@ -909,8 +1019,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
   Widget build(BuildContext context) {
     final controller = ref.read(editorControllerProvider.notifier);
     final left = layer.startTime.inMicroseconds / 1e6 * pps;
-    final width =
-        (layer.duration.inMicroseconds / 1e6 * pps).clamp(40.0, 1e6);
+    final width = (layer.duration.inMicroseconds / 1e6 * pps).clamp(40.0, 1e6);
 
     return SizedBox(
       height: kAmRowHeight,
@@ -940,10 +1049,8 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
               onLongPress: compact
                   ? null
                   : () {
-                      final set =
-                          {...ref.read(multiSelectProvider)};
-                      final primary =
-                          ref.read(selectedLayerProvider);
+                      final set = {...ref.read(multiSelectProvider)};
+                      final primary = ref.read(selectedLayerProvider);
                       if (primary != null) set.add(primary);
                       if (!set.add(layer.id)) set.remove(layer.id);
                       ref.read(multiSelectProvider.notifier).state = set;
@@ -965,10 +1072,10 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                       controller.moveLayer(layer.id, snapped);
                     }
                   : null,
-              onHorizontalDragEnd:
-                  selected && !compact ? (_) => onEditEnd() : null,
-              onHorizontalDragCancel:
-                  selected && !compact ? onEditEnd : null,
+              onHorizontalDragEnd: selected && !compact
+                  ? (_) => onEditEnd()
+                  : null,
+              onHorizontalDragCancel: selected && !compact ? onEditEnd : null,
               child: CustomPaint(
                 painter: _AmBarPainter(
                   selected: selected,
@@ -980,87 +1087,148 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                 child: _ClipPreview(
                   layer: layer,
                   child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      // ICONE DO TIPO na ponta: reconhecer sem ler.
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Icon(layerTypeIcon(layer),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        // ICONE DO TIPO na ponta: reconhecer sem ler.
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Icon(
+                            layerTypeIcon(layer),
                             size: 11,
-                            color: Colors.white.withValues(alpha: 0.85)),
-                      ),
-                      Flexible(
-                        child: Text(
-                          layer.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: Colors.white.withValues(alpha: 0.85),
                           ),
                         ),
-                      ),
-                      if (layer.hasAnimation) ...[
-                        const SizedBox(width: 6),
-                        const Icon(CupertinoIcons.rhombus,
-                            size: 12, color: Colors.white),
+                        Flexible(
+                          child: Text(
+                            layer.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        if (layer.hasAnimation) ...[
+                          const SizedBox(width: 6),
+                          const Icon(
+                            CupertinoIcons.rhombus,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                        ],
+                        const Spacer(),
+                        if (!compact && width > 90)
+                          const Icon(
+                            CupertinoIcons.line_horizontal_3,
+                            size: 14,
+                            color: Colors.white70,
+                          ),
                       ],
-                      const Spacer(),
-                      if (!compact && width > 90)
-                        const Icon(CupertinoIcons.line_horizontal_3,
-                            size: 14, color: Colors.white70),
-                    ],
-                  ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-          // MARCA NA JUNCAO: os dois pedacos vieram do mesmo arquivo e
-          // encostam em sequencia. Tocar oferece juntar de volta —
-          // desfazer um corte antigo sem procurar comando nenhum.
-          Consumer(builder: (context, ref, _) {
-            final ctrl = ref.read(editorControllerProvider.notifier);
-            if (!ctrl.hasJoinableNeighbour(layer.id)) {
-              return const SizedBox.shrink();
-            }
-            final x = left + (layer.duration.inMicroseconds / 1e6 * pps);
-            return Positioned(
-              left: x - 11,
-              top: 0,
-              width: 22,
-              height: kAmBarHeight,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (ctrl.joinWithNeighbour(layer.id)) {
-                    AureaSnack.show(context, 'Pedacos juntados',
-                        actionLabel: 'Desfazer', onAction: ctrl.undo);
-                  }
-                },
-                child: Center(
-                  child: Container(
-                    width: 3,
-                    height: kAmBarHeight - 10,
-                    decoration: BoxDecoration(
-                      color: AmColors.accent.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(2),
+          // A juncao e o botao da TRANSICAO. Toque longo preserva o gesto
+          // antigo de juntar novamente dois pedacos da mesma fonte.
+          Consumer(
+            builder: (context, ref, _) {
+              final ctrl = ref.read(editorControllerProvider.notifier);
+              if (layer is! VideoLayer || ctrl.clipAfter(layer.id) == null) {
+                return const SizedBox.shrink();
+              }
+              final transition = ctrl.transitionAfter(layer.id);
+              final x = left + (layer.duration.inMicroseconds / 1e6 * pps);
+              final markerWidth = transition == null ? 24.0 : 66.0;
+              return Positioned(
+                left: x - markerWidth / 2,
+                top: 0,
+                width: markerWidth,
+                height: kAmBarHeight,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => showTransitionSheet(context, ref, layer.id),
+                  onLongPress: ctrl.hasJoinableNeighbour(layer.id)
+                      ? () {
+                          if (ctrl.joinWithNeighbour(layer.id)) {
+                            AureaSnack.show(
+                              context,
+                              'Pedacos juntados',
+                              actionLabel: 'Desfazer',
+                              onAction: ctrl.undo,
+                            );
+                          }
+                        }
+                      : null,
+                  onHorizontalDragStart: transition == null
+                      ? null
+                      : (_) {
+                          onEditStart();
+                          _transitionDuration0 = transition.duration;
+                          _transitionAccumPx = 0;
+                        },
+                  onHorizontalDragUpdate: transition == null
+                      ? null
+                      : (details) {
+                          _transitionAccumPx += details.delta.dx;
+                          final delta = _pxToDur(_transitionAccumPx);
+                          var duration = _transitionDuration0 + delta;
+                          if (duration < Duration.zero) {
+                            duration = Duration.zero;
+                          }
+                          if (duration > const Duration(milliseconds: 2500)) {
+                            duration = const Duration(milliseconds: 2500);
+                          }
+                          ctrl.setTransitionDuration(layer.id, duration);
+                        },
+                  onHorizontalDragEnd: transition == null
+                      ? null
+                      : (_) => onEditEnd(),
+                  onHorizontalDragCancel: transition == null ? null : onEditEnd,
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 4),
+                      height: kAmBarHeight - 10,
+                      padding: transition == null
+                          ? EdgeInsets.zero
+                          : const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: AmColors.accent.withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      alignment: Alignment.center,
+                      child: transition == null
+                          ? null
+                          : Text(
+                              '${transition.type.shortLabel} '
+                              '${transition.duration.inMilliseconds}ms',
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
+              );
+            },
+          ),
           // Cues de legenda como marcas dentro da barra (§6.5).
           if (layer is CaptionLayer)
             for (final cue in (layer as CaptionLayer).cues)
               Positioned(
                 left: left + (cue.start.inMicroseconds / 1e6 * pps),
                 top: 6,
-                width: ((cue.end - cue.start).inMicroseconds / 1e6 * pps)
-                    .clamp(3.0, 1e6),
+                width: ((cue.end - cue.start).inMicroseconds / 1e6 * pps).clamp(
+                  3.0,
+                  1e6,
+                ),
                 height: kAmBarHeight - 12,
                 child: IgnorePointer(
                   child: Container(
@@ -1081,73 +1249,78 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
           // demais para se distinguir vira barra, e o que da para
           // distinguir continua losango.
           for (final grupo in _agrupaKeyframes(layer.keyframeTimes, pps))
-            Builder(builder: (context) {
-              final active = activeTimesUs == null ||
-                  grupo.times.any(
-                      (t) => activeTimesUs!.contains(t.inMicroseconds));
-              final cor = active
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.30);
-              final x0 = grupo.times.first.inMicroseconds / 1e6 * pps;
-              final x1 = grupo.times.last.inMicroseconds / 1e6 * pps;
+            Builder(
+              builder: (context) {
+                final active =
+                    activeTimesUs == null ||
+                    grupo.times.any(
+                      (t) => activeTimesUs!.contains(t.inMicroseconds),
+                    );
+                final cor = active
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.30);
+                final x0 = grupo.times.first.inMicroseconds / 1e6 * pps;
+                final x1 = grupo.times.last.inMicroseconds / 1e6 * pps;
 
-              final Widget marca = grupo.times.length == 1
-                  ? Transform.rotate(
-                      angle: 0.785398,
-                      child: Container(
-                        width: 10,
-                        height: 10,
+                final Widget marca = grupo.times.length == 1
+                    ? Transform.rotate(
+                        angle: 0.785398,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: cor,
+                            borderRadius: BorderRadius.circular(2),
+                            border: active
+                                ? Border.all(color: Colors.black38)
+                                : null,
+                          ),
+                        ),
+                      )
+                    : Container(
+                        height: 8,
                         decoration: BoxDecoration(
                           color: cor,
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: BorderRadius.circular(4),
                           border: active
                               ? Border.all(color: Colors.black38)
                               : null,
                         ),
-                      ),
-                    )
-                  : Container(
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: cor,
-                        borderRadius: BorderRadius.circular(4),
-                        border: active
-                            ? Border.all(color: Colors.black38)
-                            : null,
-                      ),
-                    );
+                      );
 
-              final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
-              return Positioned(
-                left: left + x0 - 11,
-                top: kAmBarHeight / 2 - 11,
-                width: largura,
-                height: 22,
-                // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
-                // consegue tocar vira enigma: de quem e essa? So `onTap`
-                // — arrastar continua movendo o clipe, porque um
-                // reconhecedor de toque perde a arena para um de arrasto.
-                // O diamante ACESO leva o cabecote ate ele: e como se
-                // navega de keyframe em keyframe no Alight Motion, tocando
-                // na barra. Sem botao de anterior/proximo, sem menu.
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (active) {
-                      playback.pause();
-                      playback.seek(layer.startTime + grupo.times.first);
-                    } else {
-                      onForeignKeyframe?.call(grupo.times.first);
-                    }
-                  },
-                  child: Center(
+                final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
+                return Positioned(
+                  left: left + x0 - 11,
+                  top: kAmBarHeight / 2 - 11,
+                  width: largura,
+                  height: 22,
+                  // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
+                  // consegue tocar vira enigma: de quem e essa? So `onTap`
+                  // — arrastar continua movendo o clipe, porque um
+                  // reconhecedor de toque perde a arena para um de arrasto.
+                  // O diamante ACESO leva o cabecote ate ele: e como se
+                  // navega de keyframe em keyframe no Alight Motion, tocando
+                  // na barra. Sem botao de anterior/proximo, sem menu.
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (active) {
+                        playback.pause();
+                        playback.seek(layer.startTime + grupo.times.first);
+                      } else {
+                        onForeignKeyframe?.call(grupo.times.first);
+                      }
+                    },
+                    child: Center(
                       child: Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 11),
-                          child: marca)),
-                ),
-              );
-            }),
+                        padding: const EdgeInsets.symmetric(horizontal: 11),
+                        child: marca,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           // Setas de navegacao entre camadas (paginas de ferramenta).
           if (compact) ...[
             Positioned(
@@ -1245,8 +1418,11 @@ class _GrupoDeKeyframes {
 /// O criterio e em PIXEL, nao em tempo: o mesmo par de keyframes se
 /// distingue com a linha ampliada e some quando ela e reduzida, e o
 /// desenho tem de acompanhar isso.
-List<_GrupoDeKeyframes> _agrupaKeyframes(List<Duration> times, double pps,
-    {double minPx = 9}) {
+List<_GrupoDeKeyframes> _agrupaKeyframes(
+  List<Duration> times,
+  double pps, {
+  double minPx = 9,
+}) {
   if (times.isEmpty) return const [];
   final ordenados = [...times]..sort();
   final out = <_GrupoDeKeyframes>[];
@@ -1287,15 +1463,20 @@ class _AmBarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
-        Offset.zero & size, const Radius.circular(8));
+      Offset.zero & size,
+      const Radius.circular(8),
+    );
     canvas.drawRRect(rrect, _fundo..color = color);
     if (selected) {
       canvas.save();
       canvas.clipRRect(rrect);
       _listra.color = stripeColor.withValues(alpha: 0.55);
       for (var x = -size.height; x < size.width + size.height; x += 22) {
-        canvas.drawLine(Offset(x, size.height + 4),
-            Offset(x + size.height + 8, -4), _listra);
+        canvas.drawLine(
+          Offset(x, size.height + 4),
+          Offset(x + size.height + 8, -4),
+          _listra,
+        );
       }
       canvas.restore();
     }
@@ -1378,7 +1559,14 @@ class _ClipPreviewState extends State<_ClipPreview> {
   @override
   void didUpdateWidget(_ClipPreview old) {
     super.didUpdateWidget(old);
-    if (old.layer.id != widget.layer.id) _pedir();
+    if (old.layer.id != widget.layer.id ||
+        old.layer.duration != widget.layer.duration ||
+        old.layer is VideoLayer &&
+            widget.layer is VideoLayer &&
+            (old.layer as VideoLayer).sourceOffset !=
+                (widget.layer as VideoLayer).sourceOffset) {
+      _pedir();
+    }
   }
 
   void _pedir() {
@@ -1388,7 +1576,9 @@ class _ClipPreviewState extends State<_ClipPreview> {
     } else if (l is VideoLayer) {
       _service.ensureWaveform(l.sourcePath);
       _service.ensureFilmstrip(
-          l.sourcePath, l.sourceOffset + l.duration);
+        l.sourcePath,
+        l.sourceOffset + videoSourceSpan(l),
+      );
       // PROXY: pedido daqui porque a barra do clipe sempre monta —
       // pendurar no caminho de sincronia do player era fragil, ele so
       // roda quando o relogio anda.
@@ -1401,21 +1591,20 @@ class _ClipPreviewState extends State<_ClipPreview> {
     final l = widget.layer;
     if (l is! AudioLayer && l is! VideoLayer) return widget.child;
 
-    final path = l is AudioLayer
-        ? l.sourcePath
-        : (l as VideoLayer).sourcePath;
+    final path = l is AudioLayer ? l.sourcePath : (l as VideoLayer).sourcePath;
     final inicio = l is VideoLayer
         ? l.sourceOffset
         : (l as AudioLayer).sourceOffset;
-    final fim = inicio + l.duration;
+    final fim =
+        inicio +
+        (l is VideoLayer ? videoSourceSpan(l) : (l as AudioLayer).sourceSpan);
 
     return ValueListenableBuilder<int>(
       valueListenable: _service.revision,
       builder: (context, _, child) {
         final peaks = _service.peaksOf(path);
         final piramide = _service.pyramidOf(path);
-        final strip =
-            l is VideoLayer ? _service.stripOf(path) : null;
+        final strip = l is VideoLayer ? _service.stripOf(path) : null;
 
         final temStrip = strip != null && strip.isNotEmpty;
         final temOnda = peaks != null && peaks.isNotEmpty;

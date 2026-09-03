@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 
+import '../domain/cut_ops.dart';
 import '../domain/layer.dart';
 import 'preview_stats.dart';
 import 'proxy_service.dart';
@@ -12,13 +14,18 @@ import 'proxy_service.dart';
 /// sincronizados ao clock mestre (play/pause/seek + correcao de drift).
 class VideoLayerManager {
   final Map<String, VideoPlayerController> _controllers = {};
+  final Map<String, String> _controllerPath = {};
+  final Map<String, Object> _controllerTicket = {};
   final Map<String, Future<void>> _initializing = {};
   final Map<String, DateTime> _lastSeek = {};
+  int _lastProxyRevision = -1;
 
   /// Ultimo volume APLICADO por camada: setVolume e uma chamada de
   /// plataforma — repeti-la a cada tick (30x/s por camada) derruba o
   /// preview. So chama quando o valor realmente muda.
   final Map<String, double> _appliedVolume = {};
+  final Map<String, double> _appliedRate = {};
+  final Map<String, double> _failedNativeRate = {};
 
   /// Notifica quando um controller termina de inicializar (para o preview
   /// trocar o placeholder pelo video).
@@ -35,13 +42,9 @@ class VideoLayerManager {
   /// Midias da cena, remontadas so quando a cena muda (zero alocacao por
   /// tick). Audio vem antes de video: o audio e o relogio mestre.
   final List<
-      ({
-        String id,
-        String path,
-        double volume,
-        Duration offset,
-        Layer layer
-      })> _media = [];
+    ({String id, String path, double volume, Duration offset, Layer layer})
+  >
+  _media = [];
 
   /// Ultima posicao JA VISTA por camada: o plugin so publica posicao a
   /// cada ~500 ms, e ancorar o relogio numa amostra repetida empurraria
@@ -61,26 +64,81 @@ class VideoLayerManager {
   /// Quanto antes do inicio de um pedaco ele e preparado.
   static const Duration _janelaPreRoll = Duration(seconds: 2);
 
-  VideoPlayerController? controllerFor(String layerId) =>
-      _controllers[layerId];
+  VideoPlayerController? controllerFor(String layerId) => _controllers[layerId];
+
+  /// Remove tambem um controller que ainda esta inicializando. O Future
+  /// nao pode ser cancelado pelo plugin, entao retirar o caminho funciona
+  /// como um token de cancelamento: ao terminar, [_ensure] ve que a camada
+  /// nao e mais desejada e descarta o controller antes de publica-lo.
+  void _evict(String id) {
+    _controllerPath.remove(id);
+    _controllerTicket.remove(id);
+    _initializing.remove(id);
+    _controllers.remove(id)?.dispose();
+    _lastSeek.remove(id);
+    _appliedVolume.remove(id);
+    _appliedRate.remove(id);
+    _failedNativeRate.remove(id);
+    _lastPos.remove(id);
+    _biasUs.remove(id);
+    _preRolled.remove(id);
+  }
 
   void _ensure(String id, String path, double volume) {
+    final currentPath = _controllerPath[id];
+    if (currentPath != null && currentPath != path) {
+      _evict(id);
+    }
     if (_controllers.containsKey(id) || _initializing.containsKey(id)) {
       return;
     }
     final controller = VideoPlayerController.file(File(path));
-    _initializing[id] = controller.initialize().then((_) {
-      _controllers[id] = controller;
-      _initializing.remove(id);
-      controller.setVolume(volume);
-      _appliedVolume[id] = volume;
-      revision.value++;
-      // Seek inicial no instante atual do clock (decupagem correta).
-      sync(_lastLayers, _lastT, _lastPlaying);
-    }).catchError((_) {
-      _initializing.remove(id);
-      controller.dispose();
-    });
+    final ticket = Object();
+    _controllerPath[id] = path;
+    _controllerTicket[id] = ticket;
+    _initializing[id] = controller
+        .initialize()
+        .then((_) {
+          if (_controllerPath[id] != path ||
+              !identical(_controllerTicket[id], ticket)) {
+            controller.dispose();
+            return;
+          }
+          _controllers[id] = controller;
+          _initializing.remove(id);
+          controller.setVolume(volume);
+          _appliedVolume[id] = volume;
+          revision.value++;
+          // Seek inicial no instante atual do clock (decupagem correta).
+          sync(_lastLayers, _lastT, _lastPlaying);
+        })
+        .catchError((_) {
+          if (_controllerPath[id] == path &&
+              identical(_controllerTicket[id], ticket)) {
+            _initializing.remove(id);
+            _controllerPath.remove(id);
+            _controllerTicket.remove(id);
+          }
+          controller.dispose();
+        });
+  }
+
+  void _setNativeRate(
+    String id,
+    VideoPlayerController controller,
+    double rate,
+  ) {
+    _appliedRate[id] = rate;
+    _failedNativeRate.remove(id);
+    unawaited(
+      controller.setPlaybackSpeed(rate).catchError((Object _) {
+        if (identical(_controllers[id], controller) &&
+            _appliedRate[id] == rate) {
+          _failedNativeRate[id] = rate;
+          if (controller.value.isPlaying) controller.pause();
+        }
+      }),
+    );
   }
 
   /// Chamado a cada mudanca relevante do clock. Camadas de AUDIO usam o
@@ -91,8 +149,11 @@ class VideoLayerManager {
 
     // Zero alocacao no caminho quente (travada-periodica C6): a lista de
     // midias so e remontada quando a CENA muda, nunca a cada tick.
-    if (!identical(layers, _lastLayers)) {
+    final proxyRevision = ProxyService.instance.revision.value;
+    if (!identical(layers, _lastLayers) ||
+        proxyRevision != _lastProxyRevision) {
       _lastLayers = layers;
+      _lastProxyRevision = proxyRevision;
       _media
         ..clear()
         // Audio primeiro: ele e o relogio mestre (nunca "pula" frame).
@@ -104,7 +165,7 @@ class VideoLayerManager {
                 path: l.sourcePath,
                 volume: l.volume,
                 offset: l.sourceOffset,
-                layer: l
+                layer: l,
               ),
           for (final l in layers)
             if (l is VideoLayer)
@@ -116,23 +177,40 @@ class VideoLayerManager {
                 path: ProxyService.instance.playbackPath(l.sourcePath),
                 volume: l.volume,
                 offset: l.sourceOffset,
-                layer: l
+                layer: l,
               ),
         ]);
 
       // Descarta controllers de camadas removidas.
       final liveIds = {for (final m in _media) m.id};
-      final dead =
-          _controllers.keys.where((id) => !liveIds.contains(id)).toList();
+      final dead = _controllerPath.keys
+          .where((id) => !liveIds.contains(id))
+          .toList();
       for (final id in dead) {
-        _controllers.remove(id)?.dispose();
-        _lastSeek.remove(id);
-        _appliedVolume.remove(id);
-        _lastPos.remove(id);
-        _preRolled.remove(id);
+        _evict(id);
       }
     }
     final mediaLayers = _media;
+    final transitions = transitionContextsAt(layers, t);
+
+    // O conjunto de decodificadores vivos e EXATAMENTE o que aparece
+    // neste quadro mais o pre-roll imediato. Camadas que continuam no
+    // projeto, mas estao longe do playhead, nao podem reter codecs para
+    // sempre (um projeto muito cortado esgotava o limite do aparelho).
+    final wanted = <String>{};
+    for (final m in mediaLayers) {
+      final active = visibleForCut(layers, m.layer, t, contexts: transitions);
+      final untilStart = m.layer.startTime - t;
+      final preRoll =
+          !active && untilStart > Duration.zero && untilStart <= _janelaPreRoll;
+      if (active || preRoll) wanted.add(m.id);
+    }
+    for (final id in _controllerPath.keys.toList()) {
+      if (!wanted.contains(id)) _evict(id);
+    }
+    for (final m in mediaLayers) {
+      if (wanted.contains(m.id)) _ensure(m.id, m.path, m.volume);
+    }
 
     // Relogio mestre desta passada: a primeira midia ativa que trouxer
     // amostra nova de posicao (audio primeiro — ver ordenacao acima).
@@ -140,68 +218,124 @@ class VideoLayerManager {
 
     for (final m in mediaLayers) {
       final layer = m.layer;
-      final active = layer.activeAt(t);
+      final active = visibleForCut(layers, layer, t, contexts: transitions);
       final ateComecar = layer.startTime - t;
-      final vemAi = !active &&
-          ateComecar > Duration.zero &&
-          ateComecar <= _janelaPreRoll;
+      final vemAi =
+          !active && ateComecar > Duration.zero && ateComecar <= _janelaPreRoll;
       // CONTROLLER SOB DEMANDA: um video decupado em vinte pedacos e
       // o mesmo arquivo vinte vezes. Vinte tocadores preparados de uma
       // vez sao vinte decodificadores vivos — e o preview que engasga.
       // So o pedaco ativo (e o que vem ai) ganha tocador; os outros
       // ganham o deles quando o cabecote chegar perto.
-      if (active || vemAi) _ensure(m.id, m.path, m.volume);
       final controller = _controllers[m.id];
       if (controller == null) continue;
       final isAudio = layer is AudioLayer;
 
-      if (_appliedVolume[m.id] != m.volume) {
-        _appliedVolume[m.id] = m.volume;
-        controller.setVolume(m.volume);
+      final layerTransitions = transitionContextsForLayer(
+        layers,
+        layer.id,
+        t,
+        contexts: transitions,
+      );
+      var effectiveVolume = m.volume;
+      for (final transition in layerTransitions) {
+        if (!transition.transition.crossfadeAudio) continue;
+        final angle = transition.progress * math.pi / 2;
+        effectiveVolume *= layer.id == transition.incoming.id
+            ? math.sin(angle)
+            : math.cos(angle);
+      }
+      if (((_appliedVolume[m.id] ?? -1) - effectiveVolume).abs() > 0.001) {
+        _appliedVolume[m.id] = effectiveVolume;
+        controller.setVolume(effectiveVolume.clamp(0.0, 1.0));
       }
       // A VELOCIDADE estica a leitura da fonte: um segundo na linha
       // consome [speed] segundos de arquivo.
+      final timelineLocal = localTimeForCutContexts(layer, t, layerTransitions);
       final vel = switch (layer) {
-        VideoLayer v => v.speed,
+        VideoLayer v => videoPlaybackRateAt(v, timelineLocal),
         AudioLayer a => a.speed,
         _ => 1.0,
       };
-      final decorrido = t - layer.startTime;
-      final local = m.offset +
-          (vel == 1.0
-              ? decorrido
-              : Duration(
-                  microseconds:
-                      (decorrido.inMicroseconds * vel).round()));
+      final local = switch (layer) {
+        VideoLayer v => videoAbsoluteSourceTimeAt(v, timelineLocal),
+        _ =>
+          m.offset +
+              Duration(
+                microseconds: (timelineLocal.inMicroseconds * vel).round(),
+              ),
+      };
+      final rate = vel.abs().clamp(0.1, 10.0).toDouble();
+      final nativeRateFailed =
+          ((_failedNativeRate[m.id] ?? -1) - rate).abs() < 0.001;
+      // Reverso e Time Remap nao possuem um unico clock de playback: o
+      // quadro correto e uma funcao pura do tempo da composicao. Nesses
+      // modos o player vira apenas decoder e recebe o source-time exato.
+      // Fora de 0,5..2x fazemos o mesmo: Android pode limitar extremos e
+      // iOS pode rejeita-los; seek por source-time sustenta todo 0,1..10x.
+      final frameDriven =
+          layer is VideoLayer &&
+          (layer.reverse ||
+              hasTimeRemap(layer) ||
+              rate < 0.5 ||
+              rate > 2.0 ||
+              nativeRateFailed);
 
       if (vemAi && isPlaying) {
         // PRE-ROLL: posiciona o pedaco que vem ai enquanto o atual ainda
         // toca. O seek e o que custa (o decodificador volta ao quadro-
         // chave anterior e avanca ate o ponto); feito agora, na entrada
         // sobra so o play. Era o "trava quando chega onde decupei".
-        if (_preRolled[m.id] != m.offset) {
+        final prepareAt = switch (layer) {
+          VideoLayer v => videoAbsoluteSourceTimeAt(v, Duration.zero),
+          _ => m.offset,
+        };
+        if (_preRolled[m.id] != prepareAt) {
           if (controller.value.isPlaying) controller.pause();
-          controller.seekTo(m.offset);
-          _preRolled[m.id] = m.offset;
+          controller.seekTo(prepareAt);
+          _preRolled[m.id] = prepareAt;
         }
         continue;
       }
 
       if (active && isPlaying) {
-        if (!controller.value.isPlaying) {
+        if (isAudio && nativeRateFailed) {
+          // Nao ha quadro para dirigir manualmente numa faixa somente de
+          // audio. Mantemos o clock da composicao independente em vez de
+          // repetir uma chamada que a plataforma acabou de rejeitar.
+          if (controller.value.isPlaying) controller.pause();
+          _lastPos[m.id] = null;
+          _biasUs.remove(m.id);
+        } else if (frameDriven) {
+          _preRolled.remove(m.id);
+          if (controller.value.isPlaying) controller.pause();
+          final last = _lastSeek[layer.id];
+          if (last == null ||
+              DateTime.now().difference(last) >
+                  const Duration(milliseconds: 25)) {
+            controller.seekTo(local);
+            _lastSeek[layer.id] = DateTime.now();
+          }
+          _lastPos[m.id] = null;
+          _biasUs.remove(m.id);
+        } else if (!controller.value.isPlaying) {
           // Pre-rolado no ponto certo: nada de seek de novo. O atraso
           // entre o pre-roll e a entrada e de no maximo um tique.
           final preparado = _preRolled.remove(m.id);
-          final jaNoLugar = preparado != null &&
+          final jaNoLugar =
+              preparado != null &&
               (local - preparado).abs() < const Duration(milliseconds: 250);
           if (!jaNoLugar) controller.seekTo(local);
           // O tocador tem velocidade propria: usar ela e o que mantem o
           // som continuo em vez de picotado por seeks.
-          controller.setPlaybackSpeed(vel.clamp(0.1, 4.0));
+          _setNativeRate(m.id, controller, rate);
           controller.play();
           _lastPos[m.id] = null;
           _biasUs.remove(m.id);
         } else {
+          if ((rate - (_appliedRate[m.id] ?? 0)).abs() > 0.015) {
+            _setNativeRate(m.id, controller, rate);
+          }
           // PR-J1: NENHUM seek durante a reproducao. O antigo "se a
           // deriva passar de X, corrige" corrigia em BLOCO, e o bloco
           // (flush do decoder) era a travada periodica. Agora a midia e
@@ -212,16 +346,22 @@ class VideoLayerManager {
             _lastPos[m.id] = pos;
             // A posicao do plugin so atualiza a cada ~500 ms: ancorar
             // com amostra repetida empurraria o relogio para tras.
-            if (master == null) {
+            if (master == null && !frameDriven) {
               // A amostra nasce VELHA (idade media ~250 ms). Esse vies e
               // constante e NAO e deriva: ancorar nele puxaria o relogio
               // para tras. Guardamos o vies na primeira amostra e
               // corrigimos so o que DERIVOU a partir dali.
               final errUs = (pos - local).inMicroseconds;
               final bias = _biasUs[m.id] ??= errUs;
-              final relUs = errUs - bias;
-              master = t + Duration(microseconds: relUs);
-              FrameLog.reportDrift(-relUs / 1000.0);
+              final sourceErrorUs = errUs - bias;
+              // [pos-local] esta no relogio da FONTE. A composicao anda
+              // 1/rate desse valor: sem a divisao, 10x corrigia dez vezes
+              // demais e 0,1x corrigia dez vezes de menos.
+              final timelineErrorUs =
+                  (sourceErrorUs / vel.abs().clamp(0.1, 10.0).toDouble())
+                      .round();
+              master = t + Duration(microseconds: timelineErrorUs);
+              FrameLog.reportDrift(-timelineErrorUs / 1000.0);
             }
           }
         }
@@ -236,8 +376,7 @@ class VideoLayerManager {
         final agora = DateTime.now();
         final ultimo = _lastSeek[layer.id];
         if (ultimo == null ||
-            agora.difference(ultimo) >
-                const Duration(milliseconds: 90)) {
+            agora.difference(ultimo) > const Duration(milliseconds: 90)) {
           controller.seekTo(local);
           _lastSeek[layer.id] = agora;
           if (!controller.value.isPlaying) controller.play();
@@ -288,10 +427,21 @@ class VideoLayerManager {
   }
 
   void dispose() {
+    _scrubTimer?.cancel();
+    _controllerPath.clear();
+    _controllerTicket.clear();
+    _initializing.clear();
     for (final c in _controllers.values) {
       c.dispose();
     }
     _controllers.clear();
+    _lastSeek.clear();
+    _appliedVolume.clear();
+    _appliedRate.clear();
+    _failedNativeRate.clear();
+    _lastPos.clear();
+    _biasUs.clear();
+    _preRolled.clear();
     revision.dispose();
   }
 }

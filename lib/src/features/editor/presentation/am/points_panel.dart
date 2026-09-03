@@ -16,8 +16,9 @@ import 'am_widgets.dart';
 /// O que o dedo faz no trackpad.
 enum PointsMode { move, handle, add }
 
-final pathEditModeProvider =
-    StateProvider<PointsMode>((ref) => PointsMode.move);
+final pathEditModeProvider = StateProvider<PointsMode>(
+  (ref) => PointsMode.move,
+);
 
 /// EDIT POINTS (o editor de pontos do Alight Motion, em retrato).
 ///
@@ -58,19 +59,36 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
   Layer? get _layer =>
       ref.read(editorControllerProvider).layerById(widget.layerId);
 
+  bool get _editaForma => ref.read(pathEditTargetProvider)?.forma ?? true;
+
+  AnimatedPath? _trilha() {
+    final l = _layer;
+    if (l == null) return null;
+    if (_editaForma) {
+      return ref
+          .read(editorControllerProvider.notifier)
+          .shapeBezierOf(widget.layerId, widget.itemId)
+          ?.path;
+    }
+    for (final m in l.masks) {
+      if (m.id == widget.itemId) return m.path;
+    }
+    return null;
+  }
+
   BezierPath? _caminho() {
     final l = _layer;
     if (l == null) return null;
-    final b = ref
-        .read(editorControllerProvider.notifier)
-        .shapeBezierOf(widget.layerId, widget.itemId);
-    return b?.path.valueAt(l.localTime(_t));
+    return _trilha()?.valueAt(l.localTime(_t));
   }
 
   void _editar(BezierPath Function(BezierPath) fn) {
-    ref
-        .read(editorControllerProvider.notifier)
-        .editShapeBezier(widget.layerId, widget.itemId, _t, fn);
+    final controller = ref.read(editorControllerProvider.notifier);
+    if (_editaForma) {
+      controller.editShapeBezier(widget.layerId, widget.itemId, _t, fn);
+    } else {
+      controller.editMaskPath(widget.layerId, widget.itemId, _t, fn);
+    }
   }
 
   Offset _cursor() {
@@ -110,27 +128,21 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
 
   /// `◈` do cabecalho: keyframe nos pontos no tempo de agora.
   void toggleKeyframe() {
-    ref
-        .read(editorControllerProvider.notifier)
-        .toggleShapeBezierKeyframe(widget.layerId, widget.itemId, _t);
+    final controller = ref.read(editorControllerProvider.notifier);
+    if (_editaForma) {
+      controller.toggleShapeBezierKeyframe(widget.layerId, widget.itemId, _t);
+    } else {
+      controller.toggleMaskPathKeyframe(widget.layerId, widget.itemId, _t);
+    }
   }
 
   bool get temKeyframeAqui {
     final l = _layer;
     if (l == null) return false;
-    final b = ref
-        .read(editorControllerProvider.notifier)
-        .shapeBezierOf(widget.layerId, widget.itemId);
-    return b?.path.hasKeyframeAt(l.localTime(_t)) ?? false;
+    return _trilha()?.hasKeyframeAt(l.localTime(_t)) ?? false;
   }
 
-  bool get animado =>
-      ref
-          .read(editorControllerProvider.notifier)
-          .shapeBezierOf(widget.layerId, widget.itemId)
-          ?.path
-          .isAnimated ??
-      false;
+  bool get animado => _trilha()?.isAnimated ?? false;
 
   /// `⊕`: crava um ponto no cursor. Caminho aberto: perto do primeiro
   /// ponto fecha; senao anexa no fim. Caminho fechado: entra no
@@ -140,7 +152,8 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
     if (caminho == null) return;
     final p = _cursor();
     final n = caminho.vertices.length;
-    if (!caminho.closed && n >= 3 &&
+    if (!caminho.closed &&
+        n >= 3 &&
         (caminho.vertices.first.p - p).distance <= _raio) {
       _editar((c) => BezierPath(vertices: c.vertices, closed: true));
       ref.read(pathEditSelectedProvider.notifier).state = 0;
@@ -149,16 +162,26 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
     if (caminho.closed && n >= 2) {
       final hit = nearestOnPath(caminho, p);
       if (hit != null) {
-        _editar((c) => moveVertex(
-            insertVertex(c, hit.segment, hit.t), hit.segment + 1, p));
+        _editar(
+          (c) => moveVertex(
+            insertVertex(c, hit.segment, hit.t),
+            hit.segment + 1,
+            p,
+          ),
+        );
         ref.read(pathEditSelectedProvider.notifier).state = hit.segment + 1;
         return;
       }
     }
-    _editar((c) => BezierPath(
-          vertices: [...c.vertices, PathVertex(p: p, corner: false)],
-          closed: c.closed,
-        ));
+    _editar(
+      (c) => BezierPath(
+        vertices: [
+          ...c.vertices,
+          PathVertex(p: p, corner: false),
+        ],
+        closed: c.closed,
+      ),
+    );
     ref.read(pathEditSelectedProvider.notifier).state = n;
   }
 
@@ -242,8 +265,11 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
               children: [
                 AmRailButton(
                   onTap: widget.onBack,
-                  child: const Icon(CupertinoIcons.chevron_back,
-                      size: 24, color: AmColors.text),
+                  child: const Icon(
+                    CupertinoIcons.chevron_back,
+                    size: 24,
+                    color: AmColors.text,
+                  ),
                 ),
                 _ModoBotao(
                   ativo: modo == PointsMode.move,
@@ -266,8 +292,11 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
                 const Spacer(),
                 AmRailButton(
                   onTap: () => _menu(context, temSel, caminho?.closed ?? true),
-                  child: const Icon(CupertinoIcons.ellipsis,
-                      size: 20, color: AmColors.text),
+                  child: const Icon(
+                    CupertinoIcons.ellipsis,
+                    size: 20,
+                    color: AmColors.text,
+                  ),
                 ),
               ],
             ),
@@ -280,16 +309,20 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
                 children: [
                   Text(
                     switch (modo) {
-                      PointsMode.move => temSel
-                          ? 'Ponto ${sel + 1} de $n: deslize para mover. Toque duplo: canto/suave.'
-                          : 'Deslize ate um ponto e toque para selecionar.',
-                      PointsMode.handle => temSel
-                          ? 'Deslize para puxar a alca do ponto ${sel + 1}.'
-                          : 'Selecione um ponto antes de puxar a alca.',
-                      PointsMode.add =>
-                        'Deslize aqui para posicionar o proximo ponto, depois toque aqui para crava-lo.',
+                      PointsMode.move =>
+                        temSel
+                            ? 'Ponto ${sel + 1} de $n: deslize para mover. Toque duplo: canto/suave.'
+                            : 'Deslize ate um ponto e toque para selecionar.',
+                      PointsMode.handle =>
+                        temSel
+                            ? 'Deslize para puxar a alca do ponto ${sel + 1}.'
+                            : 'Selecione um ponto antes de puxar a alca.',
+                      PointsMode.add => 'Deslize aqui para posicionar o proximo ponto, depois toque aqui para crava-lo.',
                     },
-                    style: const TextStyle(fontSize: 12.5, color: AmColors.muted),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AmColors.muted,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Expanded(
@@ -362,9 +395,7 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
               ),
             ],
             _Item(
-              icon: fechado
-                  ? CupertinoIcons.lock_open
-                  : CupertinoIcons.lock,
+              icon: fechado ? CupertinoIcons.lock_open : CupertinoIcons.lock,
               texto: fechado ? 'Abrir o caminho' : 'Fechar o caminho',
               onTap: () {
                 Navigator.of(c).pop();
@@ -380,8 +411,11 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
 }
 
 class _ModoBotao extends StatelessWidget {
-  const _ModoBotao(
-      {required this.ativo, required this.icon, required this.onTap});
+  const _ModoBotao({
+    required this.ativo,
+    required this.icon,
+    required this.onTap,
+  });
 
   final bool ativo;
   final IconData icon;
@@ -392,7 +426,11 @@ class _ModoBotao extends StatelessWidget {
     return AmRailButton(
       onTap: onTap,
       selected: ativo,
-      child: Icon(icon, size: 22, color: ativo ? AmColors.accent : AmColors.text),
+      child: Icon(
+        icon,
+        size: 22,
+        color: ativo ? AmColors.accent : AmColors.text,
+      ),
     );
   }
 }
@@ -416,8 +454,10 @@ class _Item extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: AmColors.accent),
               const SizedBox(width: 14),
-              Text(texto,
-                  style: const TextStyle(fontSize: 15, color: AmColors.text)),
+              Text(
+                texto,
+                style: const TextStyle(fontSize: 15, color: AmColors.text),
+              ),
             ],
           ),
         ),
@@ -435,7 +475,10 @@ class _TrackpadPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final fundo = Paint()..color = AmColors.chip;
-    final rr = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(14));
+    final rr = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(14),
+    );
     canvas.drawRRect(rr, fundo);
     final traco = Paint()
       ..color = AmColors.muted.withValues(alpha: 0.7)

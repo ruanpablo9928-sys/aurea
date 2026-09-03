@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../../../core/app_mode.dart';
 import '../../application/mesh_cache.dart';
 import '../../domain/mesh_import.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,6 +34,7 @@ import 'curve_panel.dart';
 import 'decupagem_screen.dart';
 import 'font_sheet.dart';
 import 'oficio_sheets.dart';
+import 'panel_chrome.dart';
 import 'path_edit_sheet.dart';
 import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
@@ -139,220 +141,278 @@ Future<LayerMenuAction?> showLayerMenu(
                 // acoes, nao aqui.
                 // NUCLEO: a fileira so existe se tem algo nela (som).
                 if (completo || temSom)
-                SizedBox(
-                  height: 40,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              if (temSom) ...[
-                                if (completo)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.speedometer,
-                                  label: 'Velocidade',
-                                  onTap: () => abrirDepois(() =>
-                                      showSpeedSheet(context, ref, layer.id)),
-                                ),
-                                if (completo)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.scissors,
-                                  label: 'Cortes',
-                                  onTap: () => abrirDepois(() =>
-                                      openDecupagem(context, ref, layer.id)),
-                                ),
-                                // Mudo e toggle no lugar (nao abre nada):
-                                // nao ha metodo de mudo no controller, e
-                                // composto com updateAudioSpec + copyWith.
-                                _UtilIcon(
-                                  icon: mudo
-                                      ? CupertinoIcons.speaker_slash_fill
-                                      : CupertinoIcons.speaker_slash,
-                                  label: mudo ? 'Ativar som' : 'Mudo',
-                                  aceso: mudo,
-                                  onTap: () {
-                                    controller.updateAudioSpec(layer.id,
-                                        (a) => a.copyWith(muted: !a.muted));
-                                    setSheetState(() {});
-                                  },
-                                ),
-                                _UtilIcon(
-                                  icon: CupertinoIcons.waveform,
-                                  label: 'Som',
-                                  onTap: () => abrirDepois(() =>
-                                      showAudioSheet(context, ref, layer.id)),
-                                ),
-                                if (completo)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.metronome,
-                                  label: 'Batidas',
-                                  onTap: () => abrirDepois(() =>
-                                      showBeatsSheet(context, ref, layer.id)),
-                                ),
-                              ],
-                              if (completo && layer is VideoLayer) ...[
-                                _UtilIcon(
-                                  icon: CupertinoIcons.crop,
-                                  label: 'Reenquadrar sozinho',
-                                  onTap: () async {
-                                    Navigator.of(sheetContext).pop();
-                                    if (!context.mounted) return;
-                                    AureaSnack.show(
-                                        context, 'Achando o assunto...');
-                                    final n = await controller
-                                        .autoReframeLayer(layer.id);
-                                    if (!context.mounted) return;
-                                    if (n == null) {
-                                      AureaSnack.show(context,
-                                          'Nao consegui ler esse video');
-                                      return;
-                                    }
-                                    AureaSnack.show(context,
+                  SizedBox(
+                    height: 40,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                if (temSom) ...[
+                                  if (completo)
+                                    _UtilIcon(
+                                      icon: CupertinoIcons.speedometer,
+                                      label: 'Velocidade',
+                                      onTap: () => abrirDepois(
+                                        () => showSpeedSheet(
+                                          context,
+                                          ref,
+                                          layer.id,
+                                        ),
+                                      ),
+                                    ),
+                                  if (completo)
+                                    _UtilIcon(
+                                      icon: CupertinoIcons.scissors,
+                                      label: 'Cortes',
+                                      onTap: () => abrirDepois(
+                                        () => openDecupagem(
+                                          context,
+                                          ref,
+                                          layer.id,
+                                        ),
+                                      ),
+                                    ),
+                                  // Mudo e toggle no lugar (nao abre nada):
+                                  // nao ha metodo de mudo no controller, e
+                                  // composto com updateAudioSpec + copyWith.
+                                  _UtilIcon(
+                                    icon: mudo
+                                        ? CupertinoIcons.speaker_slash_fill
+                                        : CupertinoIcons.speaker_slash,
+                                    label: mudo ? 'Ativar som' : 'Mudo',
+                                    aceso: mudo,
+                                    onTap: () {
+                                      controller.updateAudioSpec(
+                                        layer.id,
+                                        (a) => a.copyWith(muted: !a.muted),
+                                      );
+                                      setSheetState(() {});
+                                    },
+                                  ),
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.waveform,
+                                    label: 'Som',
+                                    onTap: () => abrirDepois(
+                                      () => showAudioSheet(
+                                        context,
+                                        ref,
+                                        layer.id,
+                                      ),
+                                    ),
+                                  ),
+                                  if (completo)
+                                    _UtilIcon(
+                                      icon: CupertinoIcons.metronome,
+                                      label: 'Batidas',
+                                      onTap: () => abrirDepois(
+                                        () => showBeatsSheet(
+                                          context,
+                                          ref,
+                                          layer.id,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                                if (completo && layer is VideoLayer) ...[
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.crop,
+                                    label: 'Reenquadrar sozinho',
+                                    onTap: () async {
+                                      Navigator.of(sheetContext).pop();
+                                      if (!context.mounted) return;
+                                      AureaSnack.show(
+                                        context,
+                                        'Achando o assunto...',
+                                      );
+                                      final n = await controller
+                                          .autoReframeLayer(layer.id);
+                                      if (!context.mounted) return;
+                                      if (n == null) {
+                                        AureaSnack.show(
+                                          context,
+                                          'Nao consegui ler esse video',
+                                        );
+                                        return;
+                                      }
+                                      AureaSnack.show(
+                                        context,
                                         'Reenquadrado seguindo o assunto',
                                         actionLabel: 'Desfazer',
-                                        onAction: controller.undo);
-                                  },
-                                ),
-                                _UtilIcon(
-                                  icon: CupertinoIcons.hand_raised,
-                                  label: 'Estabilizar',
-                                  onTap: () async {
-                                    Navigator.of(sheetContext).pop();
-                                    if (!context.mounted) return;
-                                    AureaSnack.show(context,
-                                        'Lendo o video para estabilizar...');
-                                    final n = await controller
-                                        .stabilizeLayer(layer.id);
-                                    if (!context.mounted) return;
-                                    if (n == null) {
-                                      AureaSnack.show(context,
-                                          'Nao consegui ler esse video');
-                                      return;
-                                    }
-                                    AureaSnack.show(context,
+                                        onAction: controller.undo,
+                                      );
+                                    },
+                                  ),
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.hand_raised,
+                                    label: 'Estabilizar',
+                                    onTap: () async {
+                                      Navigator.of(sheetContext).pop();
+                                      if (!context.mounted) return;
+                                      AureaSnack.show(
+                                        context,
+                                        'Lendo o video para estabilizar...',
+                                      );
+                                      final n = await controller.stabilizeLayer(
+                                        layer.id,
+                                      );
+                                      if (!context.mounted) return;
+                                      if (n == null) {
+                                        AureaSnack.show(
+                                          context,
+                                          'Nao consegui ler esse video',
+                                        );
+                                        return;
+                                      }
+                                      AureaSnack.show(
+                                        context,
                                         'Estabilizado com $n quadros de referencia',
                                         actionLabel: 'Desfazer',
-                                        onAction: controller.undo);
-                                  },
-                                ),
+                                        onAction: controller.undo,
+                                      );
+                                    },
+                                  ),
+                                ],
+                                // 3D DA CAMADA e MOTION BLUR nesta fileira.
+                                // Mascara agora mora dentro de Mesclagem e
+                                // opacidade, sem criar uma oitava secao.
+                                // Tudo daqui em diante e ESTUDIO (fora do
+                                // nucleo).
+                                if (completo) ...[
+                                  _UtilIcon(
+                                    icon: layer.is3D
+                                        ? CupertinoIcons.cube_fill
+                                        : CupertinoIcons.cube,
+                                    label: layer.is3D
+                                        ? '3D ligado'
+                                        : 'Ligar 3D',
+                                    aceso: layer.is3D,
+                                    onTap: () {
+                                      controller.toggle3D(layer.id);
+                                      setSheetState(() {});
+                                    },
+                                  ),
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.speedometer,
+                                    label: 'Motion blur',
+                                    aceso: ref
+                                        .read(editorControllerProvider)
+                                        .metaOf(layer.id)
+                                        .motionBlur,
+                                    onTap: () {
+                                      controller.toggleLayerMotionBlurReal(
+                                        layer.id,
+                                      );
+                                      setSheetState(() {});
+                                    },
+                                  ),
+                                  if (layer is! NullLayer &&
+                                      layer is! VideoLayer &&
+                                      layer is! ParticlesLayer &&
+                                      layer is! Element3DLayer)
+                                    _UtilIcon(
+                                      icon: CupertinoIcons.cube,
+                                      label: 'Extrude 3D',
+                                      aceso:
+                                          ref
+                                              .read(editorControllerProvider)
+                                              .metaOf(layer.id)
+                                              .extrude >
+                                          0,
+                                      onTap: () => abrirDepois(
+                                        () => showExtrudeSheet(
+                                          context,
+                                          ref,
+                                          layer.id,
+                                        ),
+                                      ),
+                                    ),
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.music_note_2,
+                                    label: 'Pulsar na batida',
+                                    onTap: () => abrirDepois(
+                                      () => showBeatPulseSheet(
+                                        context,
+                                        ref,
+                                        layer.id,
+                                      ),
+                                    ),
+                                  ),
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.repeat,
+                                    label: 'Loop de keyframes',
+                                    onTap: () => abrirDepois(
+                                      () =>
+                                          showLoopSheet(context, ref, layer.id),
+                                    ),
+                                  ),
+                                  _UtilIcon(
+                                    icon: CupertinoIcons.tag,
+                                    label: 'Organizar (rotulo, solo, timida)',
+                                    onTap: () => abrirDepois(
+                                      () => showOrganizeSheet(
+                                        context,
+                                        ref,
+                                        layer.id,
+                                      ),
+                                    ),
+                                  ),
+                                  _UtilIcon(
+                                    icon: pai != null
+                                        ? CupertinoIcons.link_circle_fill
+                                        : CupertinoIcons.link,
+                                    label: pai != null
+                                        ? 'Soltar do pai'
+                                        : 'Vincular ao pai',
+                                    aceso: pai != null,
+                                    onTap: () {
+                                      if (pai != null) {
+                                        Navigator.of(sheetContext).pop();
+                                        controller.unlinkProperty(
+                                          layer.id,
+                                          LayerProp.parent,
+                                        );
+                                        return;
+                                      }
+                                      abrirDepois(
+                                        () => showParentSheet(
+                                          context,
+                                          ref,
+                                          layer,
+                                          playback.time.value,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ],
-                              // 3D DA CAMADA e MOTION BLUR na mesma fileira
-                              // em que se acha a mascara: o botao existe
-                              // onde a pessoa procura, nao num submenu.
-                              // Tudo daqui em diante e ESTUDIO (fora do
-                              // nucleo).
-                              if (completo) ...[
-                              _UtilIcon(
-                                icon: layer.is3D
-                                    ? CupertinoIcons.cube_fill
-                                    : CupertinoIcons.cube,
-                                label: layer.is3D ? '3D ligado' : 'Ligar 3D',
-                                aceso: layer.is3D,
-                                onTap: () {
-                                  controller.toggle3D(layer.id);
-                                  setSheetState(() {});
-                                },
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.speedometer,
-                                label: 'Motion blur',
-                                aceso: ref
-                                    .read(editorControllerProvider)
-                                    .metaOf(layer.id)
-                                    .motionBlur,
-                                onTap: () {
-                                  controller.toggleLayerMotionBlurReal(layer.id);
-                                  setSheetState(() {});
-                                },
-                              ),
-                              if (layer is! NullLayer &&
-                                  layer is! VideoLayer &&
-                                  layer is! ParticlesLayer &&
-                                  layer is! Element3DLayer)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.cube,
-                                  label: 'Extrude 3D',
-                                  aceso: ref
-                                          .read(editorControllerProvider)
-                                          .metaOf(layer.id)
-                                          .extrude >
-                                      0,
-                                  onTap: () => abrirDepois(() =>
-                                      showExtrudeSheet(context, ref, layer.id)),
-                                ),
-                              if (layer is! NullLayer)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.scope,
-                                  label: 'Mascaras',
-                                  onTap: () => abrirDepois(() =>
-                                      showMasksSheet(
-                                          context, ref, layer.id, playback)),
-                                ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.music_note_2,
-                                label: 'Pulsar na batida',
-                                onTap: () => abrirDepois(() =>
-                                    showBeatPulseSheet(
-                                        context, ref, layer.id)),
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.repeat,
-                                label: 'Loop de keyframes',
-                                onTap: () => abrirDepois(() =>
-                                    showLoopSheet(context, ref, layer.id)),
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.tag,
-                                label: 'Organizar (rotulo, solo, timida)',
-                                onTap: () => abrirDepois(() =>
-                                    showOrganizeSheet(
-                                        context, ref, layer.id)),
-                              ),
-                              _UtilIcon(
-                                icon: pai != null
-                                    ? CupertinoIcons.link_circle_fill
-                                    : CupertinoIcons.link,
-                                label: pai != null
-                                    ? 'Soltar do pai'
-                                    : 'Vincular ao pai',
-                                aceso: pai != null,
-                                onTap: () {
-                                  if (pai != null) {
-                                    Navigator.of(sheetContext).pop();
-                                    controller.unlinkProperty(
-                                        layer.id, LayerProp.parent);
-                                    return;
-                                  }
-                                  abrirDepois(() => showParentSheet(
-                                      context, ref, layer,
-                                      playback.time.value));
-                                },
-                              ),
-                              ],
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                      // "Mais" fixo no fim, discreto: guarda editores sem
-                      // lugar na grade (raros ou especificos do tipo).
-                      if (completo)
-                      _UtilIcon(
-                        icon: CupertinoIcons.ellipsis,
-                        label: 'Mais',
-                        muted: true,
-                        onTap: () async {
-                          final action = await _showMoreSheet(
-                              context, ref, layer, playback);
-                          if (sheetContext.mounted) {
-                            Navigator.of(sheetContext).pop(action);
-                          }
-                        },
-                      ),
-                    ],
+                        // "Mais" fixo no fim, discreto: guarda editores sem
+                        // lugar na grade (raros ou especificos do tipo).
+                        if (completo)
+                          _UtilIcon(
+                            icon: CupertinoIcons.ellipsis,
+                            label: 'Mais',
+                            muted: true,
+                            onTap: () async {
+                              final action = await _showMoreSheet(
+                                context,
+                                ref,
+                                layer,
+                                playback,
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.of(sheetContext).pop(action);
+                              }
+                            },
+                          ),
+                      ],
+                    ),
                   ),
-                ),
                 const SizedBox(height: 12),
                 // NUCLEO: so o transform e a opacidade. O resto da grade
                 // e estudio.
@@ -362,8 +422,9 @@ Future<LayerMenuAction?> showLayerMenu(
                       _MenuTile(
                         icon: CupertinoIcons.move,
                         label: 'Mover e\ntransf.',
-                        onTap: () => Navigator.of(sheetContext)
-                            .pop(LayerMenuAction.transform),
+                        onTap: () =>
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.transform),
                       ),
                       const SizedBox(width: 8),
                       _MenuTile(
@@ -371,124 +432,144 @@ Future<LayerMenuAction?> showLayerMenu(
                         label: 'Opacidade',
                         enabled: layer is! NullLayer,
                         disabledReason: 'Objeto nulo nao tem opacidade',
-                        onTap: () => Navigator.of(sheetContext)
-                            .pop(LayerMenuAction.blending),
+                        onTap: () =>
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.blending),
                       ),
                     ],
                   ),
                 // Fileira 1 da grade: 3 botoes largos (aparencia).
                 if (completo)
-                Row(
-                  children: [
-                    _MenuTile(
-                      icon: CupertinoIcons.paintbrush,
-                      label: 'Cor e\npreench.',
-                      enabled: layer is ShapeLayer ||
-                          layer is TextLayer ||
-                          layer is Element3DLayer ||
-                          layer is Scene3DLayer,
-                      disabledReason: layer is AdjustmentLayer
-                          ? 'Camada de ajuste nao tem preenchimento proprio'
-                          : 'Este tipo de camada nao tem cor editavel',
-                      onTap: () {
-                        // Cena 3D: a cor mora no material de cada objeto.
-                        if (layer is Scene3DLayer) {
-                          abrirDepois(
-                              () => showScene3DSheet(context, ref, layer.id));
-                          return;
-                        }
-                        // Elemento 3D edita cor/forma no sheet proprio.
-                        if (layer is Element3DLayer) {
-                          abrirDepois(() =>
-                              showElement3DSheet(context, ref, layer.id));
-                          return;
-                        }
-                        Navigator.of(sheetContext)
-                            .pop(LayerMenuAction.colorFill);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    // NAO ha editor dedicado de borda + sombra: o botao
-                    // abre "Estilos de camada" (contorno, sombra
-                    // projetada, brilho externo, sobreposicao de cor),
-                    // que e onde essas duas coisas de fato moram.
-                    _MenuTile(
-                      icon: CupertinoIcons.square_on_square,
-                      label: 'Borda e\nsombra',
-                      enabled: layer is! NullLayer,
-                      disabledReason: 'Objeto nulo nao renderiza',
-                      onTap: () {
-                        // Forma: o traco vetorial (espessura, cor,
-                        // tracejado animavel) mora no painel da forma;
-                        // a sombra continua nos estilos, a um toque.
-                        if (layer is ShapeLayer) {
+                  Row(
+                    children: [
+                      _MenuTile(
+                        icon: CupertinoIcons.paintbrush,
+                        label: 'Cor e\npreench.',
+                        enabled:
+                            layer is ShapeLayer ||
+                            layer is TextLayer ||
+                            layer is Element3DLayer ||
+                            layer is Scene3DLayer,
+                        disabledReason: layer is AdjustmentLayer
+                            ? 'Camada de ajuste nao tem preenchimento proprio'
+                            : 'Este tipo de camada nao tem cor editavel',
+                        onTap: () {
+                          // Cena 3D: a cor mora no material de cada objeto.
+                          if (layer is Scene3DLayer) {
+                            abrirDepois(
+                              () => showScene3DSheet(context, ref, layer.id),
+                            );
+                            return;
+                          }
+                          // Elemento 3D edita cor/forma no sheet proprio.
+                          if (layer is Element3DLayer) {
+                            abrirDepois(
+                              () => showElement3DSheet(context, ref, layer.id),
+                            );
+                            return;
+                          }
                           Navigator.of(sheetContext)
-                              .pop(LayerMenuAction.stroke);
-                          return;
-                        }
-                        abrirDepois(() => showLayerStylesSheet(
-                            context, ref, layer.id, playback));
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _MenuTile(
-                      icon: CupertinoIcons.circle_lefthalf_fill,
-                      label: 'Mesclar e\nopacidade',
-                      enabled: layer is! NullLayer,
-                      disabledReason: 'Objeto nulo nao tem mesclagem',
-                      onTap: () => Navigator.of(sheetContext)
-                          .pop(LayerMenuAction.blending),
-                    ),
-                  ],
-                ),
+                              .pop(LayerMenuAction.colorFill);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // NAO ha editor dedicado de borda + sombra: o botao
+                      // abre "Estilos de camada" (contorno, sombra
+                      // projetada, brilho externo, sobreposicao de cor),
+                      // que e onde essas duas coisas de fato moram.
+                      _MenuTile(
+                        icon: CupertinoIcons.square_on_square,
+                        label: 'Borda e\nsombra',
+                        enabled: layer is! NullLayer,
+                        disabledReason: 'Objeto nulo nao renderiza',
+                        onTap: () {
+                          // Forma: o traco vetorial (espessura, cor,
+                          // tracejado animavel) mora no painel da forma;
+                          // a sombra continua nos estilos, a um toque.
+                          if (layer is ShapeLayer) {
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.stroke);
+                            return;
+                          }
+                          abrirDepois(
+                            () => showLayerStylesSheet(
+                              context,
+                              ref,
+                              layer.id,
+                              playback,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _MenuTile(
+                        icon: CupertinoIcons.circle_lefthalf_fill,
+                        label: 'Mesclar e\nopacidade',
+                        enabled: layer is! NullLayer,
+                        disabledReason: 'Objeto nulo nao tem mesclagem',
+                        onTap: () =>
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.blending),
+                      ),
+                    ],
+                  ),
                 if (completo) const SizedBox(height: 8),
                 // Fileira 2 da grade: 4 botoes (geometria e efeitos).
                 if (completo)
-                Row(
-                  children: [
-                    _MenuTile(
-                      icon: CupertinoIcons.move,
-                      label: 'Mover e\ntransf.',
-                      onTap: () => Navigator.of(sheetContext)
-                          .pop(LayerMenuAction.transform),
-                    ),
-                    const SizedBox(width: 8),
-                    // NAO ha editor de nos para o caminho da propria forma
-                    // (showPathEditSheet e so de mascara): "Editar forma"
-                    // abre a geometria parametrica (tipo, tamanho,
-                    // arredondamento, pontas). Forma desenhada sem
-                    // parametros ve ali o "Converter para parametrica".
-                    _MenuTile(
-                      icon: CupertinoIcons.slider_horizontal_below_rectangle,
-                      label: 'Editar\nforma',
-                      enabled: layer is ShapeLayer,
-                      disabledReason:
-                          'So camadas de forma tem geometria editavel',
-                      // Painel de baixo (modelo AM), nao sheet: a barra da
-                      // camada com os keyframes fica visivel.
-                      onTap: () => Navigator.of(sheetContext)
-                          .pop(LayerMenuAction.editShape),
-                    ),
-                    const SizedBox(width: 8),
-                    _MenuTile(
-                      icon: CupertinoIcons.square_stack_3d_down_right,
-                      label: 'Presets',
-                      enabled: layer is! NullLayer,
-                      disabledReason: 'Objeto nulo nao renderiza efeitos',
-                      onTap: () => abrirDepois(() => showEffectPresetsSheet(
-                          context, ref, layer.id, playback)),
-                    ),
-                    const SizedBox(width: 8),
-                    _MenuTile(
-                      icon: CupertinoIcons.wand_stars,
-                      label: 'Efeitos',
-                      enabled: layer is! NullLayer,
-                      disabledReason: 'Objeto nulo nao renderiza efeitos',
-                      onTap: () => Navigator.of(sheetContext)
-                          .pop(LayerMenuAction.effects),
-                    ),
-                  ],
-                ),
+                  Row(
+                    children: [
+                      _MenuTile(
+                        icon: CupertinoIcons.move,
+                        label: 'Mover e\ntransf.',
+                        onTap: () =>
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.transform),
+                      ),
+                      const SizedBox(width: 8),
+                      // NAO ha editor de nos para o caminho da propria forma
+                      // (showPathEditSheet e so de mascara): "Editar forma"
+                      // abre a geometria parametrica (tipo, tamanho,
+                      // arredondamento, pontas). Forma desenhada sem
+                      // parametros ve ali o "Converter para parametrica".
+                      _MenuTile(
+                        icon: CupertinoIcons.slider_horizontal_below_rectangle,
+                        label: 'Editar\nforma',
+                        enabled: layer is ShapeLayer,
+                        disabledReason:
+                            'So camadas de forma tem geometria editavel',
+                        // Painel de baixo (modelo AM), nao sheet: a barra da
+                        // camada com os keyframes fica visivel.
+                        onTap: () =>
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.editShape),
+                      ),
+                      const SizedBox(width: 8),
+                      _MenuTile(
+                        icon: CupertinoIcons.square_stack_3d_down_right,
+                        label: 'Presets',
+                        enabled: layer is! NullLayer,
+                        disabledReason: 'Objeto nulo nao renderiza efeitos',
+                        onTap: () => abrirDepois(
+                          () => showEffectPresetsSheet(
+                            context,
+                            ref,
+                            layer.id,
+                            playback,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _MenuTile(
+                        icon: CupertinoIcons.wand_stars,
+                        label: 'Efeitos',
+                        enabled: layer is! NullLayer,
+                        disabledReason: 'Objeto nulo nao renderiza efeitos',
+                        onTap: () =>
+                            Navigator.of(sheetContext)
+                                .pop(LayerMenuAction.effects),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -501,15 +582,18 @@ Future<LayerMenuAction?> showLayerMenu(
 /// Toast curto com a razao de um controle desabilitado ou de um comando
 /// sem alvo (contrato: nada visivel pode ser inerte em silencio).
 void showReasonToast(BuildContext context, String msg) {
-  AureaSnack.show(context, msg,
-      duration: const Duration(milliseconds: 1500));
+  AureaSnack.show(context, msg, duration: const Duration(milliseconds: 1500));
 }
 
 /// Sheet "Mais": editores sem lugar na grade de 7 (raros ou especificos
 /// do tipo) e comandos de montagem. Utilidades (velocidade, som, loop,
 /// pai...) moram na fileira de icones pequenos do menu, nao aqui.
-Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
-    WidgetRef ref, Layer layer, PlaybackController playback) async {
+Future<LayerMenuAction?> _showMoreSheet(
+  BuildContext context,
+  WidgetRef ref,
+  Layer layer,
+  PlaybackController playback,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   return showModalBottomSheet<LayerMenuAction>(
     context: context,
@@ -518,18 +602,17 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (moreContext) {
-      Widget item(IconData icon, String label, VoidCallback onTap) =>
-          Material(
-            color: Colors.transparent,
-            child: ListTile(
-              leading:
-                  Icon(icon, size: 20, color: AmColors.accent),
-              title: Text(label,
-                  style: const TextStyle(
-                      fontSize: 15, color: AmColors.text)),
-              onTap: onTap,
-            ),
-          );
+      Widget item(IconData icon, String label, VoidCallback onTap) => Material(
+        color: Colors.transparent,
+        child: ListTile(
+          leading: Icon(icon, size: 20, color: AmColors.accent),
+          title: Text(
+            label,
+            style: const TextStyle(fontSize: 15, color: AmColors.text),
+          ),
+          onTap: onTap,
+        ),
+      );
 
       return SafeArea(
         child: Column(
@@ -538,8 +621,7 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
             const SizedBox(height: 10),
             if (layer is TextLayer) ...[
               item(CupertinoIcons.pencil, 'Editar texto', () {
-                Navigator.of(moreContext)
-                    .pop(LayerMenuAction.editText);
+                Navigator.of(moreContext).pop(LayerMenuAction.editText);
               }),
               item(CupertinoIcons.textformat, 'Fonte', () {
                 Navigator.of(moreContext).pop();
@@ -549,11 +631,13 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                   }
                 });
               }),
-              item(CupertinoIcons.textformat_abc_dottedunderline,
-                  'Animadores de texto', () {
-                Navigator.of(moreContext)
-                    .pop(LayerMenuAction.textAnimators);
-              }),
+              item(
+                CupertinoIcons.textformat_abc_dottedunderline,
+                'Animadores de texto',
+                () {
+                  Navigator.of(moreContext).pop(LayerMenuAction.textAnimators);
+                },
+              ),
             ],
             if (layer is NullLayer)
               item(CupertinoIcons.circle_grid_3x3, 'Modulo Grade', () {
@@ -574,13 +658,11 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                 });
               }),
             if (layer is CaptionLayer)
-              item(CupertinoIcons.text_badge_checkmark,
-                  'Editar legendas', () {
+              item(CupertinoIcons.text_badge_checkmark, 'Editar legendas', () {
                 Navigator.of(moreContext).pop();
                 Future.microtask(() {
                   if (context.mounted) {
-                    showCaptionCuesSheet(
-                        context, ref, layer.id, playback);
+                    showCaptionCuesSheet(context, ref, layer.id, playback);
                   }
                 });
               }),
@@ -634,9 +716,12 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
               Navigator.of(moreContext).pop();
               controller.rippleDeleteLayer(layer.id);
               if (context.mounted) {
-                AureaSnack.show(context,
-                    'Camada excluida — o que vinha depois andou para tras',
-                    actionLabel: 'Desfazer', onAction: controller.undo);
+                AureaSnack.show(
+                  context,
+                  'Camada excluida — o que vinha depois andou para tras',
+                  actionLabel: 'Desfazer',
+                  onAction: controller.undo,
+                );
               }
             }),
             item(CupertinoIcons.arrow_left_to_line, 'Fechar buracos', () {
@@ -651,8 +736,11 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
               controller.closeTimelineGaps();
               if (context.mounted) {
                 AureaSnack.show(
-                    context, n == 1 ? '1 buraco fechado' : '$n buracos fechados',
-                    actionLabel: 'Desfazer', onAction: controller.undo);
+                  context,
+                  n == 1 ? '1 buraco fechado' : '$n buracos fechados',
+                  actionLabel: 'Desfazer',
+                  onAction: controller.undo,
+                );
               }
             }),
             if (layer is GroupLayer) ...[
@@ -664,15 +752,12 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
                   }
                 });
               }),
-              item(CupertinoIcons.square_stack_3d_down_right,
-                  'Desagrupar', () {
+              item(CupertinoIcons.square_stack_3d_down_right, 'Desagrupar', () {
                 controller.ungroupLayer(layer.id);
                 Navigator.of(moreContext).pop();
               }),
-            ]
-            else
-              item(CupertinoIcons.square_stack_3d_up, 'Precompor',
-                  () {
+            ] else
+              item(CupertinoIcons.square_stack_3d_up, 'Precompor', () {
                 controller.groupLayer(layer.id);
                 Navigator.of(moreContext).pop();
               }),
@@ -688,12 +773,15 @@ Future<LayerMenuAction?> _showMoreSheet(BuildContext context,
 /// assets; a transform de cada camada e um offset por cima (mover uma
 /// camada nao quebra a grade). Modos Retangular/Radial/Esferico + Morph
 /// animavel (caminho mais curto) + Proximidade com effector esferico 3D.
-Future<void> showGridSheet(BuildContext context, WidgetRef ref,
-    String nullId, PlaybackController playback) async {
+Future<void> showGridSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String nullId,
+  PlaybackController playback,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
 
-  Future<void> pickAssets(
-      BuildContext ctx, StateSetter setSheetState) async {
+  Future<void> pickAssets(BuildContext ctx, StateSetter setSheetState) async {
     final project = ref.read(editorControllerProvider);
     final current = (project.layerById(nullId) as NullLayer?)?.grid;
     final picked = <String>{...(current?.assets ?? const [])};
@@ -710,11 +798,14 @@ Future<void> showGridSheet(BuildContext context, WidgetRef ref,
             children: [
               const Padding(
                 padding: EdgeInsets.all(14),
-                child: Text('Camadas da grade (ordem = indice)',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                child: Text(
+                  'Camadas da grade (ordem = indice)',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
               ),
               Flexible(
                 child: ListView(
@@ -729,12 +820,14 @@ Future<void> showGridSheet(BuildContext context, WidgetRef ref,
                             value: picked.contains(l.id),
                             activeColor: AmColors.accent,
                             checkColor: const Color(0xFF0B0E12),
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
-                            title: Text(l.name,
-                                style: const TextStyle(
-                                    fontSize: 14,
-                                    color: AmColors.text)),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(
+                              l.name,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AmColors.text,
+                              ),
+                            ),
                             onChanged: (v) => setInner(() {
                               if (v == true) {
                                 picked.add(l.id);
@@ -758,11 +851,14 @@ Future<void> showGridSheet(BuildContext context, WidgetRef ref,
                       controller.setGridAssets(nullId, picked.toList());
                       Navigator.of(c2).pop();
                     },
-                    child: Text('Usar ${picked.length} camada(s)',
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0B0E12))),
+                    child: Text(
+                      'Usar ${picked.length} camada(s)',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0B0E12),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -777,534 +873,669 @@ Future<void> showGridSheet(BuildContext context, WidgetRef ref,
   await showParamSheet(
     context,
     builder: (sheetContext) => StatefulBuilder(
-      builder: (sheetContext, setSheetState) =>
-          ValueListenableBuilder<Duration>(
+      builder: (sheetContext, setSheetState) => ValueListenableBuilder<Duration>(
         valueListenable: playback.time,
         builder: (sheetContext, t, _) {
-        final layer =
-            ref.read(editorControllerProvider).layerById(nullId);
-        if (layer is! NullLayer) return const SizedBox.shrink();
-        final rig = layer.grid;
-        final local = layer.localTime(t);
+          final layer = ref.read(editorControllerProvider).layerById(nullId);
+          if (layer is! NullLayer) return const SizedBox.shrink();
+          final rig = layer.grid;
+          final local = layer.localTime(t);
 
-        Widget ruler(String label, double value, double min, double max,
-            String display, ValueChanged<double> onChanged) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                SizedBox(
+          Widget ruler(
+            String label,
+            double value,
+            double min,
+            double max,
+            String display,
+            ValueChanged<double> onChanged,
+          ) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  SizedBox(
                     width: 92,
-                    child: Text(label,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.muted))),
-                Expanded(
-                  child: AmTickRuler(
-                    value: value,
-                    min: min,
-                    max: max,
-                    unitsPerPixel: (max - min) / 420,
-                    height: 42,
-                    onChanged: (v) {
-                      onChanged(v);
-                      setSheetState(() {});
-                    },
-                  ),
-                ),
-                SizedBox(
-                    width: 56,
-                    child: Text(display,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.accent))),
-              ],
-            ),
-          );
-        }
-
-        // Linha ANIMAVEL: cada parametro da grade tem sua trilha de
-        // keyframes propria, com diamante no playhead atual.
-        Widget animRow(String label, String key, AnimatedDouble track,
-            double min, double max, String display,
-            {double scale = 1}) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                SizedBox(
-                    width: 92,
-                    child: Text(label,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.muted))),
-                Expanded(
-                  child: AmTickRuler(
-                    value: track.valueAt(local) * scale,
-                    min: min,
-                    max: max,
-                    unitsPerPixel: (max - min) / 420,
-                    height: 42,
-                    onChanged: (v) {
-                      controller.editGridParam(
-                          nullId, key, t, v / scale);
-                      setSheetState(() {});
-                    },
-                  ),
-                ),
-                SizedBox(
-                    width: 48,
-                    child: Text(display,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.accent))),
-                CupertinoButton(
-                  padding: const EdgeInsets.only(left: 2),
-                  onPressed: () {
-                    controller.toggleGridParamKeyframe(nullId, key, t);
-                    setSheetState(() {});
-                  },
-                  child: Icon(
-                    track.hasKeyframeAt(local)
-                        ? CupertinoIcons.rhombus_fill
-                        : CupertinoIcons.rhombus,
-                    size: 17,
-                    color: track.isAnimated
-                        ? AmColors.accent
-                        : AmColors.muted,
-                  ),
-                ),
-                // Curve editor POR PARAMETRO: cada trilha da grade tem
-                // sua propria curva de easing por segmento.
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () {
-                    if (track.keyframes.length < 2) {
-                      showReasonToast(context,
-                          'Crie 2+ keyframes em "$label" para editar a curva');
-                      return;
-                    }
-                    showGridCurveSheet(
-                        context, ref, playback, nullId, key, label,
-                        onClosed: () {
-                      if (context.mounted) {
-                        showGridSheet(context, ref, nullId, playback);
-                      }
-                    });
-                  },
-                  child: Icon(
-                    CupertinoIcons.graph_square,
-                    size: 17,
-                    color: track.keyframes.length >= 2
-                        ? AmColors.accent
-                        : AmColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                14 + MediaQuery.of(sheetContext).viewInsets.bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Modulo Grade',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: AmColors.text)),
-                    ),
-                    if (rig != null)
-                      GestureDetector(
-                        onTap: () {
-                          controller.removeGrid(nullId);
-                          setSheetState(() {});
-                        },
-                        child: const Text('Remover',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted)),
-                      ),
-                  ],
-                ),
-                // Mini-transporte: anime keyframes SEM fechar o painel.
-                SheetTransport(
-                  playback: playback,
-                  duration: ref.read(editorControllerProvider).duration,
-                  fps: ref.read(editorControllerProvider).fps,
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  width: double.infinity,
-                  child: CupertinoButton(
-                    color: rig == null ? AmColors.accent : AmColors.chip,
-                    borderRadius: BorderRadius.circular(12),
-                    onPressed: () =>
-                        pickAssets(sheetContext, setSheetState),
                     child: Text(
-                      rig == null
-                          ? 'Escolher camadas da grade...'
-                          : 'Camadas: ${rig.assets.length}  (editar)',
-                      style: TextStyle(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.muted,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: AmTickRuler(
+                      value: value,
+                      min: min,
+                      max: max,
+                      unitsPerPixel: (max - min) / 420,
+                      height: 42,
+                      onChanged: (v) {
+                        onChanged(v);
+                        setSheetState(() {});
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 56,
+                    child: Text(
+                      display,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.accent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Linha ANIMAVEL: cada parametro da grade tem sua trilha de
+          // keyframes propria, com diamante no playhead atual.
+          Widget animRow(
+            String label,
+            String key,
+            AnimatedDouble track,
+            double min,
+            double max,
+            String display, {
+            double scale = 1,
+          }) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 92,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.muted,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: AmTickRuler(
+                      value: track.valueAt(local) * scale,
+                      min: min,
+                      max: max,
+                      unitsPerPixel: (max - min) / 420,
+                      height: 42,
+                      onChanged: (v) {
+                        controller.editGridParam(nullId, key, t, v / scale);
+                        setSheetState(() {});
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      display,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.accent,
+                      ),
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.only(left: 2),
+                    onPressed: () {
+                      controller.toggleGridParamKeyframe(nullId, key, t);
+                      setSheetState(() {});
+                    },
+                    child: Icon(
+                      track.hasKeyframeAt(local)
+                          ? CupertinoIcons.rhombus_fill
+                          : CupertinoIcons.rhombus,
+                      size: 17,
+                      color: track.isAnimated
+                          ? AmColors.accent
+                          : AmColors.muted,
+                    ),
+                  ),
+                  // Curve editor POR PARAMETRO: cada trilha da grade tem
+                  // sua propria curva de easing por segmento.
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      if (track.keyframes.length < 2) {
+                        showReasonToast(
+                          context,
+                          'Crie 2+ keyframes em "$label" para editar a curva',
+                        );
+                        return;
+                      }
+                      showGridCurveSheet(
+                        context,
+                        ref,
+                        playback,
+                        nullId,
+                        key,
+                        label,
+                        onClosed: () {
+                          if (context.mounted) {
+                            showGridSheet(context, ref, nullId, playback);
+                          }
+                        },
+                      );
+                    },
+                    child: Icon(
+                      CupertinoIcons.graph_square,
+                      size: 17,
+                      color: track.keyframes.length >= 2
+                          ? AmColors.accent
+                          : AmColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                14,
+                18,
+                14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Modulo Grade',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AmColors.text,
+                          ),
+                        ),
+                      ),
+                      if (rig != null)
+                        GestureDetector(
+                          onTap: () {
+                            controller.removeGrid(nullId);
+                            setSheetState(() {});
+                          },
+                          child: const Text(
+                            'Remover',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AmColors.muted,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  // Mini-transporte: anime keyframes SEM fechar o painel.
+                  SheetTransport(
+                    playback: playback,
+                    duration: ref.read(editorControllerProvider).duration,
+                    fps: ref.read(editorControllerProvider).fps,
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      color: rig == null ? AmColors.accent : AmColors.chip,
+                      borderRadius: BorderRadius.circular(12),
+                      onPressed: () => pickAssets(sheetContext, setSheetState),
+                      child: Text(
+                        rig == null
+                            ? 'Escolher camadas da grade...'
+                            : 'Camadas: ${rig.assets.length}  (editar)',
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: rig == null
                               ? const Color(0xFF0B0E12)
-                              : AmColors.accent),
+                              : AmColors.accent,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                if (rig != null) ...[
-                  const SizedBox(height: 12),
-                  // Modo / morph: 1 Retangular, 2 Radial, 3 Esferico.
-                  Row(
-                    children: [
-                      for (final (label, mode) in const [
-                        ('Retangular', 1.0),
-                        ('Radial', 2.0),
-                        ('Esferico', 3.0),
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () {
-                              // Com o morph ANIMADO, escolher um modo
-                              // cria keyframe no playhead (nao apaga a
-                              // animacao); sem animacao, so troca o modo.
-                              if (rig.transition.isAnimated) {
-                                controller.editGridTransition(
-                                    nullId, playback.time.value, mode);
-                              } else {
-                                controller.updateGrid(
+                  if (rig != null) ...[
+                    const SizedBox(height: 12),
+                    // Modo / morph: 1 Retangular, 2 Radial, 3 Esferico.
+                    Row(
+                      children: [
+                        for (final (label, mode) in const [
+                          ('Retangular', 1.0),
+                          ('Radial', 2.0),
+                          ('Esferico', 3.0),
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: GestureDetector(
+                              onTap: () {
+                                // Com o morph ANIMADO, escolher um modo
+                                // cria keyframe no playhead (nao apaga a
+                                // animacao); sem animacao, so troca o modo.
+                                if (rig.transition.isAnimated) {
+                                  controller.editGridTransition(
+                                    nullId,
+                                    playback.time.value,
+                                    mode,
+                                  );
+                                } else {
+                                  controller.updateGrid(
                                     nullId,
                                     (g) => g.copyWith(
-                                        transition:
-                                            AnimatedDouble(mode)));
-                              }
-                              setSheetState(() {});
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: (!rig.transition.isAnimated &&
-                                        rig.transition
-                                                .valueAt(local)
-                                                .round() ==
-                                            mode.round())
-                                    ? AmColors.accentDim
-                                    : AmColors.chip,
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                              child: Text(label,
+                                      transition: AnimatedDouble(mode),
+                                    ),
+                                  );
+                                }
+                                setSheetState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      (!rig.transition.isAnimated &&
+                                          rig.transition
+                                                  .valueAt(local)
+                                                  .round() ==
+                                              mode.round())
+                                      ? AmColors.accentDim
+                                      : AmColors.chip,
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Text(
+                                  label,
                                   style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AmColors.accent)),
+                                    fontSize: 12,
+                                    color: AmColors.accent,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
+                        const Spacer(),
+                        // Diamante do MORPH (transition animavel).
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(4),
+                          onPressed: () {
+                            controller.toggleGridTransitionKeyframe(nullId, t);
+                            setSheetState(() {});
+                          },
+                          child: Icon(
+                            rig.transition.hasKeyframeAt(local)
+                                ? CupertinoIcons.rhombus_fill
+                                : CupertinoIcons.rhombus,
+                            size: 18,
+                            color: rig.transition.isAnimated
+                                ? AmColors.accent
+                                : AmColors.muted,
+                          ),
                         ),
-                      const Spacer(),
-                      // Diamante do MORPH (transition animavel).
-                      CupertinoButton(
-                        padding: const EdgeInsets.all(4),
-                        onPressed: () {
-                          controller.toggleGridTransitionKeyframe(
-                              nullId, t);
-                          setSheetState(() {});
-                        },
-                        child: Icon(
-                          rig.transition.hasKeyframeAt(local)
-                              ? CupertinoIcons.rhombus_fill
-                              : CupertinoIcons.rhombus,
-                          size: 18,
-                          color: rig.transition.isAnimated
-                              ? AmColors.accent
-                              : AmColors.muted,
-                        ),
-                      ),
-                      // Curva do MORPH.
-                      CupertinoButton(
-                        padding: const EdgeInsets.all(4),
-                        onPressed: () {
-                          if (rig.transition.keyframes.length < 2) {
-                            showReasonToast(context,
-                                'Crie 2+ keyframes no morph para editar a curva');
-                            return;
-                          }
-                          showGridCurveSheet(context, ref, playback,
-                              nullId, 'transition', 'Morph',
-                              onClosed: () {
-                            if (context.mounted) {
-                              showGridSheet(
-                                  context, ref, nullId, playback);
+                        // Curva do MORPH.
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(4),
+                          onPressed: () {
+                            if (rig.transition.keyframes.length < 2) {
+                              showReasonToast(
+                                context,
+                                'Crie 2+ keyframes no morph para editar a curva',
+                              );
+                              return;
                             }
-                          });
-                        },
-                        child: Icon(
-                          CupertinoIcons.graph_square,
-                          size: 18,
-                          color: rig.transition.keyframes.length >= 2
-                              ? AmColors.accent
-                              : AmColors.muted,
+                            showGridCurveSheet(
+                              context,
+                              ref,
+                              playback,
+                              nullId,
+                              'transition',
+                              'Morph',
+                              onClosed: () {
+                                if (context.mounted) {
+                                  showGridSheet(context, ref, nullId, playback);
+                                }
+                              },
+                            );
+                          },
+                          child: Icon(
+                            CupertinoIcons.graph_square,
+                            size: 18,
+                            color: rig.transition.keyframes.length >= 2
+                                ? AmColors.accent
+                                : AmColors.muted,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  ruler(
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ruler(
                       'Morph',
                       rig.transition.valueAt(local),
                       1,
                       3,
                       amNumber(rig.transition.valueAt(local), 1),
-                      (v) =>
-                          controller.editGridTransition(nullId, t, v)),
-                  ruler('Colunas', rig.columns.toDouble(), 1, 12,
+                      (v) => controller.editGridTransition(nullId, t, v),
+                    ),
+                    ruler(
+                      'Colunas',
+                      rig.columns.toDouble(),
+                      1,
+                      12,
                       '${rig.columns}',
-                      (v) => controller.updateGrid(nullId,
-                          (g) => g.copyWith(columns: v.round()))),
-                  animRow('Espaco X', 'spacingX', rig.spacingX, 20, 800,
-                      amNumber(rig.spacingX.valueAt(local), 0)),
-                  animRow('Espaco Y', 'spacingY', rig.spacingY, 20, 800,
-                      amNumber(rig.spacingY.valueAt(local), 0)),
-                  animRow('Raio', 'radius', rig.radius, 40, 1200,
-                      amNumber(rig.radius.valueAt(local), 0)),
-                  animRow(
+                      (v) => controller.updateGrid(
+                        nullId,
+                        (g) => g.copyWith(columns: v.round()),
+                      ),
+                    ),
+                    animRow(
+                      'Espaco X',
+                      'spacingX',
+                      rig.spacingX,
+                      20,
+                      800,
+                      amNumber(rig.spacingX.valueAt(local), 0),
+                    ),
+                    animRow(
+                      'Espaco Y',
+                      'spacingY',
+                      rig.spacingY,
+                      20,
+                      800,
+                      amNumber(rig.spacingY.valueAt(local), 0),
+                    ),
+                    animRow(
+                      'Raio',
+                      'radius',
+                      rig.radius,
+                      40,
+                      1200,
+                      amNumber(rig.radius.valueAt(local), 0),
+                    ),
+                    animRow(
                       'Rotacao',
                       'rotation',
                       rig.gridRotationDeg,
                       -180,
                       180,
-                      '${amNumber(rig.gridRotationDeg.valueAt(local), 0)}°'),
-                  animRow('Twist', 'twist', rig.twistDeg, -180, 180,
-                      '${amNumber(rig.twistDeg.valueAt(local), 0)}°'),
-                  animRow(
+                      '${amNumber(rig.gridRotationDeg.valueAt(local), 0)}°',
+                    ),
+                    animRow(
+                      'Twist',
+                      'twist',
+                      rig.twistDeg,
+                      -180,
+                      180,
+                      '${amNumber(rig.twistDeg.valueAt(local), 0)}°',
+                    ),
+                    animRow(
                       'Stagger',
                       'stagger',
                       rig.staggerDeg,
                       -360,
                       360,
-                      '${amNumber(rig.staggerDeg.valueAt(local), 0)}°'),
-                  animRow('Prof. Z', 'zDepth', rig.zDepth, -400, 400,
-                      amNumber(rig.zDepth.valueAt(local), 0)),
-                  animRow(
+                      '${amNumber(rig.staggerDeg.valueAt(local), 0)}°',
+                    ),
+                    animRow(
+                      'Prof. Z',
+                      'zDepth',
+                      rig.zDepth,
+                      -400,
+                      400,
+                      amNumber(rig.zDepth.valueAt(local), 0),
+                    ),
+                    animRow(
                       'Esc. frente',
                       'scaleFront',
                       rig.scaleFront,
                       10,
                       300,
                       amNumber(rig.scaleFront.valueAt(local) * 100, 0),
-                      scale: 100),
-                  animRow(
+                      scale: 100,
+                    ),
+                    animRow(
                       'Esc. tras',
                       'scaleBack',
                       rig.scaleBack,
                       10,
                       300,
                       amNumber(rig.scaleBack.valueAt(local) * 100, 0),
-                      scale: 100),
-                  animRow(
+                      scale: 100,
+                    ),
+                    animRow(
                       'Aleatorio',
                       'randomOffset',
                       rig.randomOffset,
                       0,
                       300,
-                      amNumber(rig.randomOffset.valueAt(local), 0)),
-                  ruler('Semente', rig.seed.toDouble(), 0, 100,
+                      amNumber(rig.randomOffset.valueAt(local), 0),
+                    ),
+                    ruler(
+                      'Semente',
+                      rig.seed.toDouble(),
+                      0,
+                      100,
                       '${rig.seed}',
                       (v) => controller.updateGrid(
-                          nullId, (g) => g.copyWith(seed: v.round()))),
-                  Row(
-                    children: [
-                      const Text('Embaralhar',
-                          style: TextStyle(
-                              fontSize: 13, color: AmColors.muted)),
-                      Transform.scale(
-                        scale: 0.68,
-                        child: CupertinoSwitch(
-                          value: rig.shuffle,
-                          activeTrackColor: AmColors.accent,
-                          onChanged: (v) {
-                            controller.updateGrid(nullId,
-                                (g) => g.copyWith(shuffle: v));
-                            setSheetState(() {});
-                          },
-                        ),
+                        nullId,
+                        (g) => g.copyWith(seed: v.round()),
                       ),
-                      const SizedBox(width: 12),
-                      const Text('Proximidade',
-                          style: TextStyle(
-                              fontSize: 13, color: AmColors.muted)),
-                      Transform.scale(
-                        scale: 0.68,
-                        child: CupertinoSwitch(
-                          value: rig.proximity?.enabled ?? false,
-                          activeTrackColor: AmColors.accent,
-                          onChanged: (v) {
-                            controller.updateGrid(nullId, (g) {
-                              if (v) {
+                    ),
+                    Row(
+                      children: [
+                        const Text(
+                          'Embaralhar',
+                          style: TextStyle(fontSize: 13, color: AmColors.muted),
+                        ),
+                        Transform.scale(
+                          scale: 0.68,
+                          child: CupertinoSwitch(
+                            value: rig.shuffle,
+                            activeTrackColor: AmColors.accent,
+                            onChanged: (v) {
+                              controller.updateGrid(
+                                nullId,
+                                (g) => g.copyWith(shuffle: v),
+                              );
+                              setSheetState(() {});
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Proximidade',
+                          style: TextStyle(fontSize: 13, color: AmColors.muted),
+                        ),
+                        Transform.scale(
+                          scale: 0.68,
+                          child: CupertinoSwitch(
+                            value: rig.proximity?.enabled ?? false,
+                            activeTrackColor: AmColors.accent,
+                            onChanged: (v) {
+                              controller.updateGrid(nullId, (g) {
+                                if (v) {
+                                  return g.copyWith(
+                                    proximity: (g.proximity ?? ProximityGroup())
+                                        .copyWith(enabled: true),
+                                  );
+                                }
                                 return g.copyWith(
-                                    proximity: (g.proximity ??
-                                            ProximityGroup())
-                                        .copyWith(enabled: true));
-                              }
-                              return g.copyWith(
-                                  proximity: g.proximity
-                                      ?.copyWith(enabled: false));
-                            });
-                            setSheetState(() {});
-                          },
+                                  proximity: g.proximity?.copyWith(
+                                    enabled: false,
+                                  ),
+                                );
+                              });
+                              setSheetState(() {});
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Nulo CONTROLADOR: um SEGUNDO nulo cujo transform
-                  // modula a grade — animar/curvar o nulo anima a grade.
-                  Row(
-                    children: [
-                      const Text('Nulo controlador',
-                          style: TextStyle(
-                              fontSize: 13, color: AmColors.muted)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            final pickedId = await _pickControllerNull(
-                                sheetContext, ref, nullId);
-                            if (pickedId == '') {
-                              controller.setGridController(nullId, null);
-                            } else if (pickedId != null) {
-                              controller.setGridController(
-                                  nullId, pickedId);
-                            }
-                            setSheetState(() {});
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: rig.controllerId != null
-                                  ? AmColors.accentDim
-                                  : AmColors.chip,
-                              borderRadius: BorderRadius.circular(9),
-                            ),
-                            child: Text(
-                              rig.controllerId == null
-                                  ? 'Nenhum'
-                                  : (ref
-                                          .read(editorControllerProvider)
-                                          .layerById(rig.controllerId!)
-                                          ?.name ??
-                                      'Nulo removido'),
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 12, color: AmColors.accent),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Nulo CONTROLADOR: um SEGUNDO nulo cujo transform
+                    // modula a grade — animar/curvar o nulo anima a grade.
+                    Row(
+                      children: [
+                        const Text(
+                          'Nulo controlador',
+                          style: TextStyle(fontSize: 13, color: AmColors.muted),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final pickedId = await _pickControllerNull(
+                                sheetContext,
+                                ref,
+                                nullId,
+                              );
+                              if (pickedId == '') {
+                                controller.setGridController(nullId, null);
+                              } else if (pickedId != null) {
+                                controller.setGridController(nullId, pickedId);
+                              }
+                              setSheetState(() {});
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: rig.controllerId != null
+                                    ? AmColors.accentDim
+                                    : AmColors.chip,
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Text(
+                                rig.controllerId == null
+                                    ? 'Nenhum'
+                                    : (ref
+                                              .read(editorControllerProvider)
+                                              .layerById(rig.controllerId!)
+                                              ?.name ??
+                                          'Nulo removido'),
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AmColors.accent,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  if (rig.controllerId != null)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Escala do nulo -> espacamento/raio · Rotacao Z '
-                        '-> rotacao da grade · Rotacao Y -> twist.',
-                        style: TextStyle(
-                            fontSize: 11, color: AmColors.muted),
-                      ),
+                      ],
                     ),
-                  if (rig.proximity?.enabled ?? false) ...[
-                    const SizedBox(height: 6),
-                    const Text(
-                      'O effector e uma ESFERA 3D: raio 200 tambem '
-                      'alcanca 200 de profundidade.',
-                      style:
-                          TextStyle(fontSize: 11, color: AmColors.muted),
-                    ),
-                    const SizedBox(height: 6),
-                    ruler(
+                    if (rig.controllerId != null)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Escala do nulo -> espacamento/raio · Rotacao Z '
+                          '-> rotacao da grade · Rotacao Y -> twist.',
+                          style: TextStyle(fontSize: 11, color: AmColors.muted),
+                        ),
+                      ),
+                    if (rig.proximity?.enabled ?? false) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'O effector e uma ESFERA 3D: raio 200 tambem '
+                        'alcanca 200 de profundidade.',
+                        style: TextStyle(fontSize: 11, color: AmColors.muted),
+                      ),
+                      const SizedBox(height: 6),
+                      ruler(
                         'Effector X',
                         rig.proximity!.effector.valueAt(local).dx,
                         -800,
                         800,
-                        amNumber(
-                            rig.proximity!.effector.valueAt(local).dx, 0),
+                        amNumber(rig.proximity!.effector.valueAt(local).dx, 0),
                         (v) => controller.updateGrid(nullId, (g) {
-                              final p = g.proximity!;
-                              final cur = p.effector.valueAt(local);
-                              return g.copyWith(
-                                  proximity: p.copyWith(
-                                      effector: p.effector.edited(
-                                          local, Offset(v, cur.dy))));
-                            })),
-                    ruler(
+                          final p = g.proximity!;
+                          final cur = p.effector.valueAt(local);
+                          return g.copyWith(
+                            proximity: p.copyWith(
+                              effector: p.effector.edited(
+                                local,
+                                Offset(v, cur.dy),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      ruler(
                         'Effector Y',
                         rig.proximity!.effector.valueAt(local).dy,
                         -800,
                         800,
-                        amNumber(
-                            rig.proximity!.effector.valueAt(local).dy, 0),
+                        amNumber(rig.proximity!.effector.valueAt(local).dy, 0),
                         (v) => controller.updateGrid(nullId, (g) {
-                              final p = g.proximity!;
-                              final cur = p.effector.valueAt(local);
-                              return g.copyWith(
-                                  proximity: p.copyWith(
-                                      effector: p.effector.edited(
-                                          local, Offset(cur.dx, v))));
-                            })),
-                    ruler(
+                          final p = g.proximity!;
+                          final cur = p.effector.valueAt(local);
+                          return g.copyWith(
+                            proximity: p.copyWith(
+                              effector: p.effector.edited(
+                                local,
+                                Offset(cur.dx, v),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      ruler(
                         'Raio prox.',
                         rig.proximity!.radius.valueAt(local),
                         20,
                         800,
-                        amNumber(
-                            rig.proximity!.radius.valueAt(local), 0),
+                        amNumber(rig.proximity!.radius.valueAt(local), 0),
                         (v) => controller.updateGrid(nullId, (g) {
-                              final p = g.proximity!;
-                              return g.copyWith(
-                                  proximity: p.copyWith(
-                                      radius:
-                                          p.radius.edited(local, v)));
-                            })),
-                    ruler(
+                          final p = g.proximity!;
+                          return g.copyWith(
+                            proximity: p.copyWith(
+                              radius: p.radius.edited(local, v),
+                            ),
+                          );
+                        }),
+                      ),
+                      ruler(
                         'Escala max',
                         rig.proximity!.scaleMax * 100,
                         20,
                         400,
                         amNumber(rig.proximity!.scaleMax * 100, 0),
                         (v) => controller.updateGrid(nullId, (g) {
-                              return g.copyWith(
-                                  proximity: g.proximity!
-                                      .copyWith(scaleMax: v / 100));
-                            })),
-                    ruler(
+                          return g.copyWith(
+                            proximity: g.proximity!.copyWith(scaleMax: v / 100),
+                          );
+                        }),
+                      ),
+                      ruler(
                         'Atrair',
                         rig.proximity!.attract.valueAt(local),
                         -300,
                         300,
-                        amNumber(
-                            rig.proximity!.attract.valueAt(local), 0),
+                        amNumber(rig.proximity!.attract.valueAt(local), 0),
                         (v) => controller.updateGrid(nullId, (g) {
-                              final p = g.proximity!;
-                              return g.copyWith(
-                                  proximity: p.copyWith(
-                                      attract:
-                                          p.attract.edited(local, v)));
-                            })),
+                          final p = g.proximity!;
+                          return g.copyWith(
+                            proximity: p.copyWith(
+                              attract: p.attract.edited(local, v),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
                   ],
                 ],
-              ],
+              ),
             ),
-          ),
-        );
+          );
         },
       ),
     ),
@@ -1314,295 +1545,449 @@ Future<void> showGridSheet(BuildContext context, WidgetRef ref,
 /// Painel de MASCARAS da camada (spec AM2-mascaras-e-formas, PR-M2):
 /// pilha de mascaras com modo, inverter, feather, expansao e opacidade —
 /// tudo animavel; o caminho tambem aceita keyframe (diamante).
-Future<void> showMasksSheet(BuildContext context, WidgetRef ref,
-    String layerId, PlaybackController playback) async {
+Future<void> showMasksSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+  PlaybackController playback, {
+  required void Function(String maskId) onEditMaskPoints,
+}) async {
   final controller = ref.read(editorControllerProvider.notifier);
 
   String modeLabel(MaskMode m) => switch (m) {
-        MaskMode.none => 'Nenhum',
-        MaskMode.add => 'Somar',
-        MaskMode.subtract => 'Subtrair',
-        MaskMode.intersect => 'Intersecao',
-        MaskMode.lighten => 'Clarear',
-        MaskMode.darken => 'Escurecer',
-        MaskMode.difference => 'Diferenca',
-      };
+    MaskMode.none => 'Nenhum',
+    MaskMode.add => 'Somar',
+    MaskMode.subtract => 'Subtrair',
+    MaskMode.intersect => 'Intersecao',
+    MaskMode.lighten => 'Clarear',
+    MaskMode.darken => 'Escurecer',
+    MaskMode.difference => 'Diferenca',
+  };
 
   await showParamSheet(
     context,
     builder: (sheetContext) => StatefulBuilder(
-      builder: (sheetContext, setSheetState) =>
-          ValueListenableBuilder<Duration>(
+      builder: (sheetContext, setSheetState) => ValueListenableBuilder<Duration>(
         valueListenable: playback.time,
         builder: (sheetContext, t, _) {
-        final layer =
-            ref.read(editorControllerProvider).layerById(layerId);
-        if (layer == null) return const SizedBox.shrink();
-        final local = layer.localTime(t);
-
-        Widget ruler(String label, double value, double min, double max,
-            String display, ValueChanged<double> onChanged) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              children: [
-                SizedBox(
-                    width: 86,
-                    child: Text(label,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.muted))),
-                Expanded(
-                  child: AmTickRuler(
-                    value: value,
-                    min: min,
-                    max: max,
-                    unitsPerPixel: (max - min) / 420,
-                    height: 44,
-                    onChanged: (v) {
-                      onChanged(v);
-                      setSheetState(() {});
-                    },
-                  ),
-                ),
-                SizedBox(
-                    width: 56,
-                    child: Text(display,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.accent))),
-              ],
+          final layer = ref.read(editorControllerProvider).layerById(layerId);
+          if (layer == null) return const SizedBox.shrink();
+          final local = layer.localTime(t);
+          final maskSize = controller.layerBoxSize(
+            layer.copyLayer(
+              scaleX: AnimatedDouble(1),
+              scaleY: AnimatedDouble(1),
             ),
+            t,
           );
-        }
 
-        Widget preset(String label, BezierPath path) {
-          return GestureDetector(
-            onTap: () {
-              controller.addMask(
+          Widget ruler(
+            String label,
+            double value,
+            double min,
+            double max,
+            String display,
+            ValueChanged<double> onChanged,
+          ) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 86,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.muted,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: AmTickRuler(
+                      value: value,
+                      min: min,
+                      max: max,
+                      unitsPerPixel: (max - min) / 420,
+                      height: 44,
+                      onChanged: (v) {
+                        onChanged(v);
+                        setSheetState(() {});
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 56,
+                    child: Text(
+                      display,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.accent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          Widget preset(String label, BezierPath path) {
+            return GestureDetector(
+              onTap: () {
+                controller.addMask(
                   layerId,
                   LayerMask(
-                      name: label,
-                      path: AnimatedPath(path),
-                      feather: AnimatedDouble(0)));
-              setSheetState(() {});
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AmColors.chip,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text('+ $label',
+                    name: label,
+                    path: AnimatedPath(path),
+                    feather: AnimatedDouble(0),
+                  ),
+                );
+                setSheetState(() {});
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AmColors.chip,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '+ $label',
                   style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AmColors.accent)),
-            ),
-          );
-        }
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AmColors.accent,
+                  ),
+                ),
+              ),
+            );
+          }
 
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                14 + MediaQuery.of(sheetContext).viewInsets.bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Mascaras',
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                14,
+                18,
+                14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Máscaras',
                     style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
-                SheetTransport(
-                  playback: playback,
-                  duration: ref.read(editorControllerProvider).duration,
-                  fps: ref.read(editorControllerProvider).fps,
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'A primeira corta o alfa da camada; as seguintes '
-                  'operam sobre as de cima.',
-                  style: TextStyle(fontSize: 12, color: AmColors.muted),
-                ),
-                const SizedBox(height: 12),
-                for (final (i, m) in layer.masks.indexed)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                    decoration: BoxDecoration(
-                      color: AmColors.bg.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(12),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text('${i + 1}. ${m.name}',
-                                style: const TextStyle(
+                  ),
+                  SheetTransport(
+                    playback: playback,
+                    duration: ref.read(editorControllerProvider).duration,
+                    fps: ref.read(editorControllerProvider).fps,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'A primeira corta o alfa da camada; as seguintes '
+                    'operam sobre as de cima.',
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final (i, m) in layer.masks.indexed)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                      decoration: BoxDecoration(
+                        color: AmColors.bg.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${i + 1}. ${m.name}',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
-                                    color: AmColors.text)),
-                            const SizedBox(width: 10),
-                            GestureDetector(
-                              onTap: () {
-                                controller.cycleMaskMode(layerId, m.id);
-                                setSheetState(() {});
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: AmColors.chip,
-                                  borderRadius: BorderRadius.circular(8),
+                                    color: AmColors.text,
+                                  ),
                                 ),
-                                child: Text(modeLabel(m.mode),
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AmColors.accent)),
                               ),
-                            ),
-                            const Spacer(),
-                            const Text('Inv',
-                                style: TextStyle(
-                                    fontSize: 12, color: AmColors.muted)),
-                            Transform.scale(
-                              scale: 0.68,
-                              child: CupertinoSwitch(
-                                value: m.inverted,
-                                activeTrackColor: AmColors.accent,
-                                onChanged: (_) {
-                                  controller.toggleMaskInverted(
-                                      layerId, m.id);
+                              CupertinoButton(
+                                padding: const EdgeInsets.all(4),
+                                onPressed: i == 0
+                                    ? null
+                                    : () {
+                                        controller.reorderMask(
+                                          layerId,
+                                          m.id,
+                                          -1,
+                                        );
+                                        setSheetState(() {});
+                                      },
+                                child: const Icon(
+                                  CupertinoIcons.arrow_up,
+                                  size: 17,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                              CupertinoButton(
+                                padding: const EdgeInsets.all(4),
+                                onPressed: i == layer.masks.length - 1
+                                    ? null
+                                    : () {
+                                        controller.reorderMask(
+                                          layerId,
+                                          m.id,
+                                          1,
+                                        );
+                                        setSheetState(() {});
+                                      },
+                                child: const Icon(
+                                  CupertinoIcons.arrow_down,
+                                  size: 17,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                              // O mesmo Edit Points com trackpad do nivel 1.
+                              CupertinoButton(
+                                padding: const EdgeInsets.all(4),
+                                onPressed: () async {
+                                  await Navigator.of(context).maybePop();
+                                  if (context.mounted) onEditMaskPoints(m.id);
+                                },
+                                child: const Icon(
+                                  CupertinoIcons.pencil_outline,
+                                  size: 18,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                              // Diamante: keyframe do CAMINHO.
+                              CupertinoButton(
+                                padding: const EdgeInsets.all(4),
+                                onPressed: () {
+                                  controller.toggleMaskPathKeyframe(
+                                    layerId,
+                                    m.id,
+                                    t,
+                                  );
                                   setSheetState(() {});
                                 },
+                                child: Icon(
+                                  m.path.hasKeyframeAt(local)
+                                      ? CupertinoIcons.rhombus_fill
+                                      : CupertinoIcons.rhombus,
+                                  size: 18,
+                                  color: m.path.isAnimated
+                                      ? AmColors.accent
+                                      : AmColors.muted,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  controller.removeMask(layerId, m.id);
+                                  setSheetState(() {});
+                                },
+                                child: const Icon(
+                                  CupertinoIcons.xmark,
+                                  size: 15,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Wrap(
+                            spacing: 5,
+                            runSpacing: 5,
+                            children: [
+                              for (final mode in MaskMode.values)
+                                GestureDetector(
+                                  onTap: () {
+                                    controller.updateMask(
+                                      layerId,
+                                      m.id,
+                                      (x) => x.copyWith(mode: mode),
+                                    );
+                                    setSheetState(() {});
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: m.mode == mode
+                                          ? AmColors.accentDim
+                                          : AmColors.chip,
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                    child: Text(
+                                      modeLabel(mode),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: m.mode == mode
+                                            ? AmColors.accent
+                                            : AmColors.text,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Inverter',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AmColors.muted,
+                                  ),
+                                ),
+                              ),
+                              Transform.scale(
+                                scale: 0.68,
+                                child: CupertinoSwitch(
+                                  value: m.inverted,
+                                  activeTrackColor: AmColors.accent,
+                                  onChanged: (_) {
+                                    controller.toggleMaskInverted(
+                                      layerId,
+                                      m.id,
+                                    );
+                                    setSheetState(() {});
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!m.path.valueAt(local).closed)
+                            const Text(
+                              'Caminho aberto nao corta; pode servir de entrada de efeito.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AmColors.accent,
                               ),
                             ),
-                            // Editar no a no, com os nos em cima da
-                            // composicao.
-                            CupertinoButton(
-                              padding: const EdgeInsets.all(4),
-                              onPressed: () {
-                                Navigator.of(context).maybePop();
-                                Future.microtask(() {
-                                  if (context.mounted) {
-                                    showPathEditSheet(context, ref,
-                                        layerId, m.id, playback);
-                                  }
-                                });
-                              },
-                              child: const Icon(
-                                CupertinoIcons.pencil_outline,
-                                size: 18,
-                                color: AmColors.muted,
+                          if (maskFeatherExceedsBounds(m, local, maskSize))
+                            const Text(
+                              'Aviso: caminho + feather/2 + expansao passa do limite.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AmColors.accent,
                               ),
                             ),
-                            // Diamante: keyframe do CAMINHO.
-                            CupertinoButton(
-                              padding: const EdgeInsets.all(4),
-                              onPressed: () {
-                                controller.toggleMaskPathKeyframe(
-                                    layerId, m.id, t);
-                                setSheetState(() {});
-                              },
-                              child: Icon(
-                                m.path.hasKeyframeAt(local)
-                                    ? CupertinoIcons.rhombus_fill
-                                    : CupertinoIcons.rhombus,
-                                size: 18,
-                                color: m.path.isAnimated
-                                    ? AmColors.accent
-                                    : AmColors.muted,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                controller.removeMask(layerId, m.id);
-                                setSheetState(() {});
-                              },
-                              child: const Icon(CupertinoIcons.xmark,
-                                  size: 15, color: AmColors.muted),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ruler(
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ruler(
                                   m.featherLinked ? 'Feather' : 'Feather X',
                                   m.feather.valueAt(local),
                                   0,
                                   200,
                                   amNumber(m.feather.valueAt(local), 0),
                                   (v) => controller.editMaskParam(
-                                      layerId, m.id, 'feather', t, v)),
-                            ),
-                            // Soltar os eixos: borda dura dos lados e
-                            // macia em cima e embaixo — o degrade de
-                            // horizonte que o feather redondo nao faz.
-                            GestureDetector(
-                              onTap: () => controller.toggleMaskFeatherAxes(
-                                  layerId, m.id),
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 6),
-                                child: Icon(
-                                  m.featherLinked
-                                      ? CupertinoIcons.link
-                                      : CupertinoIcons.link_circle,
-                                  size: 16,
-                                  color: m.featherLinked
-                                      ? AmColors.muted
-                                      : AmColors.accent,
+                                    layerId,
+                                    m.id,
+                                    'feather',
+                                    t,
+                                    v,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        if (!m.featherLinked)
-                          ruler(
+                              // Soltar os eixos: borda dura dos lados e
+                              // macia em cima e embaixo — o degrade de
+                              // horizonte que o feather redondo nao faz.
+                              GestureDetector(
+                                onTap: () => controller.toggleMaskFeatherAxes(
+                                  layerId,
+                                  m.id,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Icon(
+                                    m.featherLinked
+                                        ? CupertinoIcons.link
+                                        : CupertinoIcons.link_circle,
+                                    size: 16,
+                                    color: m.featherLinked
+                                        ? AmColors.muted
+                                        : AmColors.accent,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!m.featherLinked)
+                            ruler(
                               'Feather Y',
                               m.featherVertical.valueAt(local),
                               0,
                               200,
                               amNumber(m.featherVertical.valueAt(local), 0),
                               (v) => controller.editMaskParam(
-                                  layerId, m.id, 'featherY', t, v)),
-                        ruler(
+                                layerId,
+                                m.id,
+                                'featherY',
+                                t,
+                                v,
+                              ),
+                            ),
+                          ruler(
                             'Expansao',
                             m.expansion.valueAt(local),
                             -200,
                             200,
                             amNumber(m.expansion.valueAt(local), 0),
                             (v) => controller.editMaskParam(
-                                layerId, m.id, 'expansion', t, v)),
-                        ruler(
+                              layerId,
+                              m.id,
+                              'expansion',
+                              t,
+                              v,
+                            ),
+                          ),
+                          ruler(
                             'Opacidade',
                             m.opacity.valueAt(local) * 100,
                             0,
                             100,
                             amNumber(m.opacity.valueAt(local) * 100, 0),
-                            (v) => controller.editMaskParam(layerId, m.id,
-                                'opacity', t, v / 100)),
-                      ],
+                            (v) => controller.editMaskParam(
+                              layerId,
+                              m.id,
+                              'opacity',
+                              t,
+                              v / 100,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      preset('Retangulo', BezierPath.rect(460, 460)),
+                      preset('Circulo', BezierPath.ellipse(480, 480)),
+                      preset('Estrela', BezierPath.star(5, 250, 125)),
+                      preset('Coracao', BezierPath.heart(440, 420)),
+                    ],
                   ),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    preset('Retangulo', BezierPath.rect(460, 460)),
-                    preset('Circulo', BezierPath.ellipse(480, 480)),
-                    preset('Estrela', BezierPath.star(5, 250, 125)),
-                    preset('Coracao', BezierPath.heart(440, 420)),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
+          );
         },
       ),
     ),
@@ -1612,7 +1997,11 @@ Future<void> showMasksSheet(BuildContext context, WidgetRef ref,
 /// Escolher o PAI (objeto nulo ou qualquer camada): o filho segue o delta
 /// de posicao/rotacao/escala do pai a partir de agora.
 Future<void> showParentSheet(
-    BuildContext context, WidgetRef ref, Layer child, Duration t) async {
+  BuildContext context,
+  WidgetRef ref,
+  Layer child,
+  Duration t,
+) async {
   final project = ref.read(editorControllerProvider);
   final controller = ref.read(editorControllerProvider.notifier);
   final candidates = [
@@ -1632,11 +2021,14 @@ Future<void> showParentSheet(
         children: [
           const Padding(
             padding: EdgeInsets.all(14),
-            child: Text('Seguir a camada (pai)...',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
+            child: Text(
+              'Seguir a camada (pai)...',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
           ),
           for (final other in candidates)
             if (other.id != child.id)
@@ -1652,16 +2044,23 @@ Future<void> showParentSheet(
                         ? AmColors.tealBright
                         : AmColors.muted,
                   ),
-                  title: Text(other.name,
-                      style: const TextStyle(color: AmColors.text)),
+                  title: Text(
+                    other.name,
+                    style: const TextStyle(color: AmColors.text),
+                  ),
                   subtitle: other is NullLayer
-                      ? const Text('Objeto nulo',
-                          style: TextStyle(
-                              fontSize: 11, color: AmColors.muted))
+                      ? const Text(
+                          'Objeto nulo',
+                          style: TextStyle(fontSize: 11, color: AmColors.muted),
+                        )
                       : null,
                   onTap: () {
                     controller.linkProperty(
-                        child.id, LayerProp.parent, other.id, t);
+                      child.id,
+                      LayerProp.parent,
+                      other.id,
+                      t,
+                    );
                     Navigator.of(sheetContext).pop();
                   },
                 ),
@@ -1675,30 +2074,39 @@ Future<void> showParentSheet(
 
 /// Painel de parametros do sistema de particulas.
 Future<void> showParticlesSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
 
   await showParamSheet(
     context,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {
-        final layer = ref
-            .read(editorControllerProvider)
-            .layerById(layerId);
+        final layer = ref.read(editorControllerProvider).layerById(layerId);
         if (layer is! ParticlesLayer) return const SizedBox.shrink();
 
-        Widget row(String label, double value, double min, double max,
-            double upp, String display,
-            ValueChanged<double> onChanged) {
+        Widget row(
+          String label,
+          double value,
+          double min,
+          double max,
+          double upp,
+          String display,
+          ValueChanged<double> onChanged,
+        ) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
                 SizedBox(
-                    width: 86,
-                    child: Text(label,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.muted))),
+                  width: 86,
+                  child: Text(
+                    label,
+                    style: const TextStyle(fontSize: 13, color: AmColors.muted),
+                  ),
+                ),
                 Expanded(
                   child: AmTickRuler(
                     value: value,
@@ -1713,31 +2121,45 @@ Future<void> showParticlesSheet(
                   ),
                 ),
                 SizedBox(
-                    width: 64,
-                    child: Text(display,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 14, color: AmColors.accent))),
+                  width: 64,
+                  child: Text(
+                    display,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AmColors.accent,
+                    ),
+                  ),
+                ),
               ],
             ),
           );
         }
 
-        Widget chips(String label, List<String> nomes, int atual,
-            ValueChanged<int> onPick) {
+        Widget chips(
+          String label,
+          List<String> nomes,
+          int atual,
+          ValueChanged<int> onPick,
+        ) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                    width: 86,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(label,
-                          style: const TextStyle(
-                              fontSize: 13, color: AmColors.muted)),
-                    )),
+                  width: 86,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.muted,
+                      ),
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: Wrap(
                     spacing: 6,
@@ -1751,16 +2173,22 @@ Future<void> showParticlesSheet(
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 11, vertical: 7),
+                              horizontal: 11,
+                              vertical: 7,
+                            ),
                             decoration: BoxDecoration(
                               color: atual == i
                                   ? AmColors.accentDim
                                   : AmColors.chip,
                               borderRadius: BorderRadius.circular(9),
                             ),
-                            child: Text(nomes[i],
-                                style: const TextStyle(
-                                    fontSize: 12, color: AmColors.accent)),
+                            child: Text(
+                              nomes[i],
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AmColors.accent,
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -1772,149 +2200,323 @@ Future<void> showParticlesSheet(
         }
 
         Widget titulo(String t) => Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 8),
-              child: Text(t,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                      color: AmColors.muted)),
-            );
+          padding: const EdgeInsets.only(top: 6, bottom: 8),
+          child: Text(
+            t,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: AmColors.muted,
+            ),
+          ),
+        );
 
         void up(ParticlesLayer Function(ParticlesLayer) f) =>
             controller.updateParticles(layerId, f);
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                14 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              14,
+              18,
+              14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Particulas 3D',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Particulas 3D',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 14),
-                row('Quantidade', layer.count.toDouble(), 1, 2000, 3,
-                    '${layer.count}',
-                    (v) => controller.updateParticles(layerId,
-                        (p) => p.copyParticles(count: v.round()))),
-                row('Velocidade', layer.speed, 0, 2000, 3,
-                    amNumber(layer.speed, 0),
-                    (v) => controller.updateParticles(
-                        layerId, (p) => p.copyParticles(speed: v))),
-                row('Abertura', layer.spreadDeg, 0, 360, 0.9,
-                    '${amNumber(layer.spreadDeg, 0)}°',
-                    (v) => controller.updateParticles(layerId,
-                        (p) => p.copyParticles(spreadDeg: v))),
-                row('Direcao', layer.directionDeg, -180, 180, 0.9,
-                    '${amNumber(layer.directionDeg, 0)}°',
-                    (v) => controller.updateParticles(layerId,
-                        (p) => p.copyParticles(directionDeg: v))),
-                row('Gravidade', layer.gravity, -2000, 2000, 4,
-                    amNumber(layer.gravity, 0),
-                    (v) => controller.updateParticles(
-                        layerId, (p) => p.copyParticles(gravity: v))),
-                row('Tamanho', layer.size, 1, 120, 0.3,
-                    amNumber(layer.size, 0),
-                    (v) => controller.updateParticles(
-                        layerId, (p) => p.copyParticles(size: v))),
-                row('Vida (s)', layer.lifetimeMs / 1000, 0.3, 10, 0.02,
-                    amNumber(layer.lifetimeMs / 1000, 1),
-                    (v) => controller.updateParticles(
-                        layerId,
-                        (p) => p.copyParticles(
-                            lifetimeMs: (v * 1000).round()))),
+                row(
+                  'Quantidade',
+                  layer.count.toDouble(),
+                  1,
+                  2000,
+                  3,
+                  '${layer.count}',
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(count: v.round()),
+                  ),
+                ),
+                row(
+                  'Velocidade',
+                  layer.speed,
+                  0,
+                  2000,
+                  3,
+                  amNumber(layer.speed, 0),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(speed: v),
+                  ),
+                ),
+                row(
+                  'Abertura',
+                  layer.spreadDeg,
+                  0,
+                  360,
+                  0.9,
+                  '${amNumber(layer.spreadDeg, 0)}°',
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(spreadDeg: v),
+                  ),
+                ),
+                row(
+                  'Direcao',
+                  layer.directionDeg,
+                  -180,
+                  180,
+                  0.9,
+                  '${amNumber(layer.directionDeg, 0)}°',
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(directionDeg: v),
+                  ),
+                ),
+                row(
+                  'Gravidade',
+                  layer.gravity,
+                  -2000,
+                  2000,
+                  4,
+                  amNumber(layer.gravity, 0),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(gravity: v),
+                  ),
+                ),
+                row(
+                  'Tamanho',
+                  layer.size,
+                  1,
+                  120,
+                  0.3,
+                  amNumber(layer.size, 0),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(size: v),
+                  ),
+                ),
+                row(
+                  'Vida (s)',
+                  layer.lifetimeMs / 1000,
+                  0.3,
+                  10,
+                  0.02,
+                  amNumber(layer.lifetimeMs / 1000, 1),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(lifetimeMs: (v * 1000).round()),
+                  ),
+                ),
                 titulo('EMISSOR'),
-                chips('Emissor', const ['Caixa', 'Ponto', 'Esfera', 'Anel'],
-                    layer.emitter,
-                    (i) => up((p) => p.copyParticles(emitter: i))),
-                chips('Saida', const ['Cone', 'Todas', 'Para fora'],
-                    layer.emitMode,
-                    (i) => up((p) => p.copyParticles(emitMode: i))),
-                row('3D (Z)', layer.depth, 0, 3000, 5,
-                    amNumber(layer.depth, 0),
-                    (v) => controller.updateParticles(
-                        layerId, (p) => p.copyParticles(depth: v))),
-                row('Area X', layer.emitW, 0, 2400, 4,
-                    amNumber(layer.emitW, 0),
-                    (v) => controller.updateParticles(
-                        layerId, (p) => p.copyParticles(emitW: v))),
-                row('Area Y', layer.emitH, 0, 2400, 4,
-                    amNumber(layer.emitH, 0),
-                    (v) => controller.updateParticles(
-                        layerId, (p) => p.copyParticles(emitH: v))),
+                chips(
+                  'Emissor',
+                  const ['Caixa', 'Ponto', 'Esfera', 'Anel'],
+                  layer.emitter,
+                  (i) => up((p) => p.copyParticles(emitter: i)),
+                ),
+                chips(
+                  'Saida',
+                  const ['Cone', 'Todas', 'Para fora'],
+                  layer.emitMode,
+                  (i) => up((p) => p.copyParticles(emitMode: i)),
+                ),
+                row(
+                  '3D (Z)',
+                  layer.depth,
+                  0,
+                  3000,
+                  5,
+                  amNumber(layer.depth, 0),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(depth: v),
+                  ),
+                ),
+                row(
+                  'Area X',
+                  layer.emitW,
+                  0,
+                  2400,
+                  4,
+                  amNumber(layer.emitW, 0),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(emitW: v),
+                  ),
+                ),
+                row(
+                  'Area Y',
+                  layer.emitH,
+                  0,
+                  2400,
+                  4,
+                  amNumber(layer.emitH, 0),
+                  (v) => controller.updateParticles(
+                    layerId,
+                    (p) => p.copyParticles(emitH: v),
+                  ),
+                ),
                 titulo('FISICA'),
-                row('Vento X', layer.windX, -1500, 1500, 3,
-                    amNumber(layer.windX, 0),
-                    (v) => up((p) => p.copyParticles(windX: v))),
-                row('Vento Y', layer.windY, -1500, 1500, 3,
-                    amNumber(layer.windY, 0),
-                    (v) => up((p) => p.copyParticles(windY: v))),
-                row('Ar', layer.drag, 0, 8, 0.02, amNumber(layer.drag, 2),
-                    (v) => up((p) => p.copyParticles(drag: v))),
-                row('Turbulencia', layer.turbulence, 0, 600, 1.2,
-                    amNumber(layer.turbulence, 0),
-                    (v) => up((p) => p.copyParticles(turbulence: v))),
-                row('Detalhe', layer.turbulenceScale, 20, 1200, 2,
-                    amNumber(layer.turbulenceScale, 0),
-                    (v) => up((p) => p.copyParticles(turbulenceScale: v))),
-                row('Evolucao', layer.turbulenceSpeed, 0, 5, 0.01,
-                    amNumber(layer.turbulenceSpeed, 2),
-                    (v) => up((p) => p.copyParticles(turbulenceSpeed: v))),
-                row('Giro', layer.spin, -720, 720, 2,
-                    '${amNumber(layer.spin, 0)}°/s',
-                    (v) => up((p) => p.copyParticles(spin: v))),
+                row(
+                  'Vento X',
+                  layer.windX,
+                  -1500,
+                  1500,
+                  3,
+                  amNumber(layer.windX, 0),
+                  (v) => up((p) => p.copyParticles(windX: v)),
+                ),
+                row(
+                  'Vento Y',
+                  layer.windY,
+                  -1500,
+                  1500,
+                  3,
+                  amNumber(layer.windY, 0),
+                  (v) => up((p) => p.copyParticles(windY: v)),
+                ),
+                row(
+                  'Ar',
+                  layer.drag,
+                  0,
+                  8,
+                  0.02,
+                  amNumber(layer.drag, 2),
+                  (v) => up((p) => p.copyParticles(drag: v)),
+                ),
+                row(
+                  'Turbulencia',
+                  layer.turbulence,
+                  0,
+                  600,
+                  1.2,
+                  amNumber(layer.turbulence, 0),
+                  (v) => up((p) => p.copyParticles(turbulence: v)),
+                ),
+                row(
+                  'Detalhe',
+                  layer.turbulenceScale,
+                  20,
+                  1200,
+                  2,
+                  amNumber(layer.turbulenceScale, 0),
+                  (v) => up((p) => p.copyParticles(turbulenceScale: v)),
+                ),
+                row(
+                  'Evolucao',
+                  layer.turbulenceSpeed,
+                  0,
+                  5,
+                  0.01,
+                  amNumber(layer.turbulenceSpeed, 2),
+                  (v) => up((p) => p.copyParticles(turbulenceSpeed: v)),
+                ),
+                row(
+                  'Giro',
+                  layer.spin,
+                  -720,
+                  720,
+                  2,
+                  '${amNumber(layer.spin, 0)}°/s',
+                  (v) => up((p) => p.copyParticles(spin: v)),
+                ),
                 titulo('VIDA'),
-                chips('Tamanho',
-                    const ['Fixo', 'Cresce', 'Encolhe', 'Sobe e desce'],
-                    layer.sizeOverLife,
-                    (i) => up((p) => p.copyParticles(sizeOverLife: i))),
-                chips('Opacidade',
-                    const ['Entra e sai', 'Some', 'Aparece', 'Fixa'],
-                    layer.opacityOverLife,
-                    (i) => up((p) => p.copyParticles(opacityOverLife: i))),
-                row('Vida aleat.', layer.lifeRandom, 0, 1, 0.003,
-                    amNumber(layer.lifeRandom * 100, 0),
-                    (v) => up((p) => p.copyParticles(lifeRandom: v))),
-                row('Tam. aleat.', layer.sizeRandom, 0, 1, 0.003,
-                    amNumber(layer.sizeRandom * 100, 0),
-                    (v) => up((p) => p.copyParticles(sizeRandom: v))),
-                row('Opac. aleat.', layer.opacityRandom, 0, 1, 0.003,
-                    amNumber(layer.opacityRandom * 100, 0),
-                    (v) => up((p) => p.copyParticles(opacityRandom: v))),
+                chips(
+                  'Tamanho',
+                  const ['Fixo', 'Cresce', 'Encolhe', 'Sobe e desce'],
+                  layer.sizeOverLife,
+                  (i) => up((p) => p.copyParticles(sizeOverLife: i)),
+                ),
+                chips(
+                  'Opacidade',
+                  const ['Entra e sai', 'Some', 'Aparece', 'Fixa'],
+                  layer.opacityOverLife,
+                  (i) => up((p) => p.copyParticles(opacityOverLife: i)),
+                ),
+                row(
+                  'Vida aleat.',
+                  layer.lifeRandom,
+                  0,
+                  1,
+                  0.003,
+                  amNumber(layer.lifeRandom * 100, 0),
+                  (v) => up((p) => p.copyParticles(lifeRandom: v)),
+                ),
+                row(
+                  'Tam. aleat.',
+                  layer.sizeRandom,
+                  0,
+                  1,
+                  0.003,
+                  amNumber(layer.sizeRandom * 100, 0),
+                  (v) => up((p) => p.copyParticles(sizeRandom: v)),
+                ),
+                row(
+                  'Opac. aleat.',
+                  layer.opacityRandom,
+                  0,
+                  1,
+                  0.003,
+                  amNumber(layer.opacityRandom * 100, 0),
+                  (v) => up((p) => p.copyParticles(opacityRandom: v)),
+                ),
                 titulo('APARENCIA'),
                 chips(
-                    'Forma',
-                    const [
-                      'Esfera',
-                      'Estrela',
-                      'Risco',
-                      'Nuvem',
-                      'Quadrado',
-                      'Anel'
-                    ],
-                    layer.shape,
-                    (i) => up((p) => p.copyParticles(shape: i))),
-                row('Brilho', layer.glow, 0, 1, 0.003,
-                    amNumber(layer.glow * 100, 0),
-                    (v) => up((p) => p.copyParticles(glow: v))),
-                row('Rastro', layer.trail, 0, 1, 0.003,
-                    amNumber(layer.trail * 100, 0),
-                    (v) => up((p) => p.copyParticles(trail: v))),
+                  'Forma',
+                  const [
+                    'Esfera',
+                    'Estrela',
+                    'Risco',
+                    'Nuvem',
+                    'Quadrado',
+                    'Anel',
+                  ],
+                  layer.shape,
+                  (i) => up((p) => p.copyParticles(shape: i)),
+                ),
+                row(
+                  'Brilho',
+                  layer.glow,
+                  0,
+                  1,
+                  0.003,
+                  amNumber(layer.glow * 100, 0),
+                  (v) => up((p) => p.copyParticles(glow: v)),
+                ),
+                row(
+                  'Rastro',
+                  layer.trail,
+                  0,
+                  1,
+                  0.003,
+                  amNumber(layer.trail * 100, 0),
+                  (v) => up((p) => p.copyParticles(trail: v)),
+                ),
                 // COR FINAL: a particula muda de cor ao longo da vida.
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
                       const SizedBox(
-                          width: 86,
-                          child: Text('Cor final',
-                              style: TextStyle(
-                                  fontSize: 13, color: AmColors.muted))),
+                        width: 86,
+                        child: Text(
+                          'Cor final',
+                          style: TextStyle(fontSize: 13, color: AmColors.muted),
+                        ),
+                      ),
                       GestureDetector(
                         onTap: () {
                           up((p) => p.copyParticles(clearColorEnd: true));
@@ -1922,16 +2524,22 @@ Future<void> showParticlesSheet(
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 11, vertical: 7),
+                            horizontal: 11,
+                            vertical: 7,
+                          ),
                           decoration: BoxDecoration(
                             color: layer.colorEnd == null
                                 ? AmColors.accentDim
                                 : AmColors.chip,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: const Text('Nenhuma',
-                              style: TextStyle(
-                                  fontSize: 12, color: AmColors.accent)),
+                          child: const Text(
+                            'Nenhuma',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ),
                       ),
                       const Spacer(),
@@ -1956,8 +2564,7 @@ Future<void> showParticlesSheet(
                               color: c,
                               shape: BoxShape.circle,
                               border: layer.colorEnd == c
-                                  ? Border.all(
-                                      color: Colors.white, width: 2.5)
+                                  ? Border.all(color: Colors.white, width: 2.5)
                                   : null,
                             ),
                           ),
@@ -1968,17 +2575,20 @@ Future<void> showParticlesSheet(
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Text('Cintilar',
-                        style: TextStyle(
-                            fontSize: 13, color: AmColors.muted)),
+                    const Text(
+                      'Cintilar',
+                      style: TextStyle(fontSize: 13, color: AmColors.muted),
+                    ),
                     Transform.scale(
                       scale: 0.72,
                       child: CupertinoSwitch(
                         value: layer.twinkle,
                         activeTrackColor: AmColors.accent,
                         onChanged: (v) {
-                          controller.updateParticles(layerId,
-                              (p) => p.copyParticles(twinkle: v));
+                          controller.updateParticles(
+                            layerId,
+                            (p) => p.copyParticles(twinkle: v),
+                          );
                           setSheetState(() {});
                         },
                       ),
@@ -1994,8 +2604,10 @@ Future<void> showParticlesSheet(
                     ])
                       GestureDetector(
                         onTap: () {
-                          controller.updateParticles(layerId,
-                              (p) => p.copyParticles(color: c));
+                          controller.updateParticles(
+                            layerId,
+                            (p) => p.copyParticles(color: c),
+                          );
                           setSheetState(() {});
                         },
                         child: Container(
@@ -2006,8 +2618,7 @@ Future<void> showParticlesSheet(
                             color: c,
                             shape: BoxShape.circle,
                             border: layer.color == c
-                                ? Border.all(
-                                    color: Colors.white, width: 2.5)
+                                ? Border.all(color: Colors.white, width: 2.5)
                                 : null,
                           ),
                         ),
@@ -2027,30 +2638,39 @@ Future<void> showParticlesSheet(
 /// rotacao vem do transform normal da camada (X/Y/Z, keyframes e curvas
 /// de sempre) — e da cadeia de nulos quando vinculado a um pai.
 Future<void> showElement3DSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
 
   await showParamSheet(
     context,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {
-        final layer =
-            ref.read(editorControllerProvider).layerById(layerId);
+        final layer = ref.read(editorControllerProvider).layerById(layerId);
         if (layer is! Element3DLayer) return const SizedBox.shrink();
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                14 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              14,
+              18,
+              14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Elemento 3D',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Elemento 3D',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
@@ -2059,23 +2679,30 @@ Future<void> showElement3DSheet(
                     for (final kind in Element3DKind.values)
                       GestureDetector(
                         onTap: () {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(kind: kind));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(kind: kind),
+                          );
                           setSheetState(() {});
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: layer.kind == kind
                                 ? AmColors.accentDim
                                 : AmColors.chip,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: Text(element3DLabel(kind),
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AmColors.accent)),
+                          child: Text(
+                            element3DLabel(kind),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -2084,10 +2711,12 @@ Future<void> showElement3DSheet(
                 Row(
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Text('Tamanho',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted))),
+                      width: 86,
+                      child: Text(
+                        'Tamanho',
+                        style: TextStyle(fontSize: 13, color: AmColors.muted),
+                      ),
+                    ),
                     Expanded(
                       child: AmTickRuler(
                         value: layer.size,
@@ -2096,34 +2725,44 @@ Future<void> showElement3DSheet(
                         unitsPerPixel: 1.4,
                         height: 46,
                         onChanged: (v) {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(size: v));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(size: v),
+                          );
                           setSheetState(() {});
                         },
                       ),
                     ),
                     SizedBox(
-                        width: 56,
-                        child: Text(amNumber(layer.size, 0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 14, color: AmColors.accent))),
+                      width: 56,
+                      child: Text(
+                        amNumber(layer.size, 0),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AmColors.accent,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Text('Arestas',
-                        style: TextStyle(
-                            fontSize: 13, color: AmColors.muted)),
+                    const Text(
+                      'Arestas',
+                      style: TextStyle(fontSize: 13, color: AmColors.muted),
+                    ),
                     Transform.scale(
                       scale: 0.72,
                       child: CupertinoSwitch(
                         value: layer.edges,
                         activeTrackColor: AmColors.accent,
                         onChanged: (v) {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(edges: v));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(edges: v),
+                          );
                           setSheetState(() {});
                         },
                       ),
@@ -2134,8 +2773,10 @@ Future<void> showElement3DSheet(
                       color: layer.color,
                       size: 30,
                       onChanged: (c) {
-                        controller.updateElement3D(layerId,
-                            (e) => e.copyElement3D(color: c));
+                        controller.updateElement3D(
+                          layerId,
+                          (e) => e.copyElement3D(color: c),
+                        );
                         setSheetState(() {});
                       },
                     ),
@@ -2147,8 +2788,10 @@ Future<void> showElement3DSheet(
                     ])
                       GestureDetector(
                         onTap: () {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(color: c));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(color: c),
+                          );
                           setSheetState(() {});
                         },
                         child: Container(
@@ -2159,8 +2802,7 @@ Future<void> showElement3DSheet(
                             color: c,
                             shape: BoxShape.circle,
                             border: layer.color == c
-                                ? Border.all(
-                                    color: Colors.white, width: 2.5)
+                                ? Border.all(color: Colors.white, width: 2.5)
                                 : null,
                           ),
                         ),
@@ -2173,10 +2815,12 @@ Future<void> showElement3DSheet(
                 Row(
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Text('Reflexo',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted))),
+                      width: 86,
+                      child: Text(
+                        'Reflexo',
+                        style: TextStyle(fontSize: 13, color: AmColors.muted),
+                      ),
+                    ),
                     Expanded(
                       child: AmTickRuler(
                         value: layer.reflect,
@@ -2185,18 +2829,25 @@ Future<void> showElement3DSheet(
                         unitsPerPixel: 1 / 420,
                         height: 46,
                         onChanged: (v) {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(reflect: v));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(reflect: v),
+                          );
                           setSheetState(() {});
                         },
                       ),
                     ),
                     SizedBox(
-                        width: 56,
-                        child: Text(amNumber(layer.reflect * 100, 0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 14, color: AmColors.accent))),
+                      width: 56,
+                      child: Text(
+                        amNumber(layer.reflect * 100, 0),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AmColors.accent,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -2207,22 +2858,30 @@ Future<void> showElement3DSheet(
                     for (final k in EnvironmentKind.values)
                       GestureDetector(
                         onTap: () {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(environment: k));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(environment: k),
+                          );
                           setSheetState(() {});
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: layer.environment == k
                                 ? AmColors.accentDim
                                 : AmColors.chip,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: Text(environmentLabel(k),
-                              style: const TextStyle(
-                                  fontSize: 12, color: AmColors.accent)),
+                          child: Text(
+                            environmentLabel(k),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -2233,13 +2892,15 @@ Future<void> showElement3DSheet(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text('Material',
-                              style: TextStyle(
-                                  fontSize: 13, color: AmColors.muted)),
-                        )),
+                      width: 86,
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Material',
+                          style: TextStyle(fontSize: 13, color: AmColors.muted),
+                        ),
+                      ),
+                    ),
                     Expanded(
                       child: Wrap(
                         spacing: 6,
@@ -2254,23 +2915,30 @@ Future<void> showElement3DSheet(
                           ].indexed)
                             GestureDetector(
                               onTap: () {
-                                controller.updateElement3D(layerId,
-                                    (e) => e.copyElement3D(material: i));
+                                controller.updateElement3D(
+                                  layerId,
+                                  (e) => e.copyElement3D(material: i),
+                                );
                                 setSheetState(() {});
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 11, vertical: 7),
+                                  horizontal: 11,
+                                  vertical: 7,
+                                ),
                                 decoration: BoxDecoration(
                                   color: layer.material == i
                                       ? AmColors.accentDim
                                       : AmColors.chip,
                                   borderRadius: BorderRadius.circular(9),
                                 ),
-                                child: Text(nome,
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AmColors.accent)),
+                                child: Text(
+                                  nome,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AmColors.accent,
+                                  ),
+                                ),
                               ),
                             ),
                         ],
@@ -2285,13 +2953,18 @@ Future<void> showElement3DSheet(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(
-                          width: 86,
-                          child: Padding(
-                            padding: EdgeInsets.only(top: 6),
-                            child: Text('Degrade',
-                                style: TextStyle(
-                                    fontSize: 13, color: AmColors.muted)),
-                          )),
+                        width: 86,
+                        child: Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Degrade',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AmColors.muted,
+                            ),
+                          ),
+                        ),
+                      ),
                       Expanded(
                         child: Wrap(
                           spacing: 8,
@@ -2301,9 +2974,9 @@ Future<void> showElement3DSheet(
                               GestureDetector(
                                 onTap: () {
                                   controller.updateElement3D(
-                                      layerId,
-                                      (e) => e.copyElement3D(
-                                          gradient: cores));
+                                    layerId,
+                                    (e) => e.copyElement3D(gradient: cores),
+                                  );
                                   setSheetState(() {});
                                 },
                                 child: Container(
@@ -2312,10 +2985,11 @@ Future<void> showElement3DSheet(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(colors: cores),
                                     borderRadius: BorderRadius.circular(8),
-                                    border: _mesmasCores(
-                                            layer.gradient, cores)
+                                    border: _mesmasCores(layer.gradient, cores)
                                         ? Border.all(
-                                            color: Colors.white, width: 2.5)
+                                            color: Colors.white,
+                                            width: 2.5,
+                                          )
                                         : null,
                                   ),
                                 ),
@@ -2330,10 +3004,12 @@ Future<void> showElement3DSheet(
                 Row(
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Text('Brilho',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted))),
+                      width: 86,
+                      child: Text(
+                        'Brilho',
+                        style: TextStyle(fontSize: 13, color: AmColors.muted),
+                      ),
+                    ),
                     Expanded(
                       child: AmTickRuler(
                         value: layer.shininess,
@@ -2342,18 +3018,25 @@ Future<void> showElement3DSheet(
                         unitsPerPixel: 0.003,
                         height: 46,
                         onChanged: (v) {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(shininess: v));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(shininess: v),
+                          );
                           setSheetState(() {});
                         },
                       ),
                     ),
                     SizedBox(
-                        width: 56,
-                        child: Text(amNumber(layer.shininess * 100, 0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 14, color: AmColors.accent))),
+                      width: 56,
+                      child: Text(
+                        amNumber(layer.shininess * 100, 0),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AmColors.accent,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -2361,17 +3044,21 @@ Future<void> showElement3DSheet(
                 Row(
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Text('Modelo',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted))),
+                      width: 86,
+                      child: Text(
+                        'Modelo',
+                        style: TextStyle(fontSize: 13, color: AmColors.muted),
+                      ),
+                    ),
                     Expanded(
                       child: Text(
                         _descricaoDoModelo(layer),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 12, color: AmColors.text),
+                          fontSize: 12,
+                          color: AmColors.text,
+                        ),
                       ),
                     ),
                     GestureDetector(
@@ -2381,7 +3068,9 @@ Future<void> showElement3DSheet(
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: AmColors.chip,
                           borderRadius: BorderRadius.circular(9),
@@ -2389,12 +3078,19 @@ Future<void> showElement3DSheet(
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(CupertinoIcons.cube_box,
-                                size: 16, color: AmColors.accent),
+                            Icon(
+                              CupertinoIcons.cube_box,
+                              size: 16,
+                              color: AmColors.accent,
+                            ),
                             SizedBox(width: 6),
-                            Text('OBJ / FBX',
-                                style: TextStyle(
-                                    fontSize: 12, color: AmColors.accent)),
+                            Text(
+                              'OBJ / FBX',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AmColors.accent,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -2402,14 +3098,19 @@ Future<void> showElement3DSheet(
                     if (layer.meshPath != null)
                       GestureDetector(
                         onTap: () {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(clearMesh: true));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(clearMesh: true),
+                          );
                           setSheetState(() {});
                         },
                         child: const Padding(
                           padding: EdgeInsets.only(left: 8),
-                          child: Icon(CupertinoIcons.xmark_circle_fill,
-                              size: 20, color: AmColors.muted),
+                          child: Icon(
+                            CupertinoIcons.xmark_circle_fill,
+                            size: 20,
+                            color: AmColors.muted,
+                          ),
                         ),
                       ),
                   ],
@@ -2419,10 +3120,12 @@ Future<void> showElement3DSheet(
                 Row(
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Text('Imagem',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted))),
+                      width: 86,
+                      child: Text(
+                        'Imagem',
+                        style: TextStyle(fontSize: 13, color: AmColors.muted),
+                      ),
+                    ),
                     Expanded(
                       child: Text(
                         layer.imagePath == null
@@ -2431,22 +3134,29 @@ Future<void> showElement3DSheet(
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 12, color: AmColors.text),
+                          fontSize: 12,
+                          color: AmColors.text,
+                        ),
                       ),
                     ),
                     GestureDetector(
                       onTap: () async {
-                        final r = await FilePicker.platform
-                            .pickFiles(type: FileType.image);
+                        final r = await FilePicker.platform.pickFiles(
+                          type: FileType.image,
+                        );
                         final caminho = r?.files.single.path;
                         if (caminho == null) return;
-                        controller.updateElement3D(layerId,
-                            (e) => e.copyElement3D(imagePath: caminho));
+                        controller.updateElement3D(
+                          layerId,
+                          (e) => e.copyElement3D(imagePath: caminho),
+                        );
                         setSheetState(() {});
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: AmColors.chip,
                           borderRadius: BorderRadius.circular(9),
@@ -2454,12 +3164,19 @@ Future<void> showElement3DSheet(
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(CupertinoIcons.photo,
-                                size: 16, color: AmColors.accent),
+                            Icon(
+                              CupertinoIcons.photo,
+                              size: 16,
+                              color: AmColors.accent,
+                            ),
                             SizedBox(width: 6),
-                            Text('Escolher',
-                                style: TextStyle(
-                                    fontSize: 12, color: AmColors.accent)),
+                            Text(
+                              'Escolher',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AmColors.accent,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -2467,14 +3184,19 @@ Future<void> showElement3DSheet(
                     if (layer.imagePath != null)
                       GestureDetector(
                         onTap: () {
-                          controller.updateElement3D(layerId,
-                              (e) => e.copyElement3D(clearImage: true));
+                          controller.updateElement3D(
+                            layerId,
+                            (e) => e.copyElement3D(clearImage: true),
+                          );
                           setSheetState(() {});
                         },
                         child: const Padding(
                           padding: EdgeInsets.only(left: 8),
-                          child: Icon(CupertinoIcons.xmark_circle,
-                              size: 20, color: AmColors.muted),
+                          child: Icon(
+                            CupertinoIcons.xmark_circle,
+                            size: 20,
+                            color: AmColors.muted,
+                          ),
                         ),
                       ),
                   ],
@@ -2498,19 +3220,21 @@ Future<void> showElement3DSheet(
 /// GEOMETRIA — Tamanho e parametro do caminho e nao engorda o traco;
 /// Escala (em Mover) engorda tudo junto. Todo numero e animavel com
 /// diamante e curva.
-Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
-    String layerId, PlaybackController playback) async {
+Future<void> showShapeParamsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+  PlaybackController playback,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
 
   await showParamSheet(
     context,
     builder: (sheetContext) => StatefulBuilder(
-      builder: (sheetContext, setSheetState) =>
-          ValueListenableBuilder<Duration>(
+      builder: (sheetContext, setSheetState) => ValueListenableBuilder<Duration>(
         valueListenable: playback.time,
         builder: (sheetContext, t, _) {
-          final layer =
-              ref.read(editorControllerProvider).layerById(layerId);
+          final layer = ref.read(editorControllerProvider).layerById(layerId);
           if (layer is! ShapeLayer) return const SizedBox.shrink();
           final local = layer.localTime(t);
           ShapeParametric? sp;
@@ -2521,19 +3245,29 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
             }
           }
 
-          Widget animRow(String label, String key, double min,
-              double max, String display,
-              {double scale = 1}) {
+          Widget animRow(
+            String label,
+            String key,
+            double min,
+            double max,
+            String display, {
+            double scale = 1,
+          }) {
             final track = shapeParamTrackOf(sp!, key)!;
             return Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
                   SizedBox(
-                      width: 88,
-                      child: Text(label,
-                          style: const TextStyle(
-                              fontSize: 13, color: AmColors.muted))),
+                    width: 88,
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.muted,
+                      ),
+                    ),
+                  ),
                   Expanded(
                     child: AmTickRuler(
                       value: track.valueAt(local) * scale,
@@ -2542,23 +3276,26 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                       unitsPerPixel: (max - min) / 420,
                       height: 42,
                       onChanged: (v) {
-                        controller.editShapeParam(
-                            layerId, key, t, v / scale);
+                        controller.editShapeParam(layerId, key, t, v / scale);
                         setSheetState(() {});
                       },
                     ),
                   ),
                   SizedBox(
-                      width: 48,
-                      child: Text(display,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 13, color: AmColors.accent))),
+                    width: 48,
+                    child: Text(
+                      display,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AmColors.accent,
+                      ),
+                    ),
+                  ),
                   CupertinoButton(
                     padding: const EdgeInsets.only(left: 2),
                     onPressed: () {
-                      controller.toggleShapeParamKeyframe(
-                          layerId, key, t);
+                      controller.toggleShapeParamKeyframe(layerId, key, t);
                       setSheetState(() {});
                     },
                     child: Icon(
@@ -2575,8 +3312,10 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                     padding: EdgeInsets.zero,
                     onPressed: () {
                       if (track.keyframes.length < 2) {
-                        showReasonToast(context,
-                            'Crie 2+ keyframes em "$label" para editar a curva');
+                        showReasonToast(
+                          context,
+                          'Crie 2+ keyframes em "$label" para editar a curva',
+                        );
                         return;
                       }
                       showTrackCurveSheet(
@@ -2596,14 +3335,25 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                         },
                         onSetEase: (segStart, ease) =>
                             controller.setShapeParamSegmentEase(
-                                layerId, key, segStart, ease),
+                              layerId,
+                              key,
+                              segStart,
+                              ease,
+                            ),
                         onSetEaseAll: (ease) =>
                             controller.applyEaseToAllShapeParamSegments(
-                                layerId, key, ease),
+                              layerId,
+                              key,
+                              ease,
+                            ),
                         onClosed: () {
                           if (context.mounted) {
                             showShapeParamsSheet(
-                                context, ref, layerId, playback);
+                              context,
+                              ref,
+                              layerId,
+                              playback,
+                            );
                           }
                         },
                       );
@@ -2623,21 +3373,27 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
 
           return SafeArea(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(18, 14, 18,
-                  14 + MediaQuery.of(sheetContext).viewInsets.bottom),
+              padding: EdgeInsets.fromLTRB(
+                18,
+                14,
+                18,
+                14 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Forma — geometria',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
+                  const Text(
+                    'Forma — geometria',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
                   SheetTransport(
                     playback: playback,
-                    duration:
-                        ref.read(editorControllerProvider).duration,
+                    duration: ref.read(editorControllerProvider).duration,
                     fps: ref.read(editorControllerProvider).fps,
                   ),
                   const SizedBox(height: 6),
@@ -2663,14 +3419,21 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                         }
                         if (geo == null) {
                           showReasonToast(
-                              context, 'Esta forma nao tem geometria');
+                            context,
+                            'Esta forma nao tem geometria',
+                          );
                           return;
                         }
                         if (geo is! ShapeBezier &&
                             !controller.convertShapeItemToBezier(
-                                layerId, geo.id, t)) {
-                          showReasonToast(context,
-                              'Nao consegui converter esta geometria');
+                              layerId,
+                              geo.id,
+                              t,
+                            )) {
+                          showReasonToast(
+                            context,
+                            'Nao consegui converter esta geometria',
+                          );
                           return;
                         }
                         final idGeo = geo.id;
@@ -2678,22 +3441,33 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                         Future.microtask(() {
                           if (context.mounted) {
                             showPathEditSheet(
-                                context, ref, layerId, idGeo, playback,
-                                forma: true);
+                              context,
+                              ref,
+                              layerId,
+                              idGeo,
+                              playback,
+                              forma: true,
+                            );
                           }
                         });
                       },
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(CupertinoIcons.pencil_outline,
-                              size: 17, color: AmColors.accent),
+                          Icon(
+                            CupertinoIcons.pencil_outline,
+                            size: 17,
+                            color: AmColors.accent,
+                          ),
                           SizedBox(width: 8),
-                          Text('Editar nos do caminho',
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AmColors.accent)),
+                          Text(
+                            'Editar nos do caminho',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -2704,8 +3478,7 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                       'Esta forma e um caminho desenhado (sem '
                       'parametros). Converta para editar Tamanho, '
                       'Arredondamento, Pontas e afins — animaveis.',
-                      style: TextStyle(
-                          fontSize: 13, color: AmColors.muted),
+                      style: TextStyle(fontSize: 13, color: AmColors.muted),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -2715,18 +3488,22 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                         borderRadius: BorderRadius.circular(12),
                         onPressed: () {
                           controller.convertShapeToParametric(layerId);
-                          if (controller.shapeParametricOf(layerId) ==
-                              null) {
-                            showReasonToast(context,
-                                'Esta forma nao tem equivalente parametrico');
+                          if (controller.shapeParametricOf(layerId) == null) {
+                            showReasonToast(
+                              context,
+                              'Esta forma nao tem equivalente parametrico',
+                            );
                           }
                           setSheetState(() {});
                         },
-                        child: const Text('Converter para parametrica',
-                            style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0B0E12))),
+                        child: const Text(
+                          'Converter para parametrica',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0B0E12),
+                          ),
+                        ),
                       ),
                     ),
                   ] else ...[
@@ -2743,23 +3520,27 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                         ])
                           GestureDetector(
                             onTap: () {
-                              controller.setShapeParamKind(
-                                  layerId, kind);
+                              controller.setShapeParamKind(layerId, kind);
                               setSheetState(() {});
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 color: sp.kind == kind
                                     ? AmColors.accentDim
                                     : AmColors.chip,
                                 borderRadius: BorderRadius.circular(9),
                               ),
-                              child: Text(label,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AmColors.accent)),
+                              child: Text(
+                                label,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AmColors.accent,
+                                ),
+                              ),
                             ),
                           ),
                       ],
@@ -2767,54 +3548,71 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                     const SizedBox(height: 10),
                     if (sp.kind == ParamShapeKind.rect ||
                         sp.kind == ParamShapeKind.ellipse) ...[
-                      animRow('Tamanho X', 'sizeX', 4, 1000,
-                          amNumber(sp.sizeX.valueAt(local), 0)),
-                      animRow('Tamanho Y', 'sizeY', 4, 1000,
-                          amNumber(sp.sizeY.valueAt(local), 0)),
+                      animRow(
+                        'Tamanho X',
+                        'sizeX',
+                        4,
+                        1000,
+                        amNumber(sp.sizeX.valueAt(local), 0),
+                      ),
+                      animRow(
+                        'Tamanho Y',
+                        'sizeY',
+                        4,
+                        1000,
+                        amNumber(sp.sizeY.valueAt(local), 0),
+                      ),
                     ],
                     if (sp.kind == ParamShapeKind.rect) ...[
                       animRow(
-                          'Arredond.',
-                          'roundness',
-                          0,
-                          sp.roundnessPercent ? 100 : 300,
-                          amNumber(sp.roundness.valueAt(local), 0)),
+                        'Arredond.',
+                        'roundness',
+                        0,
+                        sp.roundnessPercent ? 100 : 300,
+                        amNumber(sp.roundness.valueAt(local), 0),
+                      ),
                       Row(
                         children: [
-                          const Text('Unidade do canto',
-                              style: TextStyle(
-                                  fontSize: 12, color: AmColors.muted)),
+                          const Text(
+                            'Unidade do canto',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AmColors.muted,
+                            ),
+                          ),
                           const SizedBox(width: 10),
                           for (final (label, pct) in const [
                             ('% do lado', true),
                             ('px fixo', false),
                           ])
                             Padding(
-                              padding:
-                                  const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.only(right: 8),
                               child: GestureDetector(
                                 onTap: () {
                                   controller.setShapeRoundnessUnit(
-                                      layerId,
-                                      percent: pct);
+                                    layerId,
+                                    percent: pct,
+                                  );
                                   setSheetState(() {});
                                 },
                                 child: Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: sp.roundnessPercent == pct
                                         ? AmColors.accentDim
                                         : AmColors.chip,
-                                    borderRadius:
-                                        BorderRadius.circular(8),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: Text(label,
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AmColors.accent)),
+                                  child: Text(
+                                    label,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AmColors.accent,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -2824,54 +3622,85 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
                     ],
                     if (sp.kind == ParamShapeKind.polygon ||
                         sp.kind == ParamShapeKind.star) ...[
-                      animRow('Pontas', 'points', 2, 16,
-                          amNumber(sp.points.valueAt(local), 1)),
-                      animRow('Raio', 'outerRadius', 10, 600,
-                          amNumber(sp.outerRadius.valueAt(local), 0)),
                       animRow(
-                          'Arred. ext',
-                          'outerRoundness',
-                          -100,
-                          200,
-                          amNumber(
-                              sp.outerRoundness.valueAt(local), 0)),
+                        'Pontas',
+                        'points',
+                        2,
+                        16,
+                        amNumber(sp.points.valueAt(local), 1),
+                      ),
                       animRow(
-                          'Rotacao',
-                          'shapeRotation',
-                          -180,
-                          180,
-                          '${amNumber(sp.shapeRotation.valueAt(local), 0)}°'),
+                        'Raio',
+                        'outerRadius',
+                        10,
+                        600,
+                        amNumber(sp.outerRadius.valueAt(local), 0),
+                      ),
+                      animRow(
+                        'Arred. ext',
+                        'outerRoundness',
+                        -100,
+                        200,
+                        amNumber(sp.outerRoundness.valueAt(local), 0),
+                      ),
+                      animRow(
+                        'Rotacao',
+                        'shapeRotation',
+                        -180,
+                        180,
+                        '${amNumber(sp.shapeRotation.valueAt(local), 0)}°',
+                      ),
                     ],
                     if (sp.kind == ParamShapeKind.star) ...[
-                      animRow('Raio int', 'innerRadius', 0, 600,
-                          amNumber(sp.innerRadius.valueAt(local), 0)),
                       animRow(
-                          'Arred. int',
-                          'innerRoundness',
-                          -100,
-                          200,
-                          amNumber(
-                              sp.innerRoundness.valueAt(local), 0)),
+                        'Raio int',
+                        'innerRadius',
+                        0,
+                        600,
+                        amNumber(sp.innerRadius.valueAt(local), 0),
+                      ),
+                      animRow(
+                        'Arred. int',
+                        'innerRoundness',
+                        -100,
+                        200,
+                        amNumber(sp.innerRoundness.valueAt(local), 0),
+                      ),
                     ],
                     if (sp.kind == ParamShapeKind.sector) ...[
-                      animRow('Raio', 'outerRadius', 10, 600,
-                          amNumber(sp.outerRadius.valueAt(local), 0)),
-                      animRow('Raio int', 'sectorInner', 0, 600,
-                          amNumber(sp.sectorInner.valueAt(local), 0)),
                       animRow(
-                          'Ang. inicial',
-                          'startAngle',
-                          -180,
-                          360,
-                          '${amNumber(sp.startAngle.valueAt(local), 0)}°'),
-                      animRow('Varredura', 'sweep', 0, 360,
-                          '${amNumber(sp.sweep.valueAt(local), 0)}°'),
+                        'Raio',
+                        'outerRadius',
+                        10,
+                        600,
+                        amNumber(sp.outerRadius.valueAt(local), 0),
+                      ),
+                      animRow(
+                        'Raio int',
+                        'sectorInner',
+                        0,
+                        600,
+                        amNumber(sp.sectorInner.valueAt(local), 0),
+                      ),
+                      animRow(
+                        'Ang. inicial',
+                        'startAngle',
+                        -180,
+                        360,
+                        '${amNumber(sp.startAngle.valueAt(local), 0)}°',
+                      ),
+                      animRow(
+                        'Varredura',
+                        'sweep',
+                        0,
+                        360,
+                        '${amNumber(sp.sweep.valueAt(local), 0)}°',
+                      ),
                     ],
                     const Text(
                       'Tamanho muda a GEOMETRIA (traco constante). '
                       'Escala, em Mover, engorda tudo junto.',
-                      style: TextStyle(
-                          fontSize: 11, color: AmColors.muted),
+                      style: TextStyle(fontSize: 11, color: AmColors.muted),
                     ),
                   ],
                 ],
@@ -2888,8 +3717,12 @@ Future<void> showShapeParamsSheet(BuildContext context, WidgetRef ref,
 /// (editar trava o cue — retranscrever nao sobrescreve), toque no tempo
 /// para dar seek e ouvir, e X para descartar um cue errado. Sheet
 /// persistente: o preview segue visivel enquanto voce revisa.
-Future<void> showCaptionCuesSheet(BuildContext context, WidgetRef ref,
-    String layerId, PlaybackController playback) async {
+Future<void> showCaptionCuesSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+  PlaybackController playback,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   // Um TextEditingController ESTAVEL por cue: o sheet pode reconstruir
   // (setSheetState) sem perder cursor nem texto digitado.
@@ -2905,33 +3738,38 @@ Future<void> showCaptionCuesSheet(BuildContext context, WidgetRef ref,
         if (layer is! CaptionLayer) return const SizedBox.shrink();
         final cues = layer.cues;
 
-        TextEditingController editorOf(Cue c) =>
-            editors.putIfAbsent(c.id, () {
-              final e = TextEditingController(
-                  text: c.text.replaceAll('\n', ' '));
-              // So grava quando o TEXTO muda (o listener tambem dispara
-              // por cursor/selecao — isso nao pode travar o cue).
-              var last = e.text;
-              e.addListener(() {
-                if (e.text == last) return;
-                last = e.text;
-                controller.updateCueText(layerId, c.id, e.text);
-              });
-              return e;
-            });
+        TextEditingController editorOf(Cue c) => editors.putIfAbsent(c.id, () {
+          final e = TextEditingController(text: c.text.replaceAll('\n', ' '));
+          // So grava quando o TEXTO muda (o listener tambem dispara
+          // por cursor/selecao — isso nao pode travar o cue).
+          var last = e.text;
+          e.addListener(() {
+            if (e.text == last) return;
+            last = e.text;
+            controller.updateCueText(layerId, c.id, e.text);
+          });
+          return e;
+        });
 
         return SafeArea(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(18, 12, 18,
-                10 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              12,
+              18,
+              10 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Legendas — ${cues.length} cues',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                Text(
+                  'Legendas — ${cues.length} cues',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 SheetTransport(
                   playback: playback,
                   duration: project.duration,
@@ -2947,37 +3785,39 @@ Future<void> showCaptionCuesSheet(BuildContext context, WidgetRef ref,
                 Expanded(
                   child: cues.isEmpty
                       ? const Center(
-                          child: Text('Sem cues nesta camada.',
-                              style: TextStyle(
-                                  fontSize: 13, color: AmColors.muted)),
+                          child: Text(
+                            'Sem cues nesta camada.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AmColors.muted,
+                            ),
+                          ),
                         )
                       : ListView.builder(
                           itemCount: cues.length,
                           itemBuilder: (context, i) {
                             final c = cues[i];
                             return Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.only(bottom: 6),
                               child: Row(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   GestureDetector(
                                     onTap: () => playback.seek(
-                                        layer.startTime + c.start),
+                                      layer.startTime + c.start,
+                                    ),
                                     child: Container(
                                       width: 74,
-                                      padding: const EdgeInsets
-                                          .symmetric(vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
                                       alignment: Alignment.center,
                                       decoration: BoxDecoration(
                                         color: AmColors.chip,
-                                        borderRadius:
-                                            BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
-                                        formatTimecode(
-                                            c.start, project.fps),
+                                        formatTimecode(c.start, project.fps),
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: c.locked
@@ -2993,34 +3833,31 @@ Future<void> showCaptionCuesSheet(BuildContext context, WidgetRef ref,
                                       controller: editorOf(c),
                                       maxLines: 1,
                                       style: const TextStyle(
-                                          fontSize: 14,
-                                          color: AmColors.text),
-                                      padding: const EdgeInsets
-                                          .symmetric(
-                                          horizontal: 10,
-                                          vertical: 8),
+                                        fontSize: 14,
+                                        color: AmColors.text,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 8,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: AmColors.chip,
-                                        borderRadius:
-                                            BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
                                     ),
                                   ),
                                   CupertinoButton(
-                                    padding: const EdgeInsets.only(
-                                        left: 6),
+                                    padding: const EdgeInsets.only(left: 6),
                                     onPressed: () {
-                                      controller.removeCue(
-                                          layerId, c.id);
-                                      editors
-                                          .remove(c.id)
-                                          ?.dispose();
+                                      controller.removeCue(layerId, c.id);
+                                      editors.remove(c.id)?.dispose();
                                       setSheetState(() {});
                                     },
                                     child: const Icon(
-                                        CupertinoIcons.xmark_circle,
-                                        size: 20,
-                                        color: AmColors.muted),
+                                      CupertinoIcons.xmark_circle,
+                                      size: 20,
+                                      color: AmColors.muted,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -3045,8 +3882,12 @@ Future<void> showCaptionCuesSheet(BuildContext context, WidgetRef ref,
 /// presets do painel de efeitos vivem dentro de um metodo privado do
 /// EffectsPanel (sem parametro para abrir ja neles); abrir por sheet
 /// evita mexer no painel e no switch exaustivo de LayerMenuAction.
-Future<void> showEffectPresetsSheet(BuildContext context, WidgetRef ref,
-    String layerId, PlaybackController playback) async {
+Future<void> showEffectPresetsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+  PlaybackController playback,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   final fabrica = factoryPresets();
   // Os presets DA PESSOA vem de fora do projeto: a mesma lista em todo
@@ -3072,14 +3913,20 @@ Future<void> showEffectPresetsSheet(BuildContext context, WidgetRef ref,
                 padding: EdgeInsets.fromLTRB(18, 12, 18, 6),
                 child: Row(
                   children: [
-                    Icon(CupertinoIcons.square_stack_3d_down_right,
-                        size: 18, color: AmColors.accent),
+                    Icon(
+                      CupertinoIcons.square_stack_3d_down_right,
+                      size: 18,
+                      color: AmColors.accent,
+                    ),
                     SizedBox(width: 8),
-                    Text('Presets de efeito',
-                        style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: AmColors.text)),
+                    Text(
+                      'Presets de efeito',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -3104,37 +3951,52 @@ Future<void> showEffectPresetsSheet(BuildContext context, WidgetRef ref,
                       color: Colors.transparent,
                       child: ListTile(
                         leading: Icon(
-                            meu
-                                ? CupertinoIcons.person_crop_circle
-                                : CupertinoIcons.square_stack_3d_down_right,
-                            size: 20,
-                            color: AmColors.accent),
-                        title: Text(p.name,
-                            style: const TextStyle(
-                                fontSize: 14, color: AmColors.text)),
+                          meu
+                              ? CupertinoIcons.person_crop_circle
+                              : CupertinoIcons.square_stack_3d_down_right,
+                          size: 20,
+                          color: AmColors.accent,
+                        ),
+                        title: Text(
+                          p.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AmColors.text,
+                          ),
+                        ),
                         subtitle: Text(
                           '${meu ? 'Meu preset' : p.category} · '
                           '${p.effects.length} efeito(s)',
                           style: const TextStyle(
-                              fontSize: 11, color: AmColors.muted),
+                            fontSize: 11,
+                            color: AmColors.muted,
+                          ),
                         ),
                         trailing: meu
                             ? GestureDetector(
                                 onTap: () => store.remove(p.id),
                                 child: const Padding(
                                   padding: EdgeInsets.all(6),
-                                  child: Icon(CupertinoIcons.trash,
-                                      size: 18, color: AmColors.muted),
+                                  child: Icon(
+                                    CupertinoIcons.trash,
+                                    size: 18,
+                                    color: AmColors.muted,
+                                  ),
                                 ),
                               )
                             : null,
                         onTap: () {
-                          controller.applyPreset(layerId, p,
-                              at: playback.time.value);
+                          controller.applyPreset(
+                            layerId,
+                            p,
+                            at: playback.time.value,
+                          );
                           AureaSnack.show(
-                              context, 'Preset "${p.name}" aplicado',
-                              actionLabel: 'Desfazer',
-                              onAction: controller.undo);
+                            context,
+                            'Preset "${p.name}" aplicado',
+                            actionLabel: 'Desfazer',
+                            onAction: controller.undo,
+                          );
                         },
                       ),
                     );
@@ -3225,7 +4087,9 @@ class _MenuTile extends StatelessWidget {
         onTap: enabled
             ? onTap
             : () => showReasonToast(
-                context, disabledReason ?? 'Indisponivel para esta camada'),
+                context,
+                disabledReason ?? 'Indisponivel para esta camada',
+              ),
         // Opacity DENTRO do GestureDetector: o toque no esmaecido
         // continua chegando e mostra a razao.
         child: Opacity(
@@ -3297,54 +4161,74 @@ class _BlendChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 74,
-          margin: const EdgeInsets.only(right: 8),
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(10),
-            border: aceso
-                ? Border.all(color: AmColors.accent, width: 2)
-                : null,
+    onTap: onTap,
+    child: Container(
+      width: 74,
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(10),
+        border: aceso ? Border.all(color: AmColors.accent, width: 2) : null,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            CupertinoIcons.circle_lefthalf_fill,
+            size: 18,
+            color: aceso ? AmColors.accent : AmColors.muted,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(CupertinoIcons.circle_lefthalf_fill,
-                  size: 18,
-                  color: aceso ? AmColors.accent : AmColors.muted),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 9.5,
-                  color: aceso ? AmColors.accent : AmColors.text,
-                ),
-              ),
-            ],
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 9.5,
+              color: aceso ? AmColors.accent : AmColors.text,
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
-/// Painel "Mesclagem e opacidade": blend mode + regua de opacidade.
-class BlendingPanel extends ConsumerWidget {
+enum _BlendTab { opacity, blending, mask, matte }
+
+enum _N4Depth { pronto, montar, avancado }
+
+final _blendTabProvider = StateProvider<_BlendTab>((_) => _BlendTab.opacity);
+final _maskDepthProvider = StateProvider<_N4Depth>((_) => _N4Depth.pronto);
+final _matteDepthProvider = StateProvider<_N4Depth>((_) => _N4Depth.pronto);
+
+/// Leva a navegacao por um keyframe de mascara para a aba correspondente.
+void selectMaskInBlendingPanel(WidgetRef ref) {
+  ref.read(_blendTabProvider.notifier).state = _BlendTab.mask;
+}
+
+/// Opacidade, mesclagem, mascara e recorte dentro da mesma secao da grade.
+class BlendingPanel extends ConsumerStatefulWidget {
   const BlendingPanel({
     super.key,
     required this.playback,
     required this.onBack,
     required this.onOpenCurve,
+    required this.onEditMaskPoints,
   });
 
   final PlaybackController playback;
   final VoidCallback onBack;
   final void Function(LayerProp prop) onOpenCurve;
+  final void Function(String maskId) onEditMaskPoints;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BlendingPanel> createState() => _BlendingPanelState();
+}
+
+class _BlendingPanelState extends ConsumerState<BlendingPanel> {
+  @override
+  Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
@@ -3355,185 +4239,629 @@ class BlendingPanel extends ConsumerWidget {
 
     // Escuta o relogio: `t` sempre atual (keyframe cai no playhead real).
     return ValueListenableBuilder<Duration>(
-        valueListenable: playback.time,
-        builder: (context, t, _) {
-    final local = layer.localTime(t);
-    final opacity = layer.opacity.valueAt(local);
+      valueListenable: widget.playback.time,
+      builder: (context, t, _) {
+        final local = layer.localTime(t);
+        final opacity = layer.opacity.valueAt(local);
 
-    return ColoredBox(
-      color: AmColors.panel,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
+        final tab = ref.watch(_blendTabProvider);
+        final mask = layer.masks.isEmpty ? null : layer.masks.last;
+        final pathAnimated = mask?.path.isAnimated ?? false;
+        final pathKf = mask?.path.hasKeyframeAt(local) ?? false;
+
+        return ColoredBox(
+          color: AmColors.panel,
+          child: Row(
             children: [
-              AmRailButton(
-                onTap: onBack,
-                child: const Icon(CupertinoIcons.chevron_back,
-                    size: 24, color: AmColors.text),
-              ),
-              AmRailButton(
-                onTap: () =>
-                    controller.toggleKeyframe(id, t, LayerProp.opacity),
-                child: AmDiamondAdd(
-                  active: layer.opacity.isAnimated,
-                  filled: layer.opacity.hasKeyframeAt(local),
-                ),
-              ),
-              AmRailButton(
-                onTap: layer.opacity.isAnimated
-                    ? () => onOpenCurve(LayerProp.opacity)
-                    : null,
-                child: AmCurveIcon(
-                    color: layer.opacity.isAnimated
-                        ? AmColors.text
-                        : AmColors.muted),
-              ),
-            ],
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 10, 16, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Column(
                 children: [
-                  // Fileira de blend modes (rolavel).
-                  SizedBox(
-                    height: 62,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        for (final (label, mode) in amBlendModes)
-                          _BlendChip(
-                            label: label,
-                            aceso: layer.customBlend == null &&
-                                layer.blendMode == mode,
-                            onTap: () => controller.setBlendMode(id, mode),
-                          ),
-                        // Os modos que o Flutter nao tem, no fim da
-                        // mesma fileira: para quem escolhe, e so mais um
-                        // modo — o custo maior fica escondido.
-                        for (final extra in AureaBlend.values)
-                          _BlendChip(
-                            label: aureaBlendLabel(extra),
-                            aceso: layer.customBlend == extra,
-                            onTap: () =>
-                                controller.setCustomBlend(id, extra),
-                          ),
-                      ],
+                  AmRailButton(
+                    onTap: widget.onBack,
+                    child: const Icon(
+                      CupertinoIcons.chevron_back,
+                      size: 24,
+                      color: AmColors.text,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  // Matte (PR-M5): outra camada recorta esta.
-                  SizedBox(
-                    height: 38,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(right: 8, top: 10),
-                          child: Text('Matte',
-                              style: TextStyle(
-                                  fontSize: 12, color: AmColors.muted)),
-                        ),
-                        for (final (label, mode) in const [
-                          ('Nenhum', MatteMode.none),
-                          ('Alfa', MatteMode.alpha),
-                          ('Alfa inv.', MatteMode.alphaInvert),
-                          ('Luma', MatteMode.luma),
-                          ('Luma inv.', MatteMode.lumaInvert),
-                        ])
-                          GestureDetector(
-                            onTap: () async {
-                              if (mode == MatteMode.none) {
-                                controller.setMatte(
-                                    id, MatteMode.none, null);
-                                return;
-                              }
-                              var srcId = layer.matteSourceId;
-                              srcId ??= await _pickMatteSource(
-                                  context, ref, layer);
-                              if (srcId != null) {
-                                controller.setMatte(id, mode, srcId);
-                              }
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: layer.matteMode == mode
-                                    ? AmColors.accentDim
-                                    : AmColors.chip,
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                              child: Text(label,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: layer.matteMode == mode
-                                          ? AmColors.accent
-                                          : AmColors.text)),
-                            ),
-                          ),
-                        if (layer.matteMode != MatteMode.none)
-                          GestureDetector(
-                            onTap: () async {
-                              final srcId = await _pickMatteSource(
-                                  context, ref, layer);
-                              if (srcId != null) {
-                                controller.setMatte(
-                                    id, layer.matteMode, srcId);
-                              }
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: Text(
-                                'Fonte: ${ref.read(editorControllerProvider).layerById(layer.matteSourceId ?? '')?.name ?? 'escolher...'}',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AmColors.accent,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: AmColors.accent),
-                              ),
-                            ),
-                          ),
-                      ],
+                  AmRailButton(
+                    onTap: () {
+                      if (tab == _BlendTab.opacity) {
+                        controller.toggleKeyframe(id, t, LayerProp.opacity);
+                      } else if (tab == _BlendTab.mask && mask != null) {
+                        controller.toggleMaskPathKeyframe(id, mask.id, t);
+                      } else {
+                        showReasonToast(
+                          context,
+                          tab == _BlendTab.mask
+                              ? 'Crie uma mascara primeiro'
+                              : 'Este modo nao e animavel',
+                        );
+                      }
+                    },
+                    child: AmDiamondAdd(
+                      active: tab == _BlendTab.opacity
+                          ? layer.opacity.isAnimated
+                          : tab == _BlendTab.mask && pathAnimated,
+                      filled: tab == _BlendTab.opacity
+                          ? layer.opacity.hasKeyframeAt(local)
+                          : tab == _BlendTab.mask && pathKf,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: AmValueChip(
-                        text: amNumber(opacity * 100, 0),
-                        label: 'Opacidade',
-                        width: 150),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: AmTickRuler(
-                      value: opacity * 100,
-                      min: 0,
-                      max: 100,
-                      unitsPerPixel: 0.35,
-                      height: double.infinity,
-                      onChanged: (v) =>
-                          controller.editOpacity(id, t, v / 100),
+                  AmRailButton(
+                    onTap: tab == _BlendTab.opacity && layer.opacity.isAnimated
+                        ? () => widget.onOpenCurve(LayerProp.opacity)
+                        : null,
+                    child: AmCurveIcon(
+                      color:
+                          tab == _BlendTab.opacity && layer.opacity.isAnimated
+                          ? AmColors.text
+                          : AmColors.muted,
                     ),
                   ),
                 ],
               ),
-            ),
+              Expanded(
+                child: Column(
+                  children: [
+                    AmParamTabs(
+                      abas: [
+                        ParamTab(
+                          id: _BlendTab.opacity.name,
+                          label: 'Opacidade',
+                          animated: layer.opacity.isAnimated,
+                        ),
+                        ParamTab(
+                          id: _BlendTab.blending.name,
+                          label: 'Mesclagem',
+                        ),
+                        ParamTab(
+                          id: _BlendTab.mask.name,
+                          label: 'Máscara',
+                          animated: layer.masks.any((m) => m.hasAnimation),
+                        ),
+                        ParamTab(
+                          id: _BlendTab.matte.name,
+                          label: 'Recorte por camada',
+                        ),
+                      ],
+                      ativa: tab.name,
+                      onAba: (v) => ref.read(_blendTabProvider.notifier).state =
+                          _BlendTab.values.firstWhere((x) => x.name == v),
+                    ),
+                    Expanded(
+                      child: switch (tab) {
+                        _BlendTab.opacity => _opacity(
+                          controller,
+                          id,
+                          opacity,
+                          t,
+                        ),
+                        _BlendTab.blending => _blending(controller, id, layer),
+                        _BlendTab.mask => _mask(
+                          context,
+                          controller,
+                          id,
+                          layer,
+                          t,
+                          local,
+                        ),
+                        _BlendTab.matte => _matte(
+                          context,
+                          controller,
+                          id,
+                          layer,
+                        ),
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+        );
+      },
+    );
+  }
+
+  Widget _opacity(EditorController c, String id, double value, Duration t) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(10, 12, 16, 10),
+        child: Column(
+          children: [
+            AmValueChip(
+              text: amNumber(value * 100, 0),
+              label: 'Opacidade',
+              width: 150,
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: AmTickRuler(
+                value: value * 100,
+                min: 0,
+                max: 100,
+                unitsPerPixel: 0.35,
+                height: double.infinity,
+                onChanged: (v) => c.editOpacity(id, t, v / 100),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _blending(EditorController c, String id, Layer layer) => Padding(
+    padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
+    child: SizedBox(
+      height: 68,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final (label, mode) in amBlendModes)
+            _BlendChip(
+              label: label,
+              aceso: layer.customBlend == null && layer.blendMode == mode,
+              onTap: () => c.setBlendMode(id, mode),
+            ),
+          for (final extra in AureaBlend.values)
+            _BlendChip(
+              label: aureaBlendLabel(extra),
+              aceso: layer.customBlend == extra,
+              onTap: () => c.setCustomBlend(id, extra),
+            ),
         ],
       ),
+    ),
+  );
+
+  Widget _depth(_N4Depth current, ValueChanged<_N4Depth> set) => Row(
+    children: [
+      Expanded(
+        child: _button(
+          'Montar',
+          () => set(
+            current == _N4Depth.montar ? _N4Depth.pronto : _N4Depth.montar,
+          ),
+          selected: current == _N4Depth.montar,
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: _button(
+          'Avançado',
+          () => set(
+            current == _N4Depth.avancado ? _N4Depth.pronto : _N4Depth.avancado,
+          ),
+          selected: current == _N4Depth.avancado,
+        ),
+      ),
+    ],
+  );
+
+  Widget _button(String text, VoidCallback onTap, {bool selected = false}) =>
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? AmColors.accentDim : AmColors.chip,
+            borderRadius: BorderRadius.circular(9),
+            border: selected ? Border.all(color: AmColors.accent) : null,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? AmColors.accent : AmColors.text,
+            ),
+          ),
+        ),
+      );
+
+  Size _maskSize(EditorController c, Layer layer, Duration t) {
+    final neutral = layer.copyLayer(
+      scaleX: AnimatedDouble(1),
+      scaleY: AnimatedDouble(1),
     );
-        });
+    final size = c.layerBoxSize(neutral, t);
+    return Size(
+      size.width > 1 ? size.width : 460,
+      size.height > 1 ? size.height : 460,
+    );
+  }
+
+  LayerMask _addRect(EditorController c, String id, Layer layer, Duration t) {
+    final size = _maskSize(c, layer, t);
+    final mask = LayerMask(
+      name: 'Retangulo',
+      path: AnimatedPath(BezierPath.rect(size.width, size.height)),
+    );
+    c.addMask(id, mask);
+    return mask;
+  }
+
+  void _setMaskDepth(
+    _N4Depth next,
+    EditorController c,
+    String id,
+    Layer layer,
+    Duration t,
+  ) {
+    if (next == _N4Depth.montar && layer.masks.isEmpty) {
+      _addRect(c, id, layer, t);
+    }
+    ref.read(_maskDepthProvider.notifier).state = next;
+  }
+
+  Widget _mask(
+    BuildContext context,
+    EditorController c,
+    String id,
+    Layer layer,
+    Duration t,
+    Duration local,
+  ) {
+    final depth = ref.watch(_maskDepthProvider);
+    if (depth == _N4Depth.avancado) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 14, 12),
+        child: Column(
+          children: [
+            _depth(depth, (d) {
+              _setMaskDepth(d, c, id, layer, t);
+              if (d == _N4Depth.avancado) {
+                showMasksSheet(
+                  context,
+                  ref,
+                  id,
+                  widget.playback,
+                  onEditMaskPoints: widget.onEditMaskPoints,
+                );
+              }
+            }),
+            const SizedBox(height: 14),
+            const Text(
+              'Sete modos, pilha, feather X/Y, opacidade e caminho.',
+              style: TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
+            const SizedBox(height: 12),
+            _button(
+              'Abrir pilha de máscaras',
+              () => showMasksSheet(
+                context,
+                ref,
+                id,
+                widget.playback,
+                onEditMaskPoints: widget.onEditMaskPoints,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (depth == _N4Depth.pronto) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(10, 7, 14, 12),
+        children: [
+          const Text(
+            'Pronto · Revelar',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AmColors.text,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Um toque cria mascara e keyframes reais com mola.',
+            style: TextStyle(fontSize: 12, color: AmColors.muted),
+          ),
+          const SizedBox(height: 9),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final preset in MaskRevealPreset.values)
+                _button(
+                  preset == MaskRevealPreset.iris ? 'Íris' : preset.label,
+                  () => c.applyMaskReveal(id, preset, t),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _depth(depth, (d) {
+            _setMaskDepth(d, c, id, layer, t);
+            if (d == _N4Depth.avancado) {
+              showMasksSheet(
+                context,
+                ref,
+                id,
+                widget.playback,
+                onEditMaskPoints: widget.onEditMaskPoints,
+              );
+            }
+          }),
+        ],
+      );
+    }
+    final mask = layer.masks.isEmpty ? null : layer.masks.last;
+    if (mask == null) return const SizedBox.shrink();
+    final size = _maskSize(c, layer, t);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(10, 7, 14, 12),
+      children: [
+        _depth(depth, (d) {
+          _setMaskDepth(d, c, id, layer, t);
+          if (d == _N4Depth.avancado) {
+            showMasksSheet(
+              context,
+              ref,
+              id,
+              widget.playback,
+              onEditMaskPoints: widget.onEditMaskPoints,
+            );
+          }
+        }),
+        const SizedBox(height: 8),
+        Text(
+          'Montar · ${mask.name}',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AmColors.text,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _button(
+              'Retângulo',
+              () => c.replaceMaskPath(
+                id,
+                mask.id,
+                BezierPath.rect(size.width, size.height),
+                t,
+              ),
+            ),
+            _button(
+              'Elipse',
+              () => c.replaceMaskPath(
+                id,
+                mask.id,
+                BezierPath.ellipse(size.width, size.height),
+                t,
+              ),
+            ),
+            _button('Da forma', () {
+              if (!c.setMaskFromOwnShape(id, mask.id, t)) {
+                showReasonToast(
+                  context,
+                  'Esta camada nao tem forma para copiar',
+                );
+              }
+            }),
+            _button('Desenhar', () {
+              c.replaceMaskPath(
+                id,
+                mask.id,
+                BezierPath(vertices: const [], closed: false),
+                t,
+              );
+              widget.onEditMaskPoints(mask.id);
+            }),
+          ],
+        ),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Inverter',
+                style: TextStyle(fontSize: 12, color: AmColors.muted),
+              ),
+            ),
+            CupertinoSwitch(
+              value: mask.inverted,
+              activeTrackColor: AmColors.accent,
+              onChanged: (_) => c.toggleMaskInverted(id, mask.id),
+            ),
+          ],
+        ),
+        _maskRuler(
+          'Feather',
+          mask.feather.valueAt(local),
+          0,
+          200,
+          (v) => c.editMaskParam(id, mask.id, 'feather', t, v),
+        ),
+        _maskRuler(
+          'Expansão',
+          mask.expansion.valueAt(local),
+          -200,
+          200,
+          (v) => c.editMaskParam(id, mask.id, 'expansion', t, v),
+        ),
+        if (!mask.path.valueAt(local).closed)
+          const Text(
+            'Caminho aberto nao recorta. Feche no Edit Points.',
+            style: TextStyle(fontSize: 11, color: AmColors.accent),
+          ),
+        if (maskFeatherExceedsBounds(mask, local, size))
+          const Text(
+            'Aviso: feather e expansao passam do limite.',
+            style: TextStyle(fontSize: 11, color: AmColors.accent),
+          ),
+      ],
+    );
+  }
+
+  Widget _maskRuler(
+    String label,
+    double value,
+    double min,
+    double max,
+    ValueChanged<double> changed,
+  ) => Row(
+    children: [
+      SizedBox(
+        width: 70,
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AmColors.muted),
+        ),
+      ),
+      Expanded(
+        child: AmTickRuler(
+          value: value,
+          min: min,
+          max: max,
+          unitsPerPixel: (max - min) / 360,
+          height: 38,
+          onChanged: changed,
+        ),
+      ),
+      SizedBox(
+        width: 38,
+        child: Text(
+          amNumber(value, 0),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, color: AmColors.accent),
+        ),
+      ),
+    ],
+  );
+
+  static const _matteModes = <(String, MatteMode)>[
+    ('Nenhum', MatteMode.none),
+    ('Alfa', MatteMode.alpha),
+    ('Alfa inv.', MatteMode.alphaInvert),
+    ('Luma', MatteMode.luma),
+    ('Luma inv.', MatteMode.lumaInvert),
+  ];
+
+  Widget _matte(
+    BuildContext context,
+    EditorController c,
+    String id,
+    Layer layer,
+  ) {
+    final depth = ref.watch(_matteDepthProvider);
+    void setDepth(_N4Depth d) =>
+        ref.read(_matteDepthProvider.notifier).state = d;
+    if (depth == _N4Depth.pronto) {
+      final above = c.matteSourceAbove(id);
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Pronto · Recortar',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              above == null
+                  ? 'Coloque uma camada acima desta.'
+                  : 'Fonte acima: ${above.name}. Ela sera ocultada.',
+              style: const TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
+            const SizedBox(height: 12),
+            _button('Recortar pela camada acima', () {
+              if (!c.setMatteFromAbove(id, MatteMode.alpha)) {
+                showReasonToast(context, 'Nao ha camada valida acima');
+              }
+            }, selected: true),
+            const SizedBox(height: 12),
+            _depth(depth, setDepth),
+          ],
+        ),
+      );
+    }
+    final advanced = depth == _N4Depth.avancado;
+    final source = ref
+        .read(editorControllerProvider)
+        .layerById(layer.matteSourceId ?? '');
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(10, 8, 14, 12),
+      children: [
+        _depth(depth, setDepth),
+        const SizedBox(height: 10),
+        Text(
+          advanced ? 'Avançado · Fonte e canal' : 'Montar · Canal',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AmColors.text,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final (label, mode) in _matteModes)
+              _button(label, () async {
+                if (mode == MatteMode.none) {
+                  c.setMatte(id, mode, null);
+                } else if (!advanced) {
+                  if (!c.setMatteFromAbove(id, mode)) {
+                    showReasonToast(context, 'Nao ha camada valida acima');
+                  }
+                } else {
+                  var sourceId = layer.matteSourceId;
+                  sourceId ??= await _pickMatteSource(context, ref, layer);
+                  if (sourceId != null) {
+                    c.setMatte(id, mode, sourceId);
+                  }
+                }
+              }, selected: layer.matteMode == mode),
+          ],
+        ),
+        if (advanced) ...[
+          const SizedBox(height: 12),
+          _button(
+            source == null
+                ? 'Escolher qualquer camada'
+                : 'Fonte: ${source.name}',
+            () async {
+              final sourceId = await _pickMatteSource(context, ref, layer);
+              if (sourceId != null) {
+                c.setMatte(
+                  id,
+                  layer.matteMode == MatteMode.none
+                      ? MatteMode.alpha
+                      : layer.matteMode,
+                  sourceId,
+                );
+              }
+            },
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'A fonte some enquanto o recorte estiver ligado, volta ao '
+            'desligar e a transparencia abaixo e preservada.',
+            style: TextStyle(fontSize: 11, color: AmColors.muted),
+          ),
+        ],
+      ],
+    );
   }
 }
 
 /// Escolher a camada FONTE do matte (qualquer camada da cena).
 /// Picker do nulo CONTROLADOR da grade: null = cancelou, '' = nenhum.
 Future<String?> _pickControllerNull(
-    BuildContext context, WidgetRef ref, String ownerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String ownerId,
+) async {
   final project = ref.read(editorControllerProvider);
   final nulls = [
     for (final l in project.layers)
@@ -3551,11 +4879,14 @@ Future<String?> _pickControllerNull(
         children: [
           const Padding(
             padding: EdgeInsets.all(14),
-            child: Text('Nulo controlador da grade',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
+            child: Text(
+              'Nulo controlador da grade',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
           ),
           if (nulls.isEmpty)
             const Padding(
@@ -3569,8 +4900,10 @@ Future<String?> _pickControllerNull(
           Material(
             color: Colors.transparent,
             child: ListTile(
-              title: const Text('Nenhum',
-                  style: TextStyle(color: AmColors.muted)),
+              title: const Text(
+                'Nenhum',
+                style: TextStyle(color: AmColors.muted),
+              ),
               onTap: () => Navigator.of(sheetContext).pop(''),
             ),
           ),
@@ -3578,12 +4911,14 @@ Future<String?> _pickControllerNull(
             Material(
               color: Colors.transparent,
               child: ListTile(
-                title: Text(other.name,
-                    style: const TextStyle(color: AmColors.text)),
+                title: Text(
+                  other.name,
+                  style: const TextStyle(color: AmColors.text),
+                ),
                 subtitle: const Text(
-                    'Escala/rotacao dele passam a modular a grade',
-                    style:
-                        TextStyle(fontSize: 11, color: AmColors.muted)),
+                  'Escala/rotacao dele passam a modular a grade',
+                  style: TextStyle(fontSize: 11, color: AmColors.muted),
+                ),
                 onTap: () => Navigator.of(sheetContext).pop(other.id),
               ),
             ),
@@ -3595,7 +4930,10 @@ Future<String?> _pickControllerNull(
 }
 
 Future<String?> _pickMatteSource(
-    BuildContext context, WidgetRef ref, Layer target) async {
+  BuildContext context,
+  WidgetRef ref,
+  Layer target,
+) async {
   final project = ref.read(editorControllerProvider);
   return showModalBottomSheet<String>(
     context: context,
@@ -3609,24 +4947,32 @@ Future<String?> _pickMatteSource(
         children: [
           const Padding(
             padding: EdgeInsets.all(14),
-            child: Text('Usar como matte...',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
+            child: Text(
+              'Usar como matte...',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
           ),
           for (final other in project.layers)
-            if (other.id != target.id)
+            if (other.id != target.id &&
+                other is! AudioLayer &&
+                other is! NullLayer &&
+                other is! AdjustmentLayer)
               Material(
                 color: Colors.transparent,
                 child: ListTile(
-                  title: Text(other.name,
-                      style: const TextStyle(color: AmColors.text)),
-                  subtitle: const Text('A fonte fica oculta na cena',
-                      style: TextStyle(
-                          fontSize: 11, color: AmColors.muted)),
-                  onTap: () =>
-                      Navigator.of(sheetContext).pop(other.id),
+                  title: Text(
+                    other.name,
+                    style: const TextStyle(color: AmColors.text),
+                  ),
+                  subtitle: const Text(
+                    'A fonte fica oculta na cena',
+                    style: TextStyle(fontSize: 11, color: AmColors.muted),
+                  ),
+                  onTap: () => Navigator.of(sheetContext).pop(other.id),
                 ),
               ),
           const SizedBox(height: 8),
@@ -3684,8 +5030,11 @@ class ColorFillPanel extends ConsumerWidget {
             children: [
               AmRailButton(
                 onTap: onBack,
-                child: const Icon(CupertinoIcons.chevron_back,
-                    size: 24, color: AmColors.text),
+                child: const Icon(
+                  CupertinoIcons.chevron_back,
+                  size: 24,
+                  color: AmColors.text,
+                ),
               ),
             ],
           ),
@@ -3694,8 +5043,7 @@ class ColorFillPanel extends ConsumerWidget {
                 ? const Center(
                     child: Text(
                       'Esta camada nao tem cor editavel.',
-                      style:
-                          TextStyle(color: AmColors.muted, fontSize: 13),
+                      style: TextStyle(color: AmColors.muted, fontSize: 13),
                     ),
                   )
                 : ValueListenableBuilder<Duration>(
@@ -3725,7 +5073,9 @@ class ColorFillPanel extends ConsumerWidget {
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 16),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 11),
+                              horizontal: 12,
+                              vertical: 11,
+                            ),
                             decoration: BoxDecoration(
                               color: AmColors.chip,
                               borderRadius: BorderRadius.circular(12),
@@ -3737,21 +5087,25 @@ class ColorFillPanel extends ConsumerWidget {
                                   height: 34,
                                   decoration: BoxDecoration(
                                     color: current,
-                                    borderRadius:
-                                        BorderRadius.circular(9),
-                                    border: Border.all(
-                                        color: Colors.white24),
+                                    borderRadius: BorderRadius.circular(9),
+                                    border: Border.all(color: Colors.white24),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                                 const Expanded(
-                                  child: Text('Escolher qualquer cor',
-                                      style: TextStyle(
-                                          fontSize: 14,
-                                          color: AmColors.text)),
+                                  child: Text(
+                                    'Escolher qualquer cor',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AmColors.text,
+                                    ),
+                                  ),
                                 ),
-                                const Icon(CupertinoIcons.chevron_right,
-                                    size: 15, color: AmColors.muted),
+                                const Icon(
+                                  CupertinoIcons.chevron_right,
+                                  size: 15,
+                                  color: AmColors.muted,
+                                ),
                               ],
                             ),
                           ),
@@ -3764,11 +5118,9 @@ class ColorFillPanel extends ConsumerWidget {
                               GestureDetector(
                                 onTap: () {
                                   if (layer is ShapeLayer) {
-                                    controller.setShapePrimaryColor(
-                                        id, c);
+                                    controller.setShapePrimaryColor(id, c);
                                   } else if (layer is TextLayer) {
-                                    controller.editTextLayer(id,
-                                        color: c);
+                                    controller.editTextLayer(id, color: c);
                                   }
                                 },
                                 child: Container(
@@ -3778,12 +5130,10 @@ class ColorFillPanel extends ConsumerWidget {
                                     color: c,
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: current.toARGB32() ==
-                                              c.toARGB32()
+                                      color: current.toARGB32() == c.toARGB32()
                                           ? AmColors.accent
                                           : Colors.white24,
-                                      width: current.toARGB32() ==
-                                              c.toARGB32()
+                                      width: current.toARGB32() == c.toARGB32()
                                           ? 3
                                           : 1,
                                     ),
@@ -3825,15 +5175,21 @@ class _ShapeOperators extends ConsumerWidget {
     final controller = ref.read(editorControllerProvider.notifier);
     final local = layer.localTime(globalTime);
 
-    Widget ruler(String label, double value, double min, double max,
-        ValueChanged<double> onChanged) {
+    Widget ruler(
+      String label,
+      double value,
+      double min,
+      double max,
+      ValueChanged<double> onChanged,
+    ) {
       return Row(
         children: [
           SizedBox(
             width: 58,
-            child: Text(label,
-                style:
-                    const TextStyle(fontSize: 11, color: AmColors.muted)),
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: AmColors.muted),
+            ),
           ),
           Expanded(
             child: AmTickRuler(
@@ -3847,10 +5203,11 @@ class _ShapeOperators extends ConsumerWidget {
           ),
           SizedBox(
             width: 40,
-            child: Text(amNumber(value, 0),
-                textAlign: TextAlign.right,
-                style:
-                    const TextStyle(fontSize: 11, color: AmColors.text)),
+            child: Text(
+              amNumber(value, 0),
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 11, color: AmColors.text),
+            ),
           ),
         ],
       );
@@ -3860,12 +5217,15 @@ class _ShapeOperators extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        const Text('OPERADORES',
-            style: TextStyle(
-                fontSize: 11,
-                letterSpacing: 1,
-                fontWeight: FontWeight.w600,
-                color: AmColors.muted)),
+        const Text(
+          'OPERADORES',
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 1,
+            fontWeight: FontWeight.w600,
+            color: AmColors.muted,
+          ),
+        ),
         const SizedBox(height: 8),
         for (final item in layer.contents)
           if (item is TrimOperator)
@@ -3882,19 +5242,27 @@ class _ShapeOperators extends ConsumerWidget {
                   Row(
                     children: [
                       const Expanded(
-                        child: Text('Trim Paths',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AmColors.text)),
+                        child: Text(
+                          'Trim Paths',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AmColors.text,
+                          ),
+                        ),
                       ),
                       // PR-M8: Individually (cascata) x Simultaneously.
                       GestureDetector(
                         onTap: () => controller.setTrimMode(
-                            layerId, item.id, !item.individually),
+                          layerId,
+                          item.id,
+                          !item.individually,
+                        ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 4),
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
                           margin: const EdgeInsets.only(right: 10),
                           decoration: BoxDecoration(
                             color: AmColors.chip,
@@ -3903,31 +5271,62 @@ class _ShapeOperators extends ConsumerWidget {
                           child: Text(
                             item.individually ? 'Individual' : 'Continuo',
                             style: const TextStyle(
-                                fontSize: 11, color: AmColors.accent),
+                              fontSize: 11,
+                              color: AmColors.accent,
+                            ),
                           ),
                         ),
                       ),
                       GestureDetector(
                         onTap: () =>
                             controller.removeShapeItem(layerId, item.id),
-                        child: const Icon(CupertinoIcons.xmark,
-                            size: 14, color: AmColors.muted),
+                        child: const Icon(
+                          CupertinoIcons.xmark,
+                          size: 14,
+                          color: AmColors.muted,
+                        ),
                       ),
                     ],
                   ),
-                  ruler('Inicio', item.start.valueAt(local) * 100, 0, 100,
-                      (v) => controller.editTrim(
-                          layerId, item.id, 'start', globalTime, v / 100)),
-                  ruler('Fim', item.end.valueAt(local) * 100, 0, 100,
-                      (v) => controller.editTrim(
-                          layerId, item.id, 'end', globalTime, v / 100)),
                   ruler(
-                      'Offset',
-                      item.offset.valueAt(local) * 100,
-                      -100,
-                      100,
-                      (v) => controller.editTrim(layerId, item.id,
-                          'offset', globalTime, v / 100)),
+                    'Inicio',
+                    item.start.valueAt(local) * 100,
+                    0,
+                    100,
+                    (v) => controller.editTrim(
+                      layerId,
+                      item.id,
+                      'start',
+                      globalTime,
+                      v / 100,
+                    ),
+                  ),
+                  ruler(
+                    'Fim',
+                    item.end.valueAt(local) * 100,
+                    0,
+                    100,
+                    (v) => controller.editTrim(
+                      layerId,
+                      item.id,
+                      'end',
+                      globalTime,
+                      v / 100,
+                    ),
+                  ),
+                  ruler(
+                    'Offset',
+                    item.offset.valueAt(local) * 100,
+                    -100,
+                    100,
+                    (v) => controller.editTrim(
+                      layerId,
+                      item.id,
+                      'offset',
+                      globalTime,
+                      v / 100,
+                    ),
+                  ),
                 ],
               ),
             )
@@ -3945,62 +5344,99 @@ class _ShapeOperators extends ConsumerWidget {
                   Row(
                     children: [
                       const Expanded(
-                        child: Text('Repeater',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AmColors.text)),
+                        child: Text(
+                          'Repeater',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AmColors.text,
+                          ),
+                        ),
                       ),
                       CupertinoButton(
                         padding: const EdgeInsets.all(4),
                         onPressed: item.copies > 1
                             ? () => controller.editRepeater(
-                                layerId, item.id, globalTime,
-                                copies: item.copies - 1)
+                                layerId,
+                                item.id,
+                                globalTime,
+                                copies: item.copies - 1,
+                              )
                             : null,
-                        child: const Icon(CupertinoIcons.minus_circle,
-                            size: 18, color: AmColors.muted),
+                        child: const Icon(
+                          CupertinoIcons.minus_circle,
+                          size: 18,
+                          color: AmColors.muted,
+                        ),
                       ),
-                      Text('${item.copies}',
-                          style: const TextStyle(
-                              fontSize: 13, color: AmColors.text)),
+                      Text(
+                        '${item.copies}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AmColors.text,
+                        ),
+                      ),
                       CupertinoButton(
                         padding: const EdgeInsets.all(4),
                         onPressed: () => controller.editRepeater(
-                            layerId, item.id, globalTime,
-                            copies: item.copies + 1),
-                        child: const Icon(CupertinoIcons.plus_circle,
-                            size: 18, color: AmColors.accent),
+                          layerId,
+                          item.id,
+                          globalTime,
+                          copies: item.copies + 1,
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.plus_circle,
+                          size: 18,
+                          color: AmColors.accent,
+                        ),
                       ),
                       GestureDetector(
                         onTap: () =>
                             controller.removeShapeItem(layerId, item.id),
-                        child: const Icon(CupertinoIcons.xmark,
-                            size: 14, color: AmColors.muted),
+                        child: const Icon(
+                          CupertinoIcons.xmark,
+                          size: 14,
+                          color: AmColors.muted,
+                        ),
                       ),
                     ],
                   ),
                   ruler(
-                      'Desloc X',
-                      item.dx,
-                      -400,
-                      400,
-                      (v) => controller.editRepeater(
-                          layerId, item.id, globalTime, dx: v)),
+                    'Desloc X',
+                    item.dx,
+                    -400,
+                    400,
+                    (v) => controller.editRepeater(
+                      layerId,
+                      item.id,
+                      globalTime,
+                      dx: v,
+                    ),
+                  ),
                   ruler(
-                      'Desloc Y',
-                      item.dy,
-                      -400,
-                      400,
-                      (v) => controller.editRepeater(
-                          layerId, item.id, globalTime, dy: v)),
+                    'Desloc Y',
+                    item.dy,
+                    -400,
+                    400,
+                    (v) => controller.editRepeater(
+                      layerId,
+                      item.id,
+                      globalTime,
+                      dy: v,
+                    ),
+                  ),
                   ruler(
-                      'Rotacao',
-                      item.rotation.valueAt(local),
-                      -180,
-                      180,
-                      (v) => controller.editRepeater(
-                          layerId, item.id, globalTime, rotationDeg: v)),
+                    'Rotacao',
+                    item.rotation.valueAt(local),
+                    -180,
+                    180,
+                    (v) => controller.editRepeater(
+                      layerId,
+                      item.id,
+                      globalTime,
+                      rotationDeg: v,
+                    ),
+                  ),
                 ],
               ),
             )
@@ -4023,16 +5459,20 @@ class _ShapeOperators extends ConsumerWidget {
                           '${_primName(item.from.primitive)} -> '
                           '${_primName(item.to.primitive)}',
                           style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AmColors.text),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AmColors.text,
+                          ),
                         ),
                       ),
                       // Diamante: keyframe do progresso do morph.
                       CupertinoButton(
                         padding: const EdgeInsets.all(4),
                         onPressed: () => controller.toggleMorphKeyframe(
-                            layerId, item.id, globalTime),
+                          layerId,
+                          item.id,
+                          globalTime,
+                        ),
                         child: Icon(
                           item.progress.hasKeyframeAt(local)
                               ? CupertinoIcons.rhombus_fill
@@ -4044,20 +5484,27 @@ class _ShapeOperators extends ConsumerWidget {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () =>
-                            controller.removeMorph(layerId, item.id),
-                        child: const Icon(CupertinoIcons.xmark,
-                            size: 14, color: AmColors.muted),
+                        onTap: () => controller.removeMorph(layerId, item.id),
+                        child: const Icon(
+                          CupertinoIcons.xmark,
+                          size: 14,
+                          color: AmColors.muted,
+                        ),
                       ),
                     ],
                   ),
                   ruler(
-                      'Progresso',
-                      item.progress.valueAt(local) * 100,
-                      0,
-                      100,
-                      (v) => controller.editMorphProgress(
-                          layerId, item.id, globalTime, v / 100)),
+                    'Progresso',
+                    item.progress.valueAt(local) * 100,
+                    0,
+                    100,
+                    (v) => controller.editMorphProgress(
+                      layerId,
+                      item.id,
+                      globalTime,
+                      v / 100,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -4083,11 +5530,14 @@ class _ShapeOperators extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      Text(_opName(item),
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AmColors.text)),
+                      Text(
+                        _opName(item),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AmColors.text,
+                        ),
+                      ),
                       const Spacer(),
                       if (item is MergePathsOperator)
                         GestureDetector(
@@ -4095,23 +5545,31 @@ class _ShapeOperators extends ConsumerWidget {
                               controller.cycleMergeMode(layerId, item.id),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
+                              horizontal: 9,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: AmColors.chip,
                               borderRadius: BorderRadius.circular(7),
                             ),
-                            child: Text(mergeModeLabel(item.mode),
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AmColors.accent)),
+                            child: Text(
+                              mergeModeLabel(item.mode),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AmColors.accent,
+                              ),
+                            ),
                           ),
                         ),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () =>
                             controller.removeShapeItem(layerId, item.id),
-                        child: const Icon(CupertinoIcons.trash,
-                            size: 14, color: AmColors.muted),
+                        child: const Icon(
+                          CupertinoIcons.trash,
+                          size: 14,
+                          color: AmColors.muted,
+                        ),
                       ),
                     ],
                   ),
@@ -4122,7 +5580,11 @@ class _ShapeOperators extends ConsumerWidget {
                       _opMin(item),
                       _opMax(item),
                       (v) => controller.editPathOperator(
-                          layerId, item.id, local, v),
+                        layerId,
+                        item.id,
+                        local,
+                        v,
+                      ),
                     ),
                 ],
               ),
@@ -4138,14 +5600,20 @@ class _ShapeOperators extends ConsumerWidget {
                 onTap: () => controller.addPathOperator(layerId, op),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AmColors.chip,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('+ ${shapePathOpLabel(op)}',
-                      style: const TextStyle(
-                          fontSize: 11, color: AmColors.accent)),
+                  child: Text(
+                    '+ ${shapePathOpLabel(op)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AmColors.accent,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -4154,27 +5622,30 @@ class _ShapeOperators extends ConsumerWidget {
         Row(
           children: [
             CupertinoButton(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               onPressed: () =>
                   controller.addShapeOperator(layerId, repeater: false),
-              child: const Text('+ Trim Paths',
-                  style: TextStyle(fontSize: 12, color: AmColors.accent)),
+              child: const Text(
+                '+ Trim Paths',
+                style: TextStyle(fontSize: 12, color: AmColors.accent),
+              ),
             ),
             CupertinoButton(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               onPressed: () =>
                   controller.addShapeOperator(layerId, repeater: true),
-              child: const Text('+ Repeater',
-                  style: TextStyle(fontSize: 12, color: AmColors.accent)),
+              child: const Text(
+                '+ Repeater',
+                style: TextStyle(fontSize: 12, color: AmColors.accent),
+              ),
             ),
             CupertinoButton(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               onPressed: () => _pickMorphTarget(context, ref),
-              child: const Text('+ Morfar',
-                  style: TextStyle(fontSize: 12, color: AmColors.accent)),
+              child: const Text(
+                '+ Morfar',
+                style: TextStyle(fontSize: 12, color: AmColors.accent),
+              ),
             ),
           ],
         ),
@@ -4183,79 +5654,76 @@ class _ShapeOperators extends ConsumerWidget {
   }
 
   static String _opName(ShapeItem i) => switch (i) {
-        OffsetPathOperator _ => 'Deslocar caminho',
-        RoundCornersOperator _ => 'Arredondar cantos',
-        ZigZagOperator _ => 'Zig zag',
-        PuckerBloatOperator _ => 'Inchar e encolher',
-        TwistOperator _ => 'Torcer',
-        WigglePathOperator _ => 'Baguncar caminho',
-        MergePathsOperator _ => 'Combinar caminhos',
-        _ => 'Operador',
-      };
+    OffsetPathOperator _ => 'Deslocar caminho',
+    RoundCornersOperator _ => 'Arredondar cantos',
+    ZigZagOperator _ => 'Zig zag',
+    PuckerBloatOperator _ => 'Inchar e encolher',
+    TwistOperator _ => 'Torcer',
+    WigglePathOperator _ => 'Baguncar caminho',
+    MergePathsOperator _ => 'Combinar caminhos',
+    _ => 'Operador',
+  };
 
   static String _opUnit(ShapeItem i) => switch (i) {
-        OffsetPathOperator _ => 'px',
-        RoundCornersOperator _ => 'raio',
-        ZigZagOperator _ => 'altura',
-        PuckerBloatOperator _ => 'forca',
-        TwistOperator _ => 'graus',
-        WigglePathOperator _ => 'px',
-        _ => 'valor',
-      };
+    OffsetPathOperator _ => 'px',
+    RoundCornersOperator _ => 'raio',
+    ZigZagOperator _ => 'altura',
+    PuckerBloatOperator _ => 'forca',
+    TwistOperator _ => 'graus',
+    WigglePathOperator _ => 'px',
+    _ => 'valor',
+  };
 
   static double _opValue(ShapeItem i, Duration t) => switch (i) {
-        OffsetPathOperator o => o.amount.valueAt(t),
-        RoundCornersOperator r => r.radius.valueAt(t),
-        ZigZagOperator z => z.amplitude.valueAt(t),
-        PuckerBloatOperator pb => pb.amount.valueAt(t) * 100,
-        TwistOperator tw => tw.angle.valueAt(t),
-        WigglePathOperator w => w.amount.valueAt(t),
-        _ => 0,
-      };
+    OffsetPathOperator o => o.amount.valueAt(t),
+    RoundCornersOperator r => r.radius.valueAt(t),
+    ZigZagOperator z => z.amplitude.valueAt(t),
+    PuckerBloatOperator pb => pb.amount.valueAt(t) * 100,
+    TwistOperator tw => tw.angle.valueAt(t),
+    WigglePathOperator w => w.amount.valueAt(t),
+    _ => 0,
+  };
 
   static double _opMin(ShapeItem i) => switch (i) {
-        RoundCornersOperator _ => 0,
-        ZigZagOperator _ => 0,
-        WigglePathOperator _ => 0,
-        TwistOperator _ => -720,
-        PuckerBloatOperator _ => -100,
-        _ => -300,
-      };
+    RoundCornersOperator _ => 0,
+    ZigZagOperator _ => 0,
+    WigglePathOperator _ => 0,
+    TwistOperator _ => -720,
+    PuckerBloatOperator _ => -100,
+    _ => -300,
+  };
 
   static double _opMax(ShapeItem i) => switch (i) {
-        TwistOperator _ => 720,
-        PuckerBloatOperator _ => 100,
-        _ => 300,
-      };
+    TwistOperator _ => 720,
+    PuckerBloatOperator _ => 100,
+    _ => 300,
+  };
 
   static String _primName(ShapePrimitive p) => switch (p) {
-        ShapePrimitive.rectangle => 'Retangulo',
-        ShapePrimitive.roundedRectangle => 'Retangulo',
-        ShapePrimitive.ellipse => 'Circulo',
-        ShapePrimitive.polygon => 'Poligono',
-        ShapePrimitive.star => 'Estrela',
-        ShapePrimitive.ring => 'Anel',
-        ShapePrimitive.arc => 'Arco',
-        ShapePrimitive.wave => 'Onda',
-        ShapePrimitive.heart => 'Coracao',
-        ShapePrimitive.gear => 'Engrenagem',
-        ShapePrimitive.arrow => 'Seta',
-        ShapePrimitive.check => 'Check',
-        ShapePrimitive.plus => 'Mais',
-        ShapePrimitive.drop => 'Gota',
-        ShapePrimitive.flower => 'Flor',
-        ShapePrimitive.sparkle => 'Faisca',
-      };
+    ShapePrimitive.rectangle => 'Retangulo',
+    ShapePrimitive.roundedRectangle => 'Retangulo',
+    ShapePrimitive.ellipse => 'Circulo',
+    ShapePrimitive.polygon => 'Poligono',
+    ShapePrimitive.star => 'Estrela',
+    ShapePrimitive.ring => 'Anel',
+    ShapePrimitive.arc => 'Arco',
+    ShapePrimitive.wave => 'Onda',
+    ShapePrimitive.heart => 'Coracao',
+    ShapePrimitive.gear => 'Engrenagem',
+    ShapePrimitive.arrow => 'Seta',
+    ShapePrimitive.check => 'Check',
+    ShapePrimitive.plus => 'Mais',
+    ShapePrimitive.drop => 'Gota',
+    ShapePrimitive.flower => 'Flor',
+    ShapePrimitive.sparkle => 'Faisca',
+  };
 
   /// Escolhe a forma DESTINO do morph.
   Future<void> _pickMorphTarget(BuildContext context, WidgetRef ref) async {
     final controller = ref.read(editorControllerProvider.notifier);
     final options = <(String, ShapePath)>[
       ('Circulo', ShapePath(primitive: ShapePrimitive.ellipse)),
-      (
-        'Retangulo',
-        ShapePath(primitive: ShapePrimitive.roundedRectangle)
-      ),
+      ('Retangulo', ShapePath(primitive: ShapePrimitive.roundedRectangle)),
       ('Estrela', ShapePath(primitive: ShapePrimitive.star)),
       ('Poligono', ShapePath(primitive: ShapePrimitive.polygon, points: 6)),
       ('Coracao', ShapePath(primitive: ShapePrimitive.heart)),
@@ -4274,11 +5742,14 @@ class _ShapeOperators extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Morfar para...',
-                  style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text)),
+              const Text(
+                'Morfar para...',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text,
+                ),
+              ),
               const SizedBox(height: 6),
               const Text(
                 'A forma atual vira a origem; anime o Progresso com '
@@ -4298,16 +5769,21 @@ class _ShapeOperators extends ConsumerWidget {
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 12),
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: AmColors.chip,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(label,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AmColors.accent)),
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AmColors.accent,
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -4342,7 +5818,10 @@ bool _mesmasCores(List<Color> a, List<Color> b) {
 /// Sheet do EXTRUDE 3D: a espessura da camada. Precisa de rotacao X ou Y
 /// para aparecer (de frente, a espessura fica escondida atras).
 Future<void> showExtrudeSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   await showParamSheet(
     context,
@@ -4352,7 +5831,8 @@ Future<void> showExtrudeSheet(
         final layer = projeto.layerById(layerId);
         if (layer == null) return const SizedBox.shrink();
         final atual = projeto.metaOf(layerId).extrude;
-        final inclinada = layer.rotationX.isAnimated ||
+        final inclinada =
+            layer.rotationX.isAnimated ||
             layer.rotationY.isAnimated ||
             layer.rotationX.base != 0 ||
             layer.rotationY.base != 0;
@@ -4363,11 +5843,14 @@ Future<void> showExtrudeSheet(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Extrude 3D',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Extrude 3D',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   inclinada
@@ -4379,10 +5862,12 @@ Future<void> showExtrudeSheet(
                 Row(
                   children: [
                     const SizedBox(
-                        width: 86,
-                        child: Text('Espessura',
-                            style: TextStyle(
-                                fontSize: 13, color: AmColors.muted))),
+                      width: 86,
+                      child: Text(
+                        'Espessura',
+                        style: TextStyle(fontSize: 13, color: AmColors.muted),
+                      ),
+                    ),
                     Expanded(
                       child: AmTickRuler(
                         value: atual,
@@ -4397,11 +5882,16 @@ Future<void> showExtrudeSheet(
                       ),
                     ),
                     SizedBox(
-                        width: 56,
-                        child: Text(amNumber(atual, 0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 14, color: AmColors.accent))),
+                      width: 56,
+                      child: Text(
+                        amNumber(atual, 0),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AmColors.accent,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -4416,16 +5906,22 @@ Future<void> showExtrudeSheet(
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: (atual - v).abs() < 0.5
                                 ? AmColors.accentDim
                                 : AmColors.chip,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: Text(v == 0 ? 'Desligado' : amNumber(v, 0),
-                              style: const TextStyle(
-                                  fontSize: 12, color: AmColors.accent)),
+                          child: Text(
+                            v == 0 ? 'Desligado' : amNumber(v, 0),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -4452,7 +5948,10 @@ String _descricaoDoModelo(Element3DLayer layer) {
 
 /// Escolhe um OBJ/FBX, le fora da UI, avisa se for pesado e aplica.
 Future<void> _escolherModelo3D(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   final controller = ref.read(editorControllerProvider.notifier);
   final r = await FilePicker.platform.pickFiles(type: FileType.any);
   final caminho = r?.files.single.path;
@@ -4460,8 +5959,11 @@ Future<void> _escolherModelo3D(
   final ext = caminho.split('.').last.toLowerCase();
   if (!context.mounted) return;
   if (ext != 'obj' && ext != 'fbx') {
-    await _avisoModelo(context, 'Formato nao suportado',
-        'Escolha um arquivo .obj ou .fbx (ASCII).');
+    await _avisoModelo(
+      context,
+      'Formato nao suportado',
+      'Escolha um arquivo .obj ou .fbx (ASCII).',
+    );
     return;
   }
   MeshImportResult resultado;
@@ -4489,34 +5991,44 @@ Future<void> _escolherModelo3D(
         ),
         actions: [
           CupertinoDialogAction(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Cancelar'),
+          ),
           CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Importar')),
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Importar'),
+          ),
         ],
       ),
     );
     if (segue != true) return;
   }
   controller.updateElement3D(
-      layerId, (e) => e.copyElement3D(meshPath: caminho));
+    layerId,
+    (e) => e.copyElement3D(meshPath: caminho),
+  );
 }
 
 Future<void> _avisoModelo(
-    BuildContext context, String titulo, String texto) async {
+  BuildContext context,
+  String titulo,
+  String texto,
+) async {
   await showCupertinoDialog<void>(
     context: context,
     builder: (c) => CupertinoAlertDialog(
       title: Text(titulo),
       content: Padding(
-          padding: const EdgeInsets.only(top: 8), child: Text(texto)),
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(texto),
+      ),
       actions: [
         CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(c).pop(),
-            child: const Text('OK')),
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(c).pop(),
+          child: const Text('OK'),
+        ),
       ],
     ),
   );

@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'camera3d.dart';
 import 'camera_cuts.dart';
 import 'caption.dart';
+import 'cut.dart';
 import 'effect.dart';
 import 'element3d.dart';
 import 'grid_rig.dart';
@@ -48,21 +49,21 @@ sealed class Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     this.matteSourceId,
-  })  : id = id ?? const Uuid().v4(),
-        position = position ?? AnimatedOffset(Offset.zero),
-        scaleX = scaleX ?? AnimatedDouble(1),
-        scaleY = scaleY ?? AnimatedDouble(1),
-        rotation = rotation ?? AnimatedDouble(0),
-        rotationX = rotationX ?? AnimatedDouble(0),
-        rotationY = rotationY ?? AnimatedDouble(0),
-        opacity = opacity ?? AnimatedDouble(1),
-        skewX = skewX ?? AnimatedDouble(0),
-        skewY = skewY ?? AnimatedDouble(0),
-        pivot = pivot ?? AnimatedOffset(Offset.zero),
-        positionZ = positionZ ?? AnimatedDouble(0),
-        effects = List.unmodifiable(effects ?? const <EffectInstance>[]),
-        masks = List.unmodifiable(masks ?? const <LayerMask>[]),
-        matteMode = matteMode ?? MatteMode.none;
+  }) : id = id ?? const Uuid().v4(),
+       position = position ?? AnimatedOffset(Offset.zero),
+       scaleX = scaleX ?? AnimatedDouble(1),
+       scaleY = scaleY ?? AnimatedDouble(1),
+       rotation = rotation ?? AnimatedDouble(0),
+       rotationX = rotationX ?? AnimatedDouble(0),
+       rotationY = rotationY ?? AnimatedDouble(0),
+       opacity = opacity ?? AnimatedDouble(1),
+       skewX = skewX ?? AnimatedDouble(0),
+       skewY = skewY ?? AnimatedDouble(0),
+       pivot = pivot ?? AnimatedOffset(Offset.zero),
+       positionZ = positionZ ?? AnimatedDouble(0),
+       effects = List.unmodifiable(effects ?? const <EffectInstance>[]),
+       masks = List.unmodifiable(masks ?? const <LayerMask>[]),
+       matteMode = matteMode ?? MatteMode.none;
 
   final String id;
   final String name;
@@ -133,34 +134,43 @@ sealed class Layer {
       masks.any((m) => m.hasAnimation) ||
       moduleTimesUs.isNotEmpty;
 
-  Set<int> _times(Iterable<Keyframe<dynamic>> kfs) =>
-      {for (final k in kfs) k.time.inMicroseconds};
+  Set<int> _times(Iterable<Keyframe<dynamic>> kfs) => {
+    for (final k in kfs) k.time.inMicroseconds,
+  };
 
-  Set<int> get positionTimesUs =>
-      {..._times(position.keyframes), ..._times(positionZ.keyframes)};
-  Set<int> get scaleTimesUs =>
-      {..._times(scaleX.keyframes), ..._times(scaleY.keyframes)};
+  Set<int> get positionTimesUs => {
+    ..._times(position.keyframes),
+    ..._times(positionZ.keyframes),
+  };
+  Set<int> get scaleTimesUs => {
+    ..._times(scaleX.keyframes),
+    ..._times(scaleY.keyframes),
+  };
   Set<int> get rotationTimesUs => {
-        ..._times(rotation.keyframes),
-        ..._times(rotationX.keyframes),
-        ..._times(rotationY.keyframes),
-      };
+    ..._times(rotation.keyframes),
+    ..._times(rotationX.keyframes),
+    ..._times(rotationY.keyframes),
+  };
   Set<int> get opacityTimesUs => _times(opacity.keyframes);
-  Set<int> get skewTimesUs =>
-      {..._times(skewX.keyframes), ..._times(skewY.keyframes)};
+  Set<int> get skewTimesUs => {
+    ..._times(skewX.keyframes),
+    ..._times(skewY.keyframes),
+  };
   Set<int> get pivotTimesUs => _times(pivot.keyframes);
-  Set<int> get effectTimesUs =>
-      {for (final e in effects) ...e.keyframeTimes.map((t) => t.inMicroseconds)};
+  Set<int> get effectTimesUs => {
+    for (final e in effects) ...e.keyframeTimes.map((t) => t.inMicroseconds),
+  };
 
   /// Keyframes das mascaras (caminho, feather, opacidade, expansao).
   Set<int> get maskTimesUs => {
-        for (final m in masks) ...[
-          ..._times(m.path.keyframes),
-          ..._times(m.feather.keyframes),
-          ..._times(m.opacity.keyframes),
-          ..._times(m.expansion.keyframes),
-        ],
-      };
+    for (final m in masks) ...[
+      ..._times(m.path.keyframes),
+      ..._times(m.feather.keyframes),
+      ..._times(m.featherY?.keyframes ?? const []),
+      ..._times(m.opacity.keyframes),
+      ..._times(m.expansion.keyframes),
+    ],
+  };
 
   /// Keyframes dos MODULOS da camada (grade do nulo, operadores da
   /// forma...); subclasses somam os seus. Sem isto, o diamante do modulo
@@ -206,6 +216,7 @@ sealed class Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   });
 
   Layer duplicated();
@@ -224,6 +235,7 @@ class AudioSpec {
     this.muted = false,
     this.duckAgainstId,
     this.duckAmount = 0.7,
+    this.preservePitch = true,
   });
 
   /// Fade de entrada e de saida, em tempo de clipe.
@@ -242,12 +254,17 @@ class AudioSpec {
   /// 0..1 — quanto desce no meio da voz.
   final double duckAmount;
 
+  /// Time-stretch mantem o tom por padrao. Desligado imita fita/disco:
+  /// acelerar sobe o tom e desacelerar o abaixa.
+  final bool preservePitch;
+
   bool get isNeutral =>
       fadeIn == Duration.zero &&
       fadeOut == Duration.zero &&
       gain == 1.0 &&
       !muted &&
-      duckAgainstId == null;
+      duckAgainstId == null &&
+      preservePitch;
 
   AudioSpec copyWith({
     Duration? fadeIn,
@@ -257,16 +274,16 @@ class AudioSpec {
     String? duckAgainstId,
     bool clearDuck = false,
     double? duckAmount,
-  }) =>
-      AudioSpec(
-        fadeIn: fadeIn ?? this.fadeIn,
-        fadeOut: fadeOut ?? this.fadeOut,
-        gain: gain ?? this.gain,
-        muted: muted ?? this.muted,
-        duckAgainstId:
-            clearDuck ? null : (duckAgainstId ?? this.duckAgainstId),
-        duckAmount: duckAmount ?? this.duckAmount,
-      );
+    bool? preservePitch,
+  }) => AudioSpec(
+    fadeIn: fadeIn ?? this.fadeIn,
+    fadeOut: fadeOut ?? this.fadeOut,
+    gain: gain ?? this.gain,
+    muted: muted ?? this.muted,
+    duckAgainstId: clearDuck ? null : (duckAgainstId ?? this.duckAgainstId),
+    duckAmount: duckAmount ?? this.duckAmount,
+    preservePitch: preservePitch ?? this.preservePitch,
+  );
 }
 
 class VideoLayer extends Layer {
@@ -278,6 +295,9 @@ class VideoLayer extends Layer {
     required this.sourcePath,
     this.sourceOffset = Duration.zero,
     this.speed = 1.0,
+    this.reverse = false,
+    this.speedBlur = false,
+    this.transitionIn,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
     super.position,
@@ -311,11 +331,20 @@ class VideoLayer extends Layer {
   /// inteiro.
   final double speed;
 
+  /// Reproducao da mesma faixa de fonte do fim para o inicio.
+  final bool reverse;
+
+  /// Borrao adicional proporcional ao modulo da velocidade instantanea.
+  final bool speedBlur;
+
+  /// Transicao da camada anterior (A) para esta camada (B).
+  final ClipTransition? transitionIn;
+
   final double volume;
 
   /// Quanto de FONTE este clipe consome.
-  Duration get sourceSpan => Duration(
-      microseconds: (duration.inMicroseconds * speed).round());
+  Duration get sourceSpan =>
+      Duration(microseconds: (duration.inMicroseconds * speed).round());
 
   /// Fade, ganho, mudo e ducking do som deste clipe.
   final AudioSpec audio;
@@ -344,8 +373,13 @@ class VideoLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
     Duration? sourceOffset,
     double? speed,
+    bool? reverse,
+    bool? speedBlur,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
     AudioSpec? audio,
     double? volume,
   }) {
@@ -357,6 +391,11 @@ class VideoLayer extends Layer {
       sourcePath: sourcePath,
       sourceOffset: sourceOffset ?? this.sourceOffset,
       speed: speed ?? this.speed,
+      reverse: reverse ?? this.reverse,
+      speedBlur: speedBlur ?? this.speedBlur,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       volume: volume ?? this.volume,
       audio: audio ?? this.audio,
       position: position ?? this.position,
@@ -370,46 +409,52 @@ class VideoLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   VideoLayer duplicated() => VideoLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        sourcePath: sourcePath,
-        sourceOffset: sourceOffset,
-        speed: speed,
-        volume: volume,
-        audio: audio,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    sourcePath: sourcePath,
+    sourceOffset: sourceOffset,
+    speed: speed,
+    reverse: reverse,
+    speedBlur: speedBlur,
+    // A transicao pertence a uma JUNCAO, nao ao conteudo do clipe.
+    // Duplicar B nao pode criar uma segunda entrada apontando para A.
+    transitionIn: null,
+    volume: volume,
+    audio: audio,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 class ImageLayer extends Layer {
@@ -465,6 +510,7 @@ class ImageLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   }) {
     return ImageLayer(
       id: id,
@@ -483,42 +529,43 @@ class ImageLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   ImageLayer duplicated() => ImageLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        sourcePath: sourcePath,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    sourcePath: sourcePath,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 class TextLayer extends Layer {
@@ -553,8 +600,8 @@ class TextLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
-  })  : anims = List.unmodifiable(anims ?? const <TextAnim>[]),
-        animators = List.unmodifiable(animators ?? const <TextAnimator>[]);
+  }) : anims = List.unmodifiable(anims ?? const <TextAnim>[]),
+       animators = List.unmodifiable(animators ?? const <TextAnimator>[]);
 
   final String text;
   final double fontSize;
@@ -581,10 +628,9 @@ class TextLayer extends Layer {
   /// O que o render usa: as animacoes do catalogo compiladas, e por cima
   /// delas os animadores montados a mao.
   List<TextAnimator> effectiveAnimators(int unitCount) => [
-        ...compileTextAnims(anims,
-            layerDuration: duration, unitCount: unitCount),
-        ...animators,
-      ];
+    ...compileTextAnims(anims, layerDuration: duration, unitCount: unitCount),
+    ...animators,
+  ];
 
   /// Quando o render precisa do pintor POR UNIDADE em vez do Text
   /// simples: ha animacao, ou o texto segue um caminho.
@@ -617,6 +663,7 @@ class TextLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
     String? text,
     double? fontSize,
     Color? color,
@@ -651,49 +698,50 @@ class TextLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   TextLayer duplicated() => TextLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        text: text,
-        fontSize: fontSize,
-        color: color,
-        bold: bold,
-        fontFamily: fontFamily,
-        textPath: textPath,
-        anims: anims,
-        animators: animators,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    text: text,
+    fontSize: fontSize,
+    color: color,
+    bold: bold,
+    fontFamily: fontFamily,
+    textPath: textPath,
+    anims: anims,
+    animators: animators,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Camada de forma: arvore vetorial (spec AM2-formas-3d §1). Nada de
@@ -761,6 +809,10 @@ class ShapeLayer extends Layer {
             ..addAll(_times(p.sizeX.keyframes))
             ..addAll(_times(p.sizeY.keyframes))
             ..addAll(_times(p.roundness.keyframes))
+            ..addAll(_times(p.cornerTopLeft?.keyframes ?? const []))
+            ..addAll(_times(p.cornerTopRight?.keyframes ?? const []))
+            ..addAll(_times(p.cornerBottomRight?.keyframes ?? const []))
+            ..addAll(_times(p.cornerBottomLeft?.keyframes ?? const []))
             ..addAll(_times(p.points.keyframes))
             ..addAll(_times(p.outerRadius.keyframes))
             ..addAll(_times(p.innerRadius.keyframes))
@@ -810,6 +862,7 @@ class ShapeLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
     List<ShapeItem>? contents,
   }) {
     return ShapeLayer(
@@ -829,42 +882,43 @@ class ShapeLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   ShapeLayer duplicated() => ShapeLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        contents: contents,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    contents: contents,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Precomp (spec AM2-formas-3d D3): grupo com camadas proprias e tempo
@@ -963,6 +1017,7 @@ class GroupLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
     List<Layer>? children,
     Duration? sourceDuration,
     AnimatedDouble? timeRemap,
@@ -990,46 +1045,47 @@ class GroupLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   GroupLayer duplicated() => GroupLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        children: [for (final c in children) c.duplicated()],
-        sourceDuration: sourceDuration,
-        timeRemap: timeRemap,
-        collapse: collapse,
-        clipToComp: clipToComp,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    children: [for (final c in children) c.duplicated()],
+    sourceDuration: sourceDuration,
+    timeRemap: timeRemap,
+    collapse: collapse,
+    clipToComp: clipToComp,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Camada de legendas: UMA camada com muitos cues (spec NLE §6.5).
@@ -1090,6 +1146,7 @@ class CaptionLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
     List<Cue>? cues,
     CaptionStyle? style,
   }) {
@@ -1111,43 +1168,44 @@ class CaptionLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   CaptionLayer duplicated() => CaptionLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        cues: cues,
-        style: style,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    cues: cues,
+    style: style,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 class AudioLayer extends Layer {
@@ -1194,8 +1252,8 @@ class AudioLayer extends Layer {
 
   final double volume;
 
-  Duration get sourceSpan => Duration(
-      microseconds: (duration.inMicroseconds * speed).round());
+  Duration get sourceSpan =>
+      Duration(microseconds: (duration.inMicroseconds * speed).round());
 
   /// Fade, ganho, mudo e ducking desta trilha.
   final AudioSpec audio;
@@ -1224,6 +1282,7 @@ class AudioLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
     double? volume,
     AudioSpec? audio,
     Duration? sourceOffset,
@@ -1250,46 +1309,47 @@ class AudioLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   AudioLayer duplicated() => AudioLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        sourcePath: sourcePath,
-        sourceOffset: sourceOffset,
-        speed: speed,
-        volume: volume,
-        audio: audio,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    sourcePath: sourcePath,
+    sourceOffset: sourceOffset,
+    speed: speed,
+    volume: volume,
+    audio: audio,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Objeto nulo (como no AE): camada invisivel na exportacao, desenhada como
@@ -1346,6 +1406,7 @@ class NullLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   }) {
     return NullLayer(
       id: id,
@@ -1364,14 +1425,15 @@ class NullLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
@@ -1409,56 +1471,56 @@ class NullLayer extends Layer {
 
   /// Substitui o rig (aceita null para remover a grade).
   NullLayer withGrid(GridRig? grid) => NullLayer(
-        id: id,
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        grid: grid,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: effects,
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    id: id,
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    grid: grid,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: effects,
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 
   @override
   NullLayer duplicated() => NullLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        grid: grid,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    grid: grid,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Sistema de particulas 3D (estilo CC Particle World do AE): o emissor e a
@@ -1723,6 +1785,7 @@ class ParticlesLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   }) {
     return ParticlesLayer(
       id: id,
@@ -1772,73 +1835,74 @@ class ParticlesLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   ParticlesLayer duplicated() => ParticlesLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        count: count,
-        seed: seed,
-        speed: speed,
-        spreadDeg: spreadDeg,
-        directionDeg: directionDeg,
-        gravity: gravity,
-        size: size,
-        lifetimeMs: lifetimeMs,
-        depth: depth,
-        emitW: emitW,
-        emitH: emitH,
-        twinkle: twinkle,
-        color: color,
-        star: star,
-      emitter: emitter,
-      emitMode: emitMode,
-      windX: windX,
-      windY: windY,
-      drag: drag,
-      turbulence: turbulence,
-      turbulenceScale: turbulenceScale,
-      turbulenceSpeed: turbulenceSpeed,
-      sizeOverLife: sizeOverLife,
-      sizeRandom: sizeRandom,
-      opacityOverLife: opacityOverLife,
-      opacityRandom: opacityRandom,
-      colorEnd: colorEnd,
-      shape: shape,
-      spin: spin,
-      trail: trail,
-      lifeRandom: lifeRandom,
-      glow: glow,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    count: count,
+    seed: seed,
+    speed: speed,
+    spreadDeg: spreadDeg,
+    directionDeg: directionDeg,
+    gravity: gravity,
+    size: size,
+    lifetimeMs: lifetimeMs,
+    depth: depth,
+    emitW: emitW,
+    emitH: emitH,
+    twinkle: twinkle,
+    color: color,
+    star: star,
+    emitter: emitter,
+    emitMode: emitMode,
+    windX: windX,
+    windY: windY,
+    drag: drag,
+    turbulence: turbulence,
+    turbulenceScale: turbulenceScale,
+    turbulenceSpeed: turbulenceSpeed,
+    sizeOverLife: sizeOverLife,
+    sizeRandom: sizeRandom,
+    opacityOverLife: opacityOverLife,
+    opacityRandom: opacityRandom,
+    colorEnd: colorEnd,
+    shape: shape,
+    spin: spin,
+    trail: trail,
+    lifeRandom: lifeRandom,
+    glow: glow,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Elemento 3D nativo: um solido (cubo, esfera, diamante...) gerado por
@@ -1992,6 +2056,7 @@ class Element3DLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   }) {
     return Element3DLayer(
       id: id,
@@ -2020,52 +2085,53 @@ class Element3DLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   Element3DLayer duplicated() => Element3DLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        kind: kind,
-        size: size,
-        color: color,
-        edges: edges,
-      reflect: reflect,
-      environment: environment,
-      imagePath: imagePath,
-      meshPath: meshPath,
-      material: material,
-      gradient: gradient,
-      shininess: shininess,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    kind: kind,
+    size: size,
+    color: color,
+    edges: edges,
+    reflect: reflect,
+    environment: environment,
+    imagePath: imagePath,
+    meshPath: meshPath,
+    material: material,
+    gradient: gradient,
+    shininess: shininess,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// CONTEINER CENA 3D (spec AUREA-cena-3d): por FORA e uma camada do
@@ -2106,11 +2172,10 @@ class Scene3DLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
-  })  : scene = scene ?? const Scene3D(),
-        camera = camera ?? _defaultCamera(),
-        extraCameras =
-            List.unmodifiable(extraCameras ?? const <Camera3D>[]),
-        shots = List.unmodifiable(shots ?? const <CameraShot>[]);
+  }) : scene = scene ?? const Scene3D(),
+       camera = camera ?? _defaultCamera(),
+       extraCameras = List.unmodifiable(extraCameras ?? const <Camera3D>[]),
+       shots = List.unmodifiable(shots ?? const <CameraShot>[]);
 
   static Camera3D _defaultCamera() => Camera3D();
 
@@ -2145,8 +2210,10 @@ class Scene3DLayer extends Layer {
   /// A camera herda posicao, rotacao e orientacao — nunca ESCALA.
   /// Camera nao tem escala, e herdar e o bug que faz o enquadramento
   /// explodir quando alguem escala o nulo.
-  RenderCamera cameraAt(Duration local,
-      {NodeTransform external = NodeTransform.identity}) {
+  RenderCamera cameraAt(
+    Duration local, {
+    NodeTransform external = NodeTransform.identity,
+  }) {
     final base = resolveCamera(allCameras, shots, local, camera);
 
     // Pai DENTRO da cena (nulo 3D), se houver.
@@ -2187,40 +2254,39 @@ class Scene3DLayer extends Layer {
     bool clearCameraParent = false,
     SceneView? view,
     bool? showHelpers,
-  }) =>
-      Scene3DLayer(
-        id: id,
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        scene: scene ?? this.scene,
-        camera: camera ?? this.camera,
-        extraCameras: extraCameras ?? this.extraCameras,
-        shots: shots ?? this.shots,
-        cameraParentLayerId: clearCameraParent
-            ? null
-            : (cameraParentLayerId ?? this.cameraParentLayerId),
-        view: view ?? this.view,
-        showHelpers: showHelpers ?? this.showHelpers,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: effects,
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+  }) => Scene3DLayer(
+    id: id,
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    scene: scene ?? this.scene,
+    camera: camera ?? this.camera,
+    extraCameras: extraCameras ?? this.extraCameras,
+    shots: shots ?? this.shots,
+    cameraParentLayerId: clearCameraParent
+        ? null
+        : (cameraParentLayerId ?? this.cameraParentLayerId),
+    view: view ?? this.view,
+    showHelpers: showHelpers ?? this.showHelpers,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: effects,
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 
   /// Keyframes da cena e da camera aparecem na barra da camada.
   @override
@@ -2272,6 +2338,7 @@ class Scene3DLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   }) {
     return Scene3DLayer(
       id: id,
@@ -2280,6 +2347,9 @@ class Scene3DLayer extends Layer {
       duration: duration ?? this.duration,
       scene: scene,
       camera: camera,
+      extraCameras: extraCameras,
+      shots: shots,
+      cameraParentLayerId: cameraParentLayerId,
       view: view,
       showHelpers: showHelpers,
       position: position ?? this.position,
@@ -2293,48 +2363,49 @@ class Scene3DLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   Scene3DLayer duplicated() => Scene3DLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        scene: scene,
-        camera: camera,
-        extraCameras: extraCameras,
-        shots: shots,
-        cameraParentLayerId: cameraParentLayerId,
-        view: view,
-        showHelpers: showHelpers,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    scene: scene,
+    camera: camera,
+    extraCameras: extraCameras,
+    shots: shots,
+    cameraParentLayerId: cameraParentLayerId,
+    view: view,
+    showHelpers: showHelpers,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }
 
 /// Camada de AJUSTE (spec AUREA-atualizacao-2 §1): aplica sua pilha de
@@ -2393,6 +2464,7 @@ class AdjustmentLayer extends Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     String? matteSourceId,
+    bool clearMatteSource = false,
   }) {
     return AdjustmentLayer(
       id: id,
@@ -2410,39 +2482,40 @@ class AdjustmentLayer extends Layer {
       skewY: skewY ?? this.skewY,
       pivot: pivot ?? this.pivot,
       blendMode: blendMode ?? this.blendMode,
-      customBlend:
-          clearCustomBlend ? null : (customBlend ?? this.customBlend),
+      customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
       is3D: is3D ?? this.is3D,
       positionZ: positionZ ?? this.positionZ,
       effects: effects ?? this.effects,
       masks: masks ?? this.masks,
       matteMode: matteMode ?? this.matteMode,
-      matteSourceId: matteSourceId ?? this.matteSourceId,
+      matteSourceId: clearMatteSource
+          ? null
+          : (matteSourceId ?? this.matteSourceId),
     );
   }
 
   @override
   AdjustmentLayer duplicated() => AdjustmentLayer(
-        name: name,
-        startTime: startTime,
-        duration: duration,
-        position: position,
-        scaleX: scaleX,
-        scaleY: scaleY,
-        rotation: rotation,
-        rotationX: rotationX,
-        rotationY: rotationY,
-        opacity: opacity,
-        skewX: skewX,
-        skewY: skewY,
-        pivot: pivot,
-        blendMode: blendMode,
-        customBlend: customBlend,
-        is3D: is3D,
-        positionZ: positionZ,
-        effects: [for (final e in effects) e.duplicated()],
-        masks: masks,
-        matteMode: matteMode,
-        matteSourceId: matteSourceId,
-      );
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
 }

@@ -95,9 +95,9 @@ class ShapePath extends ShapeItem {
       case ShapePrimitive.rectangle:
         return Path()..addRect(rect);
       case ShapePrimitive.roundedRectangle:
-        return Path()
-          ..addRRect(RRect.fromRectAndRadius(
-              rect, Radius.circular(cornerRadius)));
+        return Path()..addRRect(
+          RRect.fromRectAndRadius(rect, Radius.circular(cornerRadius)),
+        );
       case ShapePrimitive.ellipse:
         return Path()..addOval(rect);
       case ShapePrimitive.polygon:
@@ -116,10 +116,18 @@ class ShapePath extends ShapeItem {
         final a0 = startAngle * math.pi / 180;
         final sweep = sweepAngle * math.pi / 180;
         final path = Path()
-          ..arcTo(Rect.fromCircle(center: Offset.zero, radius: r), a0,
-              sweep, true)
-          ..arcTo(Rect.fromCircle(center: Offset.zero, radius: innerR),
-              a0 + sweep, -sweep, false)
+          ..arcTo(
+            Rect.fromCircle(center: Offset.zero, radius: r),
+            a0,
+            sweep,
+            true,
+          )
+          ..arcTo(
+            Rect.fromCircle(center: Offset.zero, radius: innerR),
+            a0 + sweep,
+            -sweep,
+            false,
+          )
           ..close();
         return path;
       case ShapePrimitive.wave:
@@ -136,10 +144,15 @@ class ShapePath extends ShapeItem {
         final h2 = h / 2;
         return Path()
           ..moveTo(0, -h2 * 0.25)
-          ..cubicTo(-w2 * 0.55, -h2 * 1.05, -w2 * 1.05, -h2 * 0.15, 0,
-              h2 * 0.95)
           ..cubicTo(
-              w2 * 1.05, -h2 * 0.15, w2 * 0.55, -h2 * 1.05, 0, -h2 * 0.25)
+            -w2 * 0.55,
+            -h2 * 1.05,
+            -w2 * 1.05,
+            -h2 * 0.15,
+            0,
+            h2 * 0.95,
+          )
+          ..cubicTo(w2 * 1.05, -h2 * 0.15, w2 * 0.55, -h2 * 1.05, 0, -h2 * 0.25)
           ..close();
       case ShapePrimitive.gear:
         final n = math.max(4, points);
@@ -186,10 +199,12 @@ class ShapePath extends ShapeItem {
       case ShapePrimitive.plus:
         final arm = w * 0.18;
         return Path()
-          ..addRect(Rect.fromCenter(
-              center: Offset.zero, width: w, height: arm * 2))
-          ..addRect(Rect.fromCenter(
-              center: Offset.zero, width: arm * 2, height: h));
+          ..addRect(
+            Rect.fromCenter(center: Offset.zero, width: w, height: arm * 2),
+          )
+          ..addRect(
+            Rect.fromCenter(center: Offset.zero, width: arm * 2, height: h),
+          );
       case ShapePrimitive.drop:
         final w2 = w / 2;
         final h2 = h / 2;
@@ -206,10 +221,14 @@ class ShapePath extends ShapeItem {
         for (var i = 0; i < n; i++) {
           final a = -math.pi / 2 + i * step;
           final tip = Offset(math.cos(a) * r, math.sin(a) * r);
-          final c1 = Offset(math.cos(a - step * 0.45) * r * 0.85,
-              math.sin(a - step * 0.45) * r * 0.85);
-          final c2 = Offset(math.cos(a + step * 0.45) * r * 0.85,
-              math.sin(a + step * 0.45) * r * 0.85);
+          final c1 = Offset(
+            math.cos(a - step * 0.45) * r * 0.85,
+            math.sin(a - step * 0.45) * r * 0.85,
+          );
+          final c2 = Offset(
+            math.cos(a + step * 0.45) * r * 0.85,
+            math.sin(a + step * 0.45) * r * 0.85,
+          );
           path.moveTo(0, 0);
           path.cubicTo(c1.dx, c1.dy, tip.dx, tip.dy, tip.dx, tip.dy);
           path.cubicTo(tip.dx, tip.dy, c2.dx, c2.dy, 0, 0);
@@ -297,6 +316,10 @@ class ShapeParametric extends ShapeItem {
     AnimatedDouble? sizeX,
     AnimatedDouble? sizeY,
     AnimatedDouble? roundness,
+    this.cornerTopLeft,
+    this.cornerTopRight,
+    this.cornerBottomRight,
+    this.cornerBottomLeft,
     this.roundnessPercent = true,
     AnimatedDouble? points,
     AnimatedDouble? outerRadius,
@@ -307,18 +330,18 @@ class ShapeParametric extends ShapeItem {
     AnimatedDouble? startAngle,
     AnimatedDouble? sweep,
     AnimatedDouble? sectorInner,
-  })  : sizeX = sizeX ?? AnimatedDouble(200),
-        sizeY = sizeY ?? AnimatedDouble(200),
-        roundness = roundness ?? AnimatedDouble(0),
-        points = points ?? AnimatedDouble(5),
-        outerRadius = outerRadius ?? AnimatedDouble(100),
-        innerRadius = innerRadius ?? AnimatedDouble(50),
-        outerRoundness = outerRoundness ?? AnimatedDouble(0),
-        innerRoundness = innerRoundness ?? AnimatedDouble(0),
-        shapeRotation = shapeRotation ?? AnimatedDouble(0),
-        startAngle = startAngle ?? AnimatedDouble(0),
-        sweep = sweep ?? AnimatedDouble(90),
-        sectorInner = sectorInner ?? AnimatedDouble(0);
+  }) : sizeX = sizeX ?? AnimatedDouble(200),
+       sizeY = sizeY ?? AnimatedDouble(200),
+       roundness = roundness ?? AnimatedDouble(0),
+       points = points ?? AnimatedDouble(5),
+       outerRadius = outerRadius ?? AnimatedDouble(100),
+       innerRadius = innerRadius ?? AnimatedDouble(50),
+       outerRoundness = outerRoundness ?? AnimatedDouble(0),
+       innerRoundness = innerRoundness ?? AnimatedDouble(0),
+       shapeRotation = shapeRotation ?? AnimatedDouble(0),
+       startAngle = startAngle ?? AnimatedDouble(0),
+       sweep = sweep ?? AnimatedDouble(90),
+       sectorInner = sectorInner ?? AnimatedDouble(0);
 
   final ParamShapeKind kind;
 
@@ -329,6 +352,13 @@ class ShapeParametric extends ShapeItem {
   /// rect: arredondamento. Em % (padrao) e proporcional ao menor lado —
   /// 100% = capsula; em px e fixo. Satura em metade do menor lado.
   final AnimatedDouble roundness;
+
+  /// Overrides por canto. Nulos preservam o comportamento legado: todos
+  /// seguem [roundness]. Ao editar um canto, só aquele ganha trilha própria.
+  final AnimatedDouble? cornerTopLeft;
+  final AnimatedDouble? cornerTopRight;
+  final AnimatedDouble? cornerBottomRight;
+  final AnimatedDouble? cornerBottomLeft;
   final bool roundnessPercent;
 
   /// polygon/star: pontas FRACIONARIAS (3,5 pontas e uma forma
@@ -364,6 +394,10 @@ class ShapeParametric extends ShapeItem {
     final sx = math.max(0.0, sizeX.valueAt(t));
     final sy = math.max(0.0, sizeY.valueAt(t));
     final round = roundness.valueAt(t);
+    final roundTopLeft = (cornerTopLeft ?? roundness).valueAt(t);
+    final roundTopRight = (cornerTopRight ?? roundness).valueAt(t);
+    final roundBottomRight = (cornerBottomRight ?? roundness).valueAt(t);
+    final roundBottomLeft = (cornerBottomLeft ?? roundness).valueAt(t);
     final p = points.valueAt(t).clamp(2.0, 100.0);
     final rOut = math.max(0.0, outerRadius.valueAt(t));
     final rIn = math.max(0.0, innerRadius.valueAt(t));
@@ -374,61 +408,106 @@ class ShapeParametric extends ShapeItem {
     final sw = sweep.valueAt(t).clamp(0.0, 360.0);
     final secIn = math.max(0.0, sectorInner.valueAt(t));
 
-    final key = '$kind|$sx|$sy|$round|$roundnessPercent|$p|$rOut|$rIn|'
+    final key =
+        '$kind|$sx|$sy|$round|$roundTopLeft|$roundTopRight|'
+        '$roundBottomRight|$roundBottomLeft|$roundnessPercent|$p|$rOut|$rIn|'
         '$roundOut|$roundIn|$rotDeg|$a0|$sw|$secIn';
     if (key == _memoKey && _memoPath != null) return _memoPath!;
-    final path = _buildFrom(sx, sy, round, p, rOut, rIn, roundOut,
-        roundIn, rotDeg, a0, sw, secIn);
+    final path = _buildFrom(
+      sx,
+      sy,
+      roundTopLeft,
+      roundTopRight,
+      roundBottomRight,
+      roundBottomLeft,
+      p,
+      rOut,
+      rIn,
+      roundOut,
+      roundIn,
+      rotDeg,
+      a0,
+      sw,
+      secIn,
+    );
     _memoKey = key;
     _memoPath = path;
     return path;
   }
 
   Path _buildFrom(
-      double sx,
-      double sy,
-      double round,
-      double p,
-      double rOut,
-      double rIn,
-      double roundOut,
-      double roundIn,
-      double rotDeg,
-      double a0,
-      double sw,
-      double secIn) {
+    double sx,
+    double sy,
+    double roundTopLeft,
+    double roundTopRight,
+    double roundBottomRight,
+    double roundBottomLeft,
+    double p,
+    double rOut,
+    double rIn,
+    double roundOut,
+    double roundIn,
+    double rotDeg,
+    double a0,
+    double sw,
+    double secIn,
+  ) {
     switch (kind) {
       case ParamShapeKind.rect:
         final rect = Rect.fromCenter(
-            center: Offset.zero, width: sx, height: sy);
+          center: Offset.zero,
+          width: sx,
+          height: sy,
+        );
         final halfMin = math.min(sx, sy) / 2;
         // % e proporcional ao menor lado (100% = capsula); px e fixo.
         // Nos dois casos SATURA em metade do menor lado.
-        final r = (roundnessPercent ? round / 100 * halfMin : round)
-            .clamp(0.0, halfMin);
-        if (r <= 0) return Path()..addRect(rect);
-        return Path()
-          ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(r)));
+        double radius(double value) =>
+            (roundnessPercent ? value / 100 * halfMin : value).clamp(
+              0.0,
+              halfMin,
+            );
+        final topLeft = radius(roundTopLeft);
+        final topRight = radius(roundTopRight);
+        final bottomRight = radius(roundBottomRight);
+        final bottomLeft = radius(roundBottomLeft);
+        if (topLeft <= 0 &&
+            topRight <= 0 &&
+            bottomRight <= 0 &&
+            bottomLeft <= 0) {
+          return Path()..addRect(rect);
+        }
+        return Path()..addRRect(
+          RRect.fromRectAndCorners(
+            rect,
+            topLeft: Radius.circular(topLeft),
+            topRight: Radius.circular(topRight),
+            bottomRight: Radius.circular(bottomRight),
+            bottomLeft: Radius.circular(bottomLeft),
+          ),
+        );
       case ParamShapeKind.ellipse:
-        return Path()
-          ..addOval(Rect.fromCenter(
-              center: Offset.zero, width: sx, height: sy));
+        return Path()..addOval(
+          Rect.fromCenter(center: Offset.zero, width: sx, height: sy),
+        );
       case ParamShapeKind.polygon:
         return _polystarPath(
-            p: p,
-            rOut: rOut,
-            rIn: null,
-            roundOut: roundOut,
-            roundIn: 0,
-            rotDeg: rotDeg);
+          p: p,
+          rOut: rOut,
+          rIn: null,
+          roundOut: roundOut,
+          roundIn: 0,
+          rotDeg: rotDeg,
+        );
       case ParamShapeKind.star:
         return _polystarPath(
-            p: p,
-            rOut: rOut,
-            rIn: rIn,
-            roundOut: roundOut,
-            roundIn: roundIn,
-            rotDeg: rotDeg);
+          p: p,
+          rOut: rOut,
+          rIn: rIn,
+          roundOut: roundOut,
+          roundIn: roundIn,
+          rotDeg: rotDeg,
+        );
       case ParamShapeKind.sector:
         final inner = math.min(secIn, rOut - 0.01);
         if (sw <= 0.01) return Path();
@@ -437,8 +516,7 @@ class ShapeParametric extends ShapeItem {
             ..addOval(Rect.fromCircle(center: Offset.zero, radius: rOut));
           if (inner <= 0) return outerO;
           final innerO = Path()
-            ..addOval(
-                Rect.fromCircle(center: Offset.zero, radius: inner));
+            ..addOval(Rect.fromCircle(center: Offset.zero, radius: inner));
           return Path.combine(PathOperation.difference, outerO, innerO);
         }
         final start = (a0 - 90) * math.pi / 180;
@@ -447,15 +525,27 @@ class ShapeParametric extends ShapeItem {
         if (inner <= 0) {
           path
             ..moveTo(0, 0)
-            ..arcTo(Rect.fromCircle(center: Offset.zero, radius: rOut),
-                start, sweepRad, false)
+            ..arcTo(
+              Rect.fromCircle(center: Offset.zero, radius: rOut),
+              start,
+              sweepRad,
+              false,
+            )
             ..close();
         } else {
           path
-            ..arcTo(Rect.fromCircle(center: Offset.zero, radius: rOut),
-                start, sweepRad, true)
-            ..arcTo(Rect.fromCircle(center: Offset.zero, radius: inner),
-                start + sweepRad, -sweepRad, false)
+            ..arcTo(
+              Rect.fromCircle(center: Offset.zero, radius: rOut),
+              start,
+              sweepRad,
+              true,
+            )
+            ..arcTo(
+              Rect.fromCircle(center: Offset.zero, radius: inner),
+              start + sweepRad,
+              -sweepRad,
+              false,
+            )
             ..close();
         }
         return path;
@@ -499,8 +589,7 @@ class ShapeParametric extends ShapeItem {
         ..addOval(Rect.fromCircle(center: Offset.zero, radius: rOut));
     }
 
-    Offset pt(double a, double r) =>
-        Offset(math.cos(a) * r, math.sin(a) * r);
+    Offset pt(double a, double r) => Offset(math.cos(a) * r, math.sin(a) * r);
     Offset tan(double a) => Offset(-math.sin(a), math.cos(a));
 
     final m = verts.length;
@@ -526,6 +615,10 @@ class ShapeParametric extends ShapeItem {
     AnimatedDouble? sizeX,
     AnimatedDouble? sizeY,
     AnimatedDouble? roundness,
+    AnimatedDouble? cornerTopLeft,
+    AnimatedDouble? cornerTopRight,
+    AnimatedDouble? cornerBottomRight,
+    AnimatedDouble? cornerBottomLeft,
     bool? roundnessPercent,
     AnimatedDouble? points,
     AnimatedDouble? outerRadius,
@@ -543,6 +636,10 @@ class ShapeParametric extends ShapeItem {
       sizeX: sizeX ?? this.sizeX,
       sizeY: sizeY ?? this.sizeY,
       roundness: roundness ?? this.roundness,
+      cornerTopLeft: cornerTopLeft ?? this.cornerTopLeft,
+      cornerTopRight: cornerTopRight ?? this.cornerTopRight,
+      cornerBottomRight: cornerBottomRight ?? this.cornerBottomRight,
+      cornerBottomLeft: cornerBottomLeft ?? this.cornerBottomLeft,
       roundnessPercent: roundnessPercent ?? this.roundnessPercent,
       points: points ?? this.points,
       outerRadius: outerRadius ?? this.outerRadius,
@@ -564,6 +661,10 @@ AnimatedDouble? shapeParamTrackOf(ShapeParametric s, String key) =>
       'sizeX' => s.sizeX,
       'sizeY' => s.sizeY,
       'roundness' => s.roundness,
+      'cornerTopLeft' => s.cornerTopLeft ?? s.roundness,
+      'cornerTopRight' => s.cornerTopRight ?? s.roundness,
+      'cornerBottomRight' => s.cornerBottomRight ?? s.roundness,
+      'cornerBottomLeft' => s.cornerBottomLeft ?? s.roundness,
       'points' => s.points,
       'outerRadius' => s.outerRadius,
       'innerRadius' => s.innerRadius,
@@ -577,22 +678,28 @@ AnimatedDouble? shapeParamTrackOf(ShapeParametric s, String key) =>
     };
 
 ShapeParametric shapeParamWithTrack(
-        ShapeParametric s, String key, AnimatedDouble v) =>
-    switch (key) {
-      'sizeX' => s.copyWith(sizeX: v),
-      'sizeY' => s.copyWith(sizeY: v),
-      'roundness' => s.copyWith(roundness: v),
-      'points' => s.copyWith(points: v),
-      'outerRadius' => s.copyWith(outerRadius: v),
-      'innerRadius' => s.copyWith(innerRadius: v),
-      'outerRoundness' => s.copyWith(outerRoundness: v),
-      'innerRoundness' => s.copyWith(innerRoundness: v),
-      'shapeRotation' => s.copyWith(shapeRotation: v),
-      'startAngle' => s.copyWith(startAngle: v),
-      'sweep' => s.copyWith(sweep: v),
-      'sectorInner' => s.copyWith(sectorInner: v),
-      _ => s,
-    };
+  ShapeParametric s,
+  String key,
+  AnimatedDouble v,
+) => switch (key) {
+  'sizeX' => s.copyWith(sizeX: v),
+  'sizeY' => s.copyWith(sizeY: v),
+  'roundness' => s.copyWith(roundness: v),
+  'cornerTopLeft' => s.copyWith(cornerTopLeft: v),
+  'cornerTopRight' => s.copyWith(cornerTopRight: v),
+  'cornerBottomRight' => s.copyWith(cornerBottomRight: v),
+  'cornerBottomLeft' => s.copyWith(cornerBottomLeft: v),
+  'points' => s.copyWith(points: v),
+  'outerRadius' => s.copyWith(outerRadius: v),
+  'innerRadius' => s.copyWith(innerRadius: v),
+  'outerRoundness' => s.copyWith(outerRoundness: v),
+  'innerRoundness' => s.copyWith(innerRoundness: v),
+  'shapeRotation' => s.copyWith(shapeRotation: v),
+  'startAngle' => s.copyWith(startAngle: v),
+  'sweep' => s.copyWith(sweep: v),
+  'sectorInner' => s.copyWith(sectorInner: v),
+  _ => s,
+};
 
 /// ---------------------------------------------------------------- pintura
 
@@ -613,10 +720,11 @@ class ShapeFill extends ShapeItem {
 
   ShapeFill copyWith({Color? color, double? opacity, bool? evenOdd}) =>
       ShapeFill(
-          id: id,
-          color: color ?? this.color,
-          opacity: opacity ?? this.opacity,
-          evenOdd: evenOdd ?? this.evenOdd);
+        id: id,
+        color: color ?? this.color,
+        opacity: opacity ?? this.opacity,
+        evenOdd: evenOdd ?? this.evenOdd,
+      );
 }
 
 class ShapeStroke extends ShapeItem {
@@ -631,11 +739,11 @@ class ShapeStroke extends ShapeItem {
     AnimatedDouble? dashLength,
     AnimatedDouble? gapLength,
     AnimatedDouble? dashOffset,
-  })  : width = width ?? AnimatedDouble(12),
-        opacity = opacity ?? AnimatedDouble(1),
-        dashLength = dashLength ?? AnimatedDouble(0),
-        gapLength = gapLength ?? AnimatedDouble(0),
-        dashOffset = dashOffset ?? AnimatedDouble(0);
+  }) : width = width ?? AnimatedDouble(12),
+       opacity = opacity ?? AnimatedDouble(1),
+       dashLength = dashLength ?? AnimatedDouble(0),
+       gapLength = gapLength ?? AnimatedDouble(0),
+       dashOffset = dashOffset ?? AnimatedDouble(0);
 
   final Color color;
 
@@ -796,19 +904,26 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
           return BezierPath.ellipse(p.width, p.height);
         case ShapePrimitive.star:
           return BezierPath.star(
-              p.points, p.width / 2, p.width / 2 * p.innerRadiusRatio);
+            p.points,
+            p.width / 2,
+            p.width / 2 * p.innerRadiusRatio,
+          );
         case ShapePrimitive.polygon:
-          return BezierPath(vertices: [
-            for (var i = 0; i < p.points; i++)
-              PathVertex(
-                p: Offset(
-                  math.cos(-math.pi / 2 + i * 2 * math.pi / p.points) *
-                      p.width / 2,
-                  math.sin(-math.pi / 2 + i * 2 * math.pi / p.points) *
-                      p.width / 2,
+          return BezierPath(
+            vertices: [
+              for (var i = 0; i < p.points; i++)
+                PathVertex(
+                  p: Offset(
+                    math.cos(-math.pi / 2 + i * 2 * math.pi / p.points) *
+                        p.width /
+                        2,
+                    math.sin(-math.pi / 2 + i * 2 * math.pi / p.points) *
+                        p.width /
+                        2,
+                  ),
                 ),
-              ),
-          ]);
+            ],
+          );
         default:
           return sampleBezier(p.build());
       }
@@ -826,9 +941,12 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
       // px fixo, saturando em metade do menor lado.
       final halfMin = math.min(sx, sy) / 2;
       final round = p.roundness.valueAt(t);
-      final raio = (p.roundnessPercent ? round / 100 * halfMin : round)
-          .clamp(0.0, halfMin);
-      final pontasRetas = p.outerRoundness.valueAt(t).abs() < 1e-6 &&
+      final raio = (p.roundnessPercent ? round / 100 * halfMin : round).clamp(
+        0.0,
+        halfMin,
+      );
+      final pontasRetas =
+          p.outerRoundness.valueAt(t).abs() < 1e-6 &&
           p.innerRoundness.valueAt(t).abs() < 1e-6;
 
       BezierPath girado(BezierPath b) {
@@ -841,7 +959,11 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
           vertices: [
             for (final v in b.vertices)
               PathVertex(
-                  p: g(v.p), inT: g(v.inT), outT: g(v.outT), corner: v.corner),
+                p: g(v.p),
+                inT: g(v.inT),
+                outT: g(v.outT),
+                corner: v.corner,
+              ),
           ],
         );
       }
@@ -854,15 +976,19 @@ BezierPath? bezierOfShapeItem(ShapeItem item, Duration t) {
         case ParamShapeKind.ellipse:
           return BezierPath.ellipse(sx, sy);
         case ParamShapeKind.polygon when pontasRetas:
-          return girado(BezierPath(vertices: [
-            for (var i = 0; i < n; i++)
-              PathVertex(
-                p: Offset(
-                  math.cos(-math.pi / 2 + i * 2 * math.pi / n) * rOut,
-                  math.sin(-math.pi / 2 + i * 2 * math.pi / n) * rOut,
-                ),
-              ),
-          ]));
+          return girado(
+            BezierPath(
+              vertices: [
+                for (var i = 0; i < n; i++)
+                  PathVertex(
+                    p: Offset(
+                      math.cos(-math.pi / 2 + i * 2 * math.pi / n) * rOut,
+                      math.sin(-math.pi / 2 + i * 2 * math.pi / n) * rOut,
+                    ),
+                  ),
+              ],
+            ),
+          );
         case ParamShapeKind.star when pontasRetas:
           return girado(BezierPath.star(n, rOut, rIn));
         default:
@@ -923,13 +1049,12 @@ class ShapeMorph extends ShapeItem {
 
   static const int _samples = 144;
 
-  ShapeMorph copyWith({ShapePath? to, AnimatedDouble? progress}) =>
-      ShapeMorph(
-        id: id,
-        from: from,
-        to: to ?? this.to,
-        progress: progress ?? this.progress,
-      );
+  ShapeMorph copyWith({ShapePath? to, AnimatedDouble? progress}) => ShapeMorph(
+    id: id,
+    from: from,
+    to: to ?? this.to,
+    progress: progress ?? this.progress,
+  );
 
   Path build(Duration t) {
     final p = progress.valueAt(t).clamp(0.0, 1.0);
@@ -945,8 +1070,11 @@ class ShapeMorph extends ShapeItem {
     }
     b = _alignStart(a, b);
 
-    final path = Path()..moveTo(
-        a[0].dx + (b[0].dx - a[0].dx) * p, a[0].dy + (b[0].dy - a[0].dy) * p);
+    final path = Path()
+      ..moveTo(
+        a[0].dx + (b[0].dx - a[0].dx) * p,
+        a[0].dy + (b[0].dy - a[0].dy) * p,
+      );
     for (var i = 1; i < _samples; i++) {
       path.lineTo(
         a[i].dx + (b[i].dx - a[i].dx) * p,
@@ -965,9 +1093,7 @@ class ShapeMorph extends ShapeItem {
     if (metric.length <= 0) return const [];
     return [
       for (var i = 0; i < _samples; i++)
-        metric
-                .getTangentForOffset(metric.length * i / _samples)
-                ?.position ??
+        metric.getTangentForOffset(metric.length * i / _samples)?.position ??
             Offset.zero,
     ];
   }
@@ -998,9 +1124,7 @@ class ShapeMorph extends ShapeItem {
       }
     }
     if (bestK == 0) return b;
-    return [
-      for (var i = 0; i < _samples; i++) b[(i + bestK) % _samples],
-    ];
+    return [for (var i = 0; i < _samples; i++) b[(i + bestK) % _samples]];
   }
 }
 
@@ -1019,9 +1143,9 @@ class TrimOperator extends ShapeItem {
     AnimatedDouble? end,
     AnimatedDouble? offset,
     this.individually = true,
-  })  : start = start ?? AnimatedDouble(0),
-        end = end ?? AnimatedDouble(1),
-        offset = offset ?? AnimatedDouble(0);
+  }) : start = start ?? AnimatedDouble(0),
+       end = end ?? AnimatedDouble(1),
+       offset = offset ?? AnimatedDouble(0);
 
   final AnimatedDouble start;
   final AnimatedDouble end;
@@ -1033,14 +1157,13 @@ class TrimOperator extends ShapeItem {
     AnimatedDouble? end,
     AnimatedDouble? offset,
     bool? individually,
-  }) =>
-      TrimOperator(
-        id: id,
-        start: start ?? this.start,
-        end: end ?? this.end,
-        offset: offset ?? this.offset,
-        individually: individually ?? this.individually,
-      );
+  }) => TrimOperator(
+    id: id,
+    start: start ?? this.start,
+    end: end ?? this.end,
+    offset: offset ?? this.offset,
+    individually: individually ?? this.individually,
+  );
 
   /// Faixas [0..1] normalizadas apos offset (com wrap na emenda).
   List<(double, double)> _ranges(double s, double e, double o) {
@@ -1070,8 +1193,7 @@ class TrimOperator extends ShapeItem {
         for (final metric in path.computeMetrics()) {
           for (final (lo, hi) in ranges) {
             if (hi <= lo) continue;
-            out.add(
-                metric.extractPath(lo * metric.length, hi * metric.length));
+            out.add(metric.extractPath(lo * metric.length, hi * metric.length));
           }
         }
       }
@@ -1161,8 +1283,7 @@ class RepeaterOperator extends ShapeItem {
 
 abstract final class Matrix4Utils {
   /// translate * rotate * scale como Float64List para Path.transform.
-  static Float64List compose(
-      double dx, double dy, double angle, double scale) {
+  static Float64List compose(double dx, double dy, double angle, double scale) {
     final cosA = math.cos(angle) * scale;
     final sinA = math.sin(angle) * scale;
     return Float64List.fromList([
@@ -1184,8 +1305,12 @@ class ShapeDraw {
   final Paint paint;
 }
 
-Path _dashPath(Path source, double dashLength, double gapLength,
-    [double offset = 0]) {
+Path _dashPath(
+  Path source,
+  double dashLength,
+  double gapLength, [
+  double offset = 0,
+]) {
   if (dashLength <= 0) return source;
   final cycle = dashLength + math.max(0.1, gapLength);
   final shift = -(offset % cycle);
@@ -1208,7 +1333,7 @@ Path _dashPath(Path source, double dashLength, double gapLength,
 /// ponto. Diferente de escalar, que afasta do centro.
 class OffsetPathOperator extends ShapeItem {
   OffsetPathOperator({super.id, AnimatedDouble? amount})
-      : amount = amount ?? AnimatedDouble(6);
+    : amount = amount ?? AnimatedDouble(6);
 
   final AnimatedDouble amount;
 
@@ -1224,7 +1349,7 @@ class OffsetPathOperator extends ShapeItem {
 /// ARREDONDAR CANTOS: troca quina por arco, so onde ha quina de verdade.
 class RoundCornersOperator extends ShapeItem {
   RoundCornersOperator({super.id, AnimatedDouble? radius})
-      : radius = radius ?? AnimatedDouble(12);
+    : radius = radius ?? AnimatedDouble(12);
 
   final AnimatedDouble radius;
 
@@ -1244,8 +1369,8 @@ class ZigZagOperator extends ShapeItem {
     AnimatedDouble? amplitude,
     AnimatedDouble? ridges,
     this.smooth = false,
-  })  : amplitude = amplitude ?? AnimatedDouble(10),
-        ridges = ridges ?? AnimatedDouble(0.5);
+  }) : amplitude = amplitude ?? AnimatedDouble(10),
+       ridges = ridges ?? AnimatedDouble(0.5);
 
   final AnimatedDouble amplitude;
   final AnimatedDouble ridges;
@@ -1263,19 +1388,18 @@ class ZigZagOperator extends ShapeItem {
     AnimatedDouble? amplitude,
     AnimatedDouble? ridges,
     bool? smooth,
-  }) =>
-      ZigZagOperator(
-        id: id,
-        amplitude: amplitude ?? this.amplitude,
-        ridges: ridges ?? this.ridges,
-        smooth: smooth ?? this.smooth,
-      );
+  }) => ZigZagOperator(
+    id: id,
+    amplitude: amplitude ?? this.amplitude,
+    ridges: ridges ?? this.ridges,
+    smooth: smooth ?? this.smooth,
+  );
 }
 
 /// INCHAR E ENCOLHER: circulo vira flor, estrela vira bolha.
 class PuckerBloatOperator extends ShapeItem {
   PuckerBloatOperator({super.id, AnimatedDouble? amount})
-      : amount = amount ?? AnimatedDouble(0);
+    : amount = amount ?? AnimatedDouble(0);
 
   /// Positivo incha, negativo encolhe.
   final AnimatedDouble amount;
@@ -1292,7 +1416,7 @@ class PuckerBloatOperator extends ShapeItem {
 /// TORCER: o centro fica parado, a borda gira.
 class TwistOperator extends ShapeItem {
   TwistOperator({super.id, AnimatedDouble? angle})
-      : angle = angle ?? AnimatedDouble(45);
+    : angle = angle ?? AnimatedDouble(45);
 
   final AnimatedDouble angle;
 
@@ -1313,9 +1437,9 @@ class WigglePathOperator extends ShapeItem {
     AnimatedDouble? detail,
     AnimatedDouble? evolution,
     this.seed = 1,
-  })  : amount = amount ?? AnimatedDouble(8),
-        detail = detail ?? AnimatedDouble(1),
-        evolution = evolution ?? AnimatedDouble(0);
+  }) : amount = amount ?? AnimatedDouble(8),
+       detail = detail ?? AnimatedDouble(1),
+       evolution = evolution ?? AnimatedDouble(0);
 
   final AnimatedDouble amount;
   final AnimatedDouble detail;
@@ -1339,14 +1463,13 @@ class WigglePathOperator extends ShapeItem {
     AnimatedDouble? detail,
     AnimatedDouble? evolution,
     int? seed,
-  }) =>
-      WigglePathOperator(
-        id: id,
-        amount: amount ?? this.amount,
-        detail: detail ?? this.detail,
-        evolution: evolution ?? this.evolution,
-        seed: seed ?? this.seed,
-      );
+  }) => WigglePathOperator(
+    id: id,
+    amount: amount ?? this.amount,
+    detail: detail ?? this.detail,
+    evolution: evolution ?? this.evolution,
+    seed: seed ?? this.seed,
+  );
 }
 
 /// COMBINAR CAMINHOS: as booleanas. E o que faz furo de verdade, em vez
@@ -1411,13 +1534,16 @@ List<ShapeDraw> evaluateShape(
           final drawn = fill.evenOdd
               ? (Path.from(path)..fillType = PathFillType.evenOdd)
               : path;
-          draws.add(ShapeDraw(
-            path: drawn,
-            paint: Paint()
-              ..style = PaintingStyle.fill
-              ..color = fill.color.withValues(
-                  alpha: fill.color.a * fill.opacity * opacity),
-          ));
+          draws.add(
+            ShapeDraw(
+              path: drawn,
+              paint: Paint()
+                ..style = PaintingStyle.fill
+                ..color = fill.color.withValues(
+                  alpha: fill.color.a * fill.opacity * opacity,
+                ),
+            ),
+          );
         }
       case ShapeGradientFill g:
         for (final path in paths) {
@@ -1429,36 +1555,41 @@ List<ShapeDraw> evaluateShape(
             g.colorA.withValues(alpha: g.colorA.a * g.opacity * opacity),
             g.colorB.withValues(alpha: g.colorB.a * g.opacity * opacity),
           ];
-          draws.add(ShapeDraw(
-            path: path,
-            paint: Paint()
-              ..style = PaintingStyle.fill
-              ..shader = g.radial
-                  ? Gradient.radial(
-                      b.center, b.longestSide / 2, colors)
-                  : Gradient.linear(
-                      b.center - half, b.center + half, colors),
-          ));
+          draws.add(
+            ShapeDraw(
+              path: path,
+              paint: Paint()
+                ..style = PaintingStyle.fill
+                ..shader = g.radial
+                    ? Gradient.radial(b.center, b.longestSide / 2, colors)
+                    : Gradient.linear(b.center - half, b.center + half, colors),
+            ),
+          );
         }
       case ShapeStroke stroke:
         for (final path in paths) {
-          draws.add(ShapeDraw(
-            path: _dashPath(
+          draws.add(
+            ShapeDraw(
+              path: _dashPath(
                 path,
                 stroke.dashLength.valueAt(t),
                 stroke.gapLength.valueAt(t),
-                stroke.dashOffset.valueAt(t)),
-            paint: Paint()
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = stroke.width.valueAt(t)
-              ..strokeCap = stroke.cap
-              ..strokeJoin = stroke.join
-              ..strokeMiterLimit = stroke.miterLimit
-              ..color = stroke.color.withValues(
-                  alpha: stroke.color.a *
+                stroke.dashOffset.valueAt(t),
+              ),
+              paint: Paint()
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = stroke.width.valueAt(t)
+                ..strokeCap = stroke.cap
+                ..strokeJoin = stroke.join
+                ..strokeMiterLimit = stroke.miterLimit
+                ..color = stroke.color.withValues(
+                  alpha:
+                      stroke.color.a *
                       stroke.opacity.valueAt(t).clamp(0.0, 1.0) *
-                      opacity),
-          ));
+                      opacity,
+                ),
+            ),
+          );
         }
     }
   }
@@ -1480,127 +1611,134 @@ abstract final class ShapePresets {
   // ------ PARAMETRICOS (novos): Tamanho e parametro do caminho ------
 
   static List<ShapeItem> paramRect() => [
-        ShapeParametric(
-            kind: ParamShapeKind.rect,
-            sizeX: AnimatedDouble(320),
-            sizeY: AnimatedDouble(320),
-            roundness: AnimatedDouble(12)),
-        ShapeFill(color: const Color(0xFF4A7BA6)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.rect,
+      sizeX: AnimatedDouble(320),
+      sizeY: AnimatedDouble(320),
+      roundness: AnimatedDouble(12),
+    ),
+    ShapeFill(color: const Color(0xFF4A7BA6)),
+  ];
 
   static List<ShapeItem> paramEllipse() => [
-        ShapeParametric(
-            kind: ParamShapeKind.ellipse,
-            sizeX: AnimatedDouble(320),
-            sizeY: AnimatedDouble(320)),
-        ShapeFill(),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.ellipse,
+      sizeX: AnimatedDouble(320),
+      sizeY: AnimatedDouble(320),
+    ),
+    ShapeFill(),
+  ];
 
   static List<ShapeItem> paramStar() => [
-        ShapeParametric(
-            kind: ParamShapeKind.star,
-            outerRadius: AnimatedDouble(170),
-            innerRadius: AnimatedDouble(85)),
-        ShapeFill(color: const Color(0xFFFFB020)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.star,
+      outerRadius: AnimatedDouble(170),
+      innerRadius: AnimatedDouble(85),
+    ),
+    ShapeFill(color: const Color(0xFFFFB020)),
+  ];
 
   static List<ShapeItem> paramPolygon() => [
-        ShapeParametric(
-            kind: ParamShapeKind.polygon,
-            points: AnimatedDouble(6),
-            outerRadius: AnimatedDouble(170)),
-        ShapeFill(color: const Color(0xFF9C5BD1)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.polygon,
+      points: AnimatedDouble(6),
+      outerRadius: AnimatedDouble(170),
+    ),
+    ShapeFill(color: const Color(0xFF9C5BD1)),
+  ];
 
   static List<ShapeItem> paramSector() => [
-        ShapeParametric(
-            kind: ParamShapeKind.sector,
-            outerRadius: AnimatedDouble(170),
-            sweep: AnimatedDouble(270)),
-        ShapeFill(color: const Color(0xFFE85B81)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.sector,
+      outerRadius: AnimatedDouble(170),
+      sweep: AnimatedDouble(270),
+    ),
+    ShapeFill(color: const Color(0xFFE85B81)),
+  ];
 
   static List<ShapeItem> paramRing() => [
-        ShapeParametric(
-            kind: ParamShapeKind.sector,
-            outerRadius: AnimatedDouble(170),
-            sectorInner: AnimatedDouble(110),
-            sweep: AnimatedDouble(360)),
-        ShapeFill(color: const Color(0xFF2BE3A0)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.sector,
+      outerRadius: AnimatedDouble(170),
+      sectorInner: AnimatedDouble(110),
+      sweep: AnimatedDouble(360),
+    ),
+    ShapeFill(color: const Color(0xFF2BE3A0)),
+  ];
 
   // ------ legados (paths cozidos; projetos antigos continuam iguais) ---
 
   static List<ShapeItem> circle() => [
-        ShapePath(primitive: ShapePrimitive.ellipse),
-        ShapeFill(),
-      ];
+    ShapePath(primitive: ShapePrimitive.ellipse),
+    ShapeFill(),
+  ];
 
   static List<ShapeItem> roundedRect() => [
-        ShapePath(primitive: ShapePrimitive.roundedRectangle),
-        ShapeFill(color: const Color(0xFF4A7BA6)),
-      ];
+    ShapePath(primitive: ShapePrimitive.roundedRectangle),
+    ShapeFill(color: const Color(0xFF4A7BA6)),
+  ];
 
   static List<ShapeItem> star() => [
-        ShapePath(primitive: ShapePrimitive.star),
-        ShapeFill(color: const Color(0xFFFFB020)),
-      ];
+    ShapePath(primitive: ShapePrimitive.star),
+    ShapeFill(color: const Color(0xFFFFB020)),
+  ];
 
   static List<ShapeItem> ring() => [
-        ShapePath(primitive: ShapePrimitive.ring),
-        ShapeFill(color: const Color(0xFF2BE3A0)),
-      ];
+    ShapePath(primitive: ShapePrimitive.ring),
+    ShapeFill(color: const Color(0xFF2BE3A0)),
+  ];
 
   static List<ShapeItem> arc() => [
-        ShapePath(primitive: ShapePrimitive.arc),
-        ShapeFill(color: const Color(0xFF7C62FF)),
-      ];
+    ShapePath(primitive: ShapePrimitive.arc),
+    ShapeFill(color: const Color(0xFF7C62FF)),
+  ];
 
   static List<ShapeItem> wave() => [
-        ShapePath(primitive: ShapePrimitive.wave, width: 640),
-        ShapeStroke(color: const Color(0xFF35C4E7), width: AnimatedDouble(16)),
-      ];
+    ShapePath(primitive: ShapePrimitive.wave, width: 640),
+    ShapeStroke(color: const Color(0xFF35C4E7), width: AnimatedDouble(16)),
+  ];
 
   static List<ShapeItem> polygon() => [
-        ShapePath(primitive: ShapePrimitive.polygon, points: 6),
-        ShapeFill(color: const Color(0xFF35C4E7)),
-      ];
+    ShapePath(primitive: ShapePrimitive.polygon, points: 6),
+    ShapeFill(color: const Color(0xFF35C4E7)),
+  ];
 
   static List<ShapeItem> heart() => [
-        ShapePath(primitive: ShapePrimitive.heart),
-        ShapeFill(color: const Color(0xFFFF3B52)),
-      ];
+    ShapePath(primitive: ShapePrimitive.heart),
+    ShapeFill(color: const Color(0xFFFF3B52)),
+  ];
 
   static List<ShapeItem> gear() => [
-        ShapePath(primitive: ShapePrimitive.gear, points: 8),
-        ShapeFill(color: const Color(0xFF8A97AD)),
-      ];
+    ShapePath(primitive: ShapePrimitive.gear, points: 8),
+    ShapeFill(color: const Color(0xFF8A97AD)),
+  ];
 
   static List<ShapeItem> arrow() => [
-        ShapePath(primitive: ShapePrimitive.arrow, width: 520, height: 300),
-        ShapeFill(color: const Color(0xFFB8FF3D)),
-      ];
+    ShapePath(primitive: ShapePrimitive.arrow, width: 520, height: 300),
+    ShapeFill(color: const Color(0xFFB8FF3D)),
+  ];
 
   static List<ShapeItem> check() => [
-        ShapePath(primitive: ShapePrimitive.check),
-        ShapeFill(color: const Color(0xFF2BE3A0)),
-      ];
+    ShapePath(primitive: ShapePrimitive.check),
+    ShapeFill(color: const Color(0xFF2BE3A0)),
+  ];
 
   static List<ShapeItem> drop() => [
-        ShapePath(primitive: ShapePrimitive.drop, width: 320, height: 440),
-        ShapeGradientFill(
-            colorA: const Color(0xFF35C4E7),
-            colorB: const Color(0xFF7C62FF),
-            angleDeg: 90),
-      ];
+    ShapePath(primitive: ShapePrimitive.drop, width: 320, height: 440),
+    ShapeGradientFill(
+      colorA: const Color(0xFF35C4E7),
+      colorB: const Color(0xFF7C62FF),
+      angleDeg: 90,
+    ),
+  ];
 
   static List<ShapeItem> flower() => [
-        ShapePath(primitive: ShapePrimitive.flower, points: 6),
-        ShapeFill(color: const Color(0xFFFF5C77)),
-      ];
+    ShapePath(primitive: ShapePrimitive.flower, points: 6),
+    ShapeFill(color: const Color(0xFFFF5C77)),
+  ];
 
   static List<ShapeItem> sparkle() => [
-        ShapePath(primitive: ShapePrimitive.sparkle),
-        ShapeFill(color: const Color(0xFFFFFFFF)),
-      ];
+    ShapePath(primitive: ShapePrimitive.sparkle),
+    ShapeFill(color: const Color(0xFFFFFFFF)),
+  ];
 }

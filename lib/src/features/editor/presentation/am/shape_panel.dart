@@ -7,6 +7,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import '../../domain/shape.dart';
+import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'curve_panel.dart';
@@ -75,6 +76,7 @@ class _Trilha {
 
 class _ShapePanelState extends ConsumerState<ShapePanel> {
   bool _sizeLinked = true;
+  bool _compoundAdvanced = false;
 
   ShapeParametric? _param(ShapeLayer l) {
     for (final i in l.contents) {
@@ -137,6 +139,16 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
               p('outerRoundness', 'Cantos externos', 0, pct ? 100 : 400,
                   suffix: pct ? '%' : ''),
               p('innerRoundness', 'Cantos internos', 0, pct ? 100 : 400,
+                  suffix: pct ? '%' : ''),
+            ],
+          ParamShapeKind.rect => [
+              p('cornerTopLeft', 'Superior esq.', 0, pct ? 100 : 400,
+                  suffix: pct ? '%' : ''),
+              p('cornerTopRight', 'Superior dir.', 0, pct ? 100 : 400,
+                  suffix: pct ? '%' : ''),
+              p('cornerBottomRight', 'Inferior dir.', 0, pct ? 100 : 400,
+                  suffix: pct ? '%' : ''),
+              p('cornerBottomLeft', 'Inferior esq.', 0, pct ? 100 : 400,
                   suffix: pct ? '%' : ''),
             ],
           _ => [
@@ -219,7 +231,15 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
         abas.add(ParamTab(
             id: ShapeTool.corners.name,
             label: 'Cantos',
-            animated: anim([sp.roundness, sp.outerRoundness, sp.innerRoundness])));
+            animated: anim([
+              sp.roundness,
+              sp.cornerTopLeft,
+              sp.cornerTopRight,
+              sp.cornerBottomRight,
+              sp.cornerBottomLeft,
+              sp.outerRoundness,
+              sp.innerRoundness,
+            ])));
       }
       if (sp.kind == ParamShapeKind.polygon || sp.kind == ParamShapeKind.star) {
         abas.add(ParamTab(
@@ -385,9 +405,196 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
           );
         }
         return _Reguas(layer: layer, trilhas: trilhas, t: t);
+      case ShapeTool.corners:
+        if (sp?.kind == ParamShapeKind.rect) {
+          return _CompoundShapeEditor(
+            layer: layer,
+            trilhas: trilhas,
+            t: t,
+            advanced: _compoundAdvanced,
+            onDepth: (v) => setState(() => _compoundAdvanced = v),
+            onAddGeometry: (kind) =>
+                controller.addCompoundShapeGeometry(id, kind),
+            onAddMerge: () =>
+                controller.addPathOperator(id, ShapePathOp.merge),
+            onSetMerge: (operator, mode) {
+              final delta = (mode.index - operator.mode.index +
+                      MergeMode.values.length) %
+                  MergeMode.values.length;
+              for (var i = 0; i < delta; i++) {
+                controller.cycleMergeMode(id, operator.id);
+              }
+            },
+          );
+        }
+        return _Reguas(layer: layer, trilhas: trilhas, t: t);
       default:
         return _Reguas(layer: layer, trilhas: trilhas, t: t);
     }
+  }
+}
+
+class _CompoundShapeEditor extends StatelessWidget {
+  const _CompoundShapeEditor({
+    required this.layer,
+    required this.trilhas,
+    required this.t,
+    required this.advanced,
+    required this.onDepth,
+    required this.onAddGeometry,
+    required this.onAddMerge,
+    required this.onSetMerge,
+  });
+
+  final ShapeLayer layer;
+  final List<_Trilha> trilhas;
+  final Duration t;
+  final bool advanced;
+  final ValueChanged<bool> onDepth;
+  final ValueChanged<ParamShapeKind> onAddGeometry;
+  final VoidCallback onAddMerge;
+  final void Function(MergePathsOperator operator, MergeMode mode) onSetMerge;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget depth(String label, bool value) => Expanded(
+          child: GestureDetector(
+            onTap: () => onDepth(value),
+            child: Container(
+              height: 32,
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                color: advanced == value ? AmColors.accent : AmColors.bg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: advanced == value
+                          ? AmColors.bg
+                          : AmColors.muted)),
+            ),
+          ),
+        );
+
+    final merges = layer.contents.whereType<MergePathsOperator>().toList();
+    return Column(
+      children: [
+        Row(children: [depth('Montar', false), depth('Avancado', true)]),
+        const SizedBox(height: 8),
+        Expanded(
+          child: advanced
+              ? SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text('Adicionar geometria ao composto',
+                          style: TextStyle(
+                              fontSize: 11, color: AmColors.muted)),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: CupertinoButton(
+                              color: AmColors.panelHigh,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              onPressed: () =>
+                                  onAddGeometry(ParamShapeKind.rect),
+                              child: const Text('Retangulo',
+                                  style: TextStyle(
+                                      fontSize: 11, color: AmColors.text)),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: CupertinoButton(
+                              color: AmColors.panelHigh,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              onPressed: () =>
+                                  onAddGeometry(ParamShapeKind.ellipse),
+                              child: const Text('Circulo',
+                                  style: TextStyle(
+                                      fontSize: 11, color: AmColors.text)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      for (final merge in merges)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AmColors.bg,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Combinar caminhos',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AmColors.text)),
+                              const SizedBox(height: 7),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final mode in MergeMode.values)
+                                    GestureDetector(
+                                      onTap: () => onSetMerge(merge, mode),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 9, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: merge.mode == mode
+                                              ? AmColors.accent
+                                              : AmColors.chip,
+                                          borderRadius:
+                                              BorderRadius.circular(7),
+                                        ),
+                                        child: Text(
+                                          mergeModeLabel(mode),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: merge.mode == mode
+                                                ? AmColors.bg
+                                                : AmColors.text,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      CupertinoButton(
+                        color: AmColors.panelHigh,
+                        onPressed: onAddMerge,
+                        child: Text(
+                          merges.isEmpty
+                              ? 'Adicionar Merge Paths'
+                              : 'Adicionar outro Merge Paths',
+                          style: const TextStyle(color: AmColors.text),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'O operador combina os caminhos que aparecem antes dele.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 10, color: AmColors.muted),
+                      ),
+                    ],
+                  ),
+                )
+              : _Reguas(layer: layer, trilhas: trilhas, t: t),
+        ),
+      ],
+    );
   }
 }
 
@@ -410,17 +617,17 @@ class _Reguas extends StatelessWidget {
     }
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 6,
+          runSpacing: 4,
           children: [
-            for (final tr in trilhas) ...[
+            for (final tr in trilhas)
               AmValueChip(
                   text:
                       '${amNumber((tr.read(layer)?.valueAt(local) ?? 0) * tr.scale, tr.decimals)}${tr.suffix}',
                   label: tr.label,
-                  width: trilhas.length > 2 ? 96 : 112),
-              const SizedBox(width: 12),
-            ],
+                  width: trilhas.length > 2 ? 76 : 112),
           ],
         ),
         const SizedBox(height: 8),

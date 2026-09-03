@@ -9,7 +9,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../editor/application/editor_controller.dart';
+import '../../editor/application/panorama_cache.dart';
+import '../../editor/application/texture_cache.dart';
 import '../../editor/application/video_layer_manager.dart';
+import '../../editor/domain/cut_ops.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/presentation/am/am_colors.dart';
 import '../../editor/presentation/widgets/dither_layer.dart';
@@ -34,8 +37,7 @@ class ExportVideoScreen extends ConsumerStatefulWidget {
   final ExportSettings settings;
 
   @override
-  ConsumerState<ExportVideoScreen> createState() =>
-      _ExportVideoScreenState();
+  ConsumerState<ExportVideoScreen> createState() => _ExportVideoScreenState();
 }
 
 enum _Fase { preparando, lendoVideos, desenhando, codificando, pronto, erro }
@@ -56,6 +58,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   /// atual, ja decodificada.
   final Map<String, Directory> _pastas = {};
   final Map<String, int> _contagem = {};
+  final Map<String, Duration> _inicioDosQuadros = {};
   final Map<String, ui.Image> _quadroAtual = {};
 
   @override
@@ -63,7 +66,9 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     super.initState();
     // O shader precisa estar carregado antes do primeiro quadro.
     DitherLayer.warmUp().then((_) {
-      if (mounted) WidgetsBinding.instance.addPostFrameCallback((_) => _rodar());
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _rodar());
+      }
     });
   }
 
@@ -106,7 +111,8 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       // um minuto de espera.
       // O atalho de copiar so vale quando a saida e igual a entrada:
       // pedir 720p, HEVC ou sequencia PNG e pedir para RENDERIZAR.
-      final podeCopiar = widget.settings.format == ExportFormat.mp4 &&
+      final podeCopiar =
+          widget.settings.format == ExportFormat.mp4 &&
           widget.settings.size == ExportSize.original &&
           widget.settings.codec == ExportCodec.h264 &&
           widget.settings.fps == null &&
@@ -124,15 +130,25 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         return;
       }
 
+      // O pintor 3D consulta caches sincronamente. Depois de reabrir um
+      // projeto eles ainda estao vazios; aguardar aqui impede que os
+      // primeiros quadros sejam capturados com cor lisa ou sem panorama.
+      await _prepararRecursos3D(project.layers);
+      if (engine.cancelled) return;
+
       // 1. Quadros de cada camada de video.
       final videoLayers = project.layers.whereType<VideoLayer>().toList();
       for (var i = 0; i < videoLayers.length; i++) {
         if (engine.cancelled) return;
         final l = videoLayers[i];
-        _passo(_Fase.lendoVideos, (i + 0.5) / (videoLayers.length + 1),
-            'Lendo "${l.name}" (${i + 1} de ${videoLayers.length})');
+        _passo(
+          _Fase.lendoVideos,
+          (i + 0.5) / (videoLayers.length + 1),
+          'Lendo "${l.name}" (${i + 1} de ${videoLayers.length})',
+        );
         final dir = await engine.extractVideoFrames(l);
         _pastas[l.id] = dir;
+        _inicioDosQuadros[l.id] = engine.videoFrameRange(l).$1;
         _contagem[l.id] = dir
             .listSync()
             .whereType<File>()
@@ -164,8 +180,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         final name = i.toString().padLeft(6, '0');
         File('${framesDir.path}/$name.png').writeAsBytesSync(png);
 
-        _passo(_Fase.desenhando, (i + 1) / total,
-            'Quadro ${i + 1} de $total');
+        _passo(_Fase.desenhando, (i + 1) / total, 'Quadro ${i + 1} de $total');
       }
 
       // 3. Sequencia PNG para quando termina aqui: nao ha o que
@@ -184,13 +199,19 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         return;
       }
 
-      _passo(_Fase.codificando, 0.05,
-          'Codificando no codificador do aparelho...');
+      _passo(
+        _Fase.codificando,
+        0.05,
+        'Codificando no codificador do aparelho...',
+      );
       final file = await engine.encode(
         framesDir: framesDir,
         quality: widget.quality,
-        onProgress: (p) => _passo(_Fase.codificando, p,
-            p < 0.9 ? 'Codificando video...' : 'Juntando o audio...'),
+        onProgress: (p) => _passo(
+          _Fase.codificando,
+          p,
+          p < 0.9 ? 'Codificando video...' : 'Juntando o audio...',
+        ),
       );
       await engine.cleanup();
       if (!mounted) return;
@@ -217,28 +238,99 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     }
   }
 
+  Future<void> _prepararRecursos3D(List<Layer> layers) async {
+    final panoramas = <Scene3DLayer>[];
+    final texturePaths = <String>{};
+
+    for (final layer in layers) {
+      if (layer is Element3DLayer) {
+        final path = layer.imagePath;
+        if (path != null && path.isNotEmpty) texturePaths.add(path);
+      }
+      if (layer is! Scene3DLayer) continue;
+      final panorama = layer.scene.panorama;
+      if (panorama.hasImage) {
+        panoramas.add(layer);
+        if (panorama.showBackground) texturePaths.add(panorama.sourcePath!);
+      }
+      for (final node in layer.scene.nodes) {
+        final material = node.material;
+        final imagePath = material.imagePath;
+        if (imagePath != null && imagePath.isNotEmpty) {
+          texturePaths.add(imagePath);
+        }
+        texturePaths.addAll(
+          material.faceImagePaths.values.where((path) => path.isNotEmpty),
+        );
+      }
+    }
+
+    if (panoramas.isEmpty && texturePaths.isEmpty) return;
+    _passo(_Fase.preparando, 0.18, 'Preparando panorama e texturas 3D...');
+
+    final labels = <String>[
+      for (final layer in panoramas) 'panorama de "${layer.name}"',
+      for (final path in texturePaths) 'textura "$path"',
+    ];
+    final jobs = <Future<bool>>[
+      for (final layer in panoramas)
+        PanoramaCache.instance.prepare(layer.scene.panorama),
+      for (final path in texturePaths) TextureCache.instance.prepare(path),
+    ];
+
+    late final List<bool> ready;
+    try {
+      ready = await Future.wait(jobs).timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw ExportException(
+        'Panorama ou textura 3D demorou demais para preparar. '
+        'Tente exportar novamente.',
+      );
+    }
+
+    final failed = <String>[
+      for (var i = 0; i < ready.length; i++)
+        if (!ready[i]) labels[i],
+    ];
+    if (failed.isNotEmpty) {
+      final first = failed.take(3).join(', ');
+      final remaining = failed.length > 3 ? failed.length - 3 : 0;
+      throw ExportException(
+        'Nao foi possivel preparar $first'
+        '${remaining > 0 ? ' e mais $remaining recurso(s)' : ''}.',
+      );
+    }
+  }
+
   /// Decodifica o quadro certo de cada camada de video para o instante
   /// [t] — so o que a camada esta mostrando agora.
   Future<void> _prepararQuadrosDeVideo(
-      List<VideoLayer> videoLayers, Duration t) async {
+    List<VideoLayer> videoLayers,
+    Duration t,
+  ) async {
+    // A exportacao trabalha sobre o snapshot que criou o engine. Ler o
+    // provider a cada quadro permitiria que uma alteracao de estado no
+    // meio do processo misturasse duas curvas de source-time no arquivo.
+    final exportLayers = _engine!.project.layers;
     for (final l in videoLayers) {
       final dir = _pastas[l.id];
       final count = _contagem[l.id] ?? 0;
       if (dir == null || count == 0) continue;
 
-      final dentro = t >= l.startTime && t < l.startTime + l.duration;
+      final dentro = visibleForCut(exportLayers, l, t);
       if (!dentro) {
         _quadroAtual.remove(l.id)?.dispose();
         continue;
       }
-      final local = t - l.startTime;
-      final idx = (local.inMicroseconds *
-              (_engine!.fps) /
-              1000000)
-          .floor()
-          .clamp(0, count - 1);
-      final file =
-          File('${dir.path}/${idx.toString().padLeft(6, '0')}.jpg');
+      final transition = transitionContextAt(exportLayers, t);
+      final local = localTimeForCut(l, t, transition);
+      final source = videoAbsoluteSourceTimeAt(l, local);
+      final extractedFrom = _inicioDosQuadros[l.id] ?? l.sourceOffset;
+      final idx =
+          ((source - extractedFrom).inMicroseconds * _engine!.fps / 1000000)
+              .floor()
+              .clamp(0, count - 1);
+      final file = File('${dir.path}/${idx.toString().padLeft(6, '0')}.jpg');
       if (!file.existsSync()) continue;
 
       _quadroAtual.remove(l.id)?.dispose();
@@ -313,28 +405,34 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   }
 
   Widget _barra() => Container(
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        color: AmColors.topBar,
-        child: Row(
-          children: [
-            CupertinoButton(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              onPressed: () {
-                _engine?.cancel();
-                Navigator.of(context).maybePop();
-              },
-              child: const Icon(CupertinoIcons.xmark,
-                  size: 19, color: AmColors.text),
-            ),
-            const Text('Exportar video',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AmColors.text)),
-          ],
+    height: 50,
+    padding: const EdgeInsets.symmetric(horizontal: 6),
+    color: AmColors.topBar,
+    child: Row(
+      children: [
+        CupertinoButton(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          onPressed: () {
+            _engine?.cancel();
+            Navigator.of(context).maybePop();
+          },
+          child: const Icon(
+            CupertinoIcons.xmark,
+            size: 19,
+            color: AmColors.text,
+          ),
         ),
-      );
+        const Text(
+          'Exportar video',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: AmColors.text,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _rodape() {
     if (_fase == _Fase.erro) {
@@ -347,20 +445,31 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
           children: [
             const Row(
               children: [
-                Icon(CupertinoIcons.exclamationmark_triangle,
-                    size: 17, color: AmColors.pink),
+                Icon(
+                  CupertinoIcons.exclamationmark_triangle,
+                  size: 17,
+                  color: AmColors.pink,
+                ),
                 SizedBox(width: 8),
-                Text('Nao deu para exportar',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.pink)),
+                Text(
+                  'Nao deu para exportar',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.pink,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(_erro ?? '',
-                style: const TextStyle(
-                    fontSize: 11, height: 1.4, color: AmColors.muted)),
+            Text(
+              _erro ?? '',
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.4,
+                color: AmColors.muted,
+              ),
+            ),
           ],
         ),
       );
@@ -376,20 +485,31 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
           children: [
             const Row(
               children: [
-                Icon(CupertinoIcons.checkmark_seal_fill,
-                    size: 17, color: AmColors.accent),
+                Icon(
+                  CupertinoIcons.checkmark_seal_fill,
+                  size: 17,
+                  color: AmColors.accent,
+                ),
                 SizedBox(width: 8),
-                Text('Video pronto',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.accent)),
+                Text(
+                  'Video pronto',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.accent,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 6),
-            Text(_saida?.path ?? '',
-                style: const TextStyle(
-                    fontSize: 10, height: 1.4, color: AmColors.muted)),
+            Text(
+              _saida?.path ?? '',
+              style: const TextStyle(
+                fontSize: 10,
+                height: 1.4,
+                color: AmColors.muted,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -401,7 +521,8 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.maybeOf(context);
                       await Clipboard.setData(
-                          ClipboardData(text: _saida?.path ?? ''));
+                        ClipboardData(text: _saida?.path ?? ''),
+                      );
                       messenger?.showSnackBar(
                         const SnackBar(
                           content: Text('Caminho copiado'),
@@ -410,9 +531,10 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                         ),
                       );
                     },
-                    child: const Text('Copiar caminho',
-                        style: TextStyle(
-                            fontSize: 13, color: AmColors.accent)),
+                    child: const Text(
+                      'Copiar caminho',
+                      style: TextStyle(fontSize: 13, color: AmColors.accent),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -422,11 +544,14 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                     borderRadius: BorderRadius.circular(12),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     onPressed: () => Navigator.of(context).maybePop(),
-                    child: const Text('Concluir',
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF10151D))),
+                    child: const Text(
+                      'Concluir',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF10151D),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -453,15 +578,19 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         children: [
           Row(
             children: [
-              Text(rotulo,
-                  style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AmColors.text)),
+              Text(
+                rotulo,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AmColors.text,
+                ),
+              ),
               const Spacer(),
-              Text('${(_progresso * 100).round()}%',
-                  style: const TextStyle(
-                      fontSize: 13, color: AmColors.accent)),
+              Text(
+                '${(_progresso * 100).round()}%',
+                style: const TextStyle(fontSize: 13, color: AmColors.accent),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -471,15 +600,16 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
               value: _progresso,
               minHeight: 6,
               backgroundColor: AmColors.chip,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AmColors.accent),
+              valueColor: const AlwaysStoppedAnimation<Color>(AmColors.accent),
             ),
           ),
           const SizedBox(height: 8),
-          Text(_detalhe,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: AmColors.muted)),
+          Text(
+            _detalhe,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: AmColors.muted),
+          ),
           const SizedBox(height: 4),
           const Text(
             'Deixe o app aberto nesta tela ate terminar.',

@@ -29,19 +29,29 @@ enum Element3DKind {
 /// SOFTBOX — a faixa clara e larga que, refletida numa superficie, e o
 /// que o olho le como "metal". No neon, as duas faixas de cor no
 /// horizonte. Sem ambiente nao ha reflexo: espelho de nada e preto.
-enum EnvironmentKind { estudio, ceu, porDoSol, neon }
+/// [ceu] e mantido no mesmo indice para compatibilidade com projetos antigos.
+/// A grade atual de presets usa os outros seis ambientes.
+enum EnvironmentKind { estudio, ceu, porDoSol, neon, noite, branco, interior }
 
 String environmentLabel(EnvironmentKind k) => switch (k) {
-      EnvironmentKind.estudio => 'Estudio',
-      EnvironmentKind.ceu => 'Ceu',
-      EnvironmentKind.porDoSol => 'Por do sol',
-      EnvironmentKind.neon => 'Neon',
-    };
+  EnvironmentKind.estudio => 'Estudio',
+  EnvironmentKind.ceu => 'Ceu',
+  EnvironmentKind.porDoSol => 'Por do sol',
+  EnvironmentKind.neon => 'Neon',
+  EnvironmentKind.noite => 'Noite',
+  EnvironmentKind.branco => 'Branco',
+  EnvironmentKind.interior => 'Interior',
+};
 
 (double, double, double) _mistura(
-        (double, double, double) a, (double, double, double) b, double t) =>
-    (a.$1 + (b.$1 - a.$1) * t, a.$2 + (b.$2 - a.$2) * t,
-        a.$3 + (b.$3 - a.$3) * t);
+  (double, double, double) a,
+  (double, double, double) b,
+  double t,
+) => (
+  a.$1 + (b.$1 - a.$1) * t,
+  a.$2 + (b.$2 - a.$2) * t,
+  a.$3 + (b.$3 - a.$3) * t,
+);
 
 /// Cor do ambiente na direcao (dx, dy, dz), com Y PARA CIMA. Devolve
 /// (r, g, b) — pode passar de 1 no brilho de uma luz, e o tonemap
@@ -90,6 +100,20 @@ String environmentLabel(EnvironmentKind k) => switch (k) {
       topo = (0.04, 0.02, 0.10);
       horizonte = (0.10, 0.06, 0.18);
       chao = (0.03, 0.02, 0.06);
+    case EnvironmentKind.noite:
+      topo = (0.015, 0.025, 0.075);
+      horizonte = (0.07, 0.11, 0.20);
+      chao = (0.012, 0.014, 0.025);
+      faixa = (0.03, 0.05, 0.10);
+    case EnvironmentKind.branco:
+      topo = (1.05, 1.05, 1.05);
+      horizonte = (0.92, 0.92, 0.92);
+      chao = (0.68, 0.68, 0.68);
+    case EnvironmentKind.interior:
+      topo = (0.42, 0.34, 0.25);
+      horizonte = (0.68, 0.52, 0.34);
+      chao = (0.12, 0.09, 0.07);
+      faixa = (0.22, 0.12, 0.04);
   }
 
   final t = y.abs();
@@ -121,6 +145,9 @@ String environmentLabel(EnvironmentKind k) => switch (k) {
       b += w * (0.75 * (1 - lado) + 0.95 * lado);
     case EnvironmentKind.ceu:
     case EnvironmentKind.porDoSol:
+    case EnvironmentKind.noite:
+    case EnvironmentKind.branco:
+    case EnvironmentKind.interior:
       break;
   }
 
@@ -165,11 +192,17 @@ Element3DMesh _build(Element3DKind kind) {
       return Element3DMesh(
         [
           [0, -1.1, 0],
-          [-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1],
+          [-1, 1, -1],
+          [1, 1, -1],
+          [1, 1, 1],
+          [-1, 1, 1],
         ],
         [
           [1, 2, 3, 4],
-          [0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1],
+          [0, 1, 2],
+          [0, 2, 3],
+          [0, 3, 4],
+          [0, 4, 1],
         ],
       );
 
@@ -191,7 +224,9 @@ Element3DMesh _build(Element3DKind kind) {
     case Element3DKind.prism:
       return _extrude(
         outline: const [
-          [0.0, -1.0], [1.0, 1.0], [-1.0, 1.0],
+          [0.0, -1.0],
+          [1.0, 1.0],
+          [-1.0, 1.0],
         ],
         halfDepth: 0.8,
       );
@@ -223,12 +258,22 @@ Element3DMesh _build(Element3DKind kind) {
     case Element3DKind.octahedron:
       return Element3DMesh(
         [
-          [0, -1.15, 0], [0, 1.15, 0],
-          [-1, 0, 0], [0, 0, -1], [1, 0, 0], [0, 0, 1],
+          [0, -1.15, 0],
+          [0, 1.15, 0],
+          [-1, 0, 0],
+          [0, 0, -1],
+          [1, 0, 0],
+          [0, 0, 1],
         ],
         [
-          [0, 2, 3], [0, 3, 4], [0, 4, 5], [0, 5, 2],
-          [1, 3, 2], [1, 4, 3], [1, 5, 4], [1, 2, 5],
+          [0, 2, 3],
+          [0, 3, 4],
+          [0, 4, 5],
+          [0, 5, 2],
+          [1, 3, 2],
+          [1, 4, 3],
+          [1, 5, 4],
+          [1, 2, 5],
         ],
       );
 
@@ -236,7 +281,9 @@ Element3DMesh _build(Element3DKind kind) {
       // Uma rampa: triangulo retangulo extrudado.
       return _extrude(
         outline: const [
-          [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0],
+          [-1.0, 1.0],
+          [1.0, 1.0],
+          [1.0, -1.0],
         ],
         halfDepth: 1.0,
       );
@@ -251,20 +298,27 @@ Element3DMesh _build(Element3DKind kind) {
 /// precisa da SUA normal: o descarte de costas deixa passar a que olha
 /// para a camera e some com a outra.
 Element3DMesh _plane() => Element3DMesh(
-      [
-        [-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0],
-      ],
-      [
-        [0, 1, 2, 3],
-        [3, 2, 1, 0],
-      ],
-    );
+  [
+    [-1, -1, 0],
+    [1, -1, 0],
+    [1, 1, 0],
+    [-1, 1, 0],
+  ],
+  [
+    [0, 1, 2, 3],
+    [3, 2, 1, 0],
+  ],
+);
 
 /// SOLIDO DE REVOLUCAO: um perfil (raio, y) girado em torno de Y.
 /// Raio zero vira polo (um vertice so); os aneis vizinhos viram quads
 /// ou, contra o polo, triangulos.
-Element3DMesh _revolve(List<List<double>> perfil, int slices,
-    {bool tampaInicio = false, bool tampaFim = false}) {
+Element3DMesh _revolve(
+  List<List<double>> perfil,
+  int slices, {
+  bool tampaInicio = false,
+  bool tampaFim = false,
+}) {
   final verts = <List<double>>[];
   final aneis = <List<int>>[];
   for (final p in perfil) {
@@ -327,7 +381,10 @@ Element3DMesh _dome({required int slices, required int arcos}) {
   // Polo em -0.5 (cima), base em +0.5: centrada na propria altura.
   final perfil = <List<double>>[
     for (var k = 0; k <= arcos; k++)
-      [math.sin(math.pi / 2 * k / arcos), 0.5 - math.cos(math.pi / 2 * k / arcos)],
+      [
+        math.sin(math.pi / 2 * k / arcos),
+        0.5 - math.cos(math.pi / 2 * k / arcos),
+      ],
   ];
   return _revolve(perfil, slices, tampaFim: true);
 }
@@ -392,7 +449,10 @@ Element3DMesh _sphere({required int stacks, required int slices}) {
   for (var st = 0; st < stacks; st++) {
     for (var sl = 0; sl < slices; sl++) {
       faces.add([
-        at(st, sl), at(st, sl + 1), at(st + 1, sl + 1), at(st + 1, sl),
+        at(st, sl),
+        at(st, sl + 1),
+        at(st + 1, sl + 1),
+        at(st + 1, sl),
       ]);
     }
   }
@@ -430,8 +490,7 @@ Element3DMesh _extrude({
   final faces = <List<int>>[
     [for (var i = 0; i < n; i++) i],
     [for (var i = 0; i < n; i++) n + i],
-    for (var i = 0; i < n; i++)
-      [i, (i + 1) % n, n + (i + 1) % n, n + i],
+    for (var i = 0; i < n; i++) [i, (i + 1) % n, n + (i + 1) % n, n + i],
   ];
   return Element3DMesh(verts, faces);
 }
@@ -451,8 +510,7 @@ Element3DMesh _diamond() {
   verts.add([0, 1.05, 0]);
   final faces = <List<int>>[
     [0, 1, 2, 3, 4, 5],
-    for (var i = 0; i < 6; i++)
-      [i, (i + 1) % 6, 6 + (i + 1) % 6, 6 + i],
+    for (var i = 0; i < 6; i++) [i, (i + 1) % 6, 6 + (i + 1) % 6, 6 + i],
     for (var i = 0; i < 6; i++) [6 + i, 6 + (i + 1) % 6, 12],
   ];
   return Element3DMesh(verts, faces);
@@ -484,23 +542,22 @@ Element3DMesh _torus({
 }
 
 String element3DLabel(Element3DKind kind) => switch (kind) {
-      Element3DKind.cube => 'Cubo',
-      Element3DKind.pyramid => 'Piramide',
-      Element3DKind.cone => 'Cone',
-      Element3DKind.sphere => 'Esfera',
-      Element3DKind.cylinder => 'Cilindro',
-      Element3DKind.prism => 'Prisma',
-      Element3DKind.diamond => 'Diamante',
-      Element3DKind.torus => 'Anel 3D',
-      Element3DKind.star => 'Estrela 3D',
-      Element3DKind.plane => 'Plano',
-      Element3DKind.capsule => 'Capsula',
-      Element3DKind.tube => 'Tubo',
-      Element3DKind.octahedron => 'Octaedro',
-      Element3DKind.wedge => 'Rampa',
-      Element3DKind.dome => 'Cupula',
-    };
-
+  Element3DKind.cube => 'Cubo',
+  Element3DKind.pyramid => 'Piramide',
+  Element3DKind.cone => 'Cone',
+  Element3DKind.sphere => 'Esfera',
+  Element3DKind.cylinder => 'Cilindro',
+  Element3DKind.prism => 'Prisma',
+  Element3DKind.diamond => 'Diamante',
+  Element3DKind.torus => 'Anel 3D',
+  Element3DKind.star => 'Estrela 3D',
+  Element3DKind.plane => 'Plano',
+  Element3DKind.capsule => 'Capsula',
+  Element3DKind.tube => 'Tubo',
+  Element3DKind.octahedron => 'Octaedro',
+  Element3DKind.wedge => 'Rampa',
+  Element3DKind.dome => 'Cupula',
+};
 
 /// CUBO COM CHANFRO nas arestas.
 ///
@@ -592,11 +649,7 @@ Element3DMesh _cuboChanfrado({double chanfro = 0.075}) {
   for (final sx in const [-1.0, 1.0]) {
     for (final sy in const [-1.0, 1.0]) {
       for (final sz in const [-1.0, 1.0]) {
-        faces.add([
-          em(sx, sy, sz, 0),
-          em(sx, sy, sz, 1),
-          em(sx, sy, sz, 2),
-        ]);
+        faces.add([em(sx, sy, sz, 0), em(sx, sy, sz, 1), em(sx, sy, sz, 2)]);
       }
     }
   }

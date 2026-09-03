@@ -43,11 +43,20 @@ class ProxyService {
   final ValueNotifier<int> revision = ValueNotifier(0);
 
   /// Caminho do proxy de [source], ou null se ainda nao existe.
-  String? proxyOf(String source) => _pronto[source];
+  String? proxyOf(String source) {
+    final path = _pronto[source];
+    if (path == null) return null;
+    try {
+      if (File(path).lengthSync() > 4096) return path;
+    } catch (_) {}
+    _pronto.remove(source);
+    revision.value++;
+    return null;
+  }
 
   /// O que o player deve tocar: o proxy quando ha, o original quando
   /// nao ha. Nunca falha por falta de proxy.
-  String playbackPath(String source) => _pronto[source] ?? source;
+  String playbackPath(String source) => proxyOf(source) ?? source;
 
   static String _key(String path) {
     var stamp = '';
@@ -66,14 +75,48 @@ class ProxyService {
   }
 
   /// Gera o proxy se ainda nao houver. Seguro chamar varias vezes.
-  Future<void> ensureProxy(String source) {
-    if (_pronto.containsKey(source)) return Future.value();
-    return _emAndamento[source] ??= _build(source).whenComplete(() {
-      _emAndamento.remove(source);
+  ///
+  /// [force] existe para operacoes que dependem semanticamente do proxy
+  /// (reverso, por exemplo). O pre-cache comum continua podendo pular
+  /// arquivos pequenos, onde uma copia leve nao traria beneficio.
+  Future<void> ensureProxy(String source, {bool force = false}) async {
+    if (proxyOf(source) != null) return;
+
+    final running = _emAndamento[source];
+    if (running != null) {
+      await running;
+      if (proxyOf(source) != null || !force) return;
+      // Reentra pela verificacao do mapa: outro chamador que acordou do
+      // mesmo Future pode ter iniciado a tentativa forcada primeiro.
+      await ensureProxy(source, force: true);
+      return;
+    }
+
+    late final Future<void> pending;
+    pending = _build(source, force: force).whenComplete(() {
+      if (identical(_emAndamento[source], pending)) {
+        _emAndamento.remove(source);
+      }
     });
+    _emAndamento[source] = pending;
+    await pending;
   }
 
-  Future<void> _build(String source) async {
+  /// Garante uma copia apta a busca quadro a quadro e so devolve caminho
+  /// depois do rename atomico. `null` significa falha real; o chamador
+  /// nao deve habilitar reverso nesse caso.
+  Future<String?> ensureReverseProxy(String source) async {
+    await ensureProxy(source, force: true);
+    final path = proxyOf(source);
+    if (path == null) return null;
+    try {
+      return File(path).lengthSync() > 4096 ? path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _build(String source, {bool force = false}) async {
     try {
       final dir = await _dir();
       final target = File('${dir.path}/${_key(source)}.mp4');
@@ -84,12 +127,13 @@ class ProxyService {
         revision.value++;
         return;
       }
+      if (target.existsSync()) target.deleteSync();
 
       // NAO VALE A PENA: se a fonte ja e pequena ou baixa, o proxy so
       // gasta disco e tempo — e chega a ficar MAIOR que o original,
       // porque GOP curto custa taxa. O proxy existe para arquivo
       // grande, que e onde o scrub trava.
-      if (!await _valeAPena(source)) {
+      if (!force && !await _valeAPena(source)) {
         progress[source] = 1;
         revision.value++;
         return;

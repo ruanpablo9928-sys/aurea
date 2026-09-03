@@ -10,6 +10,7 @@ import '../../domain/mask.dart';
 class MaskSpec {
   const MaskSpec({
     required this.path,
+    required this.closed,
     required this.mode,
     required this.inverted,
     required this.opacity,
@@ -18,8 +19,12 @@ class MaskSpec {
     this.featherY,
   });
 
-
   final Path path;
+
+  /// Caminho aberto serve de entrada para efeitos/edicao, mas nao cria
+  /// uma area de recorte. O Canvas preencheria fechando as pontas em
+  /// silencio, por isso o estado precisa chegar explicitamente ao render.
+  final bool closed;
   final MaskMode mode;
   final bool inverted;
   final double opacity;
@@ -48,7 +53,9 @@ class MaskedBox extends SingleChildRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) => _RenderMaskedBox(
-      specs, MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0);
+    specs,
+    MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
+  );
 
   @override
   void updateRenderObject(BuildContext context, RenderObject renderObject) {
@@ -60,6 +67,32 @@ class MaskedBox extends SingleChildRenderObjectWidget {
 
 class _RenderMaskedBox extends RenderProxyBox {
   _RenderMaskedBox(this._specs, this._pixelRatio);
+
+  /// A pilha e composta como um campo grayscale OPACO. So no restore
+  /// final o cinza vira alfa; assim Lighten/Darken operam em max/min do
+  /// valor da mascara, em vez de aplicarem as regras de alfa do srcOver.
+  static const _grayToAlpha = ColorFilter.matrix(<double>[
+    0,
+    0,
+    0,
+    0,
+    255,
+    0,
+    0,
+    0,
+    0,
+    255,
+    0,
+    0,
+    0,
+    0,
+    255,
+    1,
+    0,
+    0,
+    0,
+    0,
+  ]);
 
   List<MaskSpec> _specs;
   set specs(List<MaskSpec> v) {
@@ -98,7 +131,11 @@ class _RenderMaskedBox extends RenderProxyBox {
       return;
     }
     final limites = Rect.fromLTWH(
-        -folga, -folga, size.width + 2 * folga, size.height + 2 * folga);
+      -folga,
+      -folga,
+      size.width + 2 * folga,
+      size.height + 2 * folga,
+    );
     final camada = OffsetLayer();
     final ctx = PaintingContext(camada, limites);
     ctx.paintChild(filho, Offset.zero);
@@ -110,8 +147,11 @@ class _RenderMaskedBox extends RenderProxyBox {
     canvas.save();
     canvas.translate(offset.dx - folga, offset.dy - folga);
     canvas.scale(1 / _pixelRatio);
-    canvas.drawImage(foto, Offset.zero,
-        Paint()..filterQuality = FilterQuality.low);
+    canvas.drawImage(
+      foto,
+      Offset.zero,
+      Paint()..filterQuality = FilterQuality.low,
+    );
     canvas.restore();
     foto.dispose();
   }
@@ -121,7 +161,7 @@ class _RenderMaskedBox extends RenderProxyBox {
     if (child == null) return;
     final active = [
       for (final s in _specs)
-        if (s.mode != MaskMode.none) s,
+        if (s.mode != MaskMode.none && s.closed) s,
     ];
     if (active.isEmpty) {
       context.paintChild(child!, offset);
@@ -129,8 +169,13 @@ class _RenderMaskedBox extends RenderProxyBox {
     }
 
     final canvas = context.canvas;
-    // O conteudo da camada pode desenhar alem do size; folga generosa.
-    final rect = (offset & size).inflate(1400);
+    // A cobertura termina EXATAMENTE nos limites da camada. O retangulo
+    // de trabalho continua com folga para fotografar filhos compostos,
+    // mas o matte e recortado em [layerRect]: feather nunca nasce fora
+    // do conteudo e um caminho encostado na borda termina seco, como a UI
+    // avisa.
+    final layerRect = offset & size;
+    final rect = layerRect.inflate(1400);
     canvas.saveLayer(rect, Paint());
     // Folga da foto: o halo de um glow e a expansao da mascara cabem.
     var folga = 160.0;
@@ -140,52 +185,103 @@ class _RenderMaskedBox extends RenderProxyBox {
     }
     _pintarFilho(context, offset, folga.clamp(160.0, 720.0));
 
-    // Cobertura das mascaras multiplica o alfa do conteudo.
-    canvas.saveLayer(rect, Paint()..blendMode = BlendMode.dstIn);
+    // Cobertura das mascaras multiplica o alfa do conteudo. Durante a
+    // acumulacao ela fica em RGB grayscale com alfa 1; no restore este
+    // filtro copia R para alfa e deixa RGB branco para o dstIn final.
+    canvas.saveLayer(
+      rect,
+      Paint()
+        ..blendMode = BlendMode.dstIn
+        ..colorFilter = _grayToAlpha,
+    );
+    canvas.save();
+    canvas.clipRect(layerRect);
 
-    // Primeira mascara em modo que "corta de" precisa de base cheia.
+    // A primeira Add/Lighten nasce do vazio. Os modos que medem, cortam
+    // ou diferenciam a entrada nascem cheios, para agirem contra o alfa
+    // original da camada quando o campo for aplicado por dstIn.
     final firstMode = active.first.mode;
-    if (firstMode == MaskMode.subtract ||
+    final startsFull =
+        firstMode == MaskMode.subtract ||
+        firstMode == MaskMode.intersect ||
         firstMode == MaskMode.darken ||
-        firstMode == MaskMode.difference) {
-      canvas.drawRect(rect, Paint()..color = const Color(0xFFFFFFFF));
-    }
+        firstMode == MaskMode.difference;
+    canvas.drawRect(
+      layerRect,
+      Paint()
+        ..color = startsFull
+            ? const Color(0xFFFFFFFF)
+            : const Color(0xFF000000),
+    );
 
     final center = offset + Offset(size.width / 2, size.height / 2);
-    var first = true;
     for (final s in active) {
-      final blend = first ? _firstBlend(s.mode) : _blendFor(s.mode);
-      first = false;
+      final subtract = s.mode == MaskMode.subtract;
+      final opacity = s.opacity.clamp(0.0, 1.0);
+
+      // P e o campo geometrico branco (0..1). A mascara efetiva S e
+      // opacity*P, ou opacity*(1-P) quando invertida. Subtract precisa
+      // do operando (1-S); os outros recebem S diretamente.
+      final double factor;
+      final double bias;
+      if (subtract) {
+        factor = s.inverted ? opacity : -opacity;
+        bias = s.inverted ? 255 * (1 - opacity) : 255;
+      } else {
+        factor = s.inverted ? -opacity : opacity;
+        bias = s.inverted ? 255 * opacity : 0;
+      }
       canvas.saveLayer(
         rect,
         Paint()
-          ..blendMode = blend
-          ..color = const Color(0xFFFFFFFF)
-              .withValues(alpha: s.opacity.clamp(0.0, 1.0)),
+          ..blendMode = _blendFor(s.mode)
+          ..colorFilter = ColorFilter.matrix(<double>[
+            factor,
+            0,
+            0,
+            0,
+            bias,
+            0,
+            factor,
+            0,
+            0,
+            bias,
+            0,
+            0,
+            factor,
+            0,
+            bias,
+            0,
+            0,
+            0,
+            1,
+            0,
+          ]),
       );
 
-      var g = s.path.shift(center);
-      if (s.inverted) {
-        g = Path.combine(
-            PathOperation.difference, Path()..addRect(rect), g);
-      }
+      // Campo P opaco: preto fora, branco dentro. Inversao e opacidade
+      // entram no filtro acima, sem borrar a borda externa da camada.
+      canvas.drawRect(layerRect, Paint()..color = const Color(0xFF000000));
+      final g = s.path.shift(center);
 
       // Feather por EIXO: o blur vai numa camada propria porque
       // MaskFilter e redondo por definicao — nao ha como pedir 40 px em
       // cima e 0 dos lados com ele. ImageFilter aceita os dois sigmas, e
       // e o que permite o degrade de horizonte.
       final borrar = s.feather > 0.5 || s.featherVertical > 0.5;
-      if (borrar) {
-        canvas.saveLayer(
-          rect,
-          Paint()
-            ..imageFilter = ui.ImageFilter.blur(
-              // 25 ~ 12,5 px por lado, como antes.
-              sigmaX: s.feather > 0.5 ? s.feather / 4 : 0.0001,
-              sigmaY: s.featherVertical > 0.5 ? s.featherVertical / 4 : 0.0001,
-            ),
-        );
-      }
+      canvas.saveLayer(
+        rect,
+        Paint()
+          ..imageFilter = borrar
+              ? ui.ImageFilter.blur(
+                  // 25 ~ 12,5 px por lado, como antes.
+                  sigmaX: s.feather > 0.5 ? s.feather / 4 : 0.0001,
+                  sigmaY: s.featherVertical > 0.5
+                      ? s.featherVertical / 4
+                      : 0.0001,
+                )
+              : null,
+      );
 
       canvas.drawPath(g, Paint()..color = const Color(0xFFFFFFFF));
 
@@ -204,31 +300,25 @@ class _RenderMaskedBox extends RenderProxyBox {
         }
       }
 
-      if (borrar) canvas.restore();
+      canvas.restore();
       canvas.restore();
     }
 
     canvas.restore();
     canvas.restore();
+    canvas.restore();
   }
 
-  /// A primeira mascara interage com o alfa da camada: modos que cortam
-  /// operam sobre a base cheia; os aditivos comecam do vazio.
-  BlendMode _firstBlend(MaskMode mode) => switch (mode) {
-        MaskMode.subtract => BlendMode.dstOut,
-        MaskMode.darken => BlendMode.darken,
-        MaskMode.difference => BlendMode.xor,
-        _ => BlendMode.srcOver,
-      };
-
-  /// Mascaras seguintes interagem com as de cima na pilha.
+  /// Operacoes sobre campos escalares opacos D (acumulado) e S (mascara):
+  /// Add = screen, Subtract = D*(1-S), Intersect = D*S,
+  /// Lighten = max, Darken = min e Difference = abs(D-S).
   BlendMode _blendFor(MaskMode mode) => switch (mode) {
-        MaskMode.add => BlendMode.srcOver,
-        MaskMode.subtract => BlendMode.dstOut,
-        MaskMode.intersect => BlendMode.dstIn,
-        MaskMode.lighten => BlendMode.lighten,
-        MaskMode.darken => BlendMode.darken,
-        MaskMode.difference => BlendMode.xor,
-        MaskMode.none => BlendMode.srcOver,
-      };
+    MaskMode.add => BlendMode.screen,
+    MaskMode.subtract => BlendMode.multiply,
+    MaskMode.intersect => BlendMode.multiply,
+    MaskMode.lighten => BlendMode.lighten,
+    MaskMode.darken => BlendMode.darken,
+    MaskMode.difference => BlendMode.difference,
+    MaskMode.none => BlendMode.screen,
+  };
 }

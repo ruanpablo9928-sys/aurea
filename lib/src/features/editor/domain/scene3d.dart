@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import 'element3d.dart';
 import 'keyframe.dart';
+import 'panorama3d.dart';
 
 /// CENA 3D (spec AUREA-cena-3d): um CONTEINER que, por fora, e UMA
 /// camada do compositor e, por dentro, tem seu proprio renderizador.
@@ -20,7 +21,7 @@ import 'keyframe.dart';
 /// POR TRIANGULO em vez de por objeto, que resolve interpenetracao, e
 /// bater todas as instancias numa unica chamada de desenho.
 
-enum MaterialKind { pbr, unlit, transparent }
+enum MaterialKind { pbr, unlit, transparent, cutout }
 
 class Material3D {
   const Material3D({
@@ -34,6 +35,12 @@ class Material3D {
     this.textureLayerId,
     this.reflectivity = 0.0,
     this.imagePath,
+    this.faceImagePaths = const {},
+    this.normalStrength = 1,
+    this.occlusionStrength = 1,
+    this.alphaCutoff = 0.5,
+    this.doubleSided = false,
+    this.packedChannels = false,
   });
 
   final String name;
@@ -54,13 +61,25 @@ class Material3D {
   /// caixa (cada face recebe a imagem pelo eixo que ela mais encara).
   final String? imagePath;
 
+  /// Textura opcional por indice de face; a imagem geral continua sendo o
+  /// fallback. Isso cobre embalagem/tela sem multiplicar objetos.
+  final Map<int, String> faceImagePaths;
+
+  final double normalStrength;
+  final double occlusionStrength;
+  final double alphaCutoff;
+  final bool doubleSided;
+  final bool packedChannels;
+
   /// TEXTURA VINDA DE CAMADA DA CENA (§6): uma precomp animada vira a
   /// tela de um celular 3D ou o rotulo de uma embalagem. E o recurso
   /// que mais rende num app de motion.
   final String? textureLayerId;
 
   bool get isTransparent =>
-      kind == MaterialKind.transparent || opacity < 0.999;
+      kind == MaterialKind.transparent ||
+      kind == MaterialKind.cutout ||
+      opacity < 0.999;
 
   Material3D copyWith({
     String? name,
@@ -73,23 +92,150 @@ class Material3D {
     String? textureLayerId,
     double? reflectivity,
     String? imagePath,
+    Map<int, String>? faceImagePaths,
+    double? normalStrength,
+    double? occlusionStrength,
+    double? alphaCutoff,
+    bool? doubleSided,
+    bool? packedChannels,
     bool clearImage = false,
-  }) =>
-      Material3D(
-        name: name ?? this.name,
-        baseColor: baseColor ?? this.baseColor,
-        metallic: metallic ?? this.metallic,
-        roughness: roughness ?? this.roughness,
-        emissive: emissive ?? this.emissive,
-        opacity: opacity ?? this.opacity,
-        kind: kind ?? this.kind,
-        textureLayerId: textureLayerId ?? this.textureLayerId,
-        reflectivity: reflectivity ?? this.reflectivity,
-        imagePath: clearImage ? null : (imagePath ?? this.imagePath),
-      );
+    bool clearTextureLayer = false,
+  }) => Material3D(
+    name: name ?? this.name,
+    baseColor: baseColor ?? this.baseColor,
+    metallic: metallic ?? this.metallic,
+    roughness: roughness ?? this.roughness,
+    emissive: emissive ?? this.emissive,
+    opacity: opacity ?? this.opacity,
+    kind: kind ?? this.kind,
+    textureLayerId: clearTextureLayer
+        ? null
+        : (textureLayerId ?? this.textureLayerId),
+    reflectivity: reflectivity ?? this.reflectivity,
+    imagePath: clearImage ? null : (imagePath ?? this.imagePath),
+    faceImagePaths: faceImagePaths ?? this.faceImagePaths,
+    normalStrength: normalStrength ?? this.normalStrength,
+    occlusionStrength: occlusionStrength ?? this.occlusionStrength,
+    alphaCutoff: alphaCutoff ?? this.alphaCutoff,
+    doubleSided: doubleSided ?? this.doubleSided,
+    packedChannels: packedChannels ?? this.packedChannels,
+  );
 }
 
-enum Light3DKind { directional, point, ambient }
+enum MaterialPreset3D {
+  polishedMetal,
+  brushedMetal,
+  chrome,
+  plastic,
+  glass,
+  frostedGlass,
+  ceramic,
+  rubber,
+  wood,
+  mattePaint,
+  emissiveNeon,
+  unlit,
+}
+
+String materialPresetLabel(MaterialPreset3D preset) => switch (preset) {
+  MaterialPreset3D.polishedMetal => 'Metal polido',
+  MaterialPreset3D.brushedMetal => 'Metal escovado',
+  MaterialPreset3D.chrome => 'Cromo',
+  MaterialPreset3D.plastic => 'Plastico',
+  MaterialPreset3D.glass => 'Vidro',
+  MaterialPreset3D.frostedGlass => 'Vidro fosco',
+  MaterialPreset3D.ceramic => 'Ceramica',
+  MaterialPreset3D.rubber => 'Borracha',
+  MaterialPreset3D.wood => 'Madeira',
+  MaterialPreset3D.mattePaint => 'Tinta fosca',
+  MaterialPreset3D.emissiveNeon => 'Emissivo neon',
+  MaterialPreset3D.unlit => 'Sem luz',
+};
+
+Material3D materialFromPreset(MaterialPreset3D preset) => switch (preset) {
+  MaterialPreset3D.polishedMetal => const Material3D(
+    name: 'Metal polido',
+    baseColor: Color(0xFFCED5DC),
+    metallic: 1,
+    roughness: 0.05,
+    reflectivity: 1,
+  ),
+  MaterialPreset3D.brushedMetal => const Material3D(
+    name: 'Metal escovado',
+    baseColor: Color(0xFFABB3BA),
+    metallic: 0.95,
+    roughness: 0.34,
+    reflectivity: 0.8,
+  ),
+  MaterialPreset3D.chrome => const Material3D(
+    name: 'Cromo',
+    baseColor: Color(0xFFF2F4F5),
+    metallic: 1,
+    roughness: 0,
+    reflectivity: 1,
+  ),
+  MaterialPreset3D.plastic => const Material3D(
+    name: 'Plastico',
+    baseColor: Color(0xFFEF4B55),
+    roughness: 0.28,
+    reflectivity: 0.28,
+  ),
+  MaterialPreset3D.glass => const Material3D(
+    name: 'Vidro',
+    baseColor: Color(0xFFDDF6FF),
+    roughness: 0.04,
+    opacity: 0.24,
+    reflectivity: 0.9,
+    kind: MaterialKind.transparent,
+    doubleSided: true,
+  ),
+  MaterialPreset3D.frostedGlass => const Material3D(
+    name: 'Vidro fosco',
+    baseColor: Color(0xFFE8F7FA),
+    roughness: 0.68,
+    opacity: 0.52,
+    reflectivity: 0.45,
+    kind: MaterialKind.transparent,
+    doubleSided: true,
+  ),
+  MaterialPreset3D.ceramic => const Material3D(
+    name: 'Ceramica',
+    baseColor: Color(0xFFF4EEE2),
+    roughness: 0.18,
+    reflectivity: 0.34,
+  ),
+  MaterialPreset3D.rubber => const Material3D(
+    name: 'Borracha',
+    baseColor: Color(0xFF25282B),
+    roughness: 0.9,
+    reflectivity: 0.04,
+  ),
+  MaterialPreset3D.wood => const Material3D(
+    name: 'Madeira',
+    baseColor: Color(0xFF9A6138),
+    roughness: 0.65,
+    reflectivity: 0.08,
+  ),
+  MaterialPreset3D.mattePaint => const Material3D(
+    name: 'Tinta fosca',
+    baseColor: Color(0xFF496BC8),
+    roughness: 0.82,
+    reflectivity: 0.08,
+  ),
+  MaterialPreset3D.emissiveNeon => const Material3D(
+    name: 'Emissivo neon',
+    baseColor: Color(0xFF35F4FF),
+    roughness: 0.25,
+    emissive: 1.4,
+  ),
+  MaterialPreset3D.unlit => const Material3D(
+    name: 'Sem luz',
+    baseColor: Color(0xFFFFFFFF),
+    kind: MaterialKind.unlit,
+  ),
+};
+
+enum Light3DKind { directional, point, ambient, spot }
 
 class Light3D {
   Light3D({
@@ -101,8 +247,10 @@ class Light3D {
     this.position = const Vec3(0, 300, 300),
     this.range = 1200,
     this.castsShadow = false,
-  })  : id = id ?? const Uuid().v4(),
-        intensity = intensity ?? AnimatedDouble(1);
+    this.coneDegrees = 45,
+    this.softness = 0.2,
+  }) : id = id ?? const Uuid().v4(),
+       intensity = intensity ?? AnimatedDouble(1);
 
   final String id;
   final Light3DKind kind;
@@ -115,6 +263,8 @@ class Light3D {
   /// as luzes que a alcancam.
   final double range;
   final bool castsShadow;
+  final double coneDegrees;
+  final double softness;
 
   Light3D copyWith({
     Light3DKind? kind,
@@ -124,17 +274,20 @@ class Light3D {
     Vec3? position,
     double? range,
     bool? castsShadow,
-  }) =>
-      Light3D(
-        id: id,
-        kind: kind ?? this.kind,
-        color: color ?? this.color,
-        intensity: intensity ?? this.intensity,
-        direction: direction ?? this.direction,
-        position: position ?? this.position,
-        range: range ?? this.range,
-        castsShadow: castsShadow ?? this.castsShadow,
-      );
+    double? coneDegrees,
+    double? softness,
+  }) => Light3D(
+    id: id,
+    kind: kind ?? this.kind,
+    color: color ?? this.color,
+    intensity: intensity ?? this.intensity,
+    direction: direction ?? this.direction,
+    position: position ?? this.position,
+    range: range ?? this.range,
+    castsShadow: castsShadow ?? this.castsShadow,
+    coneDegrees: coneDegrees ?? this.coneDegrees,
+    softness: softness ?? this.softness,
+  );
 }
 
 /// Vetor 3D minimo (evita puxar vector_math para o modelo).
@@ -153,11 +306,8 @@ class Vec3 {
 
   double dot(Vec3 o) => x * o.x + y * o.y + z * o.z;
 
-  Vec3 cross(Vec3 o) => Vec3(
-        y * o.z - z * o.y,
-        z * o.x - x * o.z,
-        x * o.y - y * o.x,
-      );
+  Vec3 cross(Vec3 o) =>
+      Vec3(y * o.z - z * o.y, z * o.x - x * o.z, x * o.y - y * o.x);
 
   double get length => math.sqrt(x * x + y * y + z * z);
 
@@ -178,6 +328,56 @@ class Bounds3D {
   final double radius;
 
   static const empty = Bounds3D(Vec3.zero, 0);
+}
+
+enum MeshLod3D { auto, high, medium, low }
+
+class ModelCredit3D {
+  const ModelCredit3D({this.author, this.license, this.url});
+
+  final String? author;
+  final String? license;
+  final String? url;
+
+  bool get isEmpty => author == null && license == null && url == null;
+  String get badge => [
+    author,
+    license,
+    if (author == null && license == null) url,
+  ].whereType<String>().join(' · ');
+}
+
+/// Metadados suficientes para reabrir um modelo importado sem serializar
+/// milhares de vertices no projeto. A persistencia pode reler [path] e
+/// escolher os LODs novamente.
+class ModelSource3D {
+  const ModelSource3D({
+    required this.path,
+    required this.triangles,
+    this.bytes = 0,
+    this.meshes = 1,
+    this.materials = 0,
+    this.textures = 0,
+    this.animations = 0,
+    this.nodeNames = const [],
+    this.animationNames = const [],
+    this.overBudget = false,
+    this.lodCount = 3,
+    this.warning,
+  });
+
+  final String path;
+  final int triangles;
+  final int bytes;
+  final int meshes;
+  final int materials;
+  final int textures;
+  final int animations;
+  final List<String> nodeNames;
+  final List<String> animationNames;
+  final bool overBudget;
+  final int lodCount;
+  final String? warning;
 }
 
 /// Um NO do grafo de cena.
@@ -202,14 +402,23 @@ class SceneNode {
     this.extrudeDepth = 40,
     this.parentId,
     this.isNull = false,
-  })  : id = id ?? const Uuid().v4(),
-        x = x ?? AnimatedDouble(0),
-        y = y ?? AnimatedDouble(0),
-        z = z ?? AnimatedDouble(0),
-        rotX = rotX ?? AnimatedDouble(0),
-        rotY = rotY ?? AnimatedDouble(0),
-        rotZ = rotZ ?? AnimatedDouble(0),
-        scale = scale ?? AnimatedDouble(1);
+    this.locked = false,
+    this.colorTag = const Color(0xFF7C62FF),
+    this.lod = MeshLod3D.auto,
+    this.mediumMesh,
+    this.lowMesh,
+    this.subdivisions = 0,
+    this.credit = const ModelCredit3D(),
+    this.modelSource,
+    this.animationClip,
+  }) : id = id ?? const Uuid().v4(),
+       x = x ?? AnimatedDouble(0),
+       y = y ?? AnimatedDouble(0),
+       z = z ?? AnimatedDouble(0),
+       rotX = rotX ?? AnimatedDouble(0),
+       rotY = rotY ?? AnimatedDouble(0),
+       rotZ = rotZ ?? AnimatedDouble(0),
+       scale = scale ?? AnimatedDouble(1);
 
   final String id;
   final String name;
@@ -246,9 +455,17 @@ class SceneNode {
 
   /// NULO 3D: so transforma, nao desenha. E o pivo dos rigs.
   final bool isNull;
+  final bool locked;
+  final Color colorTag;
+  final MeshLod3D lod;
+  final Element3DMesh? mediumMesh;
+  final Element3DMesh? lowMesh;
+  final int subdivisions;
+  final ModelCredit3D credit;
+  final ModelSource3D? modelSource;
+  final String? animationClip;
 
-  Vec3 positionAt(Duration t) =>
-      Vec3(x.valueAt(t), y.valueAt(t), z.valueAt(t));
+  Vec3 positionAt(Duration t) => Vec3(x.valueAt(t), y.valueAt(t), z.valueAt(t));
 
   SceneNode copyWith({
     String? name,
@@ -270,28 +487,78 @@ class SceneNode {
     String? parentId,
     bool clearParent = false,
     bool? isNull,
-  }) =>
-      SceneNode(
-        id: id,
-        name: name ?? this.name,
-        kind: kind ?? this.kind,
-        material: material ?? this.material,
-        x: x ?? this.x,
-        y: y ?? this.y,
-        z: z ?? this.z,
-        rotX: rotX ?? this.rotX,
-        rotY: rotY ?? this.rotY,
-        rotZ: rotZ ?? this.rotZ,
-        scale: scale ?? this.scale,
-        size: size ?? this.size,
-        visible: visible ?? this.visible,
-        instances: instances ?? this.instances,
-        mesh: mesh ?? this.mesh,
-        outline: outline ?? this.outline,
-        extrudeDepth: extrudeDepth ?? this.extrudeDepth,
-        parentId: clearParent ? null : (parentId ?? this.parentId),
-        isNull: isNull ?? this.isNull,
-      );
+    bool? locked,
+    Color? colorTag,
+    MeshLod3D? lod,
+    Element3DMesh? mediumMesh,
+    Element3DMesh? lowMesh,
+    int? subdivisions,
+    ModelCredit3D? credit,
+    ModelSource3D? modelSource,
+    String? animationClip,
+    bool clearAnimationClip = false,
+  }) => SceneNode(
+    id: id,
+    name: name ?? this.name,
+    kind: kind ?? this.kind,
+    material: material ?? this.material,
+    x: x ?? this.x,
+    y: y ?? this.y,
+    z: z ?? this.z,
+    rotX: rotX ?? this.rotX,
+    rotY: rotY ?? this.rotY,
+    rotZ: rotZ ?? this.rotZ,
+    scale: scale ?? this.scale,
+    size: size ?? this.size,
+    visible: visible ?? this.visible,
+    instances: instances ?? this.instances,
+    mesh: mesh ?? this.mesh,
+    outline: outline ?? this.outline,
+    extrudeDepth: extrudeDepth ?? this.extrudeDepth,
+    parentId: clearParent ? null : (parentId ?? this.parentId),
+    isNull: isNull ?? this.isNull,
+    locked: locked ?? this.locked,
+    colorTag: colorTag ?? this.colorTag,
+    lod: lod ?? this.lod,
+    mediumMesh: mediumMesh ?? this.mediumMesh,
+    lowMesh: lowMesh ?? this.lowMesh,
+    subdivisions: subdivisions ?? this.subdivisions,
+    credit: credit ?? this.credit,
+    modelSource: modelSource ?? this.modelSource,
+    animationClip: clearAnimationClip
+        ? null
+        : (animationClip ?? this.animationClip),
+  );
+
+  SceneNode duplicate({String? name}) => SceneNode(
+    name: name ?? '${this.name} copia',
+    kind: kind,
+    material: material,
+    x: x,
+    y: y,
+    z: z,
+    rotX: rotX,
+    rotY: rotY,
+    rotZ: rotZ,
+    scale: scale,
+    size: size,
+    visible: visible,
+    instances: instances,
+    mesh: mesh,
+    outline: outline,
+    extrudeDepth: extrudeDepth,
+    parentId: parentId,
+    isNull: isNull,
+    locked: locked,
+    colorTag: colorTag,
+    lod: lod,
+    mediumMesh: mediumMesh,
+    lowMesh: lowMesh,
+    subdivisions: subdivisions,
+    credit: credit,
+    modelSource: modelSource,
+    animationClip: animationClip,
+  );
 }
 
 /// CAMERA SALVA (cena §9 / camera §6): guardar um enquadramento e
@@ -307,6 +574,16 @@ class SavedView {
   final Vec3 position;
   final Vec3 target;
 }
+
+EnvironmentKind environmentForPanorama(PanoramaPreset preset) =>
+    switch (preset) {
+      PanoramaPreset.estudio => EnvironmentKind.estudio,
+      PanoramaPreset.porDoSol => EnvironmentKind.porDoSol,
+      PanoramaPreset.noite => EnvironmentKind.noite,
+      PanoramaPreset.neon => EnvironmentKind.neon,
+      PanoramaPreset.branco => EnvironmentKind.branco,
+      PanoramaPreset.interior => EnvironmentKind.interior,
+    };
 
 /// A CENA: grafo de nos, luzes e orcamento.
 class Scene3D {
@@ -325,6 +602,10 @@ class Scene3D {
     this.cameraParentId,
     this.environment = EnvironmentKind.estudio,
     this.envReflect = 0.7,
+    this.panorama = const Panorama3D(),
+    this.reflectionProbe = const ReflectionProbe3D(),
+    this.planarFloorReflection = false,
+    this.planarFloorRoughness = 0.2,
   });
 
   final List<SceneNode> nodes;
@@ -333,6 +614,13 @@ class Scene3D {
   /// forca global do reflexo, que multiplica a de cada material.
   final EnvironmentKind environment;
   final double envReflect;
+  final Panorama3D panorama;
+  final ReflectionProbe3D reflectionProbe;
+
+  /// Reflexo planar simples do piso; separado da sonda para poder ser
+  /// desligado primeiro na degradacao automatica.
+  final bool planarFloorReflection;
+  final double planarFloorRoughness;
 
   /// De qual NO da cena a camera interna e filha. Nulo = solta.
   ///
@@ -394,46 +682,58 @@ class Scene3D {
     bool clearCameraParent = false,
     EnvironmentKind? environment,
     double? envReflect,
-  }) =>
-      Scene3D(
-        environment: environment ?? this.environment,
-        envReflect: envReflect ?? this.envReflect,
-        nodes: nodes ?? this.nodes,
-        lights: lights ?? this.lights,
-        savedViews: savedViews ?? this.savedViews,
-        ambient: ambient ?? this.ambient,
-        skyColor: skyColor ?? this.skyColor,
-        groundColor: groundColor ?? this.groundColor,
-        tonemap: tonemap ?? this.tonemap,
-        background: background ?? this.background,
-        showFloorGrid: showFloorGrid ?? this.showFloorGrid,
-        msaa: msaa ?? this.msaa,
-        draftMode: draftMode ?? this.draftMode,
-        cameraParentId: clearCameraParent
-            ? null
-            : (cameraParentId ?? this.cameraParentId),
-      );
+    Panorama3D? panorama,
+    ReflectionProbe3D? reflectionProbe,
+    bool? planarFloorReflection,
+    double? planarFloorRoughness,
+  }) => Scene3D(
+    environment: environment ?? this.environment,
+    envReflect: envReflect ?? this.envReflect,
+    panorama: panorama ?? this.panorama,
+    reflectionProbe: reflectionProbe ?? this.reflectionProbe,
+    planarFloorReflection: planarFloorReflection ?? this.planarFloorReflection,
+    planarFloorRoughness: planarFloorRoughness ?? this.planarFloorRoughness,
+    nodes: nodes ?? this.nodes,
+    lights: lights ?? this.lights,
+    savedViews: savedViews ?? this.savedViews,
+    ambient: ambient ?? this.ambient,
+    skyColor: skyColor ?? this.skyColor,
+    groundColor: groundColor ?? this.groundColor,
+    tonemap: tonemap ?? this.tonemap,
+    background: background ?? this.background,
+    showFloorGrid: showFloorGrid ?? this.showFloorGrid,
+    msaa: msaa ?? this.msaa,
+    draftMode: draftMode ?? this.draftMode,
+    cameraParentId: clearCameraParent
+        ? null
+        : (cameraParentId ?? this.cameraParentId),
+  );
 
   static Scene3D get demo => Scene3D(
-        nodes: [
-          SceneNode(
-            name: 'Cubo',
-            kind: Element3DKind.cube,
-            size: 90,
-            x: AnimatedDouble(-70),
-            material: const Material3D(baseColor: Color(0xFF7C62FF)),
-          ),
-          SceneNode(
-            name: 'Esfera',
-            kind: Element3DKind.sphere,
-            size: 80,
-            x: AnimatedDouble(80),
-            material: const Material3D(
-                baseColor: Color(0xFFB8FF3D), roughness: 0.35),
-          ),
-        ],
-        lights: tresPontos,
-      );
+    nodes: [
+      SceneNode(
+        name: 'Cubo',
+        kind: Element3DKind.cube,
+        size: 90,
+        x: AnimatedDouble(-70),
+        material: const Material3D(baseColor: Color(0xFF7C62FF)),
+      ),
+      SceneNode(
+        name: 'Esfera',
+        kind: Element3DKind.sphere,
+        size: 80,
+        x: AnimatedDouble(80),
+        material: const Material3D(
+          name: 'Metal polido',
+          baseColor: Color(0xFFCED5DC),
+          metallic: 1,
+          roughness: 0.06,
+          reflectivity: 1,
+        ),
+      ),
+    ],
+    lights: tresPontos,
+  );
 
   /// TRES PONTOS: principal, preenchimento e contraluz.
   ///
@@ -443,26 +743,27 @@ class Scene3D {
   /// estudio usa: a principal desenha a forma, o preenchimento abre a
   /// sombra sem apagar o volume, e a contraluz separa o objeto do fundo.
   static List<Light3D> get tresPontos => [
-        // PRINCIPAL: alta, a 45 graus, levemente quente.
-        Light3D(
-          color: const Color(0xFFFFF4E6),
-          direction: const Vec3(-0.5, -0.75, -0.45),
-          intensity: AnimatedDouble(1),
-        ),
-        // PREENCHIMENTO: do outro lado, fria e fraca — abre a sombra
-        // sem competir com a principal.
-        Light3D(
-          color: const Color(0xFFCFE0FF),
-          direction: const Vec3(0.7, -0.25, -0.3),
-          intensity: AnimatedDouble(0.35),
-        ),
-        // CONTRALUZ: de tras e de cima, para o objeto descolar do fundo.
-        Light3D(
-          color: const Color(0xFFFFFFFF),
-          direction: const Vec3(0.15, -0.45, 0.85),
-          intensity: AnimatedDouble(0.55),
-        ),
-      ];
+    // PRINCIPAL: alta, a 45 graus, levemente quente.
+    Light3D(
+      color: const Color(0xFFFFF4E6),
+      direction: const Vec3(-0.5, -0.75, -0.45),
+      intensity: AnimatedDouble(1),
+      castsShadow: true,
+    ),
+    // PREENCHIMENTO: do outro lado, fria e fraca — abre a sombra
+    // sem competir com a principal.
+    Light3D(
+      color: const Color(0xFFCFE0FF),
+      direction: const Vec3(0.7, -0.25, -0.3),
+      intensity: AnimatedDouble(0.35),
+    ),
+    // CONTRALUZ: de tras e de cima, para o objeto descolar do fundo.
+    Light3D(
+      color: const Color(0xFFFFFFFF),
+      direction: const Vec3(0.15, -0.45, 0.85),
+      intensity: AnimatedDouble(0.55),
+    ),
+  ];
 }
 
 // ---------------------------------------------------------- pipeline
@@ -514,6 +815,12 @@ typedef SceneFrame = ({
   int culled,
 });
 
+typedef EnvironmentSample = ({double r, double g, double b});
+typedef EnvironmentSampler = EnvironmentSample Function(
+  Vec3 direction,
+  double roughness,
+);
+
 /// Parametros de camera que o renderizador precisa.
 class RenderCamera {
   const RenderCamera({
@@ -558,12 +865,13 @@ double focalFromFov(double fovDegrees, {double filmWidth = 36}) {
 
 /// ZOOM (px) do AE: a distancia em que uma camada do tamanho da
 /// composicao preenche o quadro.
-double zoomFromFocal(double focalLength, double compWidth,
-        {double filmWidth = 36}) =>
-    compWidth * focalLength / filmWidth;
+double zoomFromFocal(
+  double focalLength,
+  double compWidth, {
+  double filmWidth = 36,
+}) => compWidth * focalLength / filmWidth;
 
-double focalFromZoom(double zoom, double compWidth,
-        {double filmWidth = 36}) =>
+double focalFromZoom(double zoom, double compWidth, {double filmWidth = 36}) =>
     zoom * filmWidth / math.max(1e-6, compWidth);
 
 /// Base ortonormal da camera (olhar, direita, cima).
@@ -620,6 +928,46 @@ class NodeTransform {
   static const identity = NodeTransform();
 }
 
+final Map<(Element3DKind, int), Element3DMesh> _subdivisionCache = {};
+
+Element3DMesh _subdividedPrimitive(Element3DKind kind, int levels) {
+  final clamped = levels.clamp(0, 4);
+  return _subdivisionCache.putIfAbsent((kind, clamped), () {
+    var mesh = element3DMesh(kind);
+    for (var level = 0; level < clamped; level++) {
+      final verts = <List<double>>[
+        for (final vertex in mesh.verts) [...vertex],
+      ];
+      final faces = <List<int>>[];
+      for (final face in mesh.faces) {
+        if (face.length < 3) continue;
+        var x = 0.0, y = 0.0, z = 0.0;
+        for (final index in face) {
+          x += mesh.verts[index][0];
+          y += mesh.verts[index][1];
+          z += mesh.verts[index][2];
+        }
+        final center = verts.length;
+        verts.add([x / face.length, y / face.length, z / face.length]);
+        for (var i = 0; i < face.length; i++) {
+          faces.add([face[i], face[(i + 1) % face.length], center]);
+        }
+      }
+      mesh = Element3DMesh(verts, faces);
+    }
+    return mesh;
+  });
+}
+
+Element3DMesh? _automaticLod(SceneNode node, bool draftMode) {
+  final high = node.mesh;
+  if (draftMode) return node.lowMesh ?? node.mediumMesh ?? high;
+  final triangles = high?.faces.length ?? 0;
+  if (triangles > 150000) return node.lowMesh ?? node.mediumMesh ?? high;
+  if (triangles > 60000) return node.mediumMesh ?? node.lowMesh ?? high;
+  return high;
+}
+
 /// Resolve a cadeia de pais de [node].
 ///
 /// A posicao do filho e GIRADA pelo pai antes de somar — e isso que faz
@@ -652,8 +1000,13 @@ NodeTransform resolveNodeTransform(
     if (parent == null) {
       pai = external;
     } else {
-      pai = resolveNodeTransform(scene, parent, t,
-          external: external, depth: depth + 1);
+      pai = resolveNodeTransform(
+        scene,
+        parent,
+        t,
+        external: external,
+        depth: depth + 1,
+      );
     }
   }
 
@@ -664,10 +1017,11 @@ NodeTransform resolveNodeTransform(
 NodeTransform composeTransforms(NodeTransform pai, NodeTransform filho) {
   final escalada = filho.position * pai.scale;
   final girada = _rotate(
-      escalada,
-      pai.rotX * math.pi / 180,
-      pai.rotY * math.pi / 180,
-      pai.rotZ * math.pi / 180);
+    escalada,
+    pai.rotX * math.pi / 180,
+    pai.rotY * math.pi / 180,
+    pai.rotZ * math.pi / 180,
+  );
   return NodeTransform(
     position: pai.position + girada,
     rotX: pai.rotX + filho.rotX,
@@ -685,13 +1039,21 @@ NodeTransform composeTransforms(NodeTransform pai, NodeTransform filho) {
 RenderCamera applyParentToCamera(RenderCamera cam, NodeTransform pai) {
   Vec3 mover(Vec3 p) =>
       pai.position +
-      _rotate(p, pai.rotX * math.pi / 180, pai.rotY * math.pi / 180,
-          pai.rotZ * math.pi / 180);
+      _rotate(
+        p,
+        pai.rotX * math.pi / 180,
+        pai.rotY * math.pi / 180,
+        pai.rotZ * math.pi / 180,
+      );
   return RenderCamera(
     position: mover(cam.position),
     target: mover(cam.target),
-    up: _rotate(cam.up, pai.rotX * math.pi / 180,
-        pai.rotY * math.pi / 180, pai.rotZ * math.pi / 180),
+    up: _rotate(
+      cam.up,
+      pai.rotX * math.pi / 180,
+      pai.rotY * math.pi / 180,
+      pai.rotZ * math.pi / 180,
+    ),
     focalLength: cam.focalLength,
     filmWidth: cam.filmWidth,
     orthographic: cam.orthographic,
@@ -705,8 +1067,9 @@ SceneFrame renderScene(
   Scene3D scene,
   RenderCamera cam,
   Size viewport,
-  Duration t,
-) {
+  Duration t, {
+  EnvironmentSampler? environmentSampler,
+}) {
   final basis = cameraBasis(cam);
   final opaque = <RenderTri>[];
   final transparent = <RenderTri>[];
@@ -724,25 +1087,35 @@ SceneFrame renderScene(
     // NULO 3D so transforma os filhos; nao desenha nada.
     if (node.isNull) continue;
     // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
-    final mesh = node.mesh ?? element3DMesh(node.kind);
+    final selectedMesh =
+        switch (node.lod) {
+          MeshLod3D.low => node.lowMesh ?? node.mediumMesh ?? node.mesh,
+          MeshLod3D.medium => node.mediumMesh ?? node.mesh,
+          MeshLod3D.high => node.mesh,
+          MeshLod3D.auto => _automaticLod(node, scene.draftMode),
+        } ??
+        element3DMesh(node.kind);
+    final mesh = node.mesh == null && node.subdivisions > 0
+        ? _subdividedPrimitive(node.kind, node.subdivisions)
+        : selectedMesh;
     if (mesh.verts.isEmpty) continue;
 
     final xf = resolveNodeTransform(scene, node, t);
     final s = node.size * xf.scale;
-    final base = xf.position;
     final rx = xf.rotX * math.pi / 180;
     final ry = xf.rotY * math.pi / 180;
     final rz = xf.rotZ * math.pi / 180;
 
     // Uma "chamada de desenho" por NO — as instancias entram na mesma,
     // que e o equivalente possivel de instanciacao aqui.
-    final offsets = node.instances.isEmpty
-        ? const [Vec3.zero]
-        : node.instances;
+    final offsets = node.instances.isEmpty ? const [Vec3.zero] : node.instances;
     var nodeEmitted = false;
 
     for (final inst in offsets) {
-      final origin = base + inst;
+      final origin = composeTransforms(
+        xf,
+        NodeTransform(position: inst),
+      ).position;
 
       // CULLING pelo volume envolvente: fora do frustum, descarta o
       // objeto inteiro com um teste so.
@@ -791,15 +1164,16 @@ SceneFrame renderScene(
       // entra multiplicada no desenho. As coordenadas vem por PROJECAO
       // DE CAIXA nas coordenadas locais da malha: cada face recebe a
       // imagem pelo eixo que ela mais encara.
-      final textura = node.material.imagePath;
-      final matLuz = textura == null
-          ? node.material
-          : node.material.copyWith(baseColor: const Color(0xFFFFFFFF));
-      var lminX = double.infinity, lminY = double.infinity,
+      final temTextura =
+          node.material.imagePath != null ||
+          node.material.faceImagePaths.isNotEmpty;
+      var lminX = double.infinity,
+          lminY = double.infinity,
           lminZ = double.infinity;
-      var lmaxX = -double.infinity, lmaxY = -double.infinity,
+      var lmaxX = -double.infinity,
+          lmaxY = -double.infinity,
           lmaxZ = -double.infinity;
-      if (textura != null) {
+      if (temTextura) {
         for (final v in mesh.verts) {
           if (v[0] < lminX) lminX = v[0];
           if (v[0] > lmaxX) lmaxX = v[0];
@@ -812,7 +1186,13 @@ SceneFrame renderScene(
       double faixa(double a, double lo, double hi) =>
           hi - lo < 1e-9 ? 0.5 : ((a - lo) / (hi - lo)).clamp(0.0, 1.0);
 
-      for (final face in mesh.faces) {
+      for (var faceIndex = 0; faceIndex < mesh.faces.length; faceIndex++) {
+        final face = mesh.faces[faceIndex];
+        final textura =
+            node.material.faceImagePaths[faceIndex] ?? node.material.imagePath;
+        final matLuz = textura == null
+            ? node.material
+            : node.material.copyWith(baseColor: const Color(0xFFFFFFFF));
         // Normal em espaco de MUNDO (Newell), para a iluminacao — e a
         // normal LOCAL, para escolher o eixo da projecao da imagem.
         var nx = 0.0, ny = 0.0, nz = 0.0;
@@ -846,6 +1226,7 @@ SceneFrame renderScene(
           }
           return Offset(faixa(v[0], lminX, lmaxX), faixa(v[1], lminY, lmaxY));
         }
+
         final inv = 1.0 / face.length;
         final faceCenter = Vec3(fcx * inv, fcy * inv, fcz * inv);
 
@@ -865,7 +1246,7 @@ SceneFrame renderScene(
         // ordenacao e do desenho de uma vez.
         //
         // Material transparente NAO entra: ali se ve o fundo por dentro.
-        if (!isTransparent) {
+        if (!isTransparent && !node.material.doubleSided) {
           final toFace = faceCenter - cam.position;
           if (normal.dot(toFace) >= 0) continue;
         }
@@ -877,6 +1258,8 @@ SceneFrame renderScene(
           point: faceCenter,
           t: t,
           viewDir: (cam.position - faceCenter).normalized,
+          nodeId: node.id,
+          environmentSampler: environmentSampler,
         );
 
         // Leque de triangulos: o poligono vira triangulos, e cada um
@@ -884,9 +1267,7 @@ SceneFrame renderScene(
         for (var i = 1; i < face.length - 1; i++) {
           final ia = face[0], ib = face[i], ic = face[i + 1];
           // Descarta o que esta atras da camera.
-          if (cz[ia] <= cam.near ||
-              cz[ib] <= cam.near ||
-              cz[ic] <= cam.near) {
+          if (cz[ia] <= cam.near || cz[ib] <= cam.near || cz[ic] <= cam.near) {
             continue;
           }
 
@@ -1032,6 +1413,8 @@ Color shadeFace({
   required Vec3 point,
   required Duration t,
   Vec3? viewDir,
+  String? nodeId,
+  EnvironmentSampler? environmentSampler,
 }) {
   if (material.kind == MaterialKind.unlit) return material.baseColor;
 
@@ -1048,15 +1431,46 @@ Color shadeFace({
   // frio, a base e quente, e o olho le isso como volume antes de
   // qualquer luz direta chegar.
   final paraCima = ((normal.y + 1) / 2).clamp(0.0, 1.0);
-  final ambR = scene.groundColor.r +
-      (scene.skyColor.r - scene.groundColor.r) * paraCima;
-  final ambG = scene.groundColor.g +
-      (scene.skyColor.g - scene.groundColor.g) * paraCima;
-  final ambB = scene.groundColor.b +
-      (scene.skyColor.b - scene.groundColor.b) * paraCima;
-  r += baseR * ambR * scene.ambient;
-  g += baseG * ambG * scene.ambient;
-  b += baseB * ambB * scene.ambient;
+  var ambR =
+      scene.groundColor.r + (scene.skyColor.r - scene.groundColor.r) * paraCima;
+  var ambG =
+      scene.groundColor.g + (scene.skyColor.g - scene.groundColor.g) * paraCima;
+  var ambB =
+      scene.groundColor.b + (scene.skyColor.b - scene.groundColor.b) * paraCima;
+  final envRotation = scene.panorama.rotationDegrees * math.pi / 180;
+  final litNormal = Vec3(
+    normal.x * math.cos(envRotation) - normal.z * math.sin(envRotation),
+    normal.y,
+    normal.x * math.sin(envRotation) + normal.z * math.cos(envRotation),
+  );
+  double envR, envG, envB;
+  if (environmentSampler != null && scene.panorama.hasImage) {
+    final sample = environmentSampler(litNormal, 1);
+    envR = sample.r;
+    envG = sample.g;
+    envB = sample.b;
+  } else {
+    (envR, envG, envB) = environmentColor(
+      scene.environment,
+      litNormal.x,
+      litNormal.y,
+      litNormal.z,
+    );
+  }
+  final directionalEnvironment =
+      scene.panorama.rotationDegrees != 0 ||
+      scene.panorama.source != PanoramaSource.preset ||
+      scene.panorama.preset != PanoramaPreset.estudio;
+  if (directionalEnvironment) {
+    ambR = (ambR + envR) * 0.5;
+    ambG = (ambG + envG) * 0.5;
+    ambB = (ambB + envB) * 0.5;
+  }
+  final panoramaStrength = scene.panorama.intensity.clamp(0.0, 4.0).toDouble();
+  final occlusion = material.occlusionStrength.clamp(0.0, 1.0).toDouble();
+  r += baseR * ambR * scene.ambient * panoramaStrength * occlusion;
+  g += baseG * ambG * scene.ambient * panoramaStrength * occlusion;
+  b += baseB * ambB * scene.ambient * panoramaStrength * occlusion;
 
   for (final light in scene.lights) {
     final intensity = light.intensity.valueAt(t);
@@ -1079,6 +1493,27 @@ Color shadeFace({
         atten = 1 - (d / light.range);
         atten *= atten;
         dir = delta.normalized;
+      case Light3DKind.spot:
+        final spotDelta = light.position - point;
+        final spotDistance = spotDelta.length;
+        if (spotDistance > light.range) continue;
+        final toPoint = (point - light.position).normalized;
+        final axis = light.direction.normalized;
+        final angle = math.acos(axis.dot(toPoint).clamp(-1.0, 1.0));
+        final outer =
+            light.coneDegrees.clamp(1.0, 179.0).toDouble() * math.pi / 360;
+        if (angle >= outer) continue;
+        final soft = light.softness.clamp(0.0, 1.0).toDouble();
+        final inner = outer * (1 - soft * 0.9);
+        final cone = angle <= inner
+            ? 1.0
+            : (1 - (angle - inner) / math.max(1e-6, outer - inner)).clamp(
+                0.0,
+                1.0,
+              );
+        atten = 1 - (spotDistance / light.range);
+        atten = atten * atten * cone;
+        dir = spotDelta.normalized;
     }
     final lambert = math.max(0.0, normal.dot(dir));
     if (lambert <= 0) continue;
@@ -1090,7 +1525,8 @@ Color shadeFace({
     // Especular simples (rugosidade menor = realce mais concentrado).
     final shininess = (1 - material.roughness).clamp(0.0, 1.0);
     if (shininess > 0.05) {
-      final spec = math.pow(lambert, 8 + shininess * 60).toDouble() *
+      final spec =
+          math.pow(lambert, 8 + shininess * 60).toDouble() *
           shininess *
           intensity *
           atten;
@@ -1122,34 +1558,85 @@ Color shadeFace({
       solG = light.color.g;
       solB = light.color.b;
     }
-    final rough = material.roughness.clamp(0.0, 1.0);
-    var (er, eg, eb) = environmentColor(
-      scene.environment,
-      rv.x,
+    final rough = material.roughness.clamp(0.0, 1.0).toDouble();
+    final rot = envRotation;
+    final rotated = Vec3(
+      rv.x * math.cos(rot) - rv.z * math.sin(rot),
       rv.y,
-      rv.z,
-      sunX: sol?.x ?? 0,
-      sunY: sol?.y ?? 0,
-      sunZ: sol?.z ?? 0,
-      sunR: solR,
-      sunG: solG,
-      sunB: solB,
-      sunSharp: 8 + (1 - rough) * (1 - rough) * 300,
-      sunGain: sol == null ? 0 : solI * (1 - rough * 0.7),
+      rv.x * math.sin(rot) + rv.z * math.cos(rot),
     );
+    double er, eg, eb;
+    if (environmentSampler != null && scene.panorama.hasImage) {
+      final sample = environmentSampler(rotated, rough);
+      er = sample.r;
+      eg = sample.g;
+      eb = sample.b;
+    } else {
+      (er, eg, eb) = environmentColor(
+        scene.environment,
+        rotated.x,
+        rotated.y,
+        rotated.z,
+        sunX: sol?.x ?? 0,
+        sunY: sol?.y ?? 0,
+        sunZ: sol?.z ?? 0,
+        sunR: solR,
+        sunG: solG,
+        sunB: solB,
+        sunSharp: 8 + (1 - rough) * (1 - rough) * 300,
+        sunGain: sol == null ? 0 : solI * (1 - rough * 0.7),
+      );
+    }
     // Embacar: mistura com a media do hemisferio na altura do reflexo.
-    if (rough > 0.01) {
-      final (mr, mg, mb) = environmentColor(scene.environment, 0, rv.y, 0);
+    if (rough > 0.01 &&
+        !(environmentSampler != null && scene.panorama.hasImage)) {
+      final (mr, mg, mb) = environmentColor(
+        scene.environment,
+        math.sin(rot),
+        rv.y,
+        math.cos(rot),
+      );
       final k = rough * 0.85;
       er += (mr - er) * k;
       eg += (mg - eg) * k;
       eb += (mb - eb) * k;
     }
+    final boost = scene.panorama.highlightBoost.clamp(0.0, 2.0).toDouble();
+    if (boost > 0) {
+      final peak = math.max(er, math.max(eg, eb));
+      final lift = math.max(0.0, peak - 0.58) * boost;
+      er += er * lift;
+      eg += eg * lift;
+      eb += eb * lift;
+    }
+    er *= panoramaStrength;
+    eg *= panoramaStrength;
+    eb *= panoramaStrength;
+
+    // No backend Canvas nao existe cubemap GPU. A sonda abaixo e a
+    // aproximacao analitica explicita: amostra os outros volumes na direcao
+    // refletida, nunca o proprio no, sem sombra/reflexo/pos. O contrato de
+    // captura em seis faces continua em [ReflectionProbeScheduler] para a
+    // futura migracao ao Flutter GPU.
+    final probe = _sampleSceneProbe(
+      scene,
+      reflectiveNodeId: nodeId,
+      direction: rv,
+      t: t,
+      roughness: rough,
+    );
+    if (probe != null) {
+      er += (probe.r - er) * probe.weight;
+      eg += (probe.g - eg) * probe.weight;
+      eb += (probe.b - eb) * probe.weight;
+    }
     final fresnel = 0.04 + 0.96 * math.pow(1 - nv, 5).toDouble();
-    final metal = material.metallic.clamp(0.0, 1.0);
+    final metal = material.metallic.clamp(0.0, 1.0).toDouble();
     final amount =
-        (refl * (metal * 0.9 + (1 - metal) * (0.25 + 0.75 * fresnel)))
-            .clamp(0.0, 1.0);
+        (refl * (metal * 0.9 + (1 - metal) * (0.25 + 0.75 * fresnel))).clamp(
+          0.0,
+          1.0,
+        );
     final tintR = 1 - metal + metal * baseR;
     final tintG = 1 - metal + metal * baseG;
     final tintB = 1 - metal + metal * baseB;
@@ -1176,6 +1663,56 @@ Color shadeFace({
     green: g.clamp(0.0, 1.0),
     blue: b.clamp(0.0, 1.0),
   );
+}
+
+({double r, double g, double b, double weight})? _sampleSceneProbe(
+  Scene3D scene, {
+  required String? reflectiveNodeId,
+  required Vec3 direction,
+  required Duration t,
+  required double roughness,
+}) {
+  final probe = scene.reflectionProbe;
+  if (!probe.enabled || scene.draftMode) return null;
+
+  Vec3 origin = Vec3(probe.position.x, probe.position.y, probe.position.z);
+  if (probe.perObject && reflectiveNodeId != null) {
+    final own = scene.nodeById(reflectiveNodeId);
+    if (own != null) origin = resolveNodeTransform(scene, own, t).position;
+  }
+
+  var sum = 0.0, r = 0.0, g = 0.0, b = 0.0;
+  final mip = roughnessMip(roughness);
+  final sharpness = 42 / (1 + mip * 0.9);
+  for (final node in scene.nodes) {
+    if (!node.visible ||
+        node.isNull ||
+        !probe.includes(node.id, reflectiveNodeId: reflectiveNodeId)) {
+      continue;
+    }
+    final xf = resolveNodeTransform(scene, node, t);
+    final delta = xf.position - origin;
+    final distance = delta.length;
+    if (distance < 1e-6) continue;
+    final alignment = direction.normalized.dot(delta * (1 / distance));
+    if (alignment <= 0) continue;
+    final angular = math.atan2(node.size * xf.scale, distance);
+    final footprint = math.sin(angular.clamp(0.02, math.pi / 2));
+    final directional = math.pow(alignment, sharpness).toDouble();
+    final weight = (directional * (0.25 + footprint * 2.2))
+        .clamp(0.0, 1.0)
+        .toDouble();
+    if (weight <= 0.001) continue;
+    r += node.material.baseColor.r * weight;
+    g += node.material.baseColor.g * weight;
+    b += node.material.baseColor.b * weight;
+    sum += weight;
+  }
+  if (sum <= 0) return null;
+  final blend = (sum / (1 + sum) * (1 - roughness * 0.35))
+      .clamp(0.0, 0.92)
+      .toDouble();
+  return (r: r / sum, g: g / sum, b: b / sum, weight: blend);
 }
 
 /// CURVA DE SAIDA ACES (aproximacao de Narkowicz).
@@ -1236,8 +1773,7 @@ String? pickNodeAt(SceneFrame frame, Offset p) {
 
 bool _pointInTriangle(Offset p, Offset a, Offset b, Offset c) {
   double sign(Offset p1, Offset p2, Offset p3) =>
-      (p1.dx - p3.dx) * (p2.dy - p3.dy) -
-      (p2.dx - p3.dx) * (p1.dy - p3.dy);
+      (p1.dx - p3.dx) * (p2.dy - p3.dy) - (p2.dx - p3.dx) * (p1.dy - p3.dy);
   final d1 = sign(p, a, b);
   final d2 = sign(p, b, c);
   final d3 = sign(p, c, a);
@@ -1252,6 +1788,7 @@ typedef SceneBudget = ({
   int maxTriangles,
   int maxLights,
   int maxShadowLights,
+  double maxMemoryMb,
 });
 
 const lowProfileBudget = (
@@ -1259,21 +1796,62 @@ const lowProfileBudget = (
   maxTriangles: 150000,
   maxLights: 4,
   maxShadowLights: 1,
+  maxMemoryMb: 192,
 );
+
+double estimateSceneMemoryMb(Scene3D scene) {
+  var bytes = 0.0;
+  final textures = <String>{};
+  for (final node in scene.nodes) {
+    final meshes = <Element3DMesh?>[node.mesh, node.mediumMesh, node.lowMesh];
+    for (final mesh in meshes) {
+      if (mesh == null) continue;
+      bytes += mesh.verts.length * 3 * 8;
+      bytes += mesh.faces.fold<int>(0, (sum, face) => sum + face.length) * 4;
+    }
+    if (node.material.imagePath != null) {
+      textures.add(node.material.imagePath!);
+    }
+    textures.addAll(node.material.faceImagePaths.values);
+  }
+  // Texturas sao limitadas a 1024 e guardam mipmaps.
+  bytes += textures.length * 1024 * 1024 * 4 * 4 / 3;
+  if (scene.panorama.hasImage) {
+    bytes += 512 * 256 * 4;
+    bytes += 128 * 128 * 3 * 4 * 6 * 4 / 3;
+  }
+  if (scene.reflectionProbe.enabled) {
+    final side = scene.reflectionProbe.quality.faceResolution;
+    // Seis faces RGBA e cadeia completa de mipmaps (~4/3).
+    bytes += side * side * 4 * 6 * 4 / 3;
+  }
+  return bytes / (1024 * 1024);
+}
 
 /// Passos de degradacao, na ordem da spec. Devolve a cena rebaixada.
 Scene3D degradeScene(Scene3D scene, int step) {
   var out = scene;
+  if (step >= 1) {
+    out = out.copyWith(
+      planarFloorReflection: false,
+      reflectionProbe: out.reflectionProbe.copyWith(
+        quality: ProbeQuality.low,
+        updateMode: ProbeUpdateMode.onMove,
+      ),
+    );
+  }
   if (step >= 2) {
     // Desliga sombra da segunda luz em diante.
     var shadowed = 0;
-    out = out.copyWith(lights: [
-      for (final l in out.lights)
-        if (l.castsShadow && shadowed++ >= 1)
-          l.copyWith(castsShadow: false)
-        else
-          l,
-    ]);
+    out = out.copyWith(
+      lights: [
+        for (final l in out.lights)
+          if (l.castsShadow && shadowed++ >= 1)
+            l.copyWith(castsShadow: false)
+          else
+            l,
+      ],
+    );
   }
   if (step >= 4) out = out.copyWith(msaa: false);
   if (step >= 5) out = out.copyWith(ambient: out.ambient * 0.8);

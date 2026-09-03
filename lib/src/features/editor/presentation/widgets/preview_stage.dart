@@ -14,6 +14,8 @@ import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../application/preview_stats.dart';
 import '../../application/video_layer_manager.dart';
+import '../../domain/cut.dart';
+import '../../domain/cut_ops.dart';
 import '../../domain/effect.dart';
 import '../../domain/fx.dart';
 import '../../domain/gear.dart';
@@ -48,11 +50,7 @@ import 'scene3d_painter.dart';
 /// Palco: composicao renderizada em coordenadas logicas, escalada para
 /// caber. Gestos editam a camada selecionada.
 class PreviewStage extends ConsumerStatefulWidget {
-  const PreviewStage({
-    super.key,
-    required this.playback,
-    required this.videos,
-  });
+  const PreviewStage({super.key, required this.playback, required this.videos});
 
   final PlaybackController playback;
   final VideoLayerManager videos;
@@ -89,9 +87,15 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
 
     if (d.pointerCount >= 2) {
       controller.editScaleUniform(
-          id, t, (_startScale * d.scale).clamp(0.05, 8.0));
+        id,
+        t,
+        (_startScale * d.scale).clamp(0.05, 8.0),
+      );
       controller.editRotation(
-          id, t, _startRotation + d.rotation * 180 / math.pi);
+        id,
+        t,
+        _startRotation + d.rotation * 180 / math.pi,
+      );
       return;
     }
     final deltaLogical = d.focalPointDelta / _stageScale;
@@ -117,7 +121,9 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     final snap = 16 / _stageScale;
     final self = ref.read(editorControllerProvider.notifier);
     final size = self.layerBoxSize(
-        ref.read(editorControllerProvider).layerById(id)!, t);
+      ref.read(editorControllerProvider).layerById(id)!,
+      t,
+    );
     final half = Offset(size.width / 2, size.height / 2);
 
     final xs = <double>[
@@ -186,8 +192,10 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
         color: Colors.black,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final scale = math.min(constraints.maxWidth / compW,
-                constraints.maxHeight / compH);
+            final scale = math.min(
+              constraints.maxWidth / compW,
+              constraints.maxHeight / compH,
+            );
             _stageScale = scale;
             return Center(
               child: SizedBox(
@@ -208,117 +216,122 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                           compWidth: compW,
                           compHeight: compH,
                           stageScale: scale,
-                          devicePixelRatio:
-                              MediaQuery.devicePixelRatioOf(context),
+                          devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                            context,
+                          ),
                         ),
                       ),
                       child: OverflowBox(
-                      alignment: Alignment.topLeft,
-                      minWidth: compW,
-                      maxWidth: compW,
-                      minHeight: compH,
-                      maxHeight: compH,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          // DITHERING NO PREVIEW, so sem video na cena.
-                          //
-                          // Sombra ampla sobre fundo escuro BANDEIA em 8
-                          // bits, e gradiente suave e metade do visual
-                          // "Apple". O dithering resolve — mas ele
-                          // fotografa a composicao para rodar o shader,
-                          // e a textura de video nao entra nessa foto
-                          // (vira buraco preto). Entao: cena so de
-                          // grafismo ganha dithering; cena com video
-                          // fica sem, e o dithering dela acontece na
-                          // exportacao, onde o video chega como imagem.
-                          //
-                          // A foto e refeita a cada reconstrucao (a
-                          // invalidacao do FxSnapshot); sem isso o preview
-                          // congelava no primeiro quadro.
-                          ValueListenableBuilder<Duration>(
-                            valueListenable: widget.playback.time,
-                            builder: (context, t, child) => project.layers
-                                    .any((l) => l is VideoLayer)
-                                ? child!
-                                : DitherLayer(
-                                    time: t,
-                                    // Escala do palco x DPR de verdade: e o
-                                    // tamanho da textura do filtro.
-                                    pixelRatio: scale *
-                                        MediaQuery.devicePixelRatioOf(context),
-                                    child: child!,
-                                  ),
-                            child: CompositionView(
-                              time: widget.playback.time,
-                              videos: widget.videos,
-                              selectedId: selectedId,
+                        alignment: Alignment.topLeft,
+                        minWidth: compW,
+                        maxWidth: compW,
+                        minHeight: compH,
+                        maxHeight: compH,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            // DITHERING NO PREVIEW, so sem video na cena.
+                            //
+                            // Sombra ampla sobre fundo escuro BANDEIA em 8
+                            // bits, e gradiente suave e metade do visual
+                            // "Apple". O dithering resolve — mas ele
+                            // fotografa a composicao para rodar o shader,
+                            // e a textura de video nao entra nessa foto
+                            // (vira buraco preto). Entao: cena so de
+                            // grafismo ganha dithering; cena com video
+                            // fica sem, e o dithering dela acontece na
+                            // exportacao, onde o video chega como imagem.
+                            //
+                            // A foto e refeita a cada reconstrucao (a
+                            // invalidacao do FxSnapshot); sem isso o preview
+                            // congelava no primeiro quadro.
+                            ValueListenableBuilder<Duration>(
+                              valueListenable: widget.playback.time,
+                              builder: (context, t, child) =>
+                                  project.layers.any((l) => l is VideoLayer)
+                                  ? child!
+                                  : DitherLayer(
+                                      time: t,
+                                      // Escala do palco x DPR de verdade: e o
+                                      // tamanho da textura do filtro.
+                                      pixelRatio:
+                                          scale *
+                                          MediaQuery.devicePixelRatioOf(
+                                            context,
+                                          ),
+                                      child: child!,
+                                    ),
+                              child: CompositionView(
+                                time: widget.playback.time,
+                                videos: widget.videos,
+                                selectedId: selectedId,
+                              ),
                             ),
-                          ),
-                          // CASCA DE CEBOLA: os quadros vizinhos,
-                          // fantasmas, ATRAS do quadro atual. Passado
-                          // puxado para o vermelho, futuro para o
-                          // verde — e como se sabe de que lado esta.
-                          if (onion > 0)
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: ValueListenableBuilder<Duration>(
-                                  valueListenable: widget.playback.time,
-                                  builder: (context, t, _) {
-                                    final passo = Duration(
-                                        microseconds: 1000000 ~/
+                            // CASCA DE CEBOLA: os quadros vizinhos,
+                            // fantasmas, ATRAS do quadro atual. Passado
+                            // puxado para o vermelho, futuro para o
+                            // verde — e como se sabe de que lado esta.
+                            if (onion > 0)
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: ValueListenableBuilder<Duration>(
+                                    valueListenable: widget.playback.time,
+                                    builder: (context, t, _) {
+                                      final passo = Duration(
+                                        microseconds:
+                                            1000000 ~/
                                             (project.fps < 1
                                                 ? 30
-                                                : project.fps));
-                                    return Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        for (var k = onion; k >= 1; k--)
-                                          for (final lado in const [-1, 1])
-                                            _Fantasma(
-                                              time: t + passo * (k * lado),
-                                              videos: widget.videos,
-                                              opacity:
-                                                  0.34 / k,
-                                              futuro: lado > 0,
-                                            ),
-                                      ],
-                                    );
-                                  },
+                                                : project.fps),
+                                      );
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          for (var k = onion; k >= 1; k--)
+                                            for (final lado in const [-1, 1])
+                                              _Fantasma(
+                                                time: t + passo * (k * lado),
+                                                videos: widget.videos,
+                                                opacity: 0.34 / k,
+                                                futuro: lado > 0,
+                                              ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            // GUIAS, GRADE, AREAS SEGURAS e mascara de
+                            // enquadramento (PR-X3): vivem ACIMA da
+                            // composicao e nunca entram no render final.
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _GuidesPainter(
+                                    guides: project.guides,
+                                    compSize: Size(compW, compH),
+                                  ),
                                 ),
                               ),
                             ),
-                          // GUIAS, GRADE, AREAS SEGURAS e mascara de
-                          // enquadramento (PR-X3): vivem ACIMA da
-                          // composicao e nunca entram no render final.
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: _GuidesPainter(
-                                  guides: project.guides,
-                                  compSize: Size(compW, compH),
-                                ),
+                            // NOS DA MASCARA: quando alguem esta editando
+                            // o caminho, o dedo passa a mexer nos nos em
+                            // vez de mover a camada. Fora disso o widget
+                            // nao existe e nao intercepta nada.
+                            Positioned.fill(
+                              child: MaskNodeEditor(
+                                time: widget.playback.time,
+                                stageScale: () => _stageScale,
                               ),
                             ),
-                          ),
-                          // NOS DA MASCARA: quando alguem esta editando
-                          // o caminho, o dedo passa a mexer nos nos em
-                          // vez de mover a camada. Fora disso o widget
-                          // nao existe e nao intercepta nada.
-                          Positioned.fill(
-                            child: MaskNodeEditor(
-                              time: widget.playback.time,
-                              stageScale: () => _stageScale,
+                            // DESENHO LIVRE: por cima de tudo enquanto o
+                            // pedido do menu estiver ligado.
+                            Positioned.fill(
+                              child: FreehandOverlay(playback: widget.playback),
                             ),
-                          ),
-                          // DESENHO LIVRE: por cima de tudo enquanto o
-                          // pedido do menu estiver ligado.
-                          Positioned.fill(
-                            child: FreehandOverlay(playback: widget.playback),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                     ),
                   ),
                 ),
@@ -344,8 +357,7 @@ class _BandClipper extends CustomClipper<Rect> {
       Rect.fromLTWH(0, size.height * top, size.width, size.height * height);
 
   @override
-  bool shouldReclip(_BandClipper old) =>
-      old.top != top || old.height != height;
+  bool shouldReclip(_BandClipper old) => old.top != top || old.height != height;
 }
 
 /// GRAO DE FILME: ruido puro por (semente, posicao, tempo) — nada
@@ -370,17 +382,23 @@ class _GrainPainter extends CustomPainter {
     final paint = Paint();
     for (var y = 0.0; y < canvasSize.height; y += step) {
       for (var x = 0.0; x < canvasSize.width; x += step) {
-        final n =
-            fxHash01(seed, frame, (x * 7919 + y * 104729).toInt());
+        final n = fxHash01(seed, frame, (x * 7919 + y * 104729).toInt());
         final v = (n - 0.5) * amount;
         paint.color = Color.fromRGBO(
-            128, 128, 128, (v.abs() * 2).clamp(0.0, 1.0));
+          128,
+          128,
+          128,
+          (v.abs() * 2).clamp(0.0, 1.0),
+        );
         if (v > 0) {
-          paint.color = Color.fromRGBO(255, 255, 255,
-              (v * 1.6).clamp(0.0, 1.0));
+          paint.color = Color.fromRGBO(
+            255,
+            255,
+            255,
+            (v * 1.6).clamp(0.0, 1.0),
+          );
         } else {
-          paint.color =
-              Color.fromRGBO(0, 0, 0, (-v * 1.6).clamp(0.0, 1.0));
+          paint.color = Color.fromRGBO(0, 0, 0, (-v * 1.6).clamp(0.0, 1.0));
         }
         canvas.drawRect(Rect.fromLTWH(x, y, step, step), paint);
       }
@@ -428,9 +446,9 @@ class _FractalNoisePainter extends CustomPainter {
         var freq = 1.0;
         var norm = 0.0;
         for (var o = 0; o < octaves.clamp(1, 6); o++) {
-          v += amp *
-              valueNoise01(seed + o, x / cell * freq + z,
-                  y / cell * freq + z);
+          v +=
+              amp *
+              valueNoise01(seed + o, x / cell * freq + z, y / cell * freq + z);
           norm += amp;
           amp *= 0.5;
           freq *= 2;
@@ -489,7 +507,10 @@ class _GuidesPainter extends CustomPainter {
       for (final f in const [0.9, 0.8]) {
         canvas.drawRect(
           Rect.fromCenter(
-              center: Offset(w / 2, h / 2), width: w * f, height: h * f),
+            center: Offset(w / 2, h / 2),
+            width: w * f,
+            height: h * f,
+          ),
           stroke,
         );
       }
@@ -512,7 +533,10 @@ class _GuidesPainter extends CustomPainter {
       final cropW = fp >= w / h ? w : h * fp;
       final cropH = fp >= w / h ? w / fp : h;
       final crop = Rect.fromCenter(
-          center: Offset(w / 2, h / 2), width: cropW, height: cropH);
+        center: Offset(w / 2, h / 2),
+        width: cropW,
+        height: cropH,
+      );
       final shade = Paint()..color = const Color(0x99000000);
       canvas.drawPath(
         Path.combine(
@@ -604,9 +628,7 @@ class _FantasmaState extends State<_Fantasma> {
         opacity: widget.opacity.clamp(0.05, 0.6),
         child: ColorFiltered(
           colorFilter: ColorFilter.mode(
-            widget.futuro
-                ? const Color(0x666BFF8A)
-                : const Color(0x66FF6B6B),
+            widget.futuro ? const Color(0x666BFF8A) : const Color(0x66FF6B6B),
             BlendMode.modulate,
           ),
           child: CompositionView(
@@ -666,8 +688,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         if (exporting) {
           return Stack(
             clipBehavior: Clip.none,
-            children: _buildLayers(project, project.layers, t,
-                resolveLinks: true),
+            children: _buildLayers(
+              project,
+              project.layers,
+              t,
+              resolveLinks: true,
+            ),
           );
         }
         // MARCHA (PR-G1): o classificador e ESTRUTURAL — roda quando a
@@ -687,8 +713,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           _gate.decision = classifyGear(project);
           PreviewStats.setGear(_gate.decision!);
         }
-        final kids = _buildLayers(project, project.layers, t,
-            resolveLinks: true);
+        final kids = _buildLayers(
+          project,
+          project.layers,
+          t,
+          resolveLinks: true,
+        );
         PreviewStats.tick(kids.length);
         return Stack(clipBehavior: Clip.none, children: kids);
       },
@@ -709,10 +739,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         if (l.matteMode != MatteMode.none && l.matteSourceId != null)
           l.matteSourceId!,
     };
+    final transitions = transitionContextsAt(layers, t);
     final paintOrder = [
       for (final layer in layers.reversed)
         if (layer is! AudioLayer &&
-            layer.activeAt(t) &&
+            visibleForCut(layers, layer, t, contexts: transitions) &&
             !matteSourceIds.contains(layer.id) &&
             // SOLO (PR-X26): havendo solo, so os solos renderizam.
             project.rendersInPreview(layer.id))
@@ -740,7 +771,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           }
           if (j - i >= 2) {
             final fila = [
-              for (var k = i; k < j; k++) sorted[k] as Element3DLayer
+              for (var k = i; k < j; k++) sorted[k] as Element3DLayer,
             ];
             mundoInicio[l.id] = fila;
             for (final f in fila) {
@@ -785,13 +816,16 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         if (layer.masks.isNotEmpty) {
           final pos = layer.position.valueAt(local);
           final compCenter = Offset(
-              project.outputWidth / 2, project.outputHeight / 2);
+            project.outputWidth / 2,
+            project.outputHeight / 2,
+          );
           final shift = pos - compCenter;
           adjusted = MaskedBox(
             specs: [
               for (final m in layer.masks)
                 MaskSpec(
                   path: m.path.valueAt(local).build().shift(shift),
+                  closed: m.path.valueAt(local).closed,
                   mode: m.mode,
                   inverted: m.inverted,
                   opacity: m.opacity.valueAt(local).clamp(0.0, 1.0),
@@ -804,7 +838,8 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           );
         }
         final op = layer.opacity.valueAt(local).clamp(0.0, 1.0);
-        final plain = layer.masks.isEmpty &&
+        final plain =
+            layer.masks.isEmpty &&
             op >= 0.999 &&
             layer.blendMode == BlendMode.srcOver;
         if (plain) {
@@ -812,19 +847,20 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           // cima duplicava o conteudo no preview.
           children
             ..clear()
-            ..add(Positioned.fill(
-                child: IgnorePointer(child: adjusted)));
+            ..add(Positioned.fill(child: IgnorePointer(child: adjusted)));
         } else {
           // Com mascara/opacidade/blend, o ajustado mistura POR CIMA do
           // original (dentro da mascara ele cobre o mesmo conteudo).
-          children.add(Positioned.fill(
-            child: IgnorePointer(
-              child: BlendMask(
-                blendMode: layer.blendMode,
-                child: Opacity(opacity: op, child: adjusted),
+          children.add(
+            Positioned.fill(
+              child: IgnorePointer(
+                child: BlendMask(
+                  blendMode: layer.blendMode,
+                  child: Opacity(opacity: op, child: adjusted),
+                ),
               ),
             ),
-          ));
+          );
         }
         continue;
       }
@@ -848,23 +884,25 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         final local = layer.localTime(t);
         final n = echoFx.paramAt('ecos', local).round().clamp(1, 8);
         final gapUs = (echoFx.paramAt('intervalo', local) * 1e6).round();
-        final decay =
-            echoFx.paramAt('decaimento', local).clamp(0.05, 0.95);
+        final decay = echoFx.paramAt('decaimento', local).clamp(0.05, 0.95);
         final hueStep = echoFx.paramAt('matiz', local);
         for (var i = n; i >= 1; i--) {
           final et = t - Duration(microseconds: gapUs * i);
           if (!layer.activeAt(et)) continue;
-          Widget copy = _buildLayer(project, layer, et, resolveLinks,
-              rig: rigMembers,
-              opacityMul: math.pow(decay, i).toDouble());
+          Widget copy = _buildLayer(
+            project,
+            layer,
+            et,
+            resolveLinks,
+            rig: rigMembers,
+            opacityMul: math.pow(decay, i).toDouble(),
+          );
           // Rastro COLORIDO (item 16): cada copia com matiz proprio.
           if (hueStep > 0.5) {
             copy = Positioned.fill(
               child: ColorFiltered(
-                colorFilter:
-                    ColorFilter.matrix(hueRotateMatrix(hueStep * i)),
-                child: Stack(
-                    clipBehavior: Clip.none, children: [copy]),
+                colorFilter: ColorFilter.matrix(hueRotateMatrix(hueStep * i)),
+                child: Stack(clipBehavior: Clip.none, children: [copy]),
               ),
             );
           }
@@ -885,7 +923,22 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       var w = forceMb == null
           ? _buildLayer(project, layer, t, resolveLinks, rig: rigMembers)
           : _forceMotionBlur(
-              project, layer, t, forceMb, resolveLinks, rigMembers);
+              project,
+              layer,
+              t,
+              forceMb,
+              resolveLinks,
+              rigMembers,
+            );
+
+      // Uma camada curta pode participar de duas janelas ao mesmo tempo
+      // (entra de A e ja sai para C). Cada contexto precisa ser composto;
+      // usar o primeiro contexto global deixava uma das juncoes sem efeito.
+      for (final transition in transitions) {
+        if (transition.isParticipant(layer.id)) {
+          w = _transitionVisual(project, transition, layer, t, w);
+        }
+      }
 
       // MOTION BLUR DA COMPOSICAO (nivel 1): a camada e desenhada varias
       // vezes ao longo da JANELA DE EXPOSICAO e as copias sao mediadas.
@@ -893,33 +946,44 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       // A janela vem do angulo e da FASE do obturador. Fase -90 centra o
       // borrao no quadro; fase 0 arrasta para frente — sao imagens
       // visivelmente diferentes, e e por isso que a fase existe.
-      if (project.motionBlur.enabled &&
-          project.metaOf(layer.id).motionBlur) {
+      if (project.motionBlur.enabled && project.metaOf(layer.id).motionBlur) {
         w = _comMotionBlur(project, layer, t, w, resolveLinks, rigMembers);
       }
 
       // Matte: a fonte recorta esta camada, num grupo isolado.
-      if (layer.matteMode != MatteMode.none &&
-          layer.matteSourceId != null) {
+      if (layer.matteMode != MatteMode.none) {
         Layer? src;
         for (final l in layers) {
           if (l.id == layer.matteSourceId) src = l;
         }
-        if (src != null && src.activeAt(t)) {
-          final matte = _matteFiltered(
-            layer.matteMode,
-            _buildLayer(project, src, t, resolveLinks, rig: rigMembers),
-          );
-          w = Positioned.fill(
-            child: BlendMask(
-              blendMode: BlendMode.srcOver,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [w, matte],
-              ),
-            ),
-          );
-        }
+        // Matte ligado sem fonte valida/ativa equivale a alfa zero. Deixar
+        // o alvo inteiro visivel mascara um link quebrado e produz um salto
+        // justamente quando a fonte entra ou sai do seu intervalo.
+        final sourceActive = src != null && src.activeAt(t);
+        final source = sourceActive
+            ? _buildLayer(project, src, t, resolveLinks, rig: rigMembers)
+            : const SizedBox.shrink();
+        // Luma precisa da cor E do alfa original. A matriz de cor trabalha
+        // em RGBA nao-premultiplicado, entao uma segunda pintura da mesma
+        // fonte preserva sua transparencia depois de extrair a luminancia.
+        final alphaForLuma =
+            sourceActive &&
+                (layer.matteMode == MatteMode.luma ||
+                    layer.matteMode == MatteMode.lumaInvert)
+            ? _buildLayer(project, src, t, resolveLinks, rig: rigMembers)
+            : null;
+        final matte = _matteFiltered(
+          layer.matteMode,
+          source,
+          alphaForLuma: alphaForLuma,
+        );
+        w = Positioned.fill(
+          child: BlendMask(
+            blendMode: BlendMode.srcOver,
+            isolate: true,
+            child: Stack(clipBehavior: Clip.none, children: [w, matte]),
+          ),
+        );
       }
       // MESCLA PROPRIA: os modos que o Flutter nao tem precisam ver o
       // que ja esta embaixo. A pilha se parte aqui — o acumulado vira o
@@ -933,14 +997,16 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         );
         children
           ..clear()
-          ..add(Positioned.fill(
-            child: CustomBlendBox(
-              mode: custom,
-              seed: (t.inMilliseconds % 4096).toDouble(),
-              base: base,
-              top: Stack(clipBehavior: Clip.none, children: [w]),
+          ..add(
+            Positioned.fill(
+              child: CustomBlendBox(
+                mode: custom,
+                seed: (t.inMilliseconds % 4096).toDouble(),
+                base: base,
+                top: Stack(clipBehavior: Clip.none, children: [w]),
+              ),
             ),
-          ));
+          );
         continue;
       }
 
@@ -949,7 +1015,71 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     return children;
   }
 
-
+  Widget _transitionVisual(
+    VideoProject project,
+    ClipTransitionContext context,
+    Layer layer,
+    Duration globalTime,
+    Widget child,
+  ) {
+    final incoming = layer.id == context.incoming.id;
+    final p = context.progress;
+    final canvas = Stack(clipBehavior: Clip.none, children: [child]);
+    Widget out = Opacity(
+      opacity: context.opacityFor(layer.id).clamp(0.0, 1.0),
+      child: canvas,
+    );
+    switch (context.transition.type) {
+      case ClipTransitionType.dissolve:
+      case ClipTransitionType.black:
+        break;
+      case ClipTransitionType.wipe:
+        if (incoming) {
+          out = ClipRect(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: p.clamp(0.001, 1.0),
+              child: out,
+            ),
+          );
+        }
+      case ClipTransitionType.zoomWarp:
+        final scale = incoming ? 0.82 + p * 0.18 : 1 + p * 0.2;
+        out = Transform.scale(scale: scale, child: out);
+      case ClipTransitionType.whip:
+        final distance = project.outputWidth.toDouble();
+        out = Transform.translate(
+          offset: Offset(incoming ? (1 - p) * distance : -p * distance, 0),
+          child: out,
+        );
+      case ClipTransitionType.glitch:
+        final phase = globalTime.inMicroseconds / 1000000.0;
+        final envelope = 1 - (2 * p - 1).abs();
+        final jump = math.sin(phase * 97.0) * envelope * 24;
+        out = Transform.translate(offset: Offset(jump, 0), child: out);
+      case ClipTransitionType.effect:
+        final effect = context.transition.effect;
+        if (effect != null) {
+          final amount = context.transition.amountAt(
+            globalTime,
+            context.incoming.startTime,
+          );
+          final local = globalTime - context.window.start;
+          final effected = _applyEffects([effect], canvas, local);
+          out = Opacity(
+            opacity: context.opacityFor(layer.id).clamp(0.0, 1.0),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                canvas,
+                Opacity(opacity: amount, child: effected),
+              ],
+            ),
+          );
+        }
+    }
+    return Positioned.fill(child: out);
+  }
 
   /// FORCE MOTION BLUR: borra a camada com as amostras que o efeito
   /// pedir, independente do que a composicao permite.
@@ -986,8 +1116,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     final copias = <Widget>[];
     for (var i = 0; i < n; i++) {
       final f = n == 1 ? 0.0 : (i / (n - 1)) * 2 - 1;
-      final ti =
-          t + Duration(microseconds: (f * metadeUs).round());
+      final ti = t + Duration(microseconds: (f * metadeUs).round());
       final amostra = ti < Duration.zero
           ? _buildLayer(project, layer, t, resolveLinks, rig: rig)
           : _buildLayer(project, layer, ti, resolveLinks, rig: rig);
@@ -1002,7 +1131,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   /// Serve para o limite adaptativo: camada parada nao gasta amostra
   /// nenhuma, e camada que anda tres pixels nao precisa de dezesseis.
   double _movimentoNaJanela(
-      VideoProject project, Layer layer, Duration a, Duration b) {
+    VideoProject project,
+    Layer layer,
+    Duration a,
+    Duration b,
+  ) {
     final ta = effectiveTransform(project, layer, a);
     final tb = effectiveTransform(project, layer, b);
     final d = (tb.pos - ta.pos).distance;
@@ -1051,8 +1184,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     final copias = <Widget>[];
     for (var i = 0; i < n; i++) {
       final f = n == 1 ? 0.5 : i / (n - 1);
-      final ti = inicio +
-          Duration(microseconds: ((termino - inicio).inMicroseconds * f).round());
+      final ti =
+          inicio +
+          Duration(
+            microseconds: ((termino - inicio).inMicroseconds * f).round(),
+          );
       final amostra = ti < Duration.zero
           ? nitida
           : _buildLayer(project, layer, ti, resolveLinks, rig: rig);
@@ -1062,7 +1198,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   }
 
   /// Converte a fonte do matte no canal certo e composita com dstIn.
-  Widget _matteFiltered(MatteMode mode, Widget matte) {
+  Widget _matteFiltered(MatteMode mode, Widget matte, {Widget? alphaForLuma}) {
     const lumaM = <double>[
       0, 0, 0, 0, 0, //
       0, 0, 0, 0, 0, //
@@ -1090,22 +1226,47 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         break;
       case MatteMode.alphaInvert:
         content = ColorFiltered(
-            colorFilter: const ColorFilter.matrix(alphaInvM),
-            child: content);
+          colorFilter: const ColorFilter.matrix(alphaInvM),
+          child: content,
+        );
       case MatteMode.luma:
         content = ColorFiltered(
-            colorFilter: const ColorFilter.matrix(lumaM), child: content);
+          colorFilter: const ColorFilter.matrix(lumaM),
+          child: content,
+        );
       case MatteMode.lumaInvert:
         content = ColorFiltered(
-            colorFilter: const ColorFilter.matrix(lumaInvM),
-            child: content);
+          colorFilter: const ColorFilter.matrix(lumaInvM),
+          child: content,
+        );
+    }
+
+    // ColorFilter.matrix substitui o alfa pelo luma em espaco
+    // nao-premultiplicado. Intersectar com uma segunda pintura da fonte
+    // produz luma * alfa (e (1-luma) * alfa no invertido), sem recuperar
+    // pixels originalmente transparentes.
+    if (alphaForLuma != null &&
+        (mode == MatteMode.luma || mode == MatteMode.lumaInvert)) {
+      content = BlendMask(
+        blendMode: BlendMode.srcOver,
+        isolate: true,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: content),
+            Positioned.fill(
+              child: BlendMask(
+                blendMode: BlendMode.dstIn,
+                child: Stack(clipBehavior: Clip.none, children: [alphaForLuma]),
+              ),
+            ),
+          ],
+        ),
+      );
     }
     return Positioned.fill(
       child: IgnorePointer(
-        child: BlendMask(
-          blendMode: BlendMode.dstIn,
-          child: content,
-        ),
+        child: BlendMask(blendMode: BlendMode.dstIn, child: content),
       ),
     );
   }
@@ -1135,8 +1296,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   /// A cena unica de uma fila de solidos: cada um com seu transform
   /// efetivo (posicao, Z, rotacoes, escala, opacidade), projetados pela
   /// mesma camera no centro da composicao.
-  Widget _buildWorld3D(VideoProject project, List<Element3DLayer> fila,
-      Duration t, bool resolveLinks) {
+  Widget _buildWorld3D(
+    VideoProject project,
+    List<Element3DLayer> fila,
+    Duration t,
+    bool resolveLinks,
+  ) {
     final items = <World3DItem>[];
     for (final l in fila) {
       final local = l.localTime(t);
@@ -1154,21 +1319,23 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final ratio = rawSx.abs() < 1e-6 ? 1.0 : eff.scale / rawSx;
       final proprioZ = l.positionZ.valueAt(local);
       final temZ = l.is3D || (eff.z - proprioZ).abs() > 1e-6;
-      items.add(World3DItem(
-        layer: l,
-        center: eff.pos,
-        z: temZ ? eff.z.clamp(-1100.0, 100000.0) : 0,
-        scaleX: eff.scale,
-        scaleY: l.scaleY.valueAt(local) * ratio,
-        rotXDeg: eff.rotX,
-        rotYDeg: eff.rotY,
-        rotZDeg: eff.rot,
-        opacity: l.opacity.valueAt(local).clamp(0.0, 1.0),
-        selected: l.id == selectedId,
-        material: l.material,
-        gradient: l.gradient,
-        shininess: l.shininess,
-      ));
+      items.add(
+        World3DItem(
+          layer: l,
+          center: eff.pos,
+          z: temZ ? eff.z.clamp(-1100.0, 100000.0) : 0,
+          scaleX: eff.scale,
+          scaleY: l.scaleY.valueAt(local) * ratio,
+          rotXDeg: eff.rotX,
+          rotYDeg: eff.rotY,
+          rotZDeg: eff.rot,
+          opacity: l.opacity.valueAt(local).clamp(0.0, 1.0),
+          selected: l.id == selectedId,
+          material: l.material,
+          gradient: l.gradient,
+          shininess: l.shininess,
+        ),
+      );
     }
     return Positioned.fill(
       child: IgnorePointer(
@@ -1177,18 +1344,20 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             TextureCache.instance.revision,
             MeshCache.instance.revision,
           ]),
-          builder: (_, _) => CustomPaint(
-            painter: World3DPainter(items: items),
-          ),
+          builder: (_, _) => CustomPaint(painter: World3DPainter(items: items)),
         ),
       ),
     );
   }
 
   Widget _buildLayer(
-      VideoProject project, Layer layer, Duration t, bool resolveLinks,
-      {double opacityMul = 1,
-      Map<String, (NullLayer, GridRig, int, int)>? rig}) {
+    VideoProject project,
+    Layer layer,
+    Duration t,
+    bool resolveLinks, {
+    double opacityMul = 1,
+    Map<String, (NullLayer, GridRig, int, int)>? rig,
+  }) {
     final local = layer.localTime(t);
 
     // REMAPEAR TEMPO (igual ao AE): muda QUAL instante da camada aparece
@@ -1214,25 +1383,31 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final pl = project.linkFor(layer.id, LayerProp.position);
       final ps = src(pl);
       if (pl != null && ps != null) {
-        pos = ps.position.valueAt(ps.localTime(t)) +
+        final sourceTime = t - pl.delay;
+        pos =
+            ps.position.valueAt(ps.localTime(sourceTime)) +
             Offset(pl.offsetX, pl.offsetY);
       }
       final rl = project.linkFor(layer.id, LayerProp.rotation);
       final rs = src(rl);
       if (rl != null && rs != null) {
+        final sourceTime = t - rl.delay;
         rotationDeg =
-            rs.rotation.valueAt(rs.localTime(t)) * rl.scale + rl.offsetX;
+            rs.rotation.valueAt(rs.localTime(sourceTime)) * rl.scale +
+            rl.offsetX;
       }
       final ol = project.linkFor(layer.id, LayerProp.opacity);
       final os = src(ol);
       if (ol != null && os != null) {
-        opacityV =
-            (os.opacity.valueAt(os.localTime(t)) + ol.offsetX).clamp(0, 1);
+        final sourceTime = t - ol.delay;
+        opacityV = (os.opacity.valueAt(os.localTime(sourceTime)) + ol.offsetX)
+            .clamp(0, 1);
       }
       final sl = project.linkFor(layer.id, LayerProp.scale);
       final ss = src(sl);
       if (sl != null && ss != null) {
-        final f = ss.scaleX.valueAt(ss.localTime(t)) * sl.offsetX;
+        final sourceTime = t - sl.delay;
+        final f = ss.scaleX.valueAt(ss.localTime(sourceTime)) * sl.offsetX;
         sx = f;
         sy = f;
       }
@@ -1245,8 +1420,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       if (par != null) {
         final eff = effectiveTransform(project, layer, t);
         final rawScale = layer.scaleX.valueAt(local);
-        final ratio =
-            rawScale.abs() < 1e-6 ? 1.0 : eff.scale / rawScale;
+        final ratio = rawScale.abs() < 1e-6 ? 1.0 : eff.scale / rawScale;
         pos = eff.pos;
         rotationDeg = eff.rot;
         extraRotX = eff.rotX - layer.rotationX.valueAt(local);
@@ -1279,10 +1453,15 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             twistAdd = ce.rotY;
           }
         }
-        final place = gridPlacementAt(g, idx, count, nullL.localTime(t),
-            spacingMul: spacingMul,
-            rotationAdd: rotationAdd,
-            twistAdd: twistAdd);
+        final place = gridPlacementAt(
+          g,
+          idx,
+          count,
+          nullL.localTime(t),
+          spacingMul: spacingMul,
+          rotationAdd: rotationAdd,
+          twistAdd: twistAdd,
+        );
         final ne = effectiveTransform(project, nullL, t);
 
         // Layout girado/escalado pelo transform 3D do nulo controlador.
@@ -1301,12 +1480,14 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         final czr = math.cos(dRz), szr = math.sin(dRz);
 
         final compCenter = Offset(
-            project.outputWidth / 2, project.outputHeight / 2);
+          project.outputWidth / 2,
+          project.outputHeight / 2,
+        );
         final authoredOffset = pos - compCenter;
         // Mesma projecao de posicao do parenting: orbita 3D de verdade.
-        final perspPos =
-            1200 / (1200 + (ne.z + z2).clamp(-1100.0, 100000.0));
-        pos = ne.pos +
+        final perspPos = 1200 / (1200 + (ne.z + z2).clamp(-1100.0, 100000.0));
+        pos =
+            ne.pos +
             Offset(x1 * czr - y1 * szr, x1 * szr + y1 * czr) * perspPos +
             authoredOffset;
         extraZ = ne.z + z2 - layer.positionZ.valueAt(local);
@@ -1321,8 +1502,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
 
     // ---- 3D: perspectiva simples pela profundidade ----
     if (layer.is3D || extraZ != 0) {
-      final z = (layer.positionZ.valueAt(local) + extraZ)
-          .clamp(-1100.0, 100000.0);
+      final z = (layer.positionZ.valueAt(local) + extraZ).clamp(
+        -1100.0,
+        100000.0,
+      );
       final persp = 1200 / (1200 + z);
       sx *= persp;
       sy *= persp;
@@ -1337,22 +1520,35 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     // Particulas vivem em espaco 3D proprio: a rotacao do sistema (da
     // camada + herdada do nulo pai) e resolvida DENTRO do simulador — a
     // nuvem gira no espaco, nada de inclinar o canvas como um cartao.
-    final isParticles =
-        layer is ParticlesLayer || layer is Element3DLayer;
+    final isParticles = layer is ParticlesLayer || layer is Element3DLayer;
     Widget content = _LayerContent(
       layer: layer,
       project: project,
       exportFrames: exportFrames,
+      exporting: exporting,
       compWidth: project.outputWidth.toDouble(),
       videos: videos,
       localTime: contentLocal,
-      particlesRotX:
-          isParticles ? layer.rotationX.valueAt(local) + extraRotX : 0,
-      particlesRotY:
-          isParticles ? layer.rotationY.valueAt(local) + extraRotY : 0,
+      particlesRotX: isParticles
+          ? layer.rotationX.valueAt(local) + extraRotX
+          : 0,
+      particlesRotY: isParticles
+          ? layer.rotationY.valueAt(local) + extraRotY
+          : 0,
       buildChildren: (childLayers, childT) =>
           _buildLayers(project, childLayers, childT, resolveLinks: false),
     );
+
+    if (layer is VideoLayer && layer.speedBlur) {
+      final rate = videoPlaybackRateAt(layer, local).abs();
+      final sigma = ((rate - 1).abs() * 2.4).clamp(0.0, 18.0);
+      if (sigma > 0.05) {
+        content = ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma * 0.35),
+          child: content,
+        );
+      }
+    }
 
     // Mascaras cortam o alfa da propria camada ANTES dos efeitos (AE).
     if (layer.masks.isNotEmpty) {
@@ -1361,6 +1557,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           for (final m in layer.masks)
             MaskSpec(
               path: m.path.valueAt(local).build(),
+              closed: m.path.valueAt(local).closed,
               mode: m.mode,
               inverted: m.inverted,
               opacity: m.opacity.valueAt(local).clamp(0.0, 1.0),
@@ -1379,7 +1576,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     // acompanham a forma da camada — e o que os diferencia de efeito.
     final styles = project.metaOf(layer.id).styles;
     if (!styles.isEmpty) {
-      content = _applyLayerStyles(styles, content, local);
+      content = _applyLayerStyles(
+        styles,
+        content,
+        local,
+        Size(project.outputWidth.toDouble(), project.outputHeight.toDouble()),
+      );
     }
 
     // Selecao desenhada DEPOIS dos efeitos: blur/glow nao pegam a borda.
@@ -1414,8 +1616,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     // orbita (Rz*Ry*Rx). Misturar ordens era o que cisalhava as formas
     // ao girar o nulo. Com tilt 3D, o Rz sobe para a matriz de
     // perspectiva; sem tilt, tudo segue no caminho 2D de sempre.
-    final m = Matrix4.identity()
-      ..translateByDouble(pivot.dx, pivot.dy, 0, 1);
+    final m = Matrix4.identity()..translateByDouble(pivot.dx, pivot.dy, 0, 1);
     if (!tilt3D) m.rotateZ(rotation);
     m
       ..multiply(Matrix4.skew(skewX, skewY))
@@ -1447,8 +1648,9 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         // Fatias a ~1,5 px na tela: quanto mais de lado a camada esta,
         // mais fatias, senao a lateral sai listrada.
         final inclinacao = math.max(math.sin(rx).abs(), math.sin(ry).abs());
-        final passos =
-            (extrude * math.max(inclinacao, 0.15) / 1.5).ceil().clamp(2, 120);
+        final passos = (extrude * math.max(inclinacao, 0.15) / 1.5)
+            .ceil()
+            .clamp(2, 120);
         composed = FxSnapshot(
           painter: ExtrudeSnapshotPainter(
             perspective: pm,
@@ -1512,52 +1714,62 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   /// camada (o alfa), nao uma caixa — por isso o desenho e uma copia
   /// tingida e borrada por baixo do original.
   Widget _applyLayerStyles(
-      LayerStyles s, Widget child, Duration local) {
+    LayerStyles s,
+    Widget child,
+    Duration local,
+    Size compositionSize,
+  ) {
     var out = child;
 
     // Sobreposicoes pintam POR CIMA, respeitando o alfa.
     if (s.colorOverlay?.enabled ?? false) {
       final o = s.colorOverlay!;
-      out = Stack(clipBehavior: Clip.none, children: [
-        out,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: o.opacity.valueAt(local).clamp(0.0, 1.0),
-              child: BlendMask(
-                blendMode: BlendMode.srcIn,
-                child: ColoredBox(color: o.color),
+      out = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          out,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: o.opacity.valueAt(local).clamp(0.0, 1.0),
+                child: BlendMask(
+                  blendMode: BlendMode.srcIn,
+                  child: ColoredBox(color: o.color),
+                ),
               ),
             ),
           ),
-        ),
-      ]);
+        ],
+      );
     }
     if (s.gradientOverlay?.enabled ?? false) {
       final g = s.gradientOverlay!;
       final rad = g.angleDeg.valueAt(local) * math.pi / 180;
-      out = Stack(clipBehavior: Clip.none, children: [
-        out,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: g.opacity.valueAt(local).clamp(0.0, 1.0),
-              child: BlendMask(
-                blendMode: BlendMode.srcIn,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment(-math.cos(rad), -math.sin(rad)),
-                      end: Alignment(math.cos(rad), math.sin(rad)),
-                      colors: [g.colorA, g.colorB],
+      out = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          out,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: g.opacity.valueAt(local).clamp(0.0, 1.0),
+                child: BlendMask(
+                  blendMode: BlendMode.srcIn,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment(-math.cos(rad), -math.sin(rad)),
+                        end: Alignment(math.cos(rad), math.sin(rad)),
+                        colors: [g.colorA, g.colorB],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ]);
+        ],
+      );
     }
 
     // Contorno: silhueta dilatada por tras.
@@ -1565,21 +1777,23 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final st = s.stroke!;
       final w = st.width.valueAt(local);
       if (w > 0.01) {
-        out = Stack(clipBehavior: Clip.none, children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: st.opacity.valueAt(local).clamp(0.0, 1.0),
-                child: ImageFiltered(
-                  imageFilter: ui.ImageFilter.dilate(
-                      radiusX: w, radiusY: w),
-                  child: _tinted(child, st.color),
+        out = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: st.opacity.valueAt(local).clamp(0.0, 1.0),
+                  child: ImageFiltered(
+                    imageFilter: ui.ImageFilter.dilate(radiusX: w, radiusY: w),
+                    child: _tinted(child, st.color),
+                  ),
                 ),
               ),
             ),
-          ),
-          out,
-        ]);
+            out,
+          ],
+        );
       }
     }
 
@@ -1588,23 +1802,27 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final g = s.outerGlow!;
       final size = g.size.valueAt(local);
       if (size > 0.01) {
-        out = Stack(clipBehavior: Clip.none, children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: g.opacity.valueAt(local).clamp(0.0, 1.0),
-                child: ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(
+        out = Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: g.opacity.valueAt(local).clamp(0.0, 1.0),
+                  child: ImageFiltered(
+                    imageFilter: ui.ImageFilter.blur(
                       sigmaX: size / 2,
                       sigmaY: size / 2,
-                      tileMode: TileMode.decal),
-                  child: _tinted(child, g.color),
+                      tileMode: TileMode.decal,
+                    ),
+                    child: _tinted(child, g.color),
+                  ),
                 ),
               ),
             ),
-          ),
-          out,
-        ]);
+            out,
+          ],
+        );
       }
     }
 
@@ -1613,28 +1831,34 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final d = s.dropShadow!;
       final off = d.offsetAt(local);
       final size = d.size.valueAt(local);
-      out = Stack(clipBehavior: Clip.none, children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Transform.translate(
-              offset: off,
-              child: Opacity(
-                opacity: d.opacity.valueAt(local).clamp(0.0, 1.0),
-                child: size > 0.01
-                    ? ImageFiltered(
-                        imageFilter: ui.ImageFilter.blur(
-                            sigmaX: size / 2,
-                            sigmaY: size / 2,
-                            tileMode: TileMode.decal),
-                        child: _tinted(child, d.color),
-                      )
-                    : _tinted(child, d.color),
+      final spread = d.spread.valueAt(local).clamp(0.0, 100.0);
+      final filtered = size > 0.01 || spread > 0.01;
+      out = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Transform.translate(
+                offset: off,
+                child: Opacity(
+                  opacity: d.opacity.valueAt(local).clamp(0.0, 1.0),
+                  child: filtered
+                      ? ImageFiltered(
+                          imageFilter: _shadowImageFilter(
+                            size,
+                            spread,
+                            compositionSize,
+                          ),
+                          child: _tinted(child, d.color),
+                        )
+                      : _tinted(child, d.color),
+                ),
               ),
             ),
           ),
-        ),
-        out,
-      ]);
+          out,
+        ],
+      );
     }
 
     // Sombra interna: mancha escura recortada pelo proprio alfa.
@@ -1642,46 +1866,71 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final d = s.innerShadow!;
       final off = d.offsetAt(local);
       final size = d.size.valueAt(local);
-      out = Stack(clipBehavior: Clip.none, children: [
-        out,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: d.opacity.valueAt(local).clamp(0.0, 1.0),
-              child: BlendMask(
-                blendMode: BlendMode.srcATop,
-                child: ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(
-                      sigmaX: math.max(0.1, size / 2),
-                      sigmaY: math.max(0.1, size / 2),
-                      tileMode: TileMode.decal),
-                  child: Transform.translate(
-                    offset: off,
-                    child: _invertedSilhouette(child, d.color),
+      final spread = d.spread.valueAt(local).clamp(0.0, 100.0);
+      out = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          out,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: d.opacity.valueAt(local).clamp(0.0, 1.0),
+                child: BlendMask(
+                  blendMode: BlendMode.srcATop,
+                  child: ImageFiltered(
+                    imageFilter: _shadowImageFilter(
+                      size,
+                      spread,
+                      compositionSize,
+                    ),
+                    child: Transform.translate(
+                      offset: off,
+                      child: _invertedSilhouette(child, d.color),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ]);
+        ],
+      );
     }
     return out;
   }
 
+  /// A silhueta cresce antes do blur (espalhamento), e o conjunto roda
+  /// em espaco linear para nao criar faixas/cinza nas bordas suaves.
+  static ui.ImageFilter _shadowImageFilter(
+    double blurSize,
+    double spread,
+    Size compositionSize,
+  ) {
+    final blur = ui.ImageFilter.blur(
+      sigmaX: math.max(0.1, blurSize / 2),
+      sigmaY: math.max(0.1, blurSize / 2),
+      tileMode: TileMode.decal,
+    );
+    final filter = spread <= 0.01
+        ? blur
+        : ui.ImageFilter.compose(
+            outer: blur,
+            inner: ui.ImageFilter.dilate(radiusX: spread, radiusY: spread),
+          );
+    return LinearLight.wrap(filter, compositionSize);
+  }
+
   /// Silhueta da camada pintada de uma cor so (usa o alfa como forma).
   static Widget _tinted(Widget child, Color color) => ColorFiltered(
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-        child: child,
-      );
+    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    child: child,
+  );
 
   /// Negativo do alfa: onde a camada NAO esta, na cor dada — e o que
   /// forma a mancha da sombra interna.
-  static Widget _invertedSilhouette(Widget child, Color color) =>
-      ColorFiltered(
-        colorFilter: ColorFilter.mode(color, BlendMode.srcOut),
-        child: child,
-      );
+  static Widget _invertedSilhouette(Widget child, Color color) => ColorFiltered(
+    colorFilter: ColorFilter.mode(color, BlendMode.srcOut),
+    child: child,
+  );
 
   /// Tempo de CONTEUDO da camada depois do remapeamento (se houver).
   static Duration _remappedTime(Layer layer, Duration local) {
@@ -1703,7 +1952,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   Size get fxSize => Size(fxWidth.toDouble(), fxHeight.toDouble());
 
   Widget _applyEffects(
-      List<EffectInstance> effects, Widget child, Duration local) {
+    List<EffectInstance> effects,
+    Widget child,
+    Duration local,
+  ) {
     var out = child;
     for (final effect in effects) {
       if (!effect.enabled) continue;
@@ -1713,12 +1965,15 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           // que existe fora da camada, e a qualidade escolhe entre a
           // conta em espaco linear (certa) e o desfoque direto (barato).
           final sigma = pxAt1080(
-              effect.paramAt('raio', local).clamp(0.0, 500.0),
-              fxWidth,
-              fxHeight);
+            effect.paramAt('raio', local).clamp(0.0, 500.0),
+            fxWidth,
+            fxHeight,
+          );
           if (sigma > 0.01) {
-            final tile = switch (
-                effect.paramAt('borda', local).round().clamp(0, 2)) {
+            final tile = switch (effect
+                .paramAt('borda', local)
+                .round()
+                .clamp(0, 2)) {
               1 => ui.TileMode.repeated,
               2 => ui.TileMode.mirror,
               _ => ui.TileMode.decal,
@@ -1729,11 +1984,16 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                     sigmaY: sigma,
                     size: fxSize,
                     tileMode: tile,
-                    child: out)
+                    child: out,
+                  )
                 : ImageFiltered(
                     imageFilter: ui.ImageFilter.blur(
-                        sigmaX: sigma, sigmaY: sigma, tileMode: tile),
-                    child: out);
+                      sigmaX: sigma,
+                      sigmaY: sigma,
+                      tileMode: tile,
+                    ),
+                    child: out,
+                  );
           }
 
         case EffectType.lightGlow:
@@ -1745,23 +2005,32 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           // A PIRAMIDE e o que faz halo grande sem pagar o raio inteiro:
           // cada nivel dobra o sigma e vale metade, somando um halo
           // largo e barato por cima do nucleo apertado.
-          final intensidade =
-              (effect.paramAt('intensity', local) / 100).clamp(0.0, 4.0);
+          final intensidade = (effect.paramAt('intensity', local) / 100).clamp(
+            0.0,
+            4.0,
+          );
           if (intensidade > 0.004) {
             final raio = pxAt1080(
-                effect.paramAt('raio', local).clamp(0.0, 500.0),
-                fxWidth,
-                fxHeight);
+              effect.paramAt('raio', local).clamp(0.0, 500.0),
+              fxWidth,
+              fxHeight,
+            );
             final sigma = math.max(0.6, raio);
-            final th =
-                (effect.paramAt('threshold', local) / 100).clamp(0.0, 0.98);
-            final niveis =
-                effect.paramAt('piramide', local).round().clamp(1, 5);
+            final th = (effect.paramAt('threshold', local) / 100).clamp(
+              0.0,
+              0.98,
+            );
+            final niveis = effect
+                .paramAt('piramide', local)
+                .round()
+                .clamp(1, 5);
             final multR = effect.paramAt('mult_r', local).clamp(0.0, 2.0);
             final multG = effect.paramAt('mult_g', local).clamp(0.0, 2.0);
             final multB = effect.paramAt('mult_b', local).clamp(0.0, 2.0);
-            final modo = switch (
-                effect.paramAt('mesclagem', local).round().clamp(0, 2)) {
+            final modo = switch (effect
+                .paramAt('mesclagem', local)
+                .round()
+                .clamp(0, 2)) {
               1 => BlendMode.screen,
               2 => BlendMode.lighten,
               _ => BlendMode.plus,
@@ -1776,10 +2045,26 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             final o = -th * 255 * e * intensidade;
             final fonte = ColorFiltered(
               colorFilter: ColorFilter.matrix(<double>[
-                g * multR, 0, 0, 0, o,
-                0, g * multG, 0, 0, o,
-                0, 0, g * multB, 0, o,
-                0, 0, 0, 1, 0,
+                g * multR,
+                0,
+                0,
+                0,
+                o,
+                0,
+                g * multG,
+                0,
+                0,
+                o,
+                0,
+                0,
+                g * multB,
+                0,
+                o,
+                0,
+                0,
+                0,
+                1,
+                0,
               ]),
               child: out,
             );
@@ -1792,25 +2077,28 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               for (var k = 0; k < niveis; k++) 1 / (1 << k),
             ];
             final soma = pesos.fold<double>(0, (a, b) => a + b);
-            out = Stack(clipBehavior: Clip.none, children: [
-              out,
-              for (var k = 0; k < niveis; k++)
-                BlendMask(
-                  blendMode: modo,
-                  margem: 3 * sigma * (1 << k) + 4,
-                  child: Opacity(
-                    opacity: (pesos[k] / soma).clamp(0.0, 1.0),
-                    // EM ESPACO LINEAR: glow SOMA luz, e soma de luz em
-                    // sRGB da o halo lavado com borda escura de sempre.
-                    child: LinearLight.blurred(
-                      sigmaX: sigma * (1 << k),
-                      sigmaY: sigma * (1 << k),
-                      size: fxSize,
-                      child: tingido,
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                out,
+                for (var k = 0; k < niveis; k++)
+                  BlendMask(
+                    blendMode: modo,
+                    margem: 3 * sigma * (1 << k) + 4,
+                    child: Opacity(
+                      opacity: (pesos[k] / soma).clamp(0.0, 1.0),
+                      // EM ESPACO LINEAR: glow SOMA luz, e soma de luz em
+                      // sRGB da o halo lavado com borda escura de sempre.
+                      child: LinearLight.blurred(
+                        sigmaX: sigma * (1 << k),
+                        sigmaY: sigma * (1 << k),
+                        size: fxSize,
+                        child: tingido,
+                      ),
                     ),
                   ),
-                ),
-            ]);
+              ],
+            );
           }
 
         case EffectType.flicker:
@@ -1865,30 +2153,16 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               3 => BlendMode.overlay,
               _ => BlendMode.srcATop,
             };
-            out = Stack(clipBehavior: Clip.none, children: [
-              out,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: BlendMask(
-                    blendMode: mescla == 0 ? BlendMode.srcATop : modoG,
-                    child: mescla == 0
-                        ? Transform.rotate(
-                            angle: giro,
-                            child: CustomPaint(
-                              painter: Gradient4Painter(
-                                topLeft: cores[0],
-                                topRight: cores[1],
-                                bottomLeft: cores[2],
-                                bottomRight: cores[3],
-                                opacity: opG,
-                              ),
-                            ),
-                          )
-                        // Com mescla, o gradiente ainda fica preso ao alfa
-                        // da camada: srcATop por dentro, mescla por fora.
-                        : BlendMask(
-                            blendMode: BlendMode.srcATop,
-                            child: Transform.rotate(
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                out,
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: BlendMask(
+                      blendMode: mescla == 0 ? BlendMode.srcATop : modoG,
+                      child: mescla == 0
+                          ? Transform.rotate(
                               angle: giro,
                               child: CustomPaint(
                                 painter: Gradient4Painter(
@@ -1899,12 +2173,29 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                                   opacity: opG,
                                 ),
                               ),
+                            )
+                          // Com mescla, o gradiente ainda fica preso ao alfa
+                          // da camada: srcATop por dentro, mescla por fora.
+                          : BlendMask(
+                              blendMode: BlendMode.srcATop,
+                              child: Transform.rotate(
+                                angle: giro,
+                                child: CustomPaint(
+                                  painter: Gradient4Painter(
+                                    topLeft: cores[0],
+                                    topRight: cores[1],
+                                    bottomLeft: cores[2],
+                                    bottomRight: cores[3],
+                                    opacity: opG,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
-              ),
-            ]);
+              ],
+            );
           }
 
         case EffectType.liquidGlass:
@@ -1914,6 +2205,11 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           // correndo pela borda de cima e sombra por baixo. A camada em
           // si (texto, icone) fica por cima, nitida.
           final blurLG = effect.paramAt('blur', local).clamp(0.0, 40.0);
+          final saturacaoLG =
+              effect.paramAt('saturation', local).clamp(0.0, 200.0) / 100;
+          final brilhoLG =
+              effect.paramAt('brightness', local).clamp(0.0, 200.0) / 100;
+          final grainLG = effect.paramAt('grain', local).clamp(0.0, 0.12);
           final refr = effect.paramAt('refraction', local).clamp(0.0, 1.0);
           final rimLG = effect.paramAt('rim', local).clamp(0.0, 1.0);
           final tintLG = effect.paramAt('tint', local).clamp(0.0, 1.0);
@@ -1921,94 +2217,160 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           final sombraLG = effect.paramAt('shadow', local).clamp(0.0, 1.0);
           final folgaLG = effect.paramAt('padding', local).clamp(0.0, 120.0);
           final bordaLG = BorderRadius.circular(raioLG);
-          out = Stack(clipBehavior: Clip.none, children: [
-            Positioned(
-              left: -folgaLG,
-              top: -folgaLG,
-              right: -folgaLG,
-              bottom: -folgaLG,
-              child: IgnorePointer(
-                child: LayoutBuilder(builder: (context, c) {
-                  final w = c.maxWidth, h = c.maxHeight;
-                  final k = 1 + refr * 0.12;
-                  // Lente: escala o fundo em torno do centro da placa.
-                  final lente = Matrix4.identity()
-                    ..translateByDouble(w / 2, h / 2, 0, 1)
-                    ..scaleByDouble(k, k, 1, 1)
-                    ..translateByDouble(-w / 2, -h / 2, 0, 1);
-                  return Stack(children: [
-                    if (sombraLG > 0.01)
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: bordaLG,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black
-                                    .withValues(alpha: 0.45 * sombraLG),
-                                blurRadius: 28,
-                                offset: const Offset(0, 12),
+          // O caminho rapido so vale quando TODO parametro que pinta pixels
+          // esta neutro. Blur/cor neutros nao podem desligar grao, tinta,
+          // borda, refracao ou sombra configurados no painel avancado.
+          final neutroLG =
+              blurLG <= 0.001 &&
+              (saturacaoLG - 1).abs() <= 0.001 &&
+              (brilhoLG - 1).abs() <= 0.001 &&
+              grainLG <= 0.0001 &&
+              refr <= 0.001 &&
+              rimLG <= 0.001 &&
+              tintLG <= 0.001 &&
+              sombraLG <= 0.001;
+          if (!neutroLG) {
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  left: -folgaLG,
+                  top: -folgaLG,
+                  right: -folgaLG,
+                  bottom: -folgaLG,
+                  child: IgnorePointer(
+                    child: LayoutBuilder(
+                      builder: (context, c) {
+                        final w = c.maxWidth, h = c.maxHeight;
+                        final k = 1 + refr * 0.12;
+                        // Lente: escala o fundo em torno do centro da placa.
+                        final lente = Matrix4.identity()
+                          ..translateByDouble(w / 2, h / 2, 0, 1)
+                          ..scaleByDouble(k, k, 1, 1)
+                          ..translateByDouble(-w / 2, -h / 2, 0, 1);
+                        final optico = ui.ImageFilter.compose(
+                          outer: ui.ImageFilter.blur(
+                            sigmaX: blurLG,
+                            sigmaY: blurLG,
+                            tileMode: TileMode.mirror,
+                          ),
+                          inner: ui.ImageFilter.matrix(
+                            lente.storage,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                        );
+                        return Stack(
+                          children: [
+                            if (sombraLG > 0.01)
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: bordaLG,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.45 * sombraLG,
+                                        ),
+                                        blurRadius: 28,
+                                        offset: const Offset(0, 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: bordaLG,
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.compose(
-                            outer: ui.ImageFilter.blur(
-                                sigmaX: blurLG,
-                                sigmaY: blurLG,
-                                tileMode: TileMode.mirror),
-                            inner: ui.ImageFilter.matrix(lente.storage,
-                                filterQuality: FilterQuality.medium),
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: bordaLG,
-                              color: effect.color.withValues(alpha: tintLG),
-                              border: Border.all(
-                                color: Colors.white
-                                    .withValues(alpha: 0.55 * rimLG),
-                                width: 1.2,
+                            Positioned.fill(
+                              child: ClipRRect(
+                                borderRadius: bordaLG,
+                                child: ColorFiltered(
+                                  colorFilter: ColorFilter.matrix(
+                                    _saturationBrightnessMatrix(
+                                      saturacaoLG,
+                                      brilhoLG,
+                                    ),
+                                  ),
+                                  child: BackdropFilter(
+                                    // O blur acontece entre as curvas sRGB/linear;
+                                    // o ajuste de cor e aplicado ao passe pronto.
+                                    filter: LinearLight.wrap(
+                                      optico,
+                                      Size(w, h),
+                                    ),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        borderRadius: bordaLG,
+                                        color: effect.color.withValues(
+                                          alpha: tintLG,
+                                        ),
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.55 * rimLG,
+                                          ),
+                                          width: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
+                            // O reflexo especular: claro em cima e a esquerda,
+                            // um fio claro embaixo — a luz passando pela curva.
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: bordaLG,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withValues(
+                                        alpha: 0.38 * rimLG,
+                                      ),
+                                      Colors.white.withValues(
+                                        alpha: 0.06 * rimLG,
+                                      ),
+                                      Colors.transparent,
+                                      Colors.white.withValues(
+                                        alpha: 0.14 * rimLG,
+                                      ),
+                                    ],
+                                    stops: const [0, 0.3, 0.7, 1],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (grainLG > 0.0001)
+                              Positioned.fill(
+                                child: ClipRRect(
+                                  borderRadius: bordaLG,
+                                  child: IgnorePointer(
+                                    child: BlendMask(
+                                      blendMode: BlendMode.overlay,
+                                      child: CustomPaint(
+                                        painter: _GrainPainter(
+                                          amount: grainLG,
+                                          size: 0.7,
+                                          seed: 8606,
+                                          time: local,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
-                    // O reflexo especular: claro em cima e a esquerda,
-                    // um fio claro embaixo — a luz passando pela curva.
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: bordaLG,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.38 * rimLG),
-                              Colors.white.withValues(alpha: 0.06 * rimLG),
-                              Colors.transparent,
-                              Colors.white.withValues(alpha: 0.14 * rimLG),
-                            ],
-                            stops: const [0, 0.3, 0.7, 1],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ]);
-                }),
-              ),
-            ),
-            out,
-          ]);
+                  ),
+                ),
+                out,
+              ],
+            );
+          }
 
         case EffectType.tint:
-          final forcaTint =
-              effect.paramAt('strength', local).clamp(0.0, 1.0);
+          final forcaTint = effect.paramAt('strength', local).clamp(0.0, 1.0);
           // Em forca zero o srcATop ja devolvia o destino intacto — mas
           // pagava uma camada de composicao para isso.
           if (forcaTint > 0.004) {
@@ -2030,47 +2392,56 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           final ganho = exposureGain(exposure).clamp(0.0, 8.0);
           if (ganho > 0.01) {
             final r = effect.paramAt('radius', local).clamp(0.0, 1.0);
-            final raioPx =
-                radiusToPixels(r, fxWidth, fxHeight).clamp(1.0, 2000.0);
-            final quality =
-                effect.paramAt('quality', local).round().clamp(0, 2);
+            final raioPx = radiusToPixels(
+              r,
+              fxWidth,
+              fxHeight,
+            ).clamp(1.0, 2000.0);
+            final quality = effect
+                .paramAt('quality', local)
+                .round()
+                .clamp(0, 2);
             final niveis = bloomLevels(quality);
             final pesos = bloomWeights(niveis);
             final sigmas = bloomSigmas(raioPx, niveis);
 
             final limiar = effect.paramAt('threshold', local);
             final suavidade = effect.paramAt('threshold_softness', local);
-            final aspecto =
-                effect.paramAt('aspect_ratio', local).clamp(0.1, 10.0);
-            final satur =
-                effect.paramAt('glow_saturation', local) / 100.0;
+            final aspecto = effect
+                .paramAt('aspect_ratio', local)
+                .clamp(0.1, 10.0);
+            final satur = effect.paramAt('glow_saturation', local) / 100.0;
             final tintAmt = effect.paramAt('tint_amount', local);
-            final tintMode =
-                effect.paramAt('tint_mode', local).round().clamp(0, 3);
-            final multR =
-                effect.paramAt('red_radius_multiplier', local);
-            final multG =
-                effect.paramAt('green_radius_multiplier', local);
-            final multB =
-                effect.paramAt('blue_radius_multiplier', local);
-            final porCanal = (multR - multG).abs() > 0.01 ||
-                (multG - multB).abs() > 0.01;
+            final tintMode = effect
+                .paramAt('tint_mode', local)
+                .round()
+                .clamp(0, 3);
+            final multR = effect.paramAt('red_radius_multiplier', local);
+            final multG = effect.paramAt('green_radius_multiplier', local);
+            final multB = effect.paramAt('blue_radius_multiplier', local);
+            final porCanal =
+                (multR - multG).abs() > 0.01 || (multG - multB).abs() > 0.01;
             final soGlow = effect.paramAt('glow_only', local) >= 0.5;
-            final blend =
-                effect.paramAt('blend_mode', local).round().clamp(0, 2);
+            final blend = effect
+                .paramAt('blend_mode', local)
+                .round()
+                .clamp(0, 2);
             final anguloOn = effect.paramAt('enable_angle', local) >= 0.5;
-            final anguloRad =
-                effect.paramAt('angle', local) * math.pi / 180;
+            final anguloRad = effect.paramAt('angle', local) * math.pi / 180;
             // 0 = Luminance, 1 = Chrominance.
-            final modoLimiar =
-                effect.paramAt('threshold_mode', local).round().clamp(0, 1);
+            final modoLimiar = effect
+                .paramAt('threshold_mode', local)
+                .round()
+                .clamp(0, 1);
             // 0 = Exponential, 1 = Iris.
-            final modoGlow =
-                effect.paramAt('glow_mode', local).round().clamp(0, 1);
-            final reducaoRuido =
-                effect.paramAt('noise_reduction', local).clamp(0.0, 100.0);
-            final reducao =
-                effect.paramAt('downsample', local).clamp(1.0, 8.0);
+            final modoGlow = effect
+                .paramAt('glow_mode', local)
+                .round()
+                .clamp(0, 1);
+            final reducaoRuido = effect
+                .paramAt('noise_reduction', local)
+                .clamp(0.0, 100.0);
+            final reducao = effect.paramAt('downsample', local).clamp(1.0, 8.0);
 
             // LIMIAR: so o que passa do valor vira glow. A rampa suave
             // evita a linha reta onde o brilho cruza o limiar — com
@@ -2086,16 +2457,21 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             if (reducaoRuido > 0.5) {
               final sr = reducaoRuido / 100 * 3.0;
               fonte = LinearLight.blurred(
-sigmaX: sr, sigmaY: sr, size: fxSize,
- child: fonte,
-);
+                sigmaX: sr,
+                sigmaY: sr,
+                size: fxSize,
+                child: fonte,
+              );
             }
 
             if (limiar > 0.01) {
               // O limiar REMAPEIA (limiar -> 0, branco -> 1); a conta
               // mora em bloom.dart, onde da para testa-la.
-              final (escala, desl) =
-                  glowThresholdMatrix(limiar, suavidade, ganho);
+              final (escala, desl) = glowThresholdMatrix(
+                limiar,
+                suavidade,
+                ganho,
+              );
               // O QUE O LIMIAR MEDE.
               //
               // Luminancia: passa o que e CLARO — o caso comum, e o que
@@ -2105,22 +2481,24 @@ sigmaX: sr, sigmaY: sr, size: fxSize,
               // ganha glow por luminancia (o fundo e tao claro quanto);
               // por crominancia, so o neon brilha.
               fonte = ColorFiltered(
-                colorFilter: ColorFilter.matrix(modoLimiar == 1
-                    ? <double>[
-                        escala * (1 - 0.2126), -escala * 0.7152,
-                        -escala * 0.0722, 0, desl, //
-                        -escala * 0.2126, escala * (1 - 0.7152),
-                        -escala * 0.0722, 0, desl,
-                        -escala * 0.2126, -escala * 0.7152,
-                        escala * (1 - 0.0722), 0, desl,
-                        0, 0, 0, 1, 0,
-                      ]
-                    : <double>[
-                        escala, 0, 0, 0, desl, //
-                        0, escala, 0, 0, desl,
-                        0, 0, escala, 0, desl,
-                        0, 0, 0, 1, 0,
-                      ]),
+                colorFilter: ColorFilter.matrix(
+                  modoLimiar == 1
+                      ? <double>[
+                          escala * (1 - 0.2126), -escala * 0.7152,
+                          -escala * 0.0722, 0, desl, //
+                          -escala * 0.2126, escala * (1 - 0.7152),
+                          -escala * 0.0722, 0, desl,
+                          -escala * 0.2126, -escala * 0.7152,
+                          escala * (1 - 0.0722), 0, desl,
+                          0, 0, 0, 1, 0,
+                        ]
+                      : <double>[
+                          escala, 0, 0, 0, desl, //
+                          0, escala, 0, 0, desl,
+                          0, 0, escala, 0, desl,
+                          0, 0, 0, 1, 0,
+                        ],
+                ),
                 child: fonte,
               );
             }
@@ -2135,13 +2513,17 @@ sigmaX: sr, sigmaY: sr, size: fxSize,
               fonte = ImageFiltered(
                 imageFilter: ui.ImageFilter.compose(
                   outer: ui.ImageFilter.matrix(
-                      Matrix4.diagonal3Values(reducao, reducao, 1).storage,
-                      filterQuality: FilterQuality.low),
+                    Matrix4.diagonal3Values(reducao, reducao, 1).storage,
+                    filterQuality: FilterQuality.low,
+                  ),
                   inner: ui.ImageFilter.matrix(
-                      Matrix4.diagonal3Values(
-                              1 / reducao, 1 / reducao, 1)
-                          .storage,
-                      filterQuality: FilterQuality.low),
+                    Matrix4.diagonal3Values(
+                      1 / reducao,
+                      1 / reducao,
+                      1,
+                    ).storage,
+                    filterQuality: FilterQuality.low,
+                  ),
                 ),
                 child: fonte,
               );
@@ -2155,8 +2537,9 @@ sigmaX: sr, sigmaY: sr, size: fxSize,
             if (tintMode != 0 && tintAmt > 0.01) {
               fonte = ColorFiltered(
                 colorFilter: ColorFilter.mode(
-                    effect.color.withValues(alpha: tintAmt),
-                    BlendMode.srcATop),
+                  effect.color.withValues(alpha: tintAmt),
+                  BlendMode.srcATop,
+                ),
                 child: fonte,
               );
             }
@@ -2180,33 +2563,38 @@ sigmaX: sr, sigmaY: sr, size: fxSize,
                 // dao a leitura de seis pontas.
                 Widget lamina(double giro) {
                   final r = LinearLight.blurred(
-sigmaX: math.max(0.1, sx * 2.2),
-                        sigmaY: math.max(0.1, sy * 0.18),
-                        size: fxSize,
- child: Transform.rotate(angle: -giro, child: alvo),
-);
+                    sigmaX: math.max(0.1, sx * 2.2),
+                    sigmaY: math.max(0.1, sy * 0.18),
+                    size: fxSize,
+                    child: Transform.rotate(angle: -giro, child: alvo),
+                  );
                   return Transform.rotate(angle: giro, child: r);
                 }
 
                 final alcanceLamina = 3 * sx * 2.2 + 4;
-                alvo = Stack(clipBehavior: Clip.none, children: [
-                  lamina(0),
-                  BlendMask(
+                alvo = Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    lamina(0),
+                    BlendMask(
                       blendMode: BlendMode.plus,
                       margem: alcanceLamina,
-                      child: lamina(math.pi / 3)),
-                  BlendMask(
+                      child: lamina(math.pi / 3),
+                    ),
+                    BlendMask(
                       blendMode: BlendMode.plus,
                       margem: alcanceLamina,
-                      child: lamina(2 * math.pi / 3)),
-                ]);
+                      child: lamina(2 * math.pi / 3),
+                    ),
+                  ],
+                );
               } else {
                 alvo = LinearLight.blurred(
-sigmaX: math.max(0.1, sx),
-                      sigmaY: math.max(0.1, sy),
-                      size: fxSize,
- child: alvo,
-);
+                  sigmaX: math.max(0.1, sx),
+                  sigmaY: math.max(0.1, sy),
+                  size: fxSize,
+                  child: alvo,
+                );
               }
               if (anguloOn && anguloRad.abs() > 0.001) {
                 alvo = Transform.rotate(angle: anguloRad, child: alvo);
@@ -2217,24 +2605,32 @@ sigmaX: math.max(0.1, sx),
             // ALCANCE do halo de um nivel: ate onde o desfoque chega fora
             // da caixa. E a margem que a foto da mescla precisa ter.
             double alcance(double sigma) {
-              final mult = math.max(math.max(multR, multG), math.max(multB, 1.0));
+              final mult = math.max(
+                math.max(multR, multG),
+                math.max(multB, 1.0),
+              );
               final eixo = math.max(aspecto, 1 / aspecto);
               return 3 * sigma * mult * eixo * (modoGlow == 1 ? 2.2 : 1.0) + 4;
             }
 
             Widget nivel(double sigma, double peso) {
               final w = porCanal
-                  ? Stack(clipBehavior: Clip.none, children: [
-                      borra(_channelIso(fonte, 0), sigma, multR),
-                      BlendMask(
+                  ? Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        borra(_channelIso(fonte, 0), sigma, multR),
+                        BlendMask(
                           blendMode: BlendMode.plus,
                           margem: alcance(sigma),
-                          child: borra(_channelIso(fonte, 1), sigma, multG)),
-                      BlendMask(
+                          child: borra(_channelIso(fonte, 1), sigma, multG),
+                        ),
+                        BlendMask(
                           blendMode: BlendMode.plus,
                           margem: alcance(sigma),
-                          child: borra(_channelIso(fonte, 2), sigma, multB)),
-                    ])
+                          child: borra(_channelIso(fonte, 2), sigma, multB),
+                        ),
+                      ],
+                    )
                   : borra(fonte, sigma, 1);
               // O ganho ja entrou na FONTE, junto do limiar; aqui so
               // o peso do nivel. Multiplicar de novo seria contar a
@@ -2259,22 +2655,31 @@ sigmaX: math.max(0.1, sx),
                 // GLOW ONLY: so o brilho, sem a fonte. Serve para mandar
                 // o glow para outra camada e mesclar la. Os niveis se
                 // somam entre si.
-                ? Stack(clipBehavior: Clip.none, children: [
-                    camadas.first.$1,
-                    for (final (c, a) in camadas.skip(1))
-                      BlendMask(
-                          blendMode: BlendMode.plus, margem: a, child: c),
-                  ])
+                ? Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      camadas.first.$1,
+                      for (final (c, a) in camadas.skip(1))
+                        BlendMask(
+                          blendMode: BlendMode.plus,
+                          margem: a,
+                          child: c,
+                        ),
+                    ],
+                  )
                 // A FONTE EMBAIXO, O GLOW POR CIMA. Com a fonte por
                 // ultimo, o solido cobria o brilho e o glow so aparecia
                 // pela borda de fora — um contorno, nao um glow. O Deep
                 // Glow soma luz em cima de tudo: o miolo claro tambem
                 // acende, e e isso que faz um texto branco "queimar".
-                : Stack(clipBehavior: Clip.none, children: [
-                    out,
-                    for (final (c, a) in camadas)
-                      BlendMask(blendMode: modo, margem: a, child: c),
-                  ]);
+                : Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      out,
+                      for (final (c, a) in camadas)
+                        BlendMask(blendMode: modo, margem: a, child: c),
+                    ],
+                  );
           }
 
         case EffectType.tremor:
@@ -2286,23 +2691,23 @@ sigmaX: math.max(0.1, sx),
           // e o mesmo projeto exportado em duas resolucoes tremia
           // diferente. Em 1080p o resultado continua identico.
           final amp = pxAt1080(
-              effect.paramAt('amplitude', local) * 60, fxWidth, fxHeight);
+            effect.paramAt('amplitude', local) * 60,
+            fxWidth,
+            fxHeight,
+          );
           final style = effect.paramAt('style', local).round().clamp(0, 2);
           final seed = effect.paramAt('seed', local).round();
-          final phase = integratedPhase(effect.track('frequency'), local) +
+          final phase =
+              integratedPhase(effect.track('frequency'), local) +
               effect.paramAt('phase', local) / 360.0;
 
           ShakeAxis eixo(String pre) => ShakeAxis(
-                randomAmplitude:
-                    effect.paramAt('${pre}_random_amplitude', local),
-                randomFrequency:
-                    effect.paramAt('${pre}_random_frequency', local),
-                waveAmplitude:
-                    effect.paramAt('${pre}_wave_amplitude', local),
-                waveFrequency:
-                    effect.paramAt('${pre}_wave_frequency', local),
-                phaseDeg: effect.paramAt('${pre}_phase', local),
-              );
+            randomAmplitude: effect.paramAt('${pre}_random_amplitude', local),
+            randomFrequency: effect.paramAt('${pre}_random_frequency', local),
+            waveAmplitude: effect.paramAt('${pre}_wave_amplitude', local),
+            waveFrequency: effect.paramAt('${pre}_wave_frequency', local),
+            phaseDeg: effect.paramAt('${pre}_phase', local),
+          );
 
           final ex = eixo('x');
           final ey = eixo('y');
@@ -2310,21 +2715,20 @@ sigmaX: math.max(0.1, sx),
           final et = eixo('tilt');
 
           TremorSample sampleAt(double shift) => tremorSample(
-                amplitudePx: amp,
-                phase: phase + shift,
-                style: style,
-                seed: seed,
-                x: ex,
-                y: ey,
-                z: ez,
-                tilt: et,
-                stillness: effect.paramAt('stillness', local),
-                twitchFrequency:
-                    effect.paramAt('twitch_frequency', local),
-                drift: effect.paramAt('drift', local),
-                centerBias: effect.paramAt('center_bias', local),
-                zDistance: effect.paramAt('z_distance', local),
-              );
+            amplitudePx: amp,
+            phase: phase + shift,
+            style: style,
+            seed: seed,
+            x: ex,
+            y: ey,
+            z: ez,
+            tilt: et,
+            stillness: effect.paramAt('stillness', local),
+            twitchFrequency: effect.paramAt('twitch_frequency', local),
+            drift: effect.paramAt('drift', local),
+            centerBias: effect.paramAt('center_bias', local),
+            zDistance: effect.paramAt('z_distance', local),
+          );
 
           // BORDAS: refletir e a escolha certa por padrao — a imagem
           // sacode e a borda continua parecendo imagem, em vez de virar
@@ -2335,48 +2739,76 @@ sigmaX: math.max(0.1, sx),
           // proprio centro (como era) punha a copia EM CIMA da original —
           // texto saia com um gemeo invertido por cima.
           Widget comBorda(Widget c) => switch (bordas) {
-                0 => Stack(clipBehavior: Clip.none, children: [
-                    Transform.scale(
-                        scaleX: -1, alignment: Alignment.centerLeft, child: c),
-                    Transform.scale(
-                        scaleX: -1, alignment: Alignment.centerRight, child: c),
-                    Transform.scale(
-                        scaleY: -1, alignment: Alignment.topCenter, child: c),
-                    Transform.scale(
-                        scaleY: -1, alignment: Alignment.bottomCenter, child: c),
-                    c,
-                  ]),
-                1 => Stack(clipBehavior: Clip.none, children: [
-                    Transform.translate(
-                        offset: Offset(-fxWidth.toDouble(), 0), child: c),
-                    Transform.translate(
-                        offset: Offset(fxWidth.toDouble(), 0), child: c),
-                    Transform.translate(
-                        offset: Offset(0, -fxHeight.toDouble()), child: c),
-                    Transform.translate(
-                        offset: Offset(0, fxHeight.toDouble()), child: c),
-                    c,
-                  ]),
-                _ => c,
-              };
+            0 => Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Transform.scale(
+                  scaleX: -1,
+                  alignment: Alignment.centerLeft,
+                  child: c,
+                ),
+                Transform.scale(
+                  scaleX: -1,
+                  alignment: Alignment.centerRight,
+                  child: c,
+                ),
+                Transform.scale(
+                  scaleY: -1,
+                  alignment: Alignment.topCenter,
+                  child: c,
+                ),
+                Transform.scale(
+                  scaleY: -1,
+                  alignment: Alignment.bottomCenter,
+                  child: c,
+                ),
+                c,
+              ],
+            ),
+            1 => Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Transform.translate(
+                  offset: Offset(-fxWidth.toDouble(), 0),
+                  child: c,
+                ),
+                Transform.translate(
+                  offset: Offset(fxWidth.toDouble(), 0),
+                  child: c,
+                ),
+                Transform.translate(
+                  offset: Offset(0, -fxHeight.toDouble()),
+                  child: c,
+                ),
+                Transform.translate(
+                  offset: Offset(0, fxHeight.toDouble()),
+                  child: c,
+                ),
+                c,
+              ],
+            ),
+            _ => c,
+          };
 
           Widget shaken(TremorSample s, Widget c) => Transform(
-                transform: Matrix4.identity()
-                  ..translateByDouble(s.dx, s.dy, 0, 1)
-                  ..rotateZ(s.rotationDeg * math.pi / 180)
-                  ..scaleByDouble(s.scale, s.scale, 1, 1),
-                alignment: Alignment.center,
-                child: c,
-              );
+            transform: Matrix4.identity()
+              ..translateByDouble(s.dx, s.dy, 0, 1)
+              ..rotateZ(s.rotationDeg * math.pi / 180)
+              ..scaleByDouble(s.scale, s.scale, 1, 1),
+            alignment: Alignment.center,
+            child: c,
+          );
 
           final s0 = sampleAt(0);
-          final rgbAleatorio =
-              effect.paramAt('rgb_randomness', local).clamp(0.0, 1.0);
+          final rgbAleatorio = effect
+              .paramAt('rgb_randomness', local)
+              .clamp(0.0, 1.0);
           final rgbFreq = effect.paramAt('rgb_frequency', local);
           final ampR = effect.paramAt('red_amplitude', local);
           final ampG = effect.paramAt('green_amplitude', local);
           final ampB = effect.paramAt('blue_amplitude', local);
-          final separaCanais = rgbAleatorio > 0.001 ||
+          final separaCanais =
+              rgbAleatorio > 0.001 ||
               (ampR - ampG).abs() > 0.001 ||
               (ampG - ampB).abs() > 0.001 ||
               effect.paramAt('red_phase', local).abs() > 0.5 ||
@@ -2393,31 +2825,46 @@ sigmaX: math.max(0.1, sx),
                   (rgbAleatorio <= 0
                       ? 0.0
                       : fxNoiseSigned(seed + 31, 9, phase * rgbFreq) *
-                          rgbAleatorio *
-                          0.15);
+                            rgbAleatorio *
+                            0.15);
 
               TremorSample canal(String p, double a) {
                 final base = sampleAt(faseDe(p, a));
-                return TremorSample(base.dx * a, base.dy * a, base.scale,
-                    base.rotationDeg);
+                return TremorSample(
+                  base.dx * a,
+                  base.dy * a,
+                  base.scale,
+                  base.rotationDeg,
+                );
               }
 
               // A margem da foto cobre ate onde o tremor pode levar o
               // canal: um quinto do quadro e mais do que qualquer tremor.
               final alcanceTremor = fxSize.longestSide * 0.2;
-              out = comBorda(Stack(clipBehavior: Clip.none, children: [
-                shaken(canal('red_phase', ampR), _channelIso(out, 0)),
-                BlendMask(
-                    blendMode: BlendMode.plus,
-                    margem: alcanceTremor,
-                    child: shaken(
-                        canal('green_phase', ampG), _channelIso(out, 1))),
-                BlendMask(
-                    blendMode: BlendMode.plus,
-                    margem: alcanceTremor,
-                    child: shaken(
-                        canal('blue_phase', ampB), _channelIso(out, 2))),
-              ]));
+              out = comBorda(
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    shaken(canal('red_phase', ampR), _channelIso(out, 0)),
+                    BlendMask(
+                      blendMode: BlendMode.plus,
+                      margem: alcanceTremor,
+                      child: shaken(
+                        canal('green_phase', ampG),
+                        _channelIso(out, 1),
+                      ),
+                    ),
+                    BlendMask(
+                      blendMode: BlendMode.plus,
+                      margem: alcanceTremor,
+                      child: shaken(
+                        canal('blue_phase', ampB),
+                        _channelIso(out, 2),
+                      ),
+                    ),
+                  ],
+                ),
+              );
             } else {
               out = comBorda(shaken(s0, out));
             }
@@ -2425,16 +2872,20 @@ sigmaX: math.max(0.1, sx),
             // MOTION BLUR do proprio Shake: amostras ao longo do rastro
             // do tremor. Sem ele, um tremor forte vira imagem picotada.
             if (effect.paramAt('motion_blur', local) >= 0.5) {
-              final comprimento =
-                  effect.paramAt('blur_length', local).clamp(0.0, 10.0);
+              final comprimento = effect
+                  .paramAt('blur_length', local)
+                  .clamp(0.0, 10.0);
               if (comprimento > 0.01) {
                 const n = 5;
                 final copias = <Widget>[];
                 for (var k = 0; k < n; k++) {
                   final f = (k / (n - 1) - 0.5) * comprimento * 0.02;
-                  copias.add(Opacity(
+                  copias.add(
+                    Opacity(
                       opacity: 1 / (k + 1),
-                      child: shaken(sampleAt(f), out)));
+                      child: shaken(sampleAt(f), out),
+                    ),
+                  );
                 }
                 out = Stack(clipBehavior: Clip.none, children: copias);
               }
@@ -2443,8 +2894,7 @@ sigmaX: math.max(0.1, sx),
 
         case EffectType.glitch:
           // Modulador mestre + operadores com tiques puros (PR-FX4).
-          final master =
-              effect.paramAt('quantidade', local).clamp(0.0, 2.0);
+          final master = effect.paramAt('quantidade', local).clamp(0.0, 2.0);
           if (master > 0.001) {
             final tau = integratedPhase(effect.track('velocidade'), local);
             final st = glitchState(
@@ -2463,49 +2913,56 @@ sigmaX: math.max(0.1, sx),
               var g = out;
               if (st.hueDeg.abs() > 0.5) {
                 g = ColorFiltered(
-                    colorFilter:
-                        ColorFilter.matrix(hueRotateMatrix(st.hueDeg)),
-                    child: g);
+                  colorFilter: ColorFilter.matrix(hueRotateMatrix(st.hueDeg)),
+                  child: g,
+                );
               }
               if (st.brightness > 0.01) {
                 final b = 1 + st.brightness;
                 g = ColorFiltered(
-                    colorFilter: ColorFilter.matrix(<double>[
-                      b, 0, 0, 0, 0, //
-                      0, b, 0, 0, 0, //
-                      0, 0, b, 0, 0, //
-                      0, 0, 0, 1, 0,
-                    ]),
-                    child: g);
+                  colorFilter: ColorFilter.matrix(<double>[
+                    b, 0, 0, 0, 0, //
+                    0, b, 0, 0, 0, //
+                    0, 0, b, 0, 0, //
+                    0, 0, 0, 1, 0,
+                  ]),
+                  child: g,
+                );
               }
               if (st.blurSigma > 0.2) {
                 g = ImageFiltered(
                   imageFilter: ui.ImageFilter.blur(
-                      sigmaX: st.blurSigma,
-                      sigmaY: st.blurSigma * 0.4,
-                      tileMode: TileMode.decal),
+                    sigmaX: st.blurSigma,
+                    sigmaY: st.blurSigma * 0.4,
+                    tileMode: TileMode.decal,
+                  ),
                   child: g,
                 );
               }
               Widget moved(double extraDx, Widget c) => Transform(
-                    transform: Matrix4.identity()
-                      ..translateByDouble(st.dx + extraDx, st.dy, 0, 1)
-                      ..scaleByDouble(st.scale, st.scale, 1, 1),
-                    alignment: Alignment.center,
-                    child: c,
-                  );
+                transform: Matrix4.identity()
+                  ..translateByDouble(st.dx + extraDx, st.dy, 0, 1)
+                  ..scaleByDouble(st.scale, st.scale, 1, 1),
+                alignment: Alignment.center,
+                child: c,
+              );
               if (st.rgbSep > 0.2) {
-                out = Stack(clipBehavior: Clip.none, children: [
-                  moved(-st.rgbSep, _channelIso(g, 0)),
-                  BlendMask(
+                out = Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    moved(-st.rgbSep, _channelIso(g, 0)),
+                    BlendMask(
                       blendMode: BlendMode.plus,
                       margem: st.rgbSep.abs() + 4,
-                      child: moved(0, _channelIso(g, 1))),
-                  BlendMask(
+                      child: moved(0, _channelIso(g, 1)),
+                    ),
+                    BlendMask(
                       blendMode: BlendMode.plus,
                       margem: st.rgbSep.abs() + 4,
-                      child: moved(st.rgbSep, _channelIso(g, 2))),
-                ]);
+                      child: moved(st.rgbSep, _channelIso(g, 2)),
+                    ),
+                  ],
+                );
               } else {
                 out = moved(0, g);
               }
@@ -2516,17 +2973,19 @@ sigmaX: math.max(0.1, sx),
           // Mesma historia do tremor: deslocamento em pixel cru, com a
           // ficha dizendo relativo. Em 1080p nada muda.
           final d = pxAt1080(
-              effect.paramAt('deslocamento', local).clamp(0.0, 100.0),
-              fxWidth,
-              fxHeight);
+            effect.paramAt('deslocamento', local).clamp(0.0, 100.0),
+            fxWidth,
+            fxHeight,
+          );
           if (d > 0.2) {
-            final ang =
-                effect.paramAt('angulo', local) * math.pi / 180;
+            final ang = effect.paramAt('angulo', local) * math.pi / 180;
             final off = Offset(math.cos(ang) * d, math.sin(ang) * d);
             // QUAIS CANAIS se afastam (avancado): o par decide a cor das
             // franjas. O terceiro fica parado, no lugar da imagem.
-            final (antes, meio, depois) = switch (
-                effect.paramAt('canais', local).round().clamp(0, 2)) {
+            final (antes, meio, depois) = switch (effect
+                .paramAt('canais', local)
+                .round()
+                .clamp(0, 2)) {
               1 => (0, 2, 1),
               2 => (1, 0, 2),
               _ => (0, 1, 2),
@@ -2537,7 +2996,11 @@ sigmaX: math.max(0.1, sx),
               Widget w = _channelIso(out, i);
               if (sigma > 0.05) {
                 w = LinearLight.blurred(
-                    sigmaX: sigma, sigmaY: sigma, size: fxSize, child: w);
+                  sigmaX: sigma,
+                  sigmaY: sigma,
+                  size: fxSize,
+                  child: w,
+                );
               }
               return deslocamento == Offset.zero
                   ? w
@@ -2545,17 +3008,22 @@ sigmaX: math.max(0.1, sx),
             }
 
             final margem = off.distance + 3 * sigma + 4;
-            out = Stack(clipBehavior: Clip.none, children: [
-              canal(antes, -off),
-              BlendMask(
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                canal(antes, -off),
+                BlendMask(
                   blendMode: BlendMode.plus,
                   margem: margem,
-                  child: canal(meio, Offset.zero)),
-              BlendMask(
+                  child: canal(meio, Offset.zero),
+                ),
+                BlendMask(
                   blendMode: BlendMode.plus,
                   margem: margem,
-                  child: canal(depois, off)),
-            ]);
+                  child: canal(depois, off),
+                ),
+              ],
+            );
           }
 
         case EffectType.echo:
@@ -2564,42 +3032,41 @@ sigmaX: math.max(0.1, sx),
 
         case EffectType.spatialEcho:
           // Repeticao no ESPACO com transformacao progressiva (item 28).
-          final n =
-              effect.paramAt('copias', local).round().clamp(1, 12);
+          final n = effect.paramAt('copias', local).round().clamp(1, 12);
           if (n > 1) {
             final dx = effect.paramAt('dx', local);
             final dy = effect.paramAt('dy', local);
-            final scaleStep =
-                effect.paramAt('escala', local) / 100.0;
-            final rotStep =
-                effect.paramAt('rotacao', local) * math.pi / 180;
-            final decay =
-                effect.paramAt('decaimento', local).clamp(0.05, 1.0);
+            final scaleStep = effect.paramAt('escala', local) / 100.0;
+            final rotStep = effect.paramAt('rotacao', local) * math.pi / 180;
+            final decay = effect.paramAt('decaimento', local).clamp(0.05, 1.0);
             final hueStep = effect.paramAt('matiz', local);
             final copies = <Widget>[];
             for (var c = n - 1; c >= 0; c--) {
               Widget w = out;
               if (hueStep > 0.5 && c > 0) {
                 w = ColorFiltered(
-                    colorFilter: ColorFilter.matrix(
-                        hueRotateMatrix(hueStep * c)),
-                    child: w);
+                  colorFilter: ColorFilter.matrix(hueRotateMatrix(hueStep * c)),
+                  child: w,
+                );
               }
-              copies.add(Opacity(
-                opacity: math.pow(decay, c).toDouble().clamp(0.0, 1.0),
-                child: Transform(
-                  transform: Matrix4.identity()
-                    ..translateByDouble(dx * c, dy * c, 0, 1)
-                    ..rotateZ(rotStep * c)
-                    ..scaleByDouble(
+              copies.add(
+                Opacity(
+                  opacity: math.pow(decay, c).toDouble().clamp(0.0, 1.0),
+                  child: Transform(
+                    transform: Matrix4.identity()
+                      ..translateByDouble(dx * c, dy * c, 0, 1)
+                      ..rotateZ(rotStep * c)
+                      ..scaleByDouble(
                         math.pow(scaleStep, c).toDouble(),
                         math.pow(scaleStep, c).toDouble(),
                         1,
-                        1),
-                  alignment: Alignment.center,
-                  child: w,
+                        1,
+                      ),
+                    alignment: Alignment.center,
+                    child: w,
+                  ),
                 ),
-              ));
+              );
             }
             out = Stack(clipBehavior: Clip.none, children: copies);
           }
@@ -2607,26 +3074,30 @@ sigmaX: math.max(0.1, sx),
         case EffectType.radialAberration:
           // Cresce do centro para a borda, como lente real (item 14):
           // cada canal amostrado com uma ESCALA levemente diferente.
-          final amt =
-              effect.paramAt('quantidade', local).clamp(0.0, 1.0);
+          final amt = effect.paramAt('quantidade', local).clamp(0.0, 1.0);
           if (amt > 0.01) {
             final spread = amt * 0.06;
             Widget scaled(double s, int ch) => Transform.scale(
-                  scale: s,
-                  alignment: Alignment.center,
-                  child: _channelIso(out, ch),
-                );
-            out = Stack(clipBehavior: Clip.none, children: [
-              scaled(1 - spread, 0),
-              BlendMask(
+              scale: s,
+              alignment: Alignment.center,
+              child: _channelIso(out, ch),
+            );
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                scaled(1 - spread, 0),
+                BlendMask(
                   blendMode: BlendMode.plus,
                   margem: fxSize.longestSide * spread + 4,
-                  child: scaled(1.0, 1)),
-              BlendMask(
+                  child: scaled(1.0, 1),
+                ),
+                BlendMask(
                   blendMode: BlendMode.plus,
                   margem: fxSize.longestSide * spread + 4,
-                  child: scaled(1 + spread, 2)),
-            ]);
+                  child: scaled(1 + spread, 2),
+                ),
+              ],
+            );
           }
 
         // ------------------- catalogo, lote 1 -------------------
@@ -2646,7 +3117,8 @@ sigmaX: math.max(0.1, sx),
           if ((scale - 1).abs() > 1e-4 || shift.abs() > 1e-4) {
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(
-                  _scaleShiftMatrix(scale, shift, canal: canal)),
+                _scaleShiftMatrix(scale, shift, canal: canal),
+              ),
               child: out,
             );
           }
@@ -2655,7 +3127,8 @@ sigmaX: math.max(0.1, sx),
             final g = 1 / gamma;
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(
-                  _scaleShiftMatrix(g, (1 - g) * 0.18, canal: canal)),
+                _scaleShiftMatrix(g, (1 - g) * 0.18, canal: canal),
+              ),
               child: out,
             );
           }
@@ -2678,8 +3151,9 @@ sigmaX: math.max(0.1, sx),
           final desloc = (1 - cC) * 0.5 * ganho;
           if ((escala - 1).abs() > 1e-4 || desloc.abs() > 1e-4) {
             out = ColorFiltered(
-              colorFilter:
-                  ColorFilter.matrix(_scaleShiftMatrix(escala, desloc)),
+              colorFilter: ColorFilter.matrix(
+                _scaleShiftMatrix(escala, desloc),
+              ),
               child: out,
             );
           }
@@ -2690,7 +3164,8 @@ sigmaX: math.max(0.1, sx),
           if (pe.abs() > 1e-4 || topo.abs() > 1e-4) {
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(
-                  _scaleShiftMatrix((1 - pe) * (1 + topo), pe)),
+                _scaleShiftMatrix((1 - pe) * (1 + topo), pe),
+              ),
               child: out,
             );
           }
@@ -2717,8 +3192,9 @@ sigmaX: math.max(0.1, sx),
           if ((gamaC - 1).abs() > 0.01) {
             final g = 1 / gamaC;
             out = ColorFiltered(
-              colorFilter:
-                  ColorFilter.matrix(_scaleShiftMatrix(g, (1 - g) * 0.18)),
+              colorFilter: ColorFilter.matrix(
+                _scaleShiftMatrix(g, (1 - g) * 0.18),
+              ),
               child: out,
             );
           }
@@ -2733,7 +3209,8 @@ sigmaX: math.max(0.1, sx),
           if ((c - 1).abs() > 1e-4 || b.abs() > 1e-4) {
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(
-                  _scaleShiftMatrix(c, b + (1 - c) * 0.5)),
+                _scaleShiftMatrix(c, b + (1 - c) * 0.5),
+              ),
               child: out,
             );
           }
@@ -2741,8 +3218,7 @@ sigmaX: math.max(0.1, sx),
         case EffectType.vibrance:
           final vib = effect.paramAt('vibracao', local);
           final sat = effect.paramAt('saturacao', local);
-          final skin = effect.paramAt('protecaoPele', local)
-              .clamp(0.0, 1.0);
+          final skin = effect.paramAt('protecaoPele', local).clamp(0.0, 1.0);
           // Vibracao sobe mais o que esta POUCO saturado; a protecao de
           // pele segura o ganho no canal vermelho, que e onde o tom de
           // pele vive — sem isso o rosto fica laranja.
@@ -2750,7 +3226,8 @@ sigmaX: math.max(0.1, sx),
           if (amount.abs() > 1e-4) {
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(
-                  _saturationMatrix(1 + amount, redGuard: skin * vib)),
+                _saturationMatrix(1 + amount, redGuard: skin * vib),
+              ),
               child: out,
             );
           }
@@ -2761,10 +3238,26 @@ sigmaX: math.max(0.1, sx),
           if (temp.abs() > 1e-4 || tintV.abs() > 1e-4) {
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(<double>[
-                1 + temp * 0.3, 0, 0, 0, 0,
-                0, 1 + tintV * 0.2, 0, 0, 0,
-                0, 0, 1 - temp * 0.3, 0, 0,
-                0, 0, 0, 1, 0,
+                1 + temp * 0.3,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1 + tintV * 0.2,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1 - temp * 0.3,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
               ]),
               child: out,
             );
@@ -2781,10 +3274,26 @@ sigmaX: math.max(0.1, sx),
           if ([sr, sg, sb, hr, hg, hb].any((v) => v.abs() > 1e-4)) {
             out = ColorFiltered(
               colorFilter: ColorFilter.matrix(<double>[
-                1 + hr, 0, 0, 0, sr * 255,
-                0, 1 + hg, 0, 0, sg * 255,
-                0, 0, 1 + hb, 0, sb * 255,
-                0, 0, 0, 1, 0,
+                1 + hr,
+                0,
+                0,
+                0,
+                sr * 255,
+                0,
+                1 + hg,
+                0,
+                0,
+                sg * 255,
+                0,
+                0,
+                1 + hb,
+                0,
+                sb * 255,
+                0,
+                0,
+                0,
+                1,
+                0,
               ]),
               child: out,
             );
@@ -2793,8 +3302,7 @@ sigmaX: math.max(0.1, sx),
         case EffectType.unmult:
           // O preto vira TRANSPARENTE: a luminancia entra no alfa. E o
           // que faz overlay de fogo/fumaca/faisca funcionar direto.
-          final soft =
-              effect.paramAt('suavidade', local).clamp(0.0, 1.0);
+          final soft = effect.paramAt('suavidade', local).clamp(0.0, 1.0);
           final k = 0.7 + soft * 0.6;
           // O LIMIAR EXISTIA NA TELA E NAO EXISTIA NA CONTA.
           //
@@ -2804,43 +3312,61 @@ sigmaX: math.max(0.1, sx),
           // limiar se escreve numa matriz de cor, onde nao cabe
           // comparacao. Cinza abaixo do limiar vai a zero; acima, sobra
           // o que passou dele.
-          final limiar =
-              effect.paramAt('limiar', local).clamp(0.0, 1.0);
+          final limiar = effect.paramAt('limiar', local).clamp(0.0, 1.0);
           out = ColorFiltered(
             colorFilter: ColorFilter.matrix(<double>[
-              1, 0, 0, 0, 0,
-              0, 1, 0, 0, 0,
-              0, 0, 1, 0, 0,
-              0.2126 * k, 0.7152 * k, 0.0722 * k, 0, -limiar * 255,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0.2126 * k,
+              0.7152 * k,
+              0.0722 * k,
+              0,
+              -limiar * 255,
             ]),
             child: out,
           );
 
         case EffectType.vignette:
-          final amt =
-              effect.paramAt('quantidade', local).clamp(0.0, 1.0);
+          final amt = effect.paramAt('quantidade', local).clamp(0.0, 1.0);
           if (amt > 0.01) {
-            out = Stack(clipBehavior: Clip.none, children: [
-              out,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: VignettePainter(
-                      amount: amt,
-                      radius: effect.paramAt('raio', local),
-                      softness:
-                          effect.paramAt('suavidade', local).clamp(0.0, 1.0),
-                      color: effect.color,
-                      retangular: effect.paramAt('forma', local) > 0.5,
-                      center: Offset(
-                        effect.paramAt('centroX', local).clamp(-1.0, 2.0),
-                        effect.paramAt('centroY', local).clamp(-1.0, 2.0),
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                out,
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: VignettePainter(
+                        amount: amt,
+                        radius: effect.paramAt('raio', local),
+                        softness: effect
+                            .paramAt('suavidade', local)
+                            .clamp(0.0, 1.0),
+                        color: effect.color,
+                        retangular: effect.paramAt('forma', local) > 0.5,
+                        center: Offset(
+                          effect.paramAt('centroX', local).clamp(-1.0, 2.0),
+                          effect.paramAt('centroY', local).clamp(-1.0, 2.0),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ]);
+              ],
+            );
           }
 
         case EffectType.directionalBlur:
@@ -2854,15 +3380,16 @@ sigmaX: math.max(0.1, sx),
                 // Tambem em linear: e desfoque, e desfoque em sRGB
                 // escurece a media entre claro e escuro — a franja
                 // suja na borda do movimento vem daí.
-                sigmaX: len / 3, sigmaY: 0.01, size: fxSize,
+                sigmaX: len / 3,
+                sigmaY: 0.01,
+                size: fxSize,
                 child: Transform.rotate(angle: ang, child: out),
               ),
             );
           }
 
         case EffectType.radialBlur:
-          final amt =
-              effect.paramAt('quantidade', local).clamp(0.0, 1.0);
+          final amt = effect.paramAt('quantidade', local).clamp(0.0, 1.0);
           if (amt > 0.01) {
             final zoom = effect.paramAt('modo', local) < 0.5;
             final n = effect.paramAt('amostras', local).round().clamp(2, 16);
@@ -2870,14 +3397,14 @@ sigmaX: math.max(0.1, sx),
             for (var i = 0; i < n; i++) {
               final f = i / (n - 1);
               final o = 1.0 / n;
-              layers.add(Opacity(
-                opacity: o * 1.6,
-                child: zoom
-                    ? Transform.scale(
-                        scale: 1 + amt * 0.25 * f, child: out)
-                    : Transform.rotate(
-                        angle: amt * 0.4 * f, child: out),
-              ));
+              layers.add(
+                Opacity(
+                  opacity: o * 1.6,
+                  child: zoom
+                      ? Transform.scale(scale: 1 + amt * 0.25 * f, child: out)
+                      : Transform.rotate(angle: amt * 0.4 * f, child: out),
+                ),
+              );
             }
             out = Stack(clipBehavior: Clip.none, children: layers);
           }
@@ -2885,8 +3412,7 @@ sigmaX: math.max(0.1, sx),
         case EffectType.lightRays:
           final len = effect.paramAt('comprimento', local);
           if (len > 0.01) {
-            final n =
-                effect.paramAt('amostras', local).round().clamp(2, 20);
+            final n = effect.paramAt('amostras', local).round().clamp(2, 20);
             final gain = effect.paramAt('intensidade', local);
             final cx = effect.paramAt('centroX', local);
             final cy = effect.paramAt('centroY', local);
@@ -2894,110 +3420,120 @@ sigmaX: math.max(0.1, sx),
             final rays = <Widget>[];
             for (var i = 1; i <= n; i++) {
               final s = 1 + len * 0.6 * i / n;
-              rays.add(Opacity(
-                opacity: (gain / n).clamp(0.0, 1.0),
-                child: Transform.scale(
-                  scale: s,
-                  alignment: origin,
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.mode(
-                        effect.color, BlendMode.srcATop),
-                    child: out,
+              rays.add(
+                Opacity(
+                  opacity: (gain / n).clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: s,
+                    alignment: origin,
+                    child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        effect.color,
+                        BlendMode.srcATop,
+                      ),
+                      child: out,
+                    ),
                   ),
                 ),
-              ));
+              );
             }
-            out = Stack(clipBehavior: Clip.none, children: [
-              BlendMask(
-                blendMode: BlendMode.plus,
-                child: Stack(clipBehavior: Clip.none, children: rays),
-              ),
-              out,
-            ]);
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                BlendMask(
+                  blendMode: BlendMode.plus,
+                  child: Stack(clipBehavior: Clip.none, children: rays),
+                ),
+                out,
+              ],
+            );
           }
 
         case EffectType.mosaic:
-          final blocks =
-              effect.paramAt('blocos', local).clamp(3.0, 160.0);
+          final blocks = effect.paramAt('blocos', local).clamp(3.0, 160.0);
           // Reduz e amplia SEM interpolacao: e o pixelate de verdade.
           out = ImageFiltered(
             imageFilter: ui.ImageFilter.compose(
               outer: ui.ImageFilter.matrix(
-                  Matrix4.diagonal3Values(blocks / 3, blocks / 3, 1)
-                      .storage,
-                  filterQuality: FilterQuality.none),
+                Matrix4.diagonal3Values(blocks / 3, blocks / 3, 1).storage,
+                filterQuality: FilterQuality.none,
+              ),
               inner: ui.ImageFilter.matrix(
-                  Matrix4.diagonal3Values(3 / blocks, 3 / blocks, 1)
-                      .storage,
-                  filterQuality: FilterQuality.none),
+                Matrix4.diagonal3Values(3 / blocks, 3 / blocks, 1).storage,
+                filterQuality: FilterQuality.none,
+              ),
             ),
             child: out,
           );
 
         case EffectType.posterize:
-          final levels =
-              effect.paramAt('niveis', local).round().clamp(2, 32);
+          final levels = effect.paramAt('niveis', local).round().clamp(2, 32);
           // Aproximacao por quantizacao de contraste em degraus.
           out = ColorFiltered(
             colorFilter: ColorFilter.matrix(
-                _posterizeMatrix(levels.toDouble())),
+              _posterizeMatrix(levels.toDouble()),
+            ),
             child: out,
           );
 
         case EffectType.filmGrain:
-          final amt =
-              effect.paramAt('intensidade', local).clamp(0.0, 1.0);
+          final amt = effect.paramAt('intensidade', local).clamp(0.0, 1.0);
           if (amt > 0.01) {
-            out = Stack(clipBehavior: Clip.none, children: [
-              out,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: BlendMask(
-                    blendMode: BlendMode.overlay,
-                    child: CustomPaint(
-                      painter: _GrainPainter(
-                        amount: amt,
-                        size: effect.paramAt('tamanho', local),
-                        seed: effect.paramAt('semente', local).round(),
-                        time: local,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ]);
-          }
-
-        case EffectType.fractalNoise:
-          final op =
-              effect.paramAt('opacidade', local).clamp(0.0, 1.0);
-          if (op > 0.01) {
-            out = Stack(clipBehavior: Clip.none, children: [
-              out,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: op,
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                out,
+                Positioned.fill(
+                  child: IgnorePointer(
                     child: BlendMask(
-                      blendMode: BlendMode.screen,
+                      blendMode: BlendMode.overlay,
                       child: CustomPaint(
-                        painter: _FractalNoisePainter(
-                          scale: effect.paramAt('escala', local),
-                          octaves: effect
-                              .paramAt('complexidade', local)
-                              .round(),
-                          contrast: effect.paramAt('contraste', local),
-                          evolution: effect.paramAt('evolucao', local),
+                        painter: _GrainPainter(
+                          amount: amt,
+                          size: effect.paramAt('tamanho', local),
                           seed: effect.paramAt('semente', local).round(),
-                          color: effect.color,
                           time: local,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ]);
+              ],
+            );
+          }
+
+        case EffectType.fractalNoise:
+          final op = effect.paramAt('opacidade', local).clamp(0.0, 1.0);
+          if (op > 0.01) {
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                out,
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: op,
+                      child: BlendMask(
+                        blendMode: BlendMode.screen,
+                        child: CustomPaint(
+                          painter: _FractalNoisePainter(
+                            scale: effect.paramAt('escala', local),
+                            octaves: effect
+                                .paramAt('complexidade', local)
+                                .round(),
+                            contrast: effect.paramAt('contraste', local),
+                            evolution: effect.paramAt('evolucao', local),
+                            seed: effect.paramAt('semente', local).round(),
+                            color: effect.color,
+                            time: local,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
           }
 
         case EffectType.digitalDamage:
@@ -3016,17 +3552,17 @@ sigmaX: math.max(0.1, sx),
             final r2 = fxHash01(seed, tick, i * 7 + 11);
             if (r > 0.55) continue;
             final top = r2.clamp(0.0, 1 - h);
-            slices.add(Positioned.fill(
-              child: ClipRect(
-                clipper: _BandClipper(top, h),
-                child: Transform.translate(
-                  offset: Offset((r - 0.275) * 4 * shift * 200, 0),
-                  child: colorAmt > 0.05
-                      ? _channelIso(out, (i % 3))
-                      : out,
+            slices.add(
+              Positioned.fill(
+                child: ClipRect(
+                  clipper: _BandClipper(top, h),
+                  child: Transform.translate(
+                    offset: Offset((r - 0.275) * 4 * shift * 200, 0),
+                    child: colorAmt > 0.05 ? _channelIso(out, (i % 3)) : out,
+                  ),
                 ),
               ),
-            ));
+            );
           }
           if (slices.isNotEmpty) {
             out = Stack(clipBehavior: Clip.none, children: [out, ...slices]);
@@ -3035,21 +3571,23 @@ sigmaX: math.max(0.1, sx),
         case EffectType.zoomWarp:
           final amt = effect.paramAt('quantidade', local);
           if (amt.abs() > 0.005) {
-            final trail =
-                effect.paramAt('rastro', local).clamp(0.0, 1.0);
-            final n =
-                effect.paramAt('amostras', local).round().clamp(2, 12);
+            final trail = effect.paramAt('rastro', local).clamp(0.0, 1.0);
+            final n = effect.paramAt('amostras', local).round().clamp(2, 12);
             if (trail < 0.02) {
               out = Transform.scale(scale: 1 + amt, child: out);
             } else {
               final layers = <Widget>[];
               for (var i = 0; i < n; i++) {
                 final f = i / (n - 1);
-                layers.add(Opacity(
-                  opacity: 1.0 / n * 1.8,
-                  child: Transform.scale(
-                      scale: 1 + amt * (1 - trail * f), child: out),
-                ));
+                layers.add(
+                  Opacity(
+                    opacity: 1.0 / n * 1.8,
+                    child: Transform.scale(
+                      scale: 1 + amt * (1 - trail * f),
+                      child: out,
+                    ),
+                  ),
+                );
               }
               out = Stack(clipBehavior: Clip.none, children: layers);
             }
@@ -3106,8 +3644,7 @@ sigmaX: math.max(0.1, sx),
                 mode: effect.paramAt('mode', local).round().clamp(0, 2),
                 sortAngle: effect.paramAt('sort_angle', local),
                 threshold: effect.paramAt('threshold', local),
-                aboveThreshold:
-                    effect.paramAt('direction', local) >= 0.5,
+                aboveThreshold: effect.paramAt('direction', local) >= 0.5,
                 reverse: effect.paramAt('reverse_sort', local) >= 0.5,
                 sortBy: effect.paramAt('sort_by', local).round().clamp(0, 2),
                 length: compr,
@@ -3124,8 +3661,7 @@ sigmaX: math.max(0.1, sx),
                 startAngle: effect.paramAt('start_angle', local),
                 degreesSorted: effect.paramAt('degrees_sorted', local),
                 innerRadius: effect.paramAt('inner_radius', local),
-                radiusVariation:
-                    effect.paramAt('radius_variation', local),
+                radiusVariation: effect.paramAt('radius_variation', local),
                 startVariation: effect.paramAt('start_variation', local),
                 thickness: effect.paramAt('thickness', local),
               ),
@@ -3141,8 +3677,9 @@ sigmaX: math.max(0.1, sx),
                 spread: sp,
                 grain: effect.paramAt('grao', local),
                 rotation: effect.paramAt('rotacao', local),
-                transfer:
-                    effect.paramAt('transferencia', local).clamp(0.0, 1.0),
+                transfer: effect
+                    .paramAt('transferencia', local)
+                    .clamp(0.0, 1.0),
                 gravity: effect.paramAt('gravidade', local),
                 seed: effect.paramAt('semente', local).round(),
               ),
@@ -3161,7 +3698,8 @@ sigmaX: math.max(0.1, sx),
           // 100%, sem fase e sem espelho, e a propria camada. Passar por
           // aqui assim mesmo custava uma FOTO da camada inteira por
           // quadro — e foto e justamente o que congelava a camada.
-          final identidade = (ladoW - 100).abs() < 0.01 &&
+          final identidade =
+              (ladoW - 100).abs() < 0.01 &&
               (ladoH - 100).abs() < 0.01 &&
               (saidaW - 100).abs() < 0.01 &&
               (saidaH - 100).abs() < 0.01 &&
@@ -3193,8 +3731,7 @@ sigmaX: math.max(0.1, sx),
                 split: sp,
                 angleDeg: effect.paramAt('angulo', local),
                 center: effect.paramAt('centro', local).clamp(0.0, 1.0),
-                softness:
-                    effect.paramAt('suavidade', local).clamp(0.0, 1.0),
+                softness: effect.paramAt('suavidade', local).clamp(0.0, 1.0),
               ),
               child: out,
             );
@@ -3207,8 +3744,7 @@ sigmaX: math.max(0.1, sx),
               painter: UnsharpMaskPainter(
                 amount: amt,
                 radius: effect.paramAt('raio', local).clamp(0.5, 40.0),
-                threshold:
-                    effect.paramAt('limiar', local).clamp(0.0, 0.95),
+                threshold: effect.paramAt('limiar', local).clamp(0.0, 0.95),
               ),
               child: out,
             );
@@ -3243,55 +3779,61 @@ sigmaX: math.max(0.1, sx),
                 : (fxNoise(
                             (local.inMilliseconds / 40).floorToDouble(),
                             0,
-                            effect.paramAt('semente', local).round()) -
-                        0.5) *
-                    2 *
-                    jitter *
-                    14;
+                            effect.paramAt('semente', local).round(),
+                          ) -
+                          0.5) *
+                      2 *
+                      jitter *
+                      14;
             var body = out;
             if (bleed > 0.02) {
-              body = Stack(clipBehavior: Clip.none, children: [
-                Transform.translate(
-                  offset: Offset(-bleed * 6, 0),
-                  child: _channelIso(body, 0),
-                ),
-                Transform.translate(
-                  offset: Offset(bleed * 6, 0),
-                  child: _channelIso(body, 2),
-                ),
-                body,
-              ]);
+              body = Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Transform.translate(
+                    offset: Offset(-bleed * 6, 0),
+                    child: _channelIso(body, 0),
+                  ),
+                  Transform.translate(
+                    offset: Offset(bleed * 6, 0),
+                    child: _channelIso(body, 2),
+                  ),
+                  body,
+                ],
+              );
             }
             final fade = effect.paramAt('desbotar', local).clamp(0.0, 1.0);
             if (fade > 0.02) {
               body = ColorFiltered(
                 colorFilter: ColorFilter.matrix(
-                    _saturationMatrix(1 - fade * 0.55)),
+                  _saturationMatrix(1 - fade * 0.55),
+                ),
                 child: body,
               );
             }
-            out = Stack(clipBehavior: Clip.none, children: [
-              Transform.translate(
-                  offset: Offset(shake, 0), child: body),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: VhsPainter(
-                      intensity: amt,
-                      lines: effect.paramAt('linhas', local),
-                      noise: effect.paramAt('ruido', local),
-                      time: local,
-                      seed: effect.paramAt('semente', local).round(),
+            out = Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Transform.translate(offset: Offset(shake, 0), child: body),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: VhsPainter(
+                        intensity: amt,
+                        lines: effect.paramAt('linhas', local),
+                        noise: effect.paramAt('ruido', local),
+                        time: local,
+                        seed: effect.paramAt('semente', local).round(),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ]);
+              ],
+            );
           }
 
         case EffectType.filmDamage:
-          final flick =
-              effect.paramAt('cintilacao', local).clamp(0.0, 1.0);
+          final flick = effect.paramAt('cintilacao', local).clamp(0.0, 1.0);
           final jump = effect.paramAt('salto', local).clamp(0.0, 1.0);
           final seed = effect.paramAt('semente', local).round();
           final frame = (local.inMilliseconds / 1000.0 * 16).floor();
@@ -3305,43 +3847,45 @@ sigmaX: math.max(0.1, sx),
           var body = out;
           if ((lum - 1).abs() > 0.005) {
             body = ColorFiltered(
-              colorFilter:
-                  ColorFilter.matrix(_scaleShiftMatrix(lum, 0)),
+              colorFilter: ColorFilter.matrix(_scaleShiftMatrix(lum, 0)),
               child: body,
             );
           }
-          out = Stack(clipBehavior: Clip.none, children: [
-            Transform.translate(offset: Offset(0, dy), child: body),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: FilmDamagePainter(
-                    dust: effect.paramAt('poeira', local),
-                    scratches: effect.paramAt('riscos', local),
-                    burn: effect.paramAt('queimado', local),
-                    time: local,
-                    seed: seed,
-                  ),
-                ),
-              ),
-            ),
-            if (effect.paramAt('granulacao', local) > 0.01)
+          out = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Transform.translate(offset: Offset(0, dy), child: body),
               Positioned.fill(
                 child: IgnorePointer(
-                  child: BlendMask(
-                    blendMode: BlendMode.overlay,
-                    child: CustomPaint(
-                      painter: _GrainPainter(
-                        amount: effect.paramAt('granulacao', local),
-                        size: 1,
-                        seed: seed,
-                        time: local,
-                      ),
+                  child: CustomPaint(
+                    painter: FilmDamagePainter(
+                      dust: effect.paramAt('poeira', local),
+                      scratches: effect.paramAt('riscos', local),
+                      burn: effect.paramAt('queimado', local),
+                      time: local,
+                      seed: seed,
                     ),
                   ),
                 ),
               ),
-          ]);
+              if (effect.paramAt('granulacao', local) > 0.01)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: BlendMask(
+                      blendMode: BlendMode.overlay,
+                      child: CustomPaint(
+                        painter: _GrainPainter(
+                          amount: effect.paramAt('granulacao', local),
+                          size: 1,
+                          seed: seed,
+                          time: local,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
 
         case EffectType.blobTracker:
           // As caixas vem da ANALISE ja gravada. Sem analise, o pintor
@@ -3350,8 +3894,7 @@ sigmaX: math.max(0.1, sx),
           // Opacidade zero e o desligado do rastreio: sem isto ele
           // desenhava tudo para pintar com alfa zero em cima.
           if (effect.paramAt('opacity', local) <= 0.4) break;
-          final rastreio =
-              BlobTrackService.instance.dataFor(effect.id);
+          final rastreio = BlobTrackService.instance.dataFor(effect.id);
           final sobreposicao = Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
@@ -3359,27 +3902,25 @@ sigmaX: math.max(0.1, sx),
                   track: rastreio,
                   time: local,
                   color: effect.color,
-                  style:
-                      effect.paramAt('style', local).round().clamp(0, 4),
+                  style: effect.paramAt('style', local).round().clamp(0, 4),
                   showCenter:
                       effect.paramAt('show_center_marker', local) >= 0.5,
-                  showLines: effect
-                          .paramAt('show_connecting_lines', local) >=
-                      0.5,
-                  lineType:
-                      effect.paramAt('line_type', local).round().clamp(0, 2),
+                  showLines:
+                      effect.paramAt('show_connecting_lines', local) >= 0.5,
+                  lineType: effect
+                      .paramAt('line_type', local)
+                      .round()
+                      .clamp(0, 2),
                   lineStyle: effect
                       .paramAt('line_style', local)
                       .round()
                       .clamp(0, 2),
-                  palette:
-                      effect.paramAt('palette', local).round().clamp(0, 2),
+                  palette: effect.paramAt('palette', local).round().clamp(0, 2),
                   thickness: effect.paramAt('thickness', local),
                   opacity: effect.paramAt('opacity', local),
                   fill: effect.paramAt('fill', local),
                   cornerLength: effect.paramAt('corner_length', local),
-                  showCaption:
-                      effect.paramAt('show_caption', local) >= 0.5,
+                  showCaption: effect.paramAt('show_caption', local) >= 0.5,
                   captionContent: effect
                       .paramAt('caption_content', local)
                       .round()
@@ -3401,10 +3942,11 @@ sigmaX: math.max(0.1, sx),
 
           // OVERLAY ONLY: so as sobreposicoes, fundo transparente —
           // serve para levar o rastreio para outra camada.
-          final soSobreposicao =
-              effect.paramAt('overlay_only', local) >= 0.5;
-          final modoBlob =
-              effect.paramAt('blend_mode', local).round().clamp(0, 2);
+          final soSobreposicao = effect.paramAt('overlay_only', local) >= 0.5;
+          final modoBlob = effect
+              .paramAt('blend_mode', local)
+              .round()
+              .clamp(0, 2);
           final camadaBlob = switch (modoBlob) {
             1 => BlendMask(blendMode: BlendMode.plus, child: sobreposicao),
             2 => BlendMask(blendMode: BlendMode.screen, child: sobreposicao),
@@ -3413,10 +3955,7 @@ sigmaX: math.max(0.1, sx),
 
           out = soSobreposicao
               ? Stack(clipBehavior: Clip.none, children: [camadaBlob])
-              : Stack(clipBehavior: Clip.none, children: [
-                  out,
-                  camadaBlob,
-                ]);
+              : Stack(clipBehavior: Clip.none, children: [out, camadaBlob]);
       }
     }
     return out;
@@ -3425,8 +3964,11 @@ sigmaX: math.max(0.1, sx),
   /// Matriz de ganho+deslocamento igual nos tres canais.
   /// Escala e desloca. Com [canal] 1..3 mexe so em R, G ou B — e o
   /// "por canal" do Levels avancado.
-  static List<double> _scaleShiftMatrix(double s, double shift,
-      {int canal = 0}) {
+  static List<double> _scaleShiftMatrix(
+    double s,
+    double shift, {
+    int canal = 0,
+  }) {
     final b = shift * 255;
     if (canal != 0) {
       final r = canal == 1, g = canal == 2, bl = canal == 3;
@@ -3437,25 +3979,66 @@ sigmaX: math.max(0.1, sx),
         0, 0, 0, 1, 0,
       ];
     }
-    return <double>[
-      s, 0, 0, 0, b,
-      0, s, 0, 0, b,
-      0, 0, s, 0, b,
-      0, 0, 0, 1, 0,
-    ];
+    return <double>[s, 0, 0, 0, b, 0, s, 0, 0, b, 0, 0, s, 0, b, 0, 0, 0, 1, 0];
   }
 
   /// Saturacao com guarda no vermelho (protecao de tom de pele).
-  static List<double> _saturationMatrix(double sat,
-      {double redGuard = 0}) {
+  static List<double> _saturationMatrix(double sat, {double redGuard = 0}) {
     const lr = 0.2126, lg = 0.7152, lb = 0.0722;
     final s = sat;
     final rs = s - (s - 1) * redGuard.clamp(0.0, 1.0);
     return <double>[
-      lr * (1 - rs) + rs, lg * (1 - rs), lb * (1 - rs), 0, 0,
-      lr * (1 - s), lg * (1 - s) + s, lb * (1 - s), 0, 0,
-      lr * (1 - s), lg * (1 - s), lb * (1 - s) + s, 0, 0,
-      0, 0, 0, 1, 0,
+      lr * (1 - rs) + rs,
+      lg * (1 - rs),
+      lb * (1 - rs),
+      0,
+      0,
+      lr * (1 - s),
+      lg * (1 - s) + s,
+      lb * (1 - s),
+      0,
+      0,
+      lr * (1 - s),
+      lg * (1 - s),
+      lb * (1 - s) + s,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+  }
+
+  /// Saturacao seguida de ganho de brilho, numa unica matriz. Quando
+  /// ambos valem 1 a matriz e identidade; o alfa nunca e alterado.
+  static List<double> _saturationBrightnessMatrix(
+    double saturation,
+    double brightness,
+  ) {
+    final m = _saturationMatrix(saturation);
+    return <double>[
+      m[0] * brightness,
+      m[1] * brightness,
+      m[2] * brightness,
+      0,
+      0,
+      m[5] * brightness,
+      m[6] * brightness,
+      m[7] * brightness,
+      0,
+      0,
+      m[10] * brightness,
+      m[11] * brightness,
+      m[12] * brightness,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -3464,12 +4047,7 @@ sigmaX: math.max(0.1, sx),
   static List<double> _posterizeMatrix(double levels) {
     final c = 1 + (32 - levels) / 12;
     final b = (1 - c) * 0.5 * 255;
-    return <double>[
-      c, 0, 0, 0, b,
-      0, c, 0, 0, b,
-      0, 0, c, 0, b,
-      0, 0, 0, 1, 0,
-    ];
+    return <double>[c, 0, 0, 0, b, 0, c, 0, 0, b, 0, 0, c, 0, b, 0, 0, 0, 1, 0];
   }
 
   /// Isola um canal (0=R, 1=G, 2=B) preservando o alfa — base da franja
@@ -3477,20 +4055,13 @@ sigmaX: math.max(0.1, sx),
   Widget _channelIso(Widget child, int channel) {
     const zeros = [0.0, 0.0, 0.0, 0.0, 0.0];
     final rows = [
-      channel == 0
-          ? const [1.0, 0.0, 0.0, 0.0, 0.0]
-          : zeros,
-      channel == 1
-          ? const [0.0, 1.0, 0.0, 0.0, 0.0]
-          : zeros,
-      channel == 2
-          ? const [0.0, 0.0, 1.0, 0.0, 0.0]
-          : zeros,
+      channel == 0 ? const [1.0, 0.0, 0.0, 0.0, 0.0] : zeros,
+      channel == 1 ? const [0.0, 1.0, 0.0, 0.0, 0.0] : zeros,
+      channel == 2 ? const [0.0, 0.0, 1.0, 0.0, 0.0] : zeros,
       const [0.0, 0.0, 0.0, 1.0, 0.0],
     ];
     return ColorFiltered(
-      colorFilter: ColorFilter.matrix(
-          [for (final r in rows) ...r]),
+      colorFilter: ColorFilter.matrix([for (final r in rows) ...r]),
       child: child,
     );
   }
@@ -3540,6 +4111,7 @@ RenderCamera? cameraDaCena(
 class _LayerContent extends StatelessWidget {
   const _LayerContent({
     this.exportFrames,
+    required this.exporting,
     required this.layer,
     required this.project,
     required this.compWidth,
@@ -3562,6 +4134,7 @@ class _LayerContent extends StatelessWidget {
 
   /// Quadro ja decodificado por camada de video (so na exportacao).
   final Map<String, ui.Image>? exportFrames;
+  final bool exporting;
 
   /// Recursao do precomp: constroi as camadas filhas no tempo local.
   final List<Widget> Function(List<Layer> layers, Duration t) buildChildren;
@@ -3569,7 +4142,10 @@ class _LayerContent extends StatelessWidget {
   /// Caminho da camada de forma [id], ja avaliado no tempo — para o
   /// texto que segue uma forma desenhada no proprio projeto.
   static ui.Path? _pathOfShapeLayer(
-      VideoProject project, String? id, Duration t) {
+    VideoProject project,
+    String? id,
+    Duration t,
+  ) {
     if (id == null) return null;
     final l = project.layerById(id);
     if (l is! ShapeLayer) return null;
@@ -3587,29 +4163,32 @@ class _LayerContent extends StatelessWidget {
     Widget child = switch (layer) {
       // Caminho rapido sem animador ativo (I2: linha inteira, com kerning).
       TextLayer l when l.hasTextAnimation => AnimatedTextView(
-          layer: l,
-          localTime: localTime,
-          // Texto seguindo OUTRA camada: o widget nao sabe resolver id,
-          // entao o caminho chega pronto de quem monta a composicao.
-          pathOverride: _pathOfShapeLayer(
-              project, l.textPath.shapeLayerId, localTime),
+        layer: l,
+        localTime: localTime,
+        // Texto seguindo OUTRA camada: o widget nao sabe resolver id,
+        // entao o caminho chega pronto de quem monta a composicao.
+        pathOverride: _pathOfShapeLayer(
+          project,
+          l.textPath.shapeLayerId,
+          localTime,
         ),
+      ),
       TextLayer l => Text(
-          l.text,
-          textAlign: TextAlign.center,
-          style: AnimatedTextView.styleFor(l),
-        ),
+        l.text,
+        textAlign: TextAlign.center,
+        style: AnimatedTextView.styleFor(l),
+      ),
       // Forma vetorial: arvore avaliada no tempo local, pintada por Path.
       ShapeLayer l => _ShapeView(layer: l, localTime: localTime),
       // CONTEINER CENA 3D: por fora e uma camada; por dentro roda o
       // proprio renderizador, com passe opaco e passe transparente
       // ordenados POR TRIANGULO.
       Scene3DLayer l => SizedBox(
-          width: compWidth,
-          height: project.outputHeight.toDouble(),
-          child: ValueListenableBuilder<int>(
-            valueListenable: TextureCache.instance.revision,
-            builder: (_, _, _) => CustomPaint(
+        width: compWidth,
+        height: project.outputHeight.toDouble(),
+        child: ValueListenableBuilder<int>(
+          valueListenable: TextureCache.instance.revision,
+          builder: (_, _, _) => CustomPaint(
             painter: Scene3DPainter(
               scene: l.scene,
               camera: l.camera,
@@ -3617,47 +4196,50 @@ class _LayerContent extends StatelessWidget {
               // vira pai externo da camera da cena. Quem conhece a
               // cadeia de parenting de fora e o compositor, entao o
               // transform chega pronto aqui.
-              resolvedCamera:
-                  cameraDaCena(project, l, localTime, layer.startTime + localTime),
+              resolvedCamera: cameraDaCena(
+                project,
+                l,
+                localTime,
+                layer.startTime + localTime,
+              ),
               view: l.view,
               time: localTime,
               // Ajudas NUNCA entram na exportacao — so no preview.
-              showHelpers: l.showHelpers,
+              showHelpers: !exporting && l.showHelpers,
             ),
-          )),
+          ),
         ),
+      ),
       // Precomp: filhos compostos no tempo local do grupo.
       // PRECOMP: tempo proprio (com remapeamento), quadro proprio e a
       // opcao de colapsar — que e o que evita a forma vetorial pixelar
       // quando a precomp e ampliada.
       GroupLayer l => SizedBox(
-          width: compWidth,
-          height: project.outputHeight.toDouble(),
-          child: ClipRect(
-            clipBehavior: l.clipToComp && !l.collapse
-                ? Clip.hardEdge
-                : Clip.none,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children:
-                  buildChildren(l.children, l.contentTimeAt(localTime)),
-            ),
+        width: compWidth,
+        height: project.outputHeight.toDouble(),
+        child: ClipRect(
+          clipBehavior: l.clipToComp && !l.collapse ? Clip.hardEdge : Clip.none,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: buildChildren(l.children, l.contentTimeAt(localTime)),
           ),
         ),
+      ),
       ImageLayer l => RepaintBoundary(
-          child: Image.file(
-            File(l.sourcePath),
-            width: compWidth,
-            fit: BoxFit.contain,
-            errorBuilder: (_, _, _) => _brokenMedia(),
-          ),
+        child: Image.file(
+          File(l.sourcePath),
+          width: compWidth,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => _brokenMedia(),
         ),
+      ),
       // EXPORTANDO: o quadro vem decodificado do disco. A textura do
       // player nunca entra num `toImage`, entao o video sairia preto.
       VideoLayer l when exportFrames != null && exportFrames![l.id] != null =>
         SizedBox(
           width: compWidth,
-          height: compWidth *
+          height:
+              compWidth *
               exportFrames![l.id]!.height /
               exportFrames![l.id]!.width,
           child: RawImage(
@@ -3667,80 +4249,84 @@ class _LayerContent extends StatelessWidget {
           ),
         ),
       VideoLayer l => RepaintBoundary(
-          child: ValueListenableBuilder<int>(
-            valueListenable: videos.revision,
-            builder: (context, _, _) {
-              final controller = videos.controllerFor(l.id);
-              if (controller == null || !controller.value.isInitialized) {
-                return SizedBox(
-                  width: compWidth,
-                  height: compWidth * 9 / 16,
-                  child: const Center(
-                    child: Icon(CupertinoIcons.film,
-                        size: 60, color: Colors.white24),
-                  ),
-                );
-              }
+        child: ValueListenableBuilder<int>(
+          valueListenable: videos.revision,
+          builder: (context, _, _) {
+            final controller = videos.controllerFor(l.id);
+            if (controller == null || !controller.value.isInitialized) {
               return SizedBox(
                 width: compWidth,
-                height: compWidth / controller.value.aspectRatio,
-                child: VideoPlayer(controller),
+                height: compWidth * 9 / 16,
+                child: const Center(
+                  child: Icon(
+                    CupertinoIcons.film,
+                    size: 60,
+                    color: Colors.white24,
+                  ),
+                ),
               );
-            },
-          ),
+            }
+            return SizedBox(
+              width: compWidth,
+              height: compWidth / controller.value.aspectRatio,
+              child: VideoPlayer(controller),
+            );
+          },
         ),
+      ),
       AudioLayer _ => const SizedBox.shrink(),
       // Objeto nulo: wireframe so no editor (nao sai na exportacao).
       NullLayer _ => const IgnorePointer(
-          child: CustomPaint(
-            size: Size(220, 220),
-            painter: NullGizmoPainter(),
-          ),
-        ),
+        child: CustomPaint(size: Size(220, 220), painter: NullGizmoPainter()),
+      ),
       // Ajuste nao tem conteudo proprio: age no composto (interceptado
       // em _buildLayers); aqui rende so o gizmo de selecao.
       AdjustmentLayer _ => const SizedBox(width: 220, height: 220),
       // Particulas em espaco 3D: simulacao + projecao por particula.
       ParticlesLayer l => CustomPaint(
-          size: const Size(420, 420),
-          painter: ParticlesPainter(
-            layer: l,
-            time: localTime,
-            rotXDeg: particlesRotX,
-            rotYDeg: particlesRotY,
-          ),
+        size: const Size(420, 420),
+        painter: ParticlesPainter(
+          layer: l,
+          time: localTime,
+          rotXDeg: particlesRotX,
+          rotYDeg: particlesRotY,
         ),
+      ),
       // Elemento 3D: vertices girados no espaco dentro do pintor (como
       // as particulas) — nada de inclinar o canvas como um cartao.
       Element3DLayer l => ListenableBuilder(
-            listenable: Listenable.merge([
-              TextureCache.instance.revision,
-              MeshCache.instance.revision,
-            ]),
-            builder: (_, _) => CustomPaint(
+        listenable: Listenable.merge([
+          TextureCache.instance.revision,
+          MeshCache.instance.revision,
+        ]),
+        builder: (_, _) => CustomPaint(
           size: const Size(620, 620),
-          painter: World3DPainter(items: [
-            World3DItem(
-              layer: l,
-              center: const Offset(310, 310),
-              rotXDeg: particlesRotX,
-              rotYDeg: particlesRotY,
-              material: l.material,
-              gradient: l.gradient,
-              shininess: l.shininess,
-            ),
-          ]),
-        )),
-      CaptionLayer l => Builder(builder: (context) {
+          painter: World3DPainter(
+            items: [
+              World3DItem(
+                layer: l,
+                center: const Offset(310, 310),
+                rotXDeg: particlesRotX,
+                rotYDeg: particlesRotY,
+                material: l.material,
+                gradient: l.gradient,
+                shininess: l.shininess,
+              ),
+            ],
+          ),
+        ),
+      ),
+      CaptionLayer l => Builder(
+        builder: (context) {
           final cue = l.cueAt(localTime);
           if (cue == null) return const SizedBox.shrink();
           return Container(
             constraints: BoxConstraints(maxWidth: compWidth * 0.86),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
             decoration: BoxDecoration(
-              color: l.style.backgroundColor
-                  .withValues(alpha: l.style.backgroundOpacity),
+              color: l.style.backgroundColor.withValues(
+                alpha: l.style.backgroundOpacity,
+              ),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
@@ -3749,25 +4335,27 @@ class _LayerContent extends StatelessWidget {
               style: TextStyle(
                 color: l.style.color,
                 fontSize: l.style.fontSize,
-                fontWeight:
-                    l.style.bold ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: l.style.bold ? FontWeight.w700 : FontWeight.w400,
                 height: 1.2,
               ),
             ),
           );
-        }),
+        },
+      ),
     };
 
     return child;
   }
 
   Widget _brokenMedia() => Container(
-        width: 400,
-        height: 300,
-        color: Colors.white10,
-        child: const Icon(CupertinoIcons.exclamationmark_triangle,
-            color: Colors.white38),
-      );
+    width: 400,
+    height: 300,
+    color: Colors.white10,
+    child: const Icon(
+      CupertinoIcons.exclamationmark_triangle,
+      color: Colors.white38,
+    ),
+  );
 }
 
 /// Pinta a arvore da forma (vetorial: nitida em qualquer escala).

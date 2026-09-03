@@ -33,18 +33,18 @@ class PathVertex {
   final bool corner;
 
   static PathVertex lerp(PathVertex a, PathVertex b, double t) => PathVertex(
-        p: Offset.lerp(a.p, b.p, t)!,
-        inT: Offset.lerp(a.inT, b.inT, t)!,
-        outT: Offset.lerp(a.outT, b.outT, t)!,
-        corner: t < 0.5 ? a.corner : b.corner,
-      );
+    p: Offset.lerp(a.p, b.p, t)!,
+    inT: Offset.lerp(a.inT, b.inT, t)!,
+    outT: Offset.lerp(a.outT, b.outT, t)!,
+    corner: t < 0.5 ? a.corner : b.corner,
+  );
 }
 
 /// ------------------------------------------------------------ BezierPath
 
 class BezierPath {
   BezierPath({required List<PathVertex> vertices, this.closed = true})
-      : vertices = List.unmodifiable(vertices);
+    : vertices = List.unmodifiable(vertices);
 
   final List<PathVertex> vertices;
   final bool closed;
@@ -65,18 +65,24 @@ class BezierPath {
       final a = vertices[i - 1];
       final b = vertices[i];
       path.cubicTo(
-        a.p.dx + a.outT.dx, a.p.dy + a.outT.dy,
-        b.p.dx + b.inT.dx, b.p.dy + b.inT.dy,
-        b.p.dx, b.p.dy,
+        a.p.dx + a.outT.dx,
+        a.p.dy + a.outT.dy,
+        b.p.dx + b.inT.dx,
+        b.p.dy + b.inT.dy,
+        b.p.dx,
+        b.p.dy,
       );
     }
     if (closed && vertices.length > 1) {
       final a = vertices.last;
       final b = vertices.first;
       path.cubicTo(
-        a.p.dx + a.outT.dx, a.p.dy + a.outT.dy,
-        b.p.dx + b.inT.dx, b.p.dy + b.inT.dy,
-        b.p.dx, b.p.dy,
+        a.p.dx + a.outT.dx,
+        a.p.dy + a.outT.dy,
+        b.p.dx + b.inT.dx,
+        b.p.dy + b.inT.dy,
+        b.p.dx,
+        b.p.dy,
       );
       path.close();
     }
@@ -96,12 +102,12 @@ class BezierPath {
 
   /// Inverte o sentido (troca tangentes de entrada/saida).
   BezierPath reversed() => BezierPath(
-        closed: closed,
-        vertices: [
-          for (final v in vertices.reversed)
-            PathVertex(p: v.p, inT: v.outT, outT: v.inT, corner: v.corner),
-        ],
-      );
+    closed: closed,
+    vertices: [
+      for (final v in vertices.reversed)
+        PathVertex(p: v.p, inT: v.outT, outT: v.inT, corner: v.corner),
+    ],
+  );
 
   int get _segmentCount =>
       closed ? vertices.length : math.max(0, vertices.length - 1);
@@ -115,8 +121,7 @@ class BezierPath {
     final p2 = b.p + b.inT;
     final p3 = b.p;
     final chord = (p3 - p0).distance;
-    final poly =
-        (p1 - p0).distance + (p2 - p1).distance + (p3 - p2).distance;
+    final poly = (p1 - p0).distance + (p2 - p1).distance + (p3 - p2).distance;
     return (chord + poly) / 2;
   }
 
@@ -137,11 +142,23 @@ class BezierPath {
     final mid = Offset.lerp(m012, m123, 0.5)!;
 
     final newA = PathVertex(
-        p: a.p, inT: a.inT, outT: m01 - p0, corner: a.corner);
+      p: a.p,
+      inT: a.inT,
+      outT: m01 - p0,
+      corner: a.corner,
+    );
     final newMid = PathVertex(
-        p: mid, inT: m012 - mid, outT: m123 - mid, corner: false);
+      p: mid,
+      inT: m012 - mid,
+      outT: m123 - mid,
+      corner: false,
+    );
     final newB = PathVertex(
-        p: b.p, inT: m23 - p3, outT: b.outT, corner: b.corner);
+      p: b.p,
+      inT: m23 - p3,
+      outT: b.outT,
+      corner: b.corner,
+    );
 
     final out = [...vertices];
     out[i] = newA;
@@ -181,8 +198,7 @@ class BezierPath {
     for (var k = 0; k < n; k++) {
       var cost = 0.0;
       for (var i = 0; i < n; i++) {
-        cost += (vertices[(i + k) % n].p - other.vertices[i].p)
-            .distanceSquared;
+        cost += (vertices[(i + k) % n].p - other.vertices[i].p).distanceSquared;
       }
       if (cost < bestCost) {
         bestCost = cost;
@@ -199,8 +215,10 @@ class BezierPath {
   /// Interpolacao com igualacao de contagem, correcao de sentido e
   /// alinhamento de vertice inicial.
   static BezierPath lerp(BezierPath a, BezierPath b, double t) {
-    if (t <= 0 || b.isEmpty) return a;
-    if (t >= 1 || a.isEmpty) return b;
+    if (t == 0) return a;
+    if (t == 1) return b;
+    if (b.isEmpty) return a;
+    if (a.isEmpty) return b;
     var from = a;
     var to = b;
     if (from.signedArea() * to.signedArea() < 0) {
@@ -225,12 +243,14 @@ class BezierPath {
 
   static BezierPath rect(double w, double h, {Offset center = Offset.zero}) {
     final w2 = w / 2, h2 = h / 2;
-    return BezierPath(vertices: [
-      PathVertex(p: center + Offset(-w2, -h2)),
-      PathVertex(p: center + Offset(w2, -h2)),
-      PathVertex(p: center + Offset(w2, h2)),
-      PathVertex(p: center + Offset(-w2, h2)),
-    ]);
+    return BezierPath(
+      vertices: [
+        PathVertex(p: center + Offset(-w2, -h2)),
+        PathVertex(p: center + Offset(w2, -h2)),
+        PathVertex(p: center + Offset(w2, h2)),
+        PathVertex(p: center + Offset(-w2, h2)),
+      ],
+    );
   }
 
   /// Retangulo arredondado em NOS EXATOS: cada canto e um quarto de
@@ -238,8 +258,12 @@ class BezierPath {
   /// — dois por canto — em vez de dezenas de amostras. Quando o raio
   /// satura um lado (capsula, circulo), os nos coincidentes se fundem e
   /// as alcas continuam colineares: fica liso, sem no duplicado.
-  static BezierPath roundedRect(double w, double h, double r,
-      {Offset center = Offset.zero}) {
+  static BezierPath roundedRect(
+    double w,
+    double h,
+    double r, {
+    Offset center = Offset.zero,
+  }) {
     final w2 = w / 2, h2 = h / 2;
     final rr = r.clamp(0.0, math.min(w2, h2));
     if (rr <= 0) return rect(w, h, center: center);
@@ -247,21 +271,45 @@ class BezierPath {
     final brutos = [
       // Sentido horario a partir do topo esquerdo, apos o arco.
       PathVertex(
-          p: center + Offset(-w2 + rr, -h2), inT: Offset(-k, 0), corner: true),
+        p: center + Offset(-w2 + rr, -h2),
+        inT: Offset(-k, 0),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(w2 - rr, -h2), outT: Offset(k, 0), corner: true),
+        p: center + Offset(w2 - rr, -h2),
+        outT: Offset(k, 0),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(w2, -h2 + rr), inT: Offset(0, -k), corner: true),
+        p: center + Offset(w2, -h2 + rr),
+        inT: Offset(0, -k),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(w2, h2 - rr), outT: Offset(0, k), corner: true),
+        p: center + Offset(w2, h2 - rr),
+        outT: Offset(0, k),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(w2 - rr, h2), inT: Offset(k, 0), corner: true),
+        p: center + Offset(w2 - rr, h2),
+        inT: Offset(k, 0),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(-w2 + rr, h2), outT: Offset(-k, 0), corner: true),
+        p: center + Offset(-w2 + rr, h2),
+        outT: Offset(-k, 0),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(-w2, h2 - rr), inT: Offset(0, k), corner: true),
+        p: center + Offset(-w2, h2 - rr),
+        inT: Offset(0, k),
+        corner: true,
+      ),
       PathVertex(
-          p: center + Offset(-w2, -h2 + rr), outT: Offset(0, -k), corner: true),
+        p: center + Offset(-w2, -h2 + rr),
+        outT: Offset(0, -k),
+        corner: true,
+      ),
     ];
     // Funde vizinhos que cairam no mesmo ponto (lado de comprimento zero):
     // o no fundido herda a alca de entrada do primeiro e a de saida do
@@ -278,73 +326,90 @@ class BezierPath {
     if (out.length > 1 && (out.first.p - out.last.p).distance < 1e-6) {
       final a = out.removeLast();
       final b = out.removeAt(0);
-      out.insert(0, PathVertex(p: b.p, inT: a.inT, outT: b.outT, corner: false));
+      out.insert(
+        0,
+        PathVertex(p: b.p, inT: a.inT, outT: b.outT, corner: false),
+      );
     }
     return BezierPath(vertices: out);
   }
 
-  static BezierPath ellipse(double w, double h,
-      {Offset center = Offset.zero}) {
+  static BezierPath ellipse(double w, double h, {Offset center = Offset.zero}) {
     final rx = w / 2, ry = h / 2;
     final kx = rx * _kappa, ky = ry * _kappa;
-    return BezierPath(vertices: [
-      PathVertex(
+    return BezierPath(
+      vertices: [
+        PathVertex(
           p: center + Offset(0, -ry),
           inT: Offset(-kx, 0),
           outT: Offset(kx, 0),
-          corner: false),
-      PathVertex(
+          corner: false,
+        ),
+        PathVertex(
           p: center + Offset(rx, 0),
           inT: Offset(0, -ky),
           outT: Offset(0, ky),
-          corner: false),
-      PathVertex(
+          corner: false,
+        ),
+        PathVertex(
           p: center + Offset(0, ry),
           inT: Offset(kx, 0),
           outT: Offset(-kx, 0),
-          corner: false),
-      PathVertex(
+          corner: false,
+        ),
+        PathVertex(
           p: center + Offset(-rx, 0),
           inT: Offset(0, ky),
           outT: Offset(0, -ky),
-          corner: false),
-    ]);
+          corner: false,
+        ),
+      ],
+    );
   }
 
-  static BezierPath star(int points, double outer, double inner,
-      {Offset center = Offset.zero}) {
+  static BezierPath star(
+    int points,
+    double outer,
+    double inner, {
+    Offset center = Offset.zero,
+  }) {
     final n = points * 2;
-    return BezierPath(vertices: [
-      for (var i = 0; i < n; i++)
-        PathVertex(
-          p: center +
-              Offset(
-                math.cos(-math.pi / 2 + i * math.pi * 2 / n) *
-                    (i.isEven ? outer : inner),
-                math.sin(-math.pi / 2 + i * math.pi * 2 / n) *
-                    (i.isEven ? outer : inner),
-              ),
-        ),
-    ]);
+    return BezierPath(
+      vertices: [
+        for (var i = 0; i < n; i++)
+          PathVertex(
+            p:
+                center +
+                Offset(
+                  math.cos(-math.pi / 2 + i * math.pi * 2 / n) *
+                      (i.isEven ? outer : inner),
+                  math.sin(-math.pi / 2 + i * math.pi * 2 / n) *
+                      (i.isEven ? outer : inner),
+                ),
+          ),
+      ],
+    );
   }
 
   static BezierPath heart(double w, double h, {Offset center = Offset.zero}) {
     // Mesmos cubics do ShapePath.heart, expressos como 2 vertices.
     final w2 = w / 2, h2 = h / 2;
-    return BezierPath(vertices: [
-      PathVertex(
-        p: center + Offset(0, -h2 * 0.25),
-        inT: Offset(w2 * 0.55, -h2 * 0.8),
-        outT: Offset(-w2 * 0.55, -h2 * 0.8),
-        corner: false,
-      ),
-      PathVertex(
-        p: center + Offset(0, h2 * 0.95),
-        inT: Offset(-w2 * 1.05, -h2 * 1.1),
-        outT: Offset(w2 * 1.05, -h2 * 1.1),
-        corner: true,
-      ),
-    ]);
+    return BezierPath(
+      vertices: [
+        PathVertex(
+          p: center + Offset(0, -h2 * 0.25),
+          inT: Offset(w2 * 0.55, -h2 * 0.8),
+          outT: Offset(-w2 * 0.55, -h2 * 0.8),
+          corner: false,
+        ),
+        PathVertex(
+          p: center + Offset(0, h2 * 0.95),
+          inT: Offset(-w2 * 1.05, -h2 * 1.1),
+          outT: Offset(w2 * 1.05, -h2 * 1.1),
+          corner: true,
+        ),
+      ],
+    );
   }
 }
 
@@ -356,8 +421,9 @@ const _epsilon = Duration(milliseconds: 8);
 /// easing por SEGMENTO guardado no keyframe de saida).
 class AnimatedPath {
   AnimatedPath(this.base, [List<Keyframe<BezierPath>>? keyframes])
-      : keyframes =
-            List.unmodifiable(keyframes ?? const <Keyframe<BezierPath>>[]);
+    : keyframes = List.unmodifiable(
+        keyframes ?? const <Keyframe<BezierPath>>[],
+      );
 
   final BezierPath base;
   final List<Keyframe<BezierPath>> keyframes;
@@ -389,8 +455,11 @@ class AnimatedPath {
     return BezierPath.lerp(a.value, b.value, f);
   }
 
-  AnimatedPath withKeyframe(Duration t, BezierPath v,
-      [Easing ease = Easing.linear]) {
+  AnimatedPath withKeyframe(
+    Duration t,
+    BezierPath v, [
+    Easing ease = Easing.linear,
+  ]) {
     final out = [
       for (final k in keyframes)
         if ((k.time - t).abs() >= _epsilon) k,
@@ -408,8 +477,15 @@ class AnimatedPath {
     return AnimatedPath(base, rest);
   }
 
+  Easing easeAt(Duration t) {
+    for (final k in keyframes) {
+      if ((k.time - t).abs() < _epsilon) return k.ease;
+    }
+    return Easing.linear;
+  }
+
   AnimatedPath edited(Duration t, BezierPath v) =>
-      isAnimated ? withKeyframe(t, v) : AnimatedPath(v, keyframes);
+      isAnimated ? withKeyframe(t, v, easeAt(t)) : AnimatedPath(v, keyframes);
 }
 
 /// -------------------------------------------------------------- mascara
@@ -417,6 +493,22 @@ class AnimatedPath {
 /// Modos de mascara (PR-M2). O modo NAO e animavel (trocar no meio nao
 /// interpola); para transicao de modo, use duas mascaras com opacidade.
 enum MaskMode { none, add, subtract, intersect, lighten, darken, difference }
+
+/// Animacoes prontas de revelacao. Elas continuam sendo mascaras comuns:
+/// o preset so escolhe as duas geometrias e grava os keyframes iniciais.
+enum MaskRevealPreset { esquerda, direita, cima, baixo, iris, caixa, cortina }
+
+extension MaskRevealPresetLabel on MaskRevealPreset {
+  String get label => switch (this) {
+    MaskRevealPreset.esquerda => 'Esquerda',
+    MaskRevealPreset.direita => 'Direita',
+    MaskRevealPreset.cima => 'Cima',
+    MaskRevealPreset.baixo => 'Baixo',
+    MaskRevealPreset.iris => 'Iris',
+    MaskRevealPreset.caixa => 'Caixa',
+    MaskRevealPreset.cortina => 'Cortina',
+  };
+}
 
 class LayerMask {
   LayerMask({
@@ -429,11 +521,11 @@ class LayerMask {
     this.featherY,
     AnimatedDouble? opacity,
     AnimatedDouble? expansion,
-  })  : id = id ?? const Uuid().v4(),
-        path = path ?? AnimatedPath(BezierPath.rect(400, 400)),
-        feather = feather ?? AnimatedDouble(0),
-        opacity = opacity ?? AnimatedDouble(1),
-        expansion = expansion ?? AnimatedDouble(0);
+  }) : id = id ?? const Uuid().v4(),
+       path = path ?? AnimatedPath(BezierPath.rect(400, 400)),
+       feather = feather ?? AnimatedDouble(0),
+       opacity = opacity ?? AnimatedDouble(1),
+       expansion = expansion ?? AnimatedDouble(0);
 
   final String id;
   final String name;
@@ -494,6 +586,82 @@ class LayerMask {
       expansion: expansion ?? this.expansion,
     );
   }
+}
+
+/// Cria uma revelacao inteiramente editavel: dois keyframes de caminho,
+/// sendo o primeiro a saida com mola/overshoot e o segundo a cobertura final.
+LayerMask createRevealMask(
+  MaskRevealPreset preset,
+  Size size,
+  Duration localStart, {
+  Duration duration = const Duration(milliseconds: 650),
+}) {
+  final width = size.width.abs() < 1 ? 1.0 : size.width.abs();
+  final height = size.height.abs() < 1 ? 1.0 : size.height.abs();
+  final fullBox = BezierPath.rect(width, height);
+
+  late final BezierPath initial;
+  late final BezierPath finalPath;
+  switch (preset) {
+    case MaskRevealPreset.esquerda:
+      initial = BezierPath.rect(width, height, center: Offset(-width, 0));
+      finalPath = fullBox;
+    case MaskRevealPreset.direita:
+      initial = BezierPath.rect(width, height, center: Offset(width, 0));
+      finalPath = fullBox;
+    case MaskRevealPreset.cima:
+      initial = BezierPath.rect(width, height, center: Offset(0, -height));
+      finalPath = fullBox;
+    case MaskRevealPreset.baixo:
+      initial = BezierPath.rect(width, height, center: Offset(0, height));
+      finalPath = fullBox;
+    case MaskRevealPreset.iris:
+      initial = BezierPath.ellipse(
+        math.max(1, width * 0.02),
+        math.max(1, height * 0.02),
+      );
+      // Uma elipse do mesmo tamanho toca os meios das bordas, mas nao os
+      // cantos. sqrt(2) garante que a caixa inteira esteja dentro no fim.
+      finalPath = BezierPath.ellipse(width * math.sqrt2, height * math.sqrt2);
+    case MaskRevealPreset.caixa:
+      initial = BezierPath.rect(
+        math.max(1, width * 0.02),
+        math.max(1, height * 0.02),
+      );
+      finalPath = fullBox;
+    case MaskRevealPreset.cortina:
+      initial = BezierPath.rect(math.max(1, width * 0.02), height);
+      finalPath = fullBox;
+  }
+
+  final path = AnimatedPath(finalPath)
+      .withKeyframe(localStart, initial, Easing.elastic)
+      .withKeyframe(localStart + duration, finalPath);
+  return LayerMask(
+    name: 'Revelar ${preset.label}',
+    path: path,
+    feather: AnimatedDouble(24),
+  );
+}
+
+/// Se o alcance visual da mascara passa da caixa local da camada.
+/// Feather e largura total: metade cai para cada lado da borda.
+bool maskFeatherExceedsBounds(LayerMask mask, Duration localTime, Size size) {
+  final path = mask.path.valueAt(localTime);
+  if (path.vertices.isEmpty) return false;
+
+  final bounds = path.build().getBounds();
+  final expansion = mask.expansion.valueAt(localTime);
+  final reachX = math.max(0, mask.feather.valueAt(localTime)) / 2 + expansion;
+  final reachY =
+      math.max(0, mask.featherVertical.valueAt(localTime)) / 2 + expansion;
+  final halfWidth = size.width.abs() / 2;
+  final halfHeight = size.height.abs() / 2;
+
+  return bounds.left - reachX < -halfWidth ||
+      bounds.right + reachX > halfWidth ||
+      bounds.top - reachY < -halfHeight ||
+      bounds.bottom + reachY > halfHeight;
 }
 
 /// Matte por camada (PR-M5, modelo Alight): OUTRA camada recorta esta.

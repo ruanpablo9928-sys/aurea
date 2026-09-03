@@ -28,6 +28,7 @@ class PropertyLink {
     this.baseRotationX = 0.0,
     this.baseRotationY = 0.0,
     this.baseZ = 0.0,
+    this.delay = Duration.zero,
   }) : id = id ?? const Uuid().v4();
 
   final String id;
@@ -55,6 +56,11 @@ class PropertyLink {
   final double baseRotationX;
   final double baseRotationY;
   final double baseZ;
+
+  /// Atraso temporal aplicado ao valor da fonte. Zero preserva o
+  /// comportamento historico; valores positivos fazem o alvo seguir a
+  /// mesma propriedade alguns milissegundos depois, sem efeito opaco.
+  final Duration delay;
 }
 
 /// MARCADOR na linha do tempo.
@@ -75,10 +81,10 @@ class Marker {
   final Color color;
 
   Marker copyWith({Duration? time, String? label, Color? color}) => Marker(
-        time: time ?? this.time,
-        label: label ?? this.label,
-        color: color ?? this.color,
-      );
+    time: time ?? this.time,
+    label: label ?? this.label,
+    color: color ?? this.color,
+  );
 }
 
 /// Projeto = composicao: pilha de camadas + configuracoes de saida.
@@ -105,21 +111,18 @@ class VideoProject {
     List<Duration>? beats,
     this.bpm,
     this.lottieMode = false,
-  })  : id = id ?? const Uuid().v4(),
-        layers = List.unmodifiable(layers ?? const <Layer>[]),
-        links = List.unmodifiable(links ?? const <PropertyLink>[]),
-        meta = Map.unmodifiable(meta ?? const <String, LayerMeta>{}),
-        textStyles =
-            List.unmodifiable(textStyles ?? const <TextStyleDef>[]),
-        exposed =
-            List.unmodifiable(exposed ?? const <ExposedProperty>[]),
-        bindings =
-            List.unmodifiable(bindings ?? const <DataBinding>[]),
-        markers = List.unmodifiable(
-            [...(markers ?? const <Marker>[])]
-              ..sort((a, b) => a.time.compareTo(b.time))),
-        beats = List.unmodifiable(
-            [...(beats ?? const <Duration>[])]..sort());
+  }) : id = id ?? const Uuid().v4(),
+       layers = List.unmodifiable(layers ?? const <Layer>[]),
+       links = List.unmodifiable(links ?? const <PropertyLink>[]),
+       meta = Map.unmodifiable(meta ?? const <String, LayerMeta>{}),
+       textStyles = List.unmodifiable(textStyles ?? const <TextStyleDef>[]),
+       exposed = List.unmodifiable(exposed ?? const <ExposedProperty>[]),
+       bindings = List.unmodifiable(bindings ?? const <DataBinding>[]),
+       markers = List.unmodifiable(
+         [...(markers ?? const <Marker>[])]
+           ..sort((a, b) => a.time.compareTo(b.time)),
+       ),
+       beats = List.unmodifiable([...(beats ?? const <Duration>[])]..sort());
 
   final String id;
   final String name;
@@ -212,8 +215,7 @@ class VideoProject {
   /// renderizam.
   bool get hasSolo => meta.values.any((m) => m.solo);
 
-  bool rendersInPreview(String layerId) =>
-      !hasSolo || metaOf(layerId).solo;
+  bool rendersInPreview(String layerId) => !hasSolo || metaOf(layerId).solo;
 
   factory VideoProject.empty(
     String name, {
@@ -277,24 +279,24 @@ class VideoProject {
   /// trabalho da primeira vez — e a pessoa perderia o que fez sem
   /// entender por que.
   VideoProject comIdNovo() => VideoProject(
-        name: name,
-        createdAt: createdAt,
-        aspectRatio: aspectRatio,
-        fps: fps,
-        resolutionHeight: resolutionHeight,
-        layers: layers,
-        links: links,
-        meta: meta,
-        palette: palette,
-        textStyles: textStyles,
-        exposed: exposed,
-        guides: guides,
-        motionBlur: motionBlur,
-        data: data,
-        bindings: bindings,
-        markers: markers,
-        lottieMode: lottieMode,
-      );
+    name: name,
+    createdAt: createdAt,
+    aspectRatio: aspectRatio,
+    fps: fps,
+    resolutionHeight: resolutionHeight,
+    layers: layers,
+    links: links,
+    meta: meta,
+    palette: palette,
+    textStyles: textStyles,
+    exposed: exposed,
+    guides: guides,
+    motionBlur: motionBlur,
+    data: data,
+    bindings: bindings,
+    markers: markers,
+    lottieMode: lottieMode,
+  );
 
   VideoProject copyWith({
     String? name,
@@ -385,9 +387,10 @@ LayerTransform effectiveTransform(
       final pp = project.layerById(par.sourceLayerId);
       if (pp != null) {
         // RECURSIVO: o pai tambem pode ter pai (nulo linkado em nulo).
-        final pe = effectiveTransform(project, pp, t, visited);
-        final ratio =
-            par.baseScale.abs() < 1e-6 ? 1.0 : pe.scale / par.baseScale;
+        final pe = effectiveTransform(project, pp, t - par.delay, visited);
+        final ratio = par.baseScale.abs() < 1e-6
+            ? 1.0
+            : pe.scale / par.baseScale;
         final vx = (pos.dx - par.offsetX) * ratio;
         final vy = (pos.dy - par.offsetY) * ratio;
         final vz = (z - par.baseZ) * ratio;
@@ -407,10 +410,8 @@ LayerTransform effectiveTransform(
         // Projeta a POSICAO pela mesma focal do resto do motor (1200):
         // o lado proximo da orbita abre, o distante comprime — sem isso
         // a orbita fica "chapada" e o conjunto parece cisalhado.
-        final persp =
-            1200 / (1200 + (pe.z + z2).clamp(-1100.0, 100000.0));
-        pos = pe.pos +
-            Offset(x1 * czr - y1 * szr, x1 * szr + y1 * czr) * persp;
+        final persp = 1200 / (1200 + (pe.z + z2).clamp(-1100.0, 100000.0));
+        pos = pe.pos + Offset(x1 * czr - y1 * szr, x1 * szr + y1 * czr) * persp;
         z = pe.z + z2;
         rot += pe.rot - par.baseRotation;
         rotX += pe.rotX - par.baseRotationX;
@@ -420,7 +421,13 @@ LayerTransform effectiveTransform(
     }
   }
   return LayerTransform(
-      pos: pos, rot: rot, rotX: rotX, rotY: rotY, scale: scale, z: z);
+    pos: pos,
+    rot: rot,
+    rotX: rotX,
+    rotY: rotY,
+    scale: scale,
+    z: z,
+  );
 }
 
 /// Ordena a lista JA em ordem de pintura (fundo primeiro) aplicando a
@@ -435,9 +442,7 @@ List<Layer> depthSortPaintOrder(List<Layer> paintOrder, Duration t) {
     if (run.isEmpty) return;
     // Desempate ESTAVEL por indice na pilha (triagem 3D §5 item 14):
     // profundidades empatadas nao podem piscar entre frames.
-    final decorated = [
-      for (var i = 0; i < run.length; i++) (run[i], i),
-    ];
+    final decorated = [for (var i = 0; i < run.length; i++) (run[i], i)];
     decorated.sort((a, b) {
       final za = a.$1.positionZ.valueAt(a.$1.localTime(t));
       final zb = b.$1.positionZ.valueAt(b.$1.localTime(t));

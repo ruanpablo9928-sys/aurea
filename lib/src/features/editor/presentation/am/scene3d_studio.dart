@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -67,8 +67,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   Offset _lastFocal = Offset.zero;
   double _lastScale = 1;
   int _pointers = 0;
-  bool _draftBefore = false;
   bool _gestureActive = false;
+  TouchIntent? _gestureIntent;
 
   // Mini-vista arrastavel e redimensionavel.
   Offset _miniPos = const Offset(-1, -1);
@@ -96,43 +96,40 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         filmWidth: layer.camera.filmWidth,
       );
     }
-    return orthoViewCamera(_view,
-        scale: _orthoScale, center: _orthoCenter);
+    return orthoViewCamera(_view, scale: _orthoScale, center: _orthoCenter);
   }
 
   // ------------------------------------------------------- gestos
 
   /// MODO RASCUNHO durante o gesto (camera §8): navega liso, e o
   /// resultado bom volta ao soltar.
-  void _beginGesture(Scene3DLayer layer) {
+  void _beginGesture() {
     if (_gestureActive) return;
-    _gestureActive = true;
-    _draftBefore = layer.scene.draftMode;
-    if (!_draftBefore) {
-      _controller.updateScene3D(
-          widget.layerId, (s) => s.copyWith(draftMode: true));
-    }
+    setState(() => _gestureActive = true);
   }
 
   void _endGesture() {
     if (!_gestureActive) return;
-    _gestureActive = false;
-    _pivot = null;
-    if (!_draftBefore) {
-      _controller.updateScene3D(
-          widget.layerId, (s) => s.copyWith(draftMode: false));
-    }
+    setState(() {
+      _gestureActive = false;
+      _gestureIntent = null;
+      _pivot = null;
+    });
   }
 
   /// PIVO fixado no INICIO do gesto — trocar no meio e o que mais
   /// atrapalha.
   Vec3 _resolvePivot(Scene3DLayer layer) {
     if (_pivot != null) return _pivot!;
-    final sel =
-        layer.scene.nodes.where((n) => n.id == _selected).firstOrNull;
-    if (sel != null) return _pivot = sel.positionAt(Duration.zero);
-    if (_view == SceneView.camera &&
-        layer.camera.kind == CameraKind.twoNode) {
+    final sel = layer.scene.nodes.where((n) => n.id == _selected).firstOrNull;
+    if (sel != null) {
+      return _pivot = resolveNodeTransform(
+        layer.scene,
+        sel,
+        Duration.zero,
+      ).position;
+    }
+    if (_view == SceneView.camera && layer.camera.kind == CameraKind.twoNode) {
       return _pivot = layer.camera.pointOfInterestAt(Duration.zero);
     }
     if (_freeView) return _pivot = _freeTarget;
@@ -144,8 +141,10 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     final yaw = -delta.dx * 0.35;
     final pitch = delta.dy * 0.28;
     if (_view == SceneView.camera) {
-      _controller.updateScene3DCamera(widget.layerId,
-          (c) => orbitCamera(c, pivot, yaw, pitch, Duration.zero));
+      _controller.updateScene3DCamera(
+        widget.layerId,
+        (c) => orbitCamera(c, pivot, yaw, pitch, Duration.zero),
+      );
       return;
     }
     if (_freeView) {
@@ -153,7 +152,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         final rel = _freePos - pivot;
         final radius = rel.length;
         var a = math.atan2(rel.x, rel.z) + yaw * math.pi / 180;
-        var p = math.asin((rel.y / math.max(1e-6, radius)).clamp(-1.0, 1.0)) +
+        var p =
+            math.asin((rel.y / math.max(1e-6, radius)).clamp(-1.0, 1.0)) +
             pitch * math.pi / 180;
         p = p.clamp(-math.pi / 2 + 0.02, math.pi / 2 - 0.02);
         _freePos = Vec3(
@@ -173,7 +173,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   void _pan(Scene3DLayer layer, Offset delta) {
     if (_view == SceneView.camera) {
       _controller.updateScene3DCamera(
-          widget.layerId, (c) => panCamera(c, delta, Duration.zero));
+        widget.layerId,
+        (c) => panCamera(c, delta, Duration.zero),
+      );
       return;
     }
     if (_freeView) {
@@ -190,10 +192,10 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   }
 
   void _panOrtho(Offset delta) {
-    final rc = orthoViewCamera(_view,
-        scale: _orthoScale, center: _orthoCenter);
+    final rc = orthoViewCamera(_view, scale: _orthoScale, center: _orthoCenter);
     final basis = cameraBasis(rc);
-    final shift = basis.right * (-delta.dx / _orthoScale) +
+    final shift =
+        basis.right * (-delta.dx / _orthoScale) +
         basis.up * (delta.dy / _orthoScale);
     setState(() => _orthoCenter = _orthoCenter + shift);
   }
@@ -204,7 +206,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     if (factor <= 0) return;
     if (_view == SceneView.camera) {
       _controller.updateScene3DCamera(
-          widget.layerId, (c) => dollyCamera(c, factor, Duration.zero));
+        widget.layerId,
+        (c) => dollyCamera(c, factor, Duration.zero),
+      );
       return;
     }
     if (_freeView) {
@@ -219,7 +223,11 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
 
   void _handleTap(Scene3DLayer layer, Offset local, Size size) {
     final frame = renderScene(
-        layer.scene, _renderCamera(layer), size, Duration.zero);
+      layer.scene,
+      _renderCamera(layer),
+      size,
+      Duration.zero,
+    );
     final hit = pickNodeAt(frame, local);
     if (_navigationMode) return;
     setState(() => _selected = hit);
@@ -227,7 +235,11 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
 
   void _handleDoubleTap(Scene3DLayer layer, Offset local, Size size) {
     final frame = renderScene(
-        layer.scene, _renderCamera(layer), size, Duration.zero);
+      layer.scene,
+      _renderCamera(layer),
+      size,
+      Duration.zero,
+    );
     final hit = pickNodeAt(frame, local);
     if (hit == null) {
       // Toque duplo em area vazia: volta ao enquadramento geral.
@@ -237,11 +249,17 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     }
     setState(() => _selected = hit);
     final node = layer.scene.nodes.firstWhere((n) => n.id == hit);
-    final center = node.positionAt(Duration.zero);
+    final center = resolveNodeTransform(
+      layer.scene,
+      node,
+      Duration.zero,
+    ).position;
     final r = node.size * node.scale.valueAt(Duration.zero) * 1.8;
     if (_view == SceneView.camera) {
-      _controller.updateScene3DCamera(widget.layerId,
-          (c) => frameBounds(c, Bounds3D(center, r), Duration.zero));
+      _controller.updateScene3DCamera(
+        widget.layerId,
+        (c) => frameBounds(c, Bounds3D(center, r), Duration.zero),
+      );
     } else if (_freeView) {
       setState(() {
         final dir = (_freePos - center).normalized;
@@ -263,7 +281,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
       setState(() {
         _freeTarget = b.center;
         final dir = (_freePos - b.center).normalized;
-        _freePos = b.center +
+        _freePos =
+            b.center +
             (dir.length < 1e-6 ? const Vec3(0.6, 0.5, 0.7) : dir) *
                 math.max(600, b.radius * 3);
       });
@@ -286,8 +305,11 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
       return const Scaffold(
         backgroundColor: AmColors.bg,
         body: Center(
-            child: Text('Cena nao encontrada',
-                style: TextStyle(color: AmColors.muted))),
+          child: Text(
+            'Cena nao encontrada',
+            style: TextStyle(color: AmColors.muted),
+          ),
+        ),
       );
     }
 
@@ -300,12 +322,15 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final size =
-                      Size(constraints.maxWidth, constraints.maxHeight);
+                  final size = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
                   if (_miniPos.dx < 0) {
                     _miniPos = Offset(
-                        size.width - _miniSize - 12,
-                        size.height - _miniSize - 12);
+                      size.width - _miniSize - 12,
+                      size.height - _miniSize - 12,
+                    );
                   }
                   return Stack(
                     children: [
@@ -323,11 +348,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                           }),
                         ),
                       ),
-                      Positioned(
-                        right: 12,
-                        top: 12,
-                        child: _navButton(),
-                      ),
+                      Positioned(right: 12, top: 12, child: _navButton()),
                     ],
                   );
                 },
@@ -351,8 +372,11 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
           CupertinoButton(
             padding: EdgeInsets.zero,
             onPressed: () => Navigator.of(context).maybePop(),
-            child: const Icon(CupertinoIcons.chevron_down,
-                size: 20, color: AmColors.text),
+            child: const Icon(
+              CupertinoIcons.chevron_down,
+              size: 20,
+              color: AmColors.text,
+            ),
           ),
           const SizedBox(width: 4),
           Expanded(
@@ -361,16 +385,20 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AmColors.text),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AmColors.text,
+              ),
             ),
           ),
           CupertinoButton(
             padding: EdgeInsets.zero,
             onPressed: () => showScene3DSheet(context, ref, widget.layerId),
-            child: const Icon(CupertinoIcons.slider_horizontal_3,
-                size: 20, color: AmColors.accent),
+            child: const Icon(
+              CupertinoIcons.slider_horizontal_3,
+              size: 20,
+              color: AmColors.accent,
+            ),
           ),
         ],
       ),
@@ -382,11 +410,26 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapUp: (d) => _handleTap(layer, d.localPosition, size),
-      onDoubleTapDown: (d) =>
-          _handleDoubleTap(layer, d.localPosition, size),
+      onDoubleTapDown: (d) => _handleDoubleTap(layer, d.localPosition, size),
       onDoubleTap: () {},
       onScaleStart: (d) {
-        _beginGesture(layer);
+        final frame = renderScene(layer.scene, cam, size, Duration.zero);
+        final hit = pickNodeAt(frame, d.localFocalPoint);
+        final startIntent = resolveTouch(
+          onSelectedLayer: hit != null && hit == _selected,
+          onOtherLayer: hit != null && hit != _selected,
+          navigationMode: _navigationMode,
+        );
+        if (startIntent == TouchIntent.selectLayer) {
+          setState(() => _selected = hit);
+          // A selecao acontece no inicio: o restante do mesmo gesto ja
+          // arrasta o objeto, sem exigir um segundo toque.
+          _gestureIntent = TouchIntent.moveLayer;
+        } else {
+          _gestureIntent = startIntent;
+        }
+        _pivot = null;
+        _beginGesture();
         _lastFocal = d.localFocalPoint;
         _lastScale = 1;
         _pointers = d.pointerCount;
@@ -408,18 +451,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
           _pan(layer, delta);
           return;
         }
-        // Um dedo: modo navegacao força camera; senao, so orbita se o
-        // dedo nao comecou sobre a camada selecionada.
-        final intent = resolveTouch(
-          onSelectedLayer: _selected != null &&
-              pickNodeAt(
-                    renderScene(layer.scene, cam, size, Duration.zero),
-                    d.localFocalPoint,
-                  ) ==
-                  _selected,
-          onOtherLayer: false,
-          navigationMode: _navigationMode,
-        );
+        // A intencao e decidida onde o gesto comecou e fica estavel ate
+        // soltar; atravessar outro objeto nao troca arraste por orbita.
+        final intent = _gestureIntent ?? TouchIntent.orbitCamera;
         switch (intent) {
           case TouchIntent.moveLayer:
             _moveSelected(layer, delta, cam);
@@ -433,20 +467,22 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         _endGesture();
       },
       child: ValueListenableBuilder<int>(
-            valueListenable: TextureCache.instance.revision,
-            builder: (_, _, _) => CustomPaint(
-        size: size,
-        painter: Scene3DPainter(
-          scene: layer.scene,
-          camera: layer.camera,
-          view: _view,
-          time: Duration.zero,
-          showHelpers: true,
-          selectedNodeId: _selected,
-          overrideCamera:
-              _view == SceneView.camera ? null : cam,
+        valueListenable: TextureCache.instance.revision,
+        builder: (_, _, _) => CustomPaint(
+          size: size,
+          painter: Scene3DPainter(
+            scene: _gestureActive
+                ? layer.scene.copyWith(draftMode: true)
+                : layer.scene,
+            camera: layer.camera,
+            view: _view,
+            time: Duration.zero,
+            showHelpers: true,
+            selectedNodeId: _selected,
+            overrideCamera: _view == SceneView.camera ? null : cam,
+          ),
         ),
-      )),
+      ),
     );
   }
 
@@ -456,20 +492,20 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     if (id == null) return;
     final basis = cameraBasis(cam);
     final node = layer.scene.nodes.firstWhere((n) => n.id == id);
-    final p = node.positionAt(Duration.zero);
+    if (node.locked) return;
+    final p = resolveNodeTransform(layer.scene, node, Duration.zero).position;
     final dist = (p - cam.position).dot(basis.forward).abs();
-    final k = cam.orthographic
-        ? 1 / cam.orthoScale
-        : dist / math.max(1, 600);
+    final k = cam.orthographic ? 1 / cam.orthoScale : dist / math.max(1, 600);
     final shift = basis.right * (delta.dx * k) - basis.up * (delta.dy * k);
     _controller.updateSceneNode(
-        widget.layerId,
-        id,
-        (n) => n.copyWith(
-              x: n.x.withBase(n.x.base + shift.x),
-              y: n.y.withBase(n.y.base + shift.y),
-              z: n.z.withBase(n.z.base + shift.z),
-            ));
+      widget.layerId,
+      id,
+      (n) => n.copyWith(
+        x: n.x.withBase(n.x.base + shift.x),
+        y: n.y.withBase(n.y.base + shift.y),
+        z: n.z.withBase(n.z.base + shift.z),
+      ),
+    );
   }
 
   Widget _navButton() {
@@ -484,15 +520,19 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(CupertinoIcons.move,
-                size: 14,
-                color: _navigationMode ? AmColors.accent : AmColors.muted),
+            Icon(
+              CupertinoIcons.move,
+              size: 14,
+              color: _navigationMode ? AmColors.accent : AmColors.muted,
+            ),
             const SizedBox(width: 5),
-            Text('Navegar',
-                style: TextStyle(
-                    fontSize: 11,
-                    color:
-                        _navigationMode ? AmColors.accent : AmColors.muted)),
+            Text(
+              'Navegar',
+              style: TextStyle(
+                fontSize: 11,
+                color: _navigationMode ? AmColors.accent : AmColors.muted,
+              ),
+            ),
           ],
         ),
       ),
@@ -509,8 +549,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
       child: GestureDetector(
         onPanUpdate: (d) => setState(() => _miniPos += d.delta),
         onTap: () => setState(() {
-          _miniView =
-              _miniView == SceneView.top ? SceneView.right : SceneView.top;
+          _miniView = _miniView == SceneView.top
+              ? SceneView.right
+              : SceneView.top;
         }),
         child: SizedBox(
           width: _miniSize,
@@ -529,9 +570,10 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               Positioned(
                 left: 5,
                 top: 3,
-                child: Text(sceneViewLabel(_miniView),
-                    style: const TextStyle(
-                        fontSize: 9, color: AmColors.muted)),
+                child: Text(
+                  sceneViewLabel(_miniView),
+                  style: const TextStyle(fontSize: 9, color: AmColors.muted),
+                ),
               ),
               Positioned(
                 right: 2,
@@ -540,8 +582,11 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                   onTap: () => setState(() => _showMiniView = false),
                   child: const Padding(
                     padding: EdgeInsets.all(5),
-                    child: Icon(CupertinoIcons.xmark,
-                        size: 11, color: AmColors.muted),
+                    child: Icon(
+                      CupertinoIcons.xmark,
+                      size: 11,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ),
               ),
@@ -551,13 +596,18 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                 bottom: 0,
                 child: GestureDetector(
                   onPanUpdate: (d) => setState(() {
-                    _miniSize = (_miniSize + d.delta.dx)
-                        .clamp(90.0, math.min(260.0, size.width - 24));
+                    _miniSize = (_miniSize + d.delta.dx).clamp(
+                      90.0,
+                      math.min(260.0, size.width - 24),
+                    );
                   }),
                   child: const Padding(
                     padding: EdgeInsets.all(6),
-                    child: Icon(CupertinoIcons.arrow_up_left_arrow_down_right,
-                        size: 11, color: AmColors.muted),
+                    child: Icon(
+                      CupertinoIcons.arrow_up_left_arrow_down_right,
+                      size: 11,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ),
               ),
@@ -615,10 +665,13 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
           color: on ? AmColors.accentDim : AmColors.chip,
           borderRadius: BorderRadius.circular(9),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 12,
-                color: on ? AmColors.accent : AmColors.muted)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: on ? AmColors.accent : AmColors.muted,
+          ),
+        ),
       ),
     );
   }
@@ -631,16 +684,19 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            _cmd(CupertinoIcons.fullscreen, 'Enquadrar tudo',
-                () => _frameAll(layer)),
+            _cmd(
+              CupertinoIcons.fullscreen,
+              'Enquadrar tudo',
+              () => _frameAll(layer),
+            ),
             const SizedBox(width: 8),
             _cmd(
               CupertinoIcons.viewfinder,
               'Enquadrar selecionado',
               _selected == null
                   ? null
-                  : () => _controller.frameSceneNode(
-                      widget.layerId, _selected!),
+                  : () =>
+                        _controller.frameSceneNode(widget.layerId, _selected!),
             ),
             const SizedBox(width: 8),
             // O COMANDO MAIS USADO: navegar livre ate achar o
@@ -652,7 +708,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                   ? null
                   : () {
                       _controller.alignCameraToRender(
-                          widget.layerId, _renderCamera(layer));
+                        widget.layerId,
+                        _renderCamera(layer),
+                      );
                       setState(() => _view = SceneView.camera);
                     },
             ),
@@ -673,7 +731,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               _selected == null
                   ? null
                   : () => _controller.focusCameraOnNode(
-                      widget.layerId, _selected!),
+                      widget.layerId,
+                      _selected!,
+                    ),
             ),
           ],
         ),
@@ -694,13 +754,15 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 14, color: on ? AmColors.accent : AmColors.muted),
+            Icon(icon, size: 14, color: on ? AmColors.accent : AmColors.muted),
             const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: on ? AmColors.accent : AmColors.muted)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: on ? AmColors.accent : AmColors.muted,
+              ),
+            ),
           ],
         ),
       ),

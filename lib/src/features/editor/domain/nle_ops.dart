@@ -1,3 +1,4 @@
+import 'cut_ops.dart';
 import 'layer.dart';
 
 /// OPERACOES DE MONTAGEM — o que separa "mover retangulos" de editar.
@@ -87,10 +88,12 @@ List<Layer> closeGaps(List<Layer> layers, {Duration from = Duration.zero}) {
       // Atravessa o ponto: a parte de tras vai para depois do inserido.
       final antes = l.copyLayer(duration: at - l.startTime);
       final depois = l.duplicated().copyLayer(
-            startTime: at + vao,
-            duration: l.endTime - at,
-          );
-      out..add(antes)..add(depois);
+        startTime: at + vao,
+        duration: l.endTime - at,
+      );
+      out
+        ..add(antes)
+        ..add(depois);
       continue;
     }
     out.add(l);
@@ -130,18 +133,14 @@ List<Layer> closeGaps(List<Layer> layers, {Duration from = Duration.zero}) {
     }
     // Sobra so a ponta da direita.
     if (l.startTime >= at && l.endTime > fim) {
-      out.add(l.copyLayer(
-        startTime: fim,
-        duration: l.endTime - fim,
-      ));
+      out.add(l.copyLayer(startTime: fim, duration: l.endTime - fim));
       continue;
     }
     // O novo cai no MEIO dela: sobram as duas pontas.
     out.add(l.copyLayer(duration: at - l.startTime));
-    out.add(l.duplicated().copyLayer(
-          startTime: fim,
-          duration: l.endTime - fim,
-        ));
+    out.add(
+      l.duplicated().copyLayer(startTime: fim, duration: l.endTime - fim),
+    );
   }
 
   final colocado = novo.copyLayer(startTime: at);
@@ -153,10 +152,29 @@ List<Layer> closeGaps(List<Layer> layers, {Duration from = Duration.zero}) {
 /// de um corte. Sem isso, tirar um trecho do meio faz o pedaco de tras
 /// repetir o audio (ou o video) que ja tinha passado.
 Layer _avancarFonte(Layer l, Duration quanto) => switch (l) {
-      VideoLayer v => v.copyLayer(sourceOffset: v.sourceOffset + quanto),
-      AudioLayer a => a.copyLayer(sourceOffset: a.sourceOffset + quanto),
-      _ => l,
-    };
+  VideoLayer v when hasTimeRemap(v) || v.reverse => () {
+    final sliced = sliceVideoTrack(v, quanto, v.duration);
+    return v.copyLayer(
+      sourceOffset: sliced.sourceOffset,
+      speed: 1,
+      reverse: false,
+      effects: replaceTimeRemap(v, sliced.track),
+      clearTransitionIn: true,
+    );
+  }(),
+  VideoLayer v => v.copyLayer(
+    sourceOffset:
+        v.sourceOffset +
+        Duration(microseconds: (quanto.inMicroseconds * v.speed).round()),
+    clearTransitionIn: true,
+  ),
+  AudioLayer a => a.copyLayer(
+    sourceOffset:
+        a.sourceOffset +
+        Duration(microseconds: (quanto.inMicroseconds * a.speed).round()),
+  ),
+  _ => l,
+};
 
 /// UM corte, em UMA camada. Devolve o que sobra: nada, um pedaco ou
 /// dois.
@@ -173,22 +191,50 @@ List<Layer> _cortar1(Layer l, Duration from, Duration to) {
   if (l.startTime >= from && l.endTime <= to) return const [];
   // So a ponta de tras foi cortada.
   if (l.startTime < from && l.endTime <= to) {
-    return [l.copyLayer(duration: from - l.startTime)];
+    final keep = from - l.startTime;
+    if (l is VideoLayer && (hasTimeRemap(l) || l.reverse)) {
+      final sliced = sliceVideoTrack(l, Duration.zero, keep);
+      return [
+        l.copyLayer(
+          duration: keep,
+          sourceOffset: sliced.sourceOffset,
+          speed: 1,
+          reverse: false,
+          effects: replaceTimeRemap(l, sliced.track),
+        ),
+      ];
+    }
+    return [l.copyLayer(duration: keep)];
   }
   // So a ponta da frente foi cortada.
   if (l.startTime >= from && l.endTime > to) {
     return [
-      _avancarFonte(l, to - l.startTime)
-          .copyLayer(startTime: to, duration: l.endTime - to)
+      _avancarFonte(
+        l,
+        to - l.startTime,
+      ).copyLayer(startTime: to, duration: l.endTime - to),
     ];
   }
   // O trecho esta no meio: parte em dois.
+  final firstDuration = from - l.startTime;
+  final secondFrom = to - l.startTime;
+  Layer first = l.copyLayer(duration: firstDuration);
+  if (l is VideoLayer && (hasTimeRemap(l) || l.reverse)) {
+    final sliced = sliceVideoTrack(l, Duration.zero, firstDuration);
+    first = l.copyLayer(
+      duration: firstDuration,
+      sourceOffset: sliced.sourceOffset,
+      speed: 1,
+      reverse: false,
+      effects: replaceTimeRemap(l, sliced.track),
+    );
+  }
   return [
-    l.copyLayer(duration: from - l.startTime),
-    _avancarFonte(l.duplicated(), to - l.startTime).copyLayer(
-      startTime: to,
-      duration: l.endTime - to,
-    ),
+    first,
+    _avancarFonte(
+      l.duplicated(),
+      secondFrom,
+    ).copyLayer(startTime: to, duration: l.endTime - to),
   ];
 }
 
@@ -224,9 +270,11 @@ List<Layer> extractRange(
       continue;
     }
     for (final pedaco in _cortar1(l, from, to)) {
-      out.add(pedaco.startTime >= to
-          ? pedaco.copyLayer(startTime: pedaco.startTime - vao)
-          : pedaco);
+      out.add(
+        pedaco.startTime >= to
+            ? pedaco.copyLayer(startTime: pedaco.startTime - vao)
+            : pedaco,
+      );
     }
   }
   return out;
@@ -234,22 +282,22 @@ List<Layer> extractRange(
 
 /// Caminho da midia de uma camada, se ela tiver.
 String? mediaPathOf(Layer l) => switch (l) {
-      VideoLayer v => v.sourcePath,
-      AudioLayer a => a.sourcePath,
-      _ => null,
-    };
+  VideoLayer v => v.sourcePath,
+  AudioLayer a => a.sourcePath,
+  _ => null,
+};
 
 Duration _fonteDe(Layer l) => switch (l) {
-      VideoLayer v => v.sourceOffset,
-      AudioLayer a => a.sourceOffset,
-      _ => Duration.zero,
-    };
+  VideoLayer v => v.sourceOffset,
+  AudioLayer a => a.sourceOffset,
+  _ => Duration.zero,
+};
 
 double _velocidadeDe(Layer l) => switch (l) {
-      VideoLayer v => v.speed,
-      AudioLayer a => a.speed,
-      _ => 1.0,
-    };
+  VideoLayer v => v.speed,
+  AudioLayer a => a.speed,
+  _ => 1.0,
+};
 
 /// DA PARA JUNTAR [a] e [b] de volta num clipe so?
 ///
@@ -261,8 +309,11 @@ double _velocidadeDe(Layer l) => switch (l) {
 /// Encostados "na medida do quadro": exigir igualdade exata em
 /// microssegundos reprovaria juncoes legitimas por causa de
 /// arredondamento.
-bool canJoin(Layer a, Layer b,
-    {Duration tolerance = const Duration(milliseconds: 40)}) {
+bool canJoin(
+  Layer a,
+  Layer b, {
+  Duration tolerance = const Duration(milliseconds: 40),
+}) {
   final pa = mediaPathOf(a);
   final pb = mediaPathOf(b);
   if (pa == null || pb == null || pa != pb) return false;
@@ -275,10 +326,11 @@ bool canJoin(Layer a, Layer b,
 
   // E em sequencia na FONTE: sem isto, dois trechos distantes do mesmo
   // arquivo "juntariam" e o video pularia no meio.
-  final fimFonteA = _fonteDe(a) +
+  final fimFonteA =
+      _fonteDe(a) +
       Duration(
-          microseconds:
-              (a.duration.inMicroseconds * _velocidadeDe(a)).round());
+        microseconds: (a.duration.inMicroseconds * _velocidadeDe(a)).round(),
+      );
   final vaoFonte = (_fonteDe(b) - fimFonteA).inMicroseconds.abs();
   return vaoFonte <= tolerance.inMicroseconds;
 }
@@ -331,7 +383,7 @@ List<Layer> removeRangesFrom(
   if (ranges.isEmpty) return layers;
   final ordenados = [
     for (final r in ranges)
-      if (r.$2 > r.$1) r
+      if (r.$2 > r.$1) r,
   ]..sort((a, b) => a.$1.compareTo(b.$1));
   if (ordenados.isEmpty) return layers;
 
@@ -371,12 +423,13 @@ List<Layer> keepRangesOf(
         (
           r.$1 < alvo.startTime ? alvo.startTime : r.$1,
           r.$2 > alvo.endTime ? alvo.endTime : r.$2,
-        )
+        ),
   ]..sort((a, b) => a.$1.compareTo(b.$1));
   // Nada a manter: a camada inteira e o trecho a tirar.
   if (dentro.isEmpty) {
-    return removeRangesFrom(layers, id, [(alvo.startTime, alvo.endTime)],
-        ripple: ripple);
+    return removeRangesFrom(layers, id, [
+      (alvo.startTime, alvo.endTime),
+    ], ripple: ripple);
   }
 
   final fora = <(Duration, Duration)>[];
@@ -393,8 +446,10 @@ List<Layer> keepRangesOf(
 ///
 /// Serve para o comando de fechar buracos avisar quantos existem — e
 /// para o teste provar que fechou.
-List<(Duration, Duration)> gapsIn(List<Layer> layers,
-    {Duration from = Duration.zero}) {
+List<(Duration, Duration)> gapsIn(
+  List<Layer> layers, {
+  Duration from = Duration.zero,
+}) {
   final ordenadas = _porTempo(layers.where((l) => l.endTime > from));
   final out = <(Duration, Duration)>[];
   var cursor = from;

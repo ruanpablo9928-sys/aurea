@@ -30,28 +30,28 @@ enum IrisShape {
 }
 
 int irisSides(IrisShape s) => switch (s) {
-      IrisShape.fastRectangle => 4,
-      IrisShape.triangle => 3,
-      IrisShape.square => 4,
-      IrisShape.pentagon => 5,
-      IrisShape.hexagon => 6,
-      IrisShape.heptagon => 7,
-      IrisShape.octagon => 8,
-      IrisShape.nonagon => 9,
-      IrisShape.decagon => 10,
-    };
+  IrisShape.fastRectangle => 4,
+  IrisShape.triangle => 3,
+  IrisShape.square => 4,
+  IrisShape.pentagon => 5,
+  IrisShape.hexagon => 6,
+  IrisShape.heptagon => 7,
+  IrisShape.octagon => 8,
+  IrisShape.nonagon => 9,
+  IrisShape.decagon => 10,
+};
 
 String irisLabel(IrisShape s) => switch (s) {
-      IrisShape.fastRectangle => 'Retangulo rapido',
-      IrisShape.triangle => 'Triangulo',
-      IrisShape.square => 'Quadrado',
-      IrisShape.pentagon => 'Pentagono',
-      IrisShape.hexagon => 'Hexagono',
-      IrisShape.heptagon => 'Heptagono',
-      IrisShape.octagon => 'Octogono',
-      IrisShape.nonagon => 'Eneagono',
-      IrisShape.decagon => 'Decagono',
-    };
+  IrisShape.fastRectangle => 'Retangulo rapido',
+  IrisShape.triangle => 'Triangulo',
+  IrisShape.square => 'Quadrado',
+  IrisShape.pentagon => 'Pentagono',
+  IrisShape.hexagon => 'Hexagono',
+  IrisShape.heptagon => 'Heptagono',
+  IrisShape.octagon => 'Octogono',
+  IrisShape.nonagon => 'Eneagono',
+  IrisShape.decagon => 'Decagono',
+};
 
 /// PROFUNDIDADE DE CAMPO. Os tres ultimos parametros sao o que separa
 /// "desfoque" de "lente": sem GANHO e LIMIAR de realce, luz fora de
@@ -72,16 +72,16 @@ class DepthOfField {
     AnimatedDouble? highlightGain,
     AnimatedDouble? highlightThreshold,
     AnimatedDouble? highlightSaturation,
-  })  : focusDistance = focusDistance ?? AnimatedDouble(800),
-        aperture = aperture ?? AnimatedDouble(25),
-        blurLevel = blurLevel ?? AnimatedDouble(100),
-        irisRotation = irisRotation ?? AnimatedDouble(0),
-        irisRoundness = irisRoundness ?? AnimatedDouble(0),
-        irisAspect = irisAspect ?? AnimatedDouble(1),
-        diffractionFringe = diffractionFringe ?? AnimatedDouble(0),
-        highlightGain = highlightGain ?? AnimatedDouble(0),
-        highlightThreshold = highlightThreshold ?? AnimatedDouble(0.75),
-        highlightSaturation = highlightSaturation ?? AnimatedDouble(1);
+  }) : focusDistance = focusDistance ?? AnimatedDouble(800),
+       aperture = aperture ?? AnimatedDouble(25),
+       blurLevel = blurLevel ?? AnimatedDouble(100),
+       irisRotation = irisRotation ?? AnimatedDouble(0),
+       irisRoundness = irisRoundness ?? AnimatedDouble(0),
+       irisAspect = irisAspect ?? AnimatedDouble(1),
+       diffractionFringe = diffractionFringe ?? AnimatedDouble(0),
+       highlightGain = highlightGain ?? AnimatedDouble(0),
+       highlightThreshold = highlightThreshold ?? AnimatedDouble(0.75),
+       highlightSaturation = highlightSaturation ?? AnimatedDouble(1);
 
   final bool enabled;
   final AnimatedDouble focusDistance;
@@ -136,42 +136,46 @@ class DepthOfField {
     AnimatedDouble? highlightGain,
     AnimatedDouble? highlightThreshold,
     AnimatedDouble? highlightSaturation,
-  }) =>
-      DepthOfField(
-        enabled: enabled ?? this.enabled,
-        focusDistance: focusDistance ?? this.focusDistance,
-        aperture: aperture ?? this.aperture,
-        blurLevel: blurLevel ?? this.blurLevel,
-        lockToZoom: lockToZoom ?? this.lockToZoom,
-        irisShape: irisShape ?? this.irisShape,
-        irisRotation: irisRotation ?? this.irisRotation,
-        irisRoundness: irisRoundness ?? this.irisRoundness,
-        irisAspect: irisAspect ?? this.irisAspect,
-        diffractionFringe: diffractionFringe ?? this.diffractionFringe,
-        highlightGain: highlightGain ?? this.highlightGain,
-        highlightThreshold:
-            highlightThreshold ?? this.highlightThreshold,
-        highlightSaturation:
-            highlightSaturation ?? this.highlightSaturation,
-      );
+  }) => DepthOfField(
+    enabled: enabled ?? this.enabled,
+    focusDistance: focusDistance ?? this.focusDistance,
+    aperture: aperture ?? this.aperture,
+    blurLevel: blurLevel ?? this.blurLevel,
+    lockToZoom: lockToZoom ?? this.lockToZoom,
+    irisShape: irisShape ?? this.irisShape,
+    irisRotation: irisRotation ?? this.irisRotation,
+    irisRoundness: irisRoundness ?? this.irisRoundness,
+    irisAspect: irisAspect ?? this.irisAspect,
+    diffractionFringe: diffractionFringe ?? this.diffractionFringe,
+    highlightGain: highlightGain ?? this.highlightGain,
+    highlightThreshold: highlightThreshold ?? this.highlightThreshold,
+    highlightSaturation: highlightSaturation ?? this.highlightSaturation,
+  );
 }
 
 /// Caminho do bokeh: o formato da iris com arredondamento e proporcao.
 /// Arredondamento 100 = circulo; 0 = poligono reto; negativo = laminas
 /// concavas.
-Path irisPath(IrisShape shape, double radius,
-    {double roundness = 0, double rotationDeg = 0, double aspect = 1}) {
+Path irisPath(
+  IrisShape shape,
+  double radius, {
+  double roundness = 0,
+  double rotationDeg = 0,
+  double aspect = 1,
+}) {
   final n = irisSides(shape);
   final r = roundness.clamp(-100.0, 100.0) / 100;
   final rot = rotationDeg * math.pi / 180 - math.pi / 2;
   final path = Path();
 
   if (r >= 0.999) {
-    return path
-      ..addOval(Rect.fromCenter(
-          center: Offset.zero,
-          width: radius * 2 * aspect,
-          height: radius * 2));
+    return path..addOval(
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: radius * 2 * aspect,
+        height: radius * 2,
+      ),
+    );
   }
 
   final pts = <Offset>[
@@ -257,8 +261,7 @@ List<BokehSprite> bokehSprites(
 
     final boost = highlightBoost(lum, gain: gain, threshold: threshold);
     // Saturacao de realce: quanto de cor a bola preserva (0 = cinza).
-    double chan(double c) => ((lum + (c - lum) * sat) * boost)
-        .clamp(0.0, 1.0);
+    double chan(double c) => ((lum + (c - lum) * sat) * boost).clamp(0.0, 1.0);
 
     out.add((
       center: Offset(
@@ -302,21 +305,21 @@ class Camera3D {
     this.orthographic = false,
     DepthOfField? dof,
     this.autoOrient = AutoOrient.off,
-  })  : id = id ?? const Uuid().v4(),
-        posX = posX ?? AnimatedDouble(0),
-        posY = posY ?? AnimatedDouble(0),
-        posZ = posZ ?? AnimatedDouble(800),
-        poiX = poiX ?? AnimatedDouble(0),
-        poiY = poiY ?? AnimatedDouble(0),
-        poiZ = poiZ ?? AnimatedDouble(0),
-        orientX = orientX ?? AnimatedDouble(0),
-        orientY = orientY ?? AnimatedDouble(0),
-        orientZ = orientZ ?? AnimatedDouble(0),
-        rotX = rotX ?? AnimatedDouble(0),
-        rotY = rotY ?? AnimatedDouble(0),
-        rotZ = rotZ ?? AnimatedDouble(0),
-        focalLength = focalLength ?? AnimatedDouble(50),
-        dof = dof ?? DepthOfField();
+  }) : id = id ?? const Uuid().v4(),
+       posX = posX ?? AnimatedDouble(0),
+       posY = posY ?? AnimatedDouble(0),
+       posZ = posZ ?? AnimatedDouble(800),
+       poiX = poiX ?? AnimatedDouble(0),
+       poiY = poiY ?? AnimatedDouble(0),
+       poiZ = poiZ ?? AnimatedDouble(0),
+       orientX = orientX ?? AnimatedDouble(0),
+       orientY = orientY ?? AnimatedDouble(0),
+       orientZ = orientZ ?? AnimatedDouble(0),
+       rotX = rotX ?? AnimatedDouble(0),
+       rotY = rotY ?? AnimatedDouble(0),
+       rotZ = rotZ ?? AnimatedDouble(0),
+       focalLength = focalLength ?? AnimatedDouble(50),
+       dof = dof ?? DepthOfField();
 
   final String id;
   final String name;
@@ -360,8 +363,7 @@ class Camera3D {
       math.pi;
 
   double zoomAt(Duration t, double compWidth) =>
-      zoomFromFocal(focalLength.valueAt(t), compWidth,
-          filmWidth: filmWidth);
+      zoomFromFocal(focalLength.valueAt(t), compWidth, filmWidth: filmWidth);
 
   /// Direcao do olhar: em dois nos, aponta para o alvo; em um no, vem
   /// da orientacao + rotacoes.
@@ -447,29 +449,28 @@ class Camera3D {
     bool? orthographic,
     DepthOfField? dof,
     AutoOrient? autoOrient,
-  }) =>
-      Camera3D(
-        id: id,
-        name: name ?? this.name,
-        kind: kind ?? this.kind,
-        posX: posX ?? this.posX,
-        posY: posY ?? this.posY,
-        posZ: posZ ?? this.posZ,
-        poiX: poiX ?? this.poiX,
-        poiY: poiY ?? this.poiY,
-        poiZ: poiZ ?? this.poiZ,
-        orientX: orientX ?? this.orientX,
-        orientY: orientY ?? this.orientY,
-        orientZ: orientZ ?? this.orientZ,
-        rotX: rotX ?? this.rotX,
-        rotY: rotY ?? this.rotY,
-        rotZ: rotZ ?? this.rotZ,
-        focalLength: focalLength ?? this.focalLength,
-        filmWidth: filmWidth ?? this.filmWidth,
-        orthographic: orthographic ?? this.orthographic,
-        dof: dof ?? this.dof,
-        autoOrient: autoOrient ?? this.autoOrient,
-      );
+  }) => Camera3D(
+    id: id,
+    name: name ?? this.name,
+    kind: kind ?? this.kind,
+    posX: posX ?? this.posX,
+    posY: posY ?? this.posY,
+    posZ: posZ ?? this.posZ,
+    poiX: poiX ?? this.poiX,
+    poiY: poiY ?? this.poiY,
+    poiZ: poiZ ?? this.poiZ,
+    orientX: orientX ?? this.orientX,
+    orientY: orientY ?? this.orientY,
+    orientZ: orientZ ?? this.orientZ,
+    rotX: rotX ?? this.rotX,
+    rotY: rotY ?? this.rotY,
+    rotZ: rotZ ?? this.rotZ,
+    focalLength: focalLength ?? this.focalLength,
+    filmWidth: filmWidth ?? this.filmWidth,
+    orthographic: orthographic ?? this.orthographic,
+    dof: dof ?? this.dof,
+    autoOrient: autoOrient ?? this.autoOrient,
+  );
 }
 
 enum AutoOrient { off, alongPath, towardsPoi }
@@ -480,10 +481,7 @@ enum AutoOrient { off, alongPath, towardsPoi }
   final n = f.normalized;
   final pitch = math.asin(n.y.clamp(-1.0, 1.0));
   final yaw = math.atan2(-n.x, -n.z);
-  return (
-    pitchDeg: pitch * 180 / math.pi,
-    yawDeg: yaw * 180 / math.pi,
-  );
+  return (pitchDeg: pitch * 180 / math.pi, yawDeg: yaw * 180 / math.pi);
 }
 
 // ------------------------------------------------------------ vistas
@@ -501,16 +499,16 @@ enum SceneView {
 }
 
 String sceneViewLabel(SceneView v) => switch (v) {
-      SceneView.camera => 'Camera',
-      SceneView.front => 'Frente',
-      SceneView.back => 'Tras',
-      SceneView.left => 'Esquerda',
-      SceneView.right => 'Direita',
-      SceneView.top => 'Topo',
-      SceneView.bottom => 'Base',
-      SceneView.custom1 => 'Livre 1',
-      SceneView.custom2 => 'Livre 2',
-    };
+  SceneView.camera => 'Camera',
+  SceneView.front => 'Frente',
+  SceneView.back => 'Tras',
+  SceneView.left => 'Esquerda',
+  SceneView.right => 'Direita',
+  SceneView.top => 'Topo',
+  SceneView.bottom => 'Base',
+  SceneView.custom1 => 'Livre 1',
+  SceneView.custom2 => 'Livre 2',
+};
 
 /// Camera ortografica das vistas fixas. Elas sao o que torna posicao em
 /// Z compreensivel — sem elas, "esta atras ou e so menor?" nao tem
@@ -528,8 +526,7 @@ RenderCamera orthoViewCamera(
     SceneView.left => (Vec3(-distance, 0, 0), Vec3(0, 1, 0)),
     SceneView.top => (Vec3(0, distance, 0), Vec3(0, 0, -1)),
     SceneView.bottom => (Vec3(0, -distance, 0), Vec3(0, 0, 1)),
-    _ => (Vec3(distance * 0.7, distance * 0.5, distance * 0.7),
-        Vec3(0, 1, 0)),
+    _ => (Vec3(distance * 0.7, distance * 0.5, distance * 0.7), Vec3(0, 1, 0)),
   };
   return RenderCamera(
     position: pos + center,
@@ -575,8 +572,10 @@ Camera3D orbitCamera(
   var yaw = math.atan2(rel.x, rel.z);
   var pitch = math.asin((rel.y / radius).clamp(-1.0, 1.0));
   yaw += deltaYawDeg * math.pi / 180;
-  pitch = (pitch + deltaPitchDeg * math.pi / 180)
-      .clamp(-math.pi / 2 + 0.01, math.pi / 2 - 0.01);
+  pitch = (pitch + deltaPitchDeg * math.pi / 180).clamp(
+    -math.pi / 2 + 0.01,
+    math.pi / 2 - 0.01,
+  );
 
   final np = Vec3(
     pivot.x + radius * math.cos(pitch) * math.sin(yaw),
@@ -623,8 +622,7 @@ Camera3D dollyCamera(Camera3D cam, double factor, Duration t) {
 Camera3D panCamera(Camera3D cam, Offset delta, Duration t) {
   final rc = cam.renderAt(t);
   final basis = cameraBasis(rc);
-  final shift =
-      basis.right * (-delta.dx) + basis.up * delta.dy;
+  final shift = basis.right * (-delta.dx) + basis.up * delta.dy;
   final pos = cam.positionAt(t) + shift;
   var out = cam.copyWith(
     posX: cam.posX.withBase(pos.x),
@@ -645,16 +643,20 @@ Camera3D panCamera(Camera3D cam, Offset delta, Duration t) {
 // --------------------------------------------------------- comandos
 
 /// ENQUADRAR: move a camera para caber [bounds] com margem.
-Camera3D frameBounds(Camera3D cam, Bounds3D bounds, Duration t,
-    {double margin = 1.35}) {
+Camera3D frameBounds(
+  Camera3D cam,
+  Bounds3D bounds,
+  Duration t, {
+  double margin = 1.35,
+}) {
   if (bounds.radius <= 0) return cam;
   final fov = cam.fovAt(t) * math.pi / 180;
   final dist = bounds.radius * margin / math.tan(fov / 2);
   final dir = cam.kind == CameraKind.twoNode
       ? (cam.positionAt(t) - bounds.center).normalized
       : (cam.forwardAt(t) * -1);
-  final np = bounds.center +
-      (dir.length < 1e-6 ? const Vec3(0, 0, 1) : dir) * dist;
+  final np =
+      bounds.center + (dir.length < 1e-6 ? const Vec3(0, 0, 1) : dir) * dist;
   var out = cam.copyWith(
     posX: cam.posX.withBase(np.x),
     posY: cam.posY.withBase(np.y),
@@ -701,23 +703,28 @@ Camera3D alignToView(Camera3D cam, RenderCamera view) {
 Bounds3D sceneBounds(Scene3D scene, Duration t) {
   if (scene.nodes.isEmpty) return Bounds3D.empty;
   var minX = double.infinity, minY = double.infinity, minZ = double.infinity;
-  var maxX = -double.infinity,
-      maxY = -double.infinity,
-      maxZ = -double.infinity;
+  var maxX = -double.infinity, maxY = -double.infinity, maxZ = -double.infinity;
   for (final n in scene.nodes) {
-    final p = n.positionAt(t);
-    final r = n.size * n.scale.valueAt(t) * 1.8;
-    minX = math.min(minX, p.x - r);
-    minY = math.min(minY, p.y - r);
-    minZ = math.min(minZ, p.z - r);
-    maxX = math.max(maxX, p.x + r);
-    maxY = math.max(maxY, p.y + r);
-    maxZ = math.max(maxZ, p.z + r);
+    if (!n.visible || n.isNull) continue;
+    final transform = resolveNodeTransform(scene, n, t);
+    final r = n.size * transform.scale.abs() * 1.8;
+    final offsets = n.instances.isEmpty ? const [Vec3.zero] : n.instances;
+    for (final offset in offsets) {
+      final p = composeTransforms(
+        transform,
+        NodeTransform(position: offset),
+      ).position;
+      minX = math.min(minX, p.x - r);
+      minY = math.min(minY, p.y - r);
+      minZ = math.min(minZ, p.z - r);
+      maxX = math.max(maxX, p.x + r);
+      maxY = math.max(maxY, p.y + r);
+      maxZ = math.max(maxZ, p.z + r);
+    }
   }
-  final center =
-      Vec3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
-  final radius = Vec3(maxX - center.x, maxY - center.y, maxZ - center.z)
-      .length;
+  if (!minX.isFinite) return Bounds3D.empty;
+  final center = Vec3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+  final radius = Vec3(maxX - center.x, maxY - center.y, maxZ - center.z).length;
   return Bounds3D(center, radius);
 }
 
@@ -728,12 +735,12 @@ Bounds3D sceneBounds(Scene3D scene, Duration t) {
 enum CameraRig { orbit, tripod, dolly, handheld, dollyZoom }
 
 String cameraRigLabel(CameraRig r) => switch (r) {
-      CameraRig.orbit => 'Orbita',
-      CameraRig.tripod => 'Tripe',
-      CameraRig.dolly => 'Dolly',
-      CameraRig.handheld => 'Camera na mao',
-      CameraRig.dollyZoom => 'Dolly zoom',
-    };
+  CameraRig.orbit => 'Orbita',
+  CameraRig.tripod => 'Tripe',
+  CameraRig.dolly => 'Dolly',
+  CameraRig.handheld => 'Camera na mao',
+  CameraRig.dollyZoom => 'Dolly zoom',
+};
 
 /// Aplica um rig, devolvendo a camera com keyframes REAIS.
 Camera3D applyCameraRig(
@@ -795,10 +802,11 @@ Camera3D applyCameraRig(
       for (var i = 0; i <= steps; i++) {
         final t = end * (i / steps);
         final a = i * 1.7;
-        px = px.withKeyframe(
-            t, cam.posX.base + math.sin(a) * 6 * intensity);
+        px = px.withKeyframe(t, cam.posX.base + math.sin(a) * 6 * intensity);
         py = py.withKeyframe(
-            t, cam.posY.base + math.cos(a * 1.3) * 4 * intensity);
+          t,
+          cam.posY.base + math.cos(a * 1.3) * 4 * intensity,
+        );
       }
       return cam.copyWith(posX: px, posY: py);
 

@@ -28,6 +28,7 @@ class BlendMask extends SingleChildRenderObjectWidget {
     required this.blendMode,
     this.margem = 0,
     this.permitirFoto = true,
+    this.isolate = false,
     super.child,
   });
 
@@ -39,28 +40,42 @@ class BlendMask extends SingleChildRenderObjectWidget {
 
   final bool permitirFoto;
 
+  /// Mesmo em [BlendMode.srcOver], pinta o filho num grupo isolado.
+  /// Necessario quando um descendente usa dstIn/dstOut: sem este grupo,
+  /// ele tambem altera tudo o que ja estava no canvas por baixo.
+  final bool isolate;
+
   @override
   RenderObject createRenderObject(BuildContext context) => _RenderBlendMask(
-        blendMode,
-        margem,
-        permitirFoto,
-        MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
-      );
+    blendMode,
+    margem,
+    permitirFoto,
+    isolate,
+    MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
+  );
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderObject renderObject) {
+    BuildContext context,
+    covariant RenderObject renderObject,
+  ) {
     (renderObject as _RenderBlendMask)
       ..blendMode = blendMode
       ..margem = margem
       ..permitirFoto = permitirFoto
+      ..isolate = isolate
       ..pixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
   }
 }
 
 class _RenderBlendMask extends RenderProxyBox {
   _RenderBlendMask(
-      this._blendMode, this._margem, this._permitirFoto, this._pixelRatio);
+    this._blendMode,
+    this._margem,
+    this._permitirFoto,
+    this._isolate,
+    this._pixelRatio,
+  );
 
   BlendMode _blendMode;
   BlendMode get blendMode => _blendMode;
@@ -83,6 +98,14 @@ class _RenderBlendMask extends RenderProxyBox {
   set permitirFoto(bool value) {
     if (_permitirFoto == value) return;
     _permitirFoto = value;
+    markNeedsPaint();
+  }
+
+  bool _isolate;
+  bool get isolate => _isolate;
+  set isolate(bool value) {
+    if (_isolate == value) return;
+    _isolate = value;
     markNeedsPaint();
   }
 
@@ -124,7 +147,7 @@ class _RenderBlendMask extends RenderProxyBox {
     final canvas = context.canvas;
 
     // Modo normal nao precisa de camada nenhuma.
-    if (_blendMode == BlendMode.srcOver) {
+    if (_blendMode == BlendMode.srcOver && !_isolate) {
       super.paint(context, offset);
       return;
     }
@@ -139,8 +162,12 @@ class _RenderBlendMask extends RenderProxyBox {
     }
 
     final m = _margem < 0 ? 0.0 : _margem;
-    final limites =
-        Rect.fromLTWH(-m, -m, size.width + 2 * m, size.height + 2 * m);
+    final limites = Rect.fromLTWH(
+      -m,
+      -m,
+      size.width + 2 * m,
+      size.height + 2 * m,
+    );
     if (limites.isEmpty) return;
     final foto = _fotografar(filho, limites);
 

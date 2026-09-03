@@ -5,7 +5,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../domain/camera3d.dart';
+import '../../application/panorama_cache.dart';
 import '../../application/texture_cache.dart';
+import '../../domain/element3d.dart';
 import '../../domain/scene3d.dart';
 
 /// Pintor do CONTEINER CENA 3D. Faz os dois passes da spec §3:
@@ -28,7 +30,12 @@ class Scene3DPainter extends CustomPainter {
     this.overrideCamera,
     this.selectedNodeId,
     this.onMetrics,
-  });
+  }) : super(
+         repaint: Listenable.merge([
+           TextureCache.instance.revision,
+           PanoramaCache.instance.revision,
+         ]),
+       );
 
   final Scene3D scene;
   final Camera3D camera;
@@ -65,18 +72,35 @@ class Scene3DPainter extends CustomPainter {
 
     if (scene.background != null) {
       canvas.drawRect(Offset.zero & size, Paint()..color = scene.background!);
+    } else if (scene.panorama.showBackground) {
+      _paintPanorama(canvas, size, cam);
     }
 
     if (showHelpers && scene.showFloorGrid) {
       _paintFloorGrid(canvas, size, cam);
     }
 
-    final frame = renderScene(scene, cam, size, time);
+    final frame = renderScene(
+      scene,
+      cam,
+      size,
+      time,
+      environmentSampler: PanoramaCache.instance.samplerFor(scene.panorama),
+    );
     onMetrics?.call(frame);
+
+    if (scene.planarFloorReflection && !scene.draftMode) {
+      _paintPlanarFloorReflection(canvas, size, cam, frame);
+    }
 
     // SOMBRA DE CONTATO antes da geometria: ela vive no chao, e tudo
     // que e objeto passa por cima dela.
-    if (!scene.draftMode) _paintContactShadows(canvas, frame);
+    final hasShadowLight = scene.lights.any(
+      (light) => light.castsShadow && light.intensity.valueAt(time) > 0,
+    );
+    if (!scene.draftMode && hasShadowLight) {
+      _paintContactShadows(canvas, frame);
+    }
 
     // Passe OPACO e passe TRANSPARENTE, nessa ordem.
     _paintTriangles(canvas, frame.opaque);
@@ -84,8 +108,7 @@ class Scene3DPainter extends CustomPainter {
 
     // PROFUNDIDADE DE CAMPO. No modo rascunho ela sai do caminho — e a
     // diferenca entre navegar a cena e sofrer num aparelho de entrada.
-    if (camera.dof.enabled && !scene.draftMode &&
-        view == SceneView.camera) {
+    if (camera.dof.enabled && !scene.draftMode && view == SceneView.camera) {
       _paintBokeh(canvas, frame);
     }
 
@@ -97,6 +120,183 @@ class Scene3DPainter extends CustomPainter {
     if (showHelpers && selectedNodeId != null) {
       _paintSelectionBox(canvas, size, cam);
     }
+  }
+
+  void _paintPanorama(Canvas canvas, Size size, RenderCamera cam) {
+    final panorama = scene.panorama;
+    final path = panorama.sourcePath;
+    final image = path == null ? null : TextureCache.instance.imageFor(path);
+    if (image != null) {
+      _paintPanoramaImage(canvas, size, cam, image);
+      return;
+    }
+
+    // Presets procedurais: poucos blocos, suficientes para conservar a
+    // direcao do horizonte, softbox e neon quando o ambiente gira.
+    const cols = 28, rows = 14;
+    final basis = cameraBasis(cam);
+    final tanX = math.tan(cam.fovRadians / 2);
+    final tanY = tanX * size.height / math.max(1, size.width);
+    final rotation = panorama.rotationDegrees * math.pi / 180;
+    final cr = math.cos(rotation), sr = math.sin(rotation);
+    final blur = panorama.backgroundBlur.clamp(0.0, 30.0).toDouble();
+    if (blur > 0) {
+      canvas.saveLayer(
+        Offset.zero & size,
+        Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+      );
+    }
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < cols; x++) {
+        final sx = ((x + 0.5) / cols * 2 - 1) * tanX;
+        final sy = (1 - (y + 0.5) / rows * 2) * tanY;
+        final ray =
+            (basis.forward + basis.right * sx + basis.up * sy).normalized;
+        final rotated = Vec3(
+          ray.x * cr - ray.z * sr,
+          ray.y,
+          ray.x * sr + ray.z * cr,
+        );
+        var (r, g, b) = environmentColor(
+          scene.environment,
+          rotated.x,
+          rotated.y,
+          rotated.z,
+        );
+        final boost = panorama.highlightBoost.clamp(0.0, 2.0).toDouble();
+        final peak = math.max(r, math.max(g, b));
+        final lift = math.max(0.0, peak - 0.58) * boost;
+        final gain = panorama.intensity.clamp(0.0, 4.0).toDouble();
+        r = acesFilmic(r * (1 + lift) * gain);
+        g = acesFilmic(g * (1 + lift) * gain);
+        b = acesFilmic(b * (1 + lift) * gain);
+        canvas.drawRect(
+          Rect.fromLTWH(
+            size.width * x / cols,
+            size.height * y / rows,
+            size.width / cols + 1,
+            size.height / rows + 1,
+          ),
+          Paint()..color = Color.from(alpha: 1, red: r, green: g, blue: b),
+        );
+      }
+    }
+    if (blur > 0) canvas.restore();
+  }
+
+  void _paintPanoramaImage(
+    Canvas canvas,
+    Size size,
+    RenderCamera cam,
+    ui.Image image,
+  ) {
+    final panorama = scene.panorama;
+    final forward = cameraBasis(cam).forward;
+    final yaw =
+        math.atan2(forward.x, forward.z) +
+        panorama.rotationDegrees * math.pi / 180;
+    var normalized = ((yaw / (2 * math.pi) + 0.5) % 1).toDouble();
+    if (panorama.mirrorTo360) {
+      final phase =
+          ((normalized * 360 / panorama.coverageDegrees.clamp(1.0, 360.0)) % 2)
+              .toDouble();
+      normalized = phase <= 1 ? phase : 2 - phase;
+    }
+    final center = normalized * image.width;
+    final sourceSpan = panorama.mirrorTo360
+        ? panorama.coverageDegrees.clamp(1.0, 360.0).toDouble() * math.pi / 180
+        : 2 * math.pi;
+    final sourceWidth = (image.width * cam.fovRadians / sourceSpan)
+        .clamp(1.0, image.width.toDouble())
+        .toDouble();
+    var sourceX = center - sourceWidth / 2;
+    while (sourceX < 0) {
+      sourceX += image.width;
+    }
+    while (sourceX >= image.width) {
+      sourceX -= image.width;
+    }
+
+    final imageGain =
+        panorama.intensity.clamp(0.0, 4.0).toDouble() *
+        (1 + panorama.highlightBoost.clamp(0.0, 2.0).toDouble() * 0.28);
+    final paint = Paint()
+      ..isAntiAlias = true
+      ..filterQuality = FilterQuality.medium
+      ..color = Colors.white
+      ..colorFilter = ColorFilter.matrix([
+        imageGain,
+        0,
+        0,
+        0,
+        0,
+        0,
+        imageGain,
+        0,
+        0,
+        0,
+        0,
+        0,
+        imageGain,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+      ]);
+    if (panorama.backgroundBlur > 0) {
+      final sigma = panorama.backgroundBlur.clamp(0.0, 30.0).toDouble();
+      paint.imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma);
+    }
+
+    var remaining = sourceWidth;
+    var dx = 0.0;
+    var sx = sourceX;
+    while (remaining > 0.01) {
+      final part = math.min(remaining, image.width - sx);
+      final dw = size.width * part / sourceWidth;
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(sx, 0, part, image.height.toDouble()),
+        Rect.fromLTWH(dx, 0, dw + 0.5, size.height),
+        paint,
+      );
+      remaining -= part;
+      dx += dw;
+      sx = 0;
+    }
+  }
+
+  void _paintPlanarFloorReflection(
+    Canvas canvas,
+    Size size,
+    RenderCamera cam,
+    SceneFrame frame,
+  ) {
+    final floor = _project(Vec3.zero, size, cam)?.dy;
+    if (floor == null || !floor.isFinite) return;
+    final opacity = (0.28 * (1 - scene.planarFloorRoughness))
+        .clamp(0.02, 0.28)
+        .toDouble();
+    canvas.save();
+    canvas.clipRect(Rect.fromLTRB(0, floor, size.width, size.height));
+    final paint = Paint()..isAntiAlias = true;
+    final blur = scene.planarFloorRoughness.clamp(0.0, 1.0).toDouble() * 10;
+    if (blur > 0) {
+      paint.maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
+    }
+    for (final tri in [...frame.opaque, ...frame.transparent]) {
+      final path = Path()
+        ..moveTo(tri.a.dx, floor * 2 - tri.a.dy)
+        ..lineTo(tri.b.dx, floor * 2 - tri.b.dy)
+        ..lineTo(tri.c.dx, floor * 2 - tri.c.dy)
+        ..close();
+      paint.color = tri.color.withValues(alpha: tri.color.a * opacity);
+      canvas.drawPath(path, paint);
+    }
+    canvas.restore();
   }
 
   /// SOMBRA DE CONTATO: a mancha escura debaixo de cada objeto.
@@ -172,8 +372,7 @@ class Scene3DPainter extends CustomPainter {
       final z = rel.dot(cameraBasis(cam).forward);
       final k = cam.orthographic
           ? cam.orthoScale
-          : (size.width / 2 / math.tan(cam.fovRadians / 2)) /
-              math.max(1, z);
+          : (size.width / 2 / math.tan(cam.fovRadians / 2)) / math.max(1, z);
       canvas.drawRect(
         Rect.fromCenter(center: c, width: r * 2 * k, height: r * 2 * k),
         Paint()
@@ -278,8 +477,14 @@ class Scene3DPainter extends CustomPainter {
   /// FACES COM IMAGEM: a imagem entra como shader e a luz como cor por
   /// vertice, multiplicadas. E o mesmo drawVertices — uma chamada por
   /// lote de mesma imagem — com coordenadas de textura em pixels.
-  void _paintTextured(Canvas canvas, List<RenderTri> tris, int start,
-      int end, ui.Image img, Paint paint) {
+  void _paintTextured(
+    Canvas canvas,
+    List<RenderTri> tris,
+    int start,
+    int end,
+    ui.Image img,
+    Paint paint,
+  ) {
     final count = end - start;
     final positions = Float32List(count * 6);
     final coords = Float32List(count * 6);
@@ -388,8 +593,7 @@ class Scene3DPainter extends CustomPainter {
       final x = rel.dot(basis.right);
       final y = rel.dot(basis.up);
       if (cam.orthographic) {
-        return Offset(halfW + x * cam.orthoScale,
-            halfH - y * cam.orthoScale);
+        return Offset(halfW + x * cam.orthoScale, halfH - y * cam.orthoScale);
       }
       final k = focalPx / z;
       return Offset(halfW + x * k, halfH - y * k);
@@ -399,8 +603,7 @@ class Scene3DPainter extends CustomPainter {
     const lines = 10;
     for (var i = -lines; i <= lines; i++) {
       final d = i * step;
-      final fade =
-          (1 - (i.abs() / lines)).clamp(0.0, 1.0) * 0.25;
+      final fade = (1 - (i.abs() / lines)).clamp(0.0, 1.0) * 0.25;
       final paint = Paint()
         ..color = Colors.white.withValues(alpha: fade)
         ..strokeWidth = 1;
@@ -426,8 +629,7 @@ class Scene3DPainter extends CustomPainter {
       if (z <= view.near) return null;
       final x = rel.dot(basis.right);
       final y = rel.dot(basis.up);
-      return Offset(halfW + x * view.orthoScale,
-          halfH - y * view.orthoScale);
+      return Offset(halfW + x * view.orthoScale, halfH - y * view.orthoScale);
     }
 
     final camPos = camera.positionAt(time);
@@ -517,8 +719,7 @@ class MiniViewPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Offset.zero & size, const Radius.circular(8)),
+      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(8)),
       Paint()..color = const Color(0xCC0B0E12),
     );
 
@@ -526,16 +727,18 @@ class MiniViewPainter extends CustomPainter {
     final bounds = sceneBounds(scene, time);
     final camPos = camera.positionAt(time);
     var extent = math.max(bounds.radius * 1.4, 300.0);
-    final camDist = Vec3(camPos.x - bounds.center.x, 0,
-            camPos.z - bounds.center.z)
-        .length;
+    final camDist = Vec3(
+      camPos.x - bounds.center.x,
+      0,
+      camPos.z - bounds.center.z,
+    ).length;
     extent = math.max(extent, camDist * 1.2);
     final k = math.min(size.width, size.height) / (extent * 2);
 
     Offset toScreen(double x, double z) => Offset(
-          size.width / 2 + (x - bounds.center.x) * k,
-          size.height / 2 + (z - bounds.center.z) * k,
-        );
+      size.width / 2 + (x - bounds.center.x) * k,
+      size.height / 2 + (z - bounds.center.z) * k,
+    );
 
     // Objetos como pontos.
     for (final n in scene.nodes) {
@@ -557,15 +760,14 @@ class MiniViewPainter extends CustomPainter {
     final right = dir + fov / 2;
     final cone = Path()
       ..moveTo(camPt.dx, camPt.dy)
-      ..lineTo(camPt.dx + math.sin(left) * len,
-          camPt.dy + math.cos(left) * len)
-      ..lineTo(camPt.dx + math.sin(right) * len,
-          camPt.dy + math.cos(right) * len)
+      ..lineTo(camPt.dx + math.sin(left) * len, camPt.dy + math.cos(left) * len)
+      ..lineTo(
+        camPt.dx + math.sin(right) * len,
+        camPt.dy + math.cos(right) * len,
+      )
       ..close();
-    canvas.drawPath(
-        cone, Paint()..color = const Color(0x33B8FF3D));
-    canvas.drawCircle(
-        camPt, 4, Paint()..color = const Color(0xFFB8FF3D));
+    canvas.drawPath(cone, Paint()..color = const Color(0x33B8FF3D));
+    canvas.drawCircle(camPt, 4, Paint()..color = const Color(0xFFB8FF3D));
   }
 
   @override
@@ -608,25 +810,28 @@ class AxisGizmo extends StatelessWidget {
             left: 0,
             top: size / 2 - 11,
             child: _AxisTap(
-                label: 'X',
-                color: const Color(0xFFE85B81),
-                onTap: () => onView(SceneView.right)),
+              label: 'X',
+              color: const Color(0xFFE85B81),
+              onTap: () => onView(SceneView.right),
+            ),
           ),
           Positioned(
             left: size / 2 - 11,
             top: 0,
             child: _AxisTap(
-                label: 'Y',
-                color: const Color(0xFF2BE3A0),
-                onTap: () => onView(SceneView.top)),
+              label: 'Y',
+              color: const Color(0xFF2BE3A0),
+              onTap: () => onView(SceneView.top),
+            ),
           ),
           Positioned(
             right: 0,
             bottom: 0,
             child: _AxisTap(
-                label: 'Z',
-                color: const Color(0xFF35C4E7),
-                onTap: () => onView(SceneView.front)),
+              label: 'Z',
+              color: const Color(0xFF35C4E7),
+              onTap: () => onView(SceneView.front),
+            ),
           ),
         ],
       ),
@@ -658,11 +863,14 @@ class _AxisTap extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: color, width: 1.2),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: color)),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
       ),
     );
   }

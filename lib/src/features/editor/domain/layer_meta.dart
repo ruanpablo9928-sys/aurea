@@ -73,13 +73,12 @@ class LayerStyles {
     bool clearStroke = false,
   }) {
     return LayerStyles(
-      dropShadow:
-          clearDropShadow ? null : (dropShadow ?? this.dropShadow),
-      innerShadow:
-          clearInnerShadow ? null : (innerShadow ?? this.innerShadow),
+      dropShadow: clearDropShadow ? null : (dropShadow ?? this.dropShadow),
+      innerShadow: clearInnerShadow ? null : (innerShadow ?? this.innerShadow),
       outerGlow: clearOuterGlow ? null : (outerGlow ?? this.outerGlow),
-      colorOverlay:
-          clearColorOverlay ? null : (colorOverlay ?? this.colorOverlay),
+      colorOverlay: clearColorOverlay
+          ? null
+          : (colorOverlay ?? this.colorOverlay),
       gradientOverlay: clearGradientOverlay
           ? null
           : (gradientOverlay ?? this.gradientOverlay),
@@ -96,10 +95,12 @@ class ShadowStyle {
     AnimatedDouble? angleDeg,
     AnimatedDouble? distance,
     AnimatedDouble? size,
-  })  : opacity = opacity ?? AnimatedDouble(0.5),
-        angleDeg = angleDeg ?? AnimatedDouble(120),
-        distance = distance ?? AnimatedDouble(12),
-        size = size ?? AnimatedDouble(10);
+    AnimatedDouble? spread,
+  }) : opacity = opacity ?? AnimatedDouble(0.5),
+       angleDeg = angleDeg ?? AnimatedDouble(120),
+       distance = distance ?? AnimatedDouble(12),
+       size = size ?? AnimatedDouble(10),
+       spread = spread ?? AnimatedDouble(0);
 
   final bool enabled;
   final Color color;
@@ -107,6 +108,7 @@ class ShadowStyle {
   final AnimatedDouble angleDeg;
   final AnimatedDouble distance;
   final AnimatedDouble size;
+  final AnimatedDouble spread;
 
   Offset offsetAt(Duration t) {
     final a = angleDeg.valueAt(t) * math.pi / 180;
@@ -122,15 +124,16 @@ class ShadowStyle {
     AnimatedDouble? angleDeg,
     AnimatedDouble? distance,
     AnimatedDouble? size,
-  }) =>
-      ShadowStyle(
-        enabled: enabled ?? this.enabled,
-        color: color ?? this.color,
-        opacity: opacity ?? this.opacity,
-        angleDeg: angleDeg ?? this.angleDeg,
-        distance: distance ?? this.distance,
-        size: size ?? this.size,
-      );
+    AnimatedDouble? spread,
+  }) => ShadowStyle(
+    enabled: enabled ?? this.enabled,
+    color: color ?? this.color,
+    opacity: opacity ?? this.opacity,
+    angleDeg: angleDeg ?? this.angleDeg,
+    distance: distance ?? this.distance,
+    size: size ?? this.size,
+    spread: spread ?? this.spread,
+  );
 }
 
 class GlowStyle {
@@ -139,8 +142,8 @@ class GlowStyle {
     this.color = const Color(0xFFFFFFFF),
     AnimatedDouble? opacity,
     AnimatedDouble? size,
-  })  : opacity = opacity ?? AnimatedDouble(0.75),
-        size = size ?? AnimatedDouble(16);
+  }) : opacity = opacity ?? AnimatedDouble(0.75),
+       size = size ?? AnimatedDouble(16);
 
   final bool enabled;
   final Color color;
@@ -152,13 +155,12 @@ class GlowStyle {
     Color? color,
     AnimatedDouble? opacity,
     AnimatedDouble? size,
-  }) =>
-      GlowStyle(
-        enabled: enabled ?? this.enabled,
-        color: color ?? this.color,
-        opacity: opacity ?? this.opacity,
-        size: size ?? this.size,
-      );
+  }) => GlowStyle(
+    enabled: enabled ?? this.enabled,
+    color: color ?? this.color,
+    opacity: opacity ?? this.opacity,
+    size: size ?? this.size,
+  );
 }
 
 class OverlayStyle {
@@ -179,13 +181,12 @@ class OverlayStyle {
     Color? color,
     AnimatedDouble? opacity,
     BlendMode? blend,
-  }) =>
-      OverlayStyle(
-        enabled: enabled ?? this.enabled,
-        color: color ?? this.color,
-        opacity: opacity ?? this.opacity,
-        blend: blend ?? this.blend,
-      );
+  }) => OverlayStyle(
+    enabled: enabled ?? this.enabled,
+    color: color ?? this.color,
+    opacity: opacity ?? this.opacity,
+    blend: blend ?? this.blend,
+  );
 }
 
 class GradientOverlayStyle {
@@ -195,8 +196,8 @@ class GradientOverlayStyle {
     this.colorB = const Color(0xFF7C62FF),
     AnimatedDouble? angleDeg,
     AnimatedDouble? opacity,
-  })  : angleDeg = angleDeg ?? AnimatedDouble(90),
-        opacity = opacity ?? AnimatedDouble(1);
+  }) : angleDeg = angleDeg ?? AnimatedDouble(90),
+       opacity = opacity ?? AnimatedDouble(1);
 
   final bool enabled;
   final Color colorA;
@@ -210,14 +211,13 @@ class GradientOverlayStyle {
     Color? colorB,
     AnimatedDouble? angleDeg,
     AnimatedDouble? opacity,
-  }) =>
-      GradientOverlayStyle(
-        enabled: enabled ?? this.enabled,
-        colorA: colorA ?? this.colorA,
-        colorB: colorB ?? this.colorB,
-        angleDeg: angleDeg ?? this.angleDeg,
-        opacity: opacity ?? this.opacity,
-      );
+  }) => GradientOverlayStyle(
+    enabled: enabled ?? this.enabled,
+    colorA: colorA ?? this.colorA,
+    colorB: colorB ?? this.colorB,
+    angleDeg: angleDeg ?? this.angleDeg,
+    opacity: opacity ?? this.opacity,
+  );
 }
 
 class StrokeStyle {
@@ -226,8 +226,8 @@ class StrokeStyle {
     this.color = const Color(0xFFFFFFFF),
     AnimatedDouble? width,
     AnimatedDouble? opacity,
-  })  : width = width ?? AnimatedDouble(4),
-        opacity = opacity ?? AnimatedDouble(1);
+  }) : width = width ?? AnimatedDouble(4),
+       opacity = opacity ?? AnimatedDouble(1);
 
   final bool enabled;
   final Color color;
@@ -239,13 +239,12 @@ class StrokeStyle {
     Color? color,
     AnimatedDouble? width,
     AnimatedDouble? opacity,
-  }) =>
-      StrokeStyle(
-        enabled: enabled ?? this.enabled,
-        color: color ?? this.color,
-        width: width ?? this.width,
-        opacity: opacity ?? this.opacity,
-      );
+  }) => StrokeStyle(
+    enabled: enabled ?? this.enabled,
+    color: color ?? this.color,
+    width: width ?? this.width,
+    opacity: opacity ?? this.opacity,
+  );
 }
 
 /// PALETA DO PROJETO (PR-X11): cores NOMEADAS. Qualquer campo de cor
@@ -261,15 +260,16 @@ class Palette {
   Palette withColor(String name, Color c) =>
       Palette(entries: {...entries, name: c});
 
-  Palette without(String name) =>
-      Palette(entries: {...entries}..remove(name));
+  Palette without(String name) => Palette(entries: {...entries}..remove(name));
 
-  static const aurea = Palette(entries: {
-    'primaria': Color(0xFFB8FF3D),
-    'fundo': Color(0xFF12151A),
-    'destaque': Color(0xFF7C62FF),
-    'texto': Color(0xFFE7ECF3),
-  });
+  static const aurea = Palette(
+    entries: {
+      'primaria': Color(0xFFB8FF3D),
+      'fundo': Color(0xFF12151A),
+      'destaque': Color(0xFF7C62FF),
+      'texto': Color(0xFFE7ECF3),
+    },
+  );
 }
 
 /// Estilo de texto nomeado (PR-X12).
@@ -302,16 +302,15 @@ class TextStyleDef {
     String? colorRef,
     double? tracking,
     double? lineHeight,
-  }) =>
-      TextStyleDef(
-        name: name ?? this.name,
-        fontSize: fontSize ?? this.fontSize,
-        bold: bold ?? this.bold,
-        color: color ?? this.color,
-        colorRef: colorRef ?? this.colorRef,
-        tracking: tracking ?? this.tracking,
-        lineHeight: lineHeight ?? this.lineHeight,
-      );
+  }) => TextStyleDef(
+    name: name ?? this.name,
+    fontSize: fontSize ?? this.fontSize,
+    bold: bold ?? this.bold,
+    color: color ?? this.color,
+    colorRef: colorRef ?? this.colorRef,
+    tracking: tracking ?? this.tracking,
+    lineHeight: lineHeight ?? this.lineHeight,
+  );
 }
 
 // ---------------------------------------------------------- bloco 4
@@ -351,13 +350,12 @@ class TextBoxSpec {
     double? width,
     double? height,
     GrowAnchor? anchor,
-  }) =>
-      TextBoxSpec(
-        mode: mode ?? this.mode,
-        width: width ?? this.width,
-        height: height ?? this.height,
-        anchor: anchor ?? this.anchor,
-      );
+  }) => TextBoxSpec(
+    mode: mode ?? this.mode,
+    width: width ?? this.width,
+    height: height ?? this.height,
+    anchor: anchor ?? this.anchor,
+  );
 }
 
 /// Deslocamento do CENTRO quando uma caixa muda de tamanho mantendo o
@@ -366,32 +364,18 @@ Offset anchorShift(Size before, Size after, GrowAnchor anchor) {
   final dw = after.width - before.width;
   final dh = after.height - before.height;
   final fx = switch (anchor) {
-    GrowAnchor.topLeft ||
-    GrowAnchor.centerLeft ||
-    GrowAnchor.bottomLeft =>
-      0.5,
-    GrowAnchor.topCenter ||
-    GrowAnchor.center ||
-    GrowAnchor.bottomCenter =>
-      0.0,
+    GrowAnchor.topLeft || GrowAnchor.centerLeft || GrowAnchor.bottomLeft => 0.5,
+    GrowAnchor.topCenter || GrowAnchor.center || GrowAnchor.bottomCenter => 0.0,
     GrowAnchor.topRight ||
     GrowAnchor.centerRight ||
-    GrowAnchor.bottomRight =>
-      -0.5,
+    GrowAnchor.bottomRight => -0.5,
   };
   final fy = switch (anchor) {
-    GrowAnchor.topLeft ||
-    GrowAnchor.topCenter ||
-    GrowAnchor.topRight =>
-      0.5,
-    GrowAnchor.centerLeft ||
-    GrowAnchor.center ||
-    GrowAnchor.centerRight =>
-      0.0,
+    GrowAnchor.topLeft || GrowAnchor.topCenter || GrowAnchor.topRight => 0.5,
+    GrowAnchor.centerLeft || GrowAnchor.center || GrowAnchor.centerRight => 0.0,
     GrowAnchor.bottomLeft ||
     GrowAnchor.bottomCenter ||
-    GrowAnchor.bottomRight =>
-      -0.5,
+    GrowAnchor.bottomRight => -0.5,
   };
   return Offset(dw * fx, dh * fy);
 }
@@ -425,8 +409,7 @@ class ContainerSpec {
 
   /// Tamanho da forma para um texto de [textSize].
   Size sizeFor(Size textSize) {
-    final w = (textSize.width + padLeft + padRight)
-        .clamp(minWidth, maxWidth);
+    final w = (textSize.width + padLeft + padRight).clamp(minWidth, maxWidth);
     return Size(w.toDouble(), textSize.height + padTop + padBottom);
   }
 
@@ -440,18 +423,17 @@ class ContainerSpec {
     double? maxWidth,
     GrowAnchor? anchor,
     bool? follow,
-  }) =>
-      ContainerSpec(
-        targetLayerId: targetLayerId ?? this.targetLayerId,
-        padLeft: padLeft ?? this.padLeft,
-        padRight: padRight ?? this.padRight,
-        padTop: padTop ?? this.padTop,
-        padBottom: padBottom ?? this.padBottom,
-        minWidth: minWidth ?? this.minWidth,
-        maxWidth: maxWidth ?? this.maxWidth,
-        anchor: anchor ?? this.anchor,
-        follow: follow ?? this.follow,
-      );
+  }) => ContainerSpec(
+    targetLayerId: targetLayerId ?? this.targetLayerId,
+    padLeft: padLeft ?? this.padLeft,
+    padRight: padRight ?? this.padRight,
+    padTop: padTop ?? this.padTop,
+    padBottom: padBottom ?? this.padBottom,
+    minWidth: minWidth ?? this.minWidth,
+    maxWidth: maxWidth ?? this.maxWidth,
+    anchor: anchor ?? this.anchor,
+    follow: follow ?? this.follow,
+  );
 }
 
 enum StackDirection { vertical, horizontal }
@@ -487,15 +469,14 @@ class StackSpec {
     double? padding,
     StackDistribution? distribution,
     double? extent,
-  }) =>
-      StackSpec(
-        direction: direction ?? this.direction,
-        gap: gap ?? this.gap,
-        align: align ?? this.align,
-        padding: padding ?? this.padding,
-        distribution: distribution ?? this.distribution,
-        extent: extent ?? this.extent,
-      );
+  }) => StackSpec(
+    direction: direction ?? this.direction,
+    gap: gap ?? this.gap,
+    align: align ?? this.align,
+    padding: padding ?? this.padding,
+    distribution: distribution ?? this.distribution,
+    extent: extent ?? this.extent,
+  );
 }
 
 /// Posiciona os filhos de um grupo conforme [spec]. Devolve o CENTRO de
@@ -595,19 +576,18 @@ class ExposedProperty {
     double? max,
     double? step,
     List<String>? options,
-  }) =>
-      ExposedProperty(
-        id: id,
-        layerId: layerId,
-        property: property,
-        label: label ?? this.label,
-        type: type ?? this.type,
-        group: group ?? this.group,
-        min: min ?? this.min,
-        max: max ?? this.max,
-        step: step ?? this.step,
-        options: options ?? this.options,
-      );
+  }) => ExposedProperty(
+    id: id,
+    layerId: layerId,
+    property: property,
+    label: label ?? this.label,
+    type: type ?? this.type,
+    group: group ?? this.group,
+    min: min ?? this.min,
+    max: max ?? this.max,
+    step: step ?? this.step,
+    options: options ?? this.options,
+  );
 }
 
 // ---------------------------------------------------------- bloco 6
@@ -626,13 +606,12 @@ class Bone {
   final double length;
   final double angleDeg;
 
-  Bone copyWith({double? length, double? angleDeg, String? parentId}) =>
-      Bone(
-        id: id,
-        parentId: parentId ?? this.parentId,
-        length: length ?? this.length,
-        angleDeg: angleDeg ?? this.angleDeg,
-      );
+  Bone copyWith({double? length, double? angleDeg, String? parentId}) => Bone(
+    id: id,
+    parentId: parentId ?? this.parentId,
+    length: length ?? this.length,
+    angleDeg: angleDeg ?? this.angleDeg,
+  );
 }
 
 /// Resultado do solver de duas juntas.
@@ -672,10 +651,14 @@ IkSolution solveTwoBoneIk({
     dist = minReach;
   }
 
-  final cosInner =
-      ((a1 * a1 + dist * dist - a2 * a2) / (2 * a1 * dist)).clamp(-1.0, 1.0);
-  final cosElbow =
-      ((a1 * a1 + a2 * a2 - dist * dist) / (2 * a1 * a2)).clamp(-1.0, 1.0);
+  final cosInner = ((a1 * a1 + dist * dist - a2 * a2) / (2 * a1 * dist)).clamp(
+    -1.0,
+    1.0,
+  );
+  final cosElbow = ((a1 * a1 + a2 * a2 - dist * dist) / (2 * a1 * a2)).clamp(
+    -1.0,
+    1.0,
+  );
   final inner = math.acos(cosInner);
   final elbow = math.acos(cosElbow);
   final s = flip ? -1.0 : 1.0;
@@ -716,15 +699,14 @@ class TubeLimb {
     double? thickEnd,
     double? bend,
     Color? color,
-  }) =>
-      TubeLimb(
-        rootId: rootId,
-        targetId: targetId,
-        thickStart: thickStart ?? this.thickStart,
-        thickEnd: thickEnd ?? this.thickEnd,
-        bend: bend ?? this.bend,
-        color: color ?? this.color,
-      );
+  }) => TubeLimb(
+    rootId: rootId,
+    targetId: targetId,
+    thickStart: thickStart ?? this.thickStart,
+    thickEnd: thickEnd ?? this.thickEnd,
+    bend: bend ?? this.bend,
+    color: color ?? this.color,
+  );
 }
 
 // ---------------------------------------------------------- bloco 7
@@ -771,21 +753,20 @@ class NumberFormatSpec {
     String? prefix,
     String? suffix,
     bool? percent,
-  }) =>
-      NumberFormatSpec(
-        decimals: decimals ?? this.decimals,
-        thousands: thousands ?? this.thousands,
-        prefix: prefix ?? this.prefix,
-        suffix: suffix ?? this.suffix,
-        percent: percent ?? this.percent,
-      );
+  }) => NumberFormatSpec(
+    decimals: decimals ?? this.decimals,
+    thousands: thousands ?? this.thousands,
+    prefix: prefix ?? this.prefix,
+    suffix: suffix ?? this.suffix,
+    percent: percent ?? this.percent,
+  );
 }
 
 /// Contador animado (PR-X22): o numero sobe com a curva da propria
 /// propriedade, e e formatado na hora de virar texto.
 class CounterSpec {
   CounterSpec({AnimatedDouble? value, this.format = const NumberFormatSpec()})
-      : value = value ?? AnimatedDouble(0);
+    : value = value ?? AnimatedDouble(0);
 
   final AnimatedDouble value;
   final NumberFormatSpec format;
@@ -793,8 +774,7 @@ class CounterSpec {
   String textAt(Duration t) => format.format(value.valueAt(t));
 
   CounterSpec copyWith({AnimatedDouble? value, NumberFormatSpec? format}) =>
-      CounterSpec(
-          value: value ?? this.value, format: format ?? this.format);
+      CounterSpec(value: value ?? this.value, format: format ?? this.format);
 }
 
 /// Fonte de dados CSV/JSON (PR-X21).
@@ -1032,14 +1012,13 @@ class MotionBlurSpec {
     double? shutterPhase,
     int? samples,
     int? adaptiveLimit,
-  }) =>
-      MotionBlurSpec(
-        enabled: enabled ?? this.enabled,
-        shutterAngle: shutterAngle ?? this.shutterAngle,
-        shutterPhase: shutterPhase ?? this.shutterPhase,
-        samples: samples ?? this.samples,
-        adaptiveLimit: adaptiveLimit ?? this.adaptiveLimit,
-      );
+  }) => MotionBlurSpec(
+    enabled: enabled ?? this.enabled,
+    shutterAngle: shutterAngle ?? this.shutterAngle,
+    shutterPhase: shutterPhase ?? this.shutterPhase,
+    samples: samples ?? this.samples,
+    adaptiveLimit: adaptiveLimit ?? this.adaptiveLimit,
+  );
 }
 
 /// GUIAS, GRADE E AREAS SEGURAS (PR-X3).
@@ -1078,17 +1057,17 @@ class GuidesSpec {
     bool? showSafeAreas,
     double? framePreview,
     bool clearFramePreview = false,
-  }) =>
-      GuidesSpec(
-        vertical: vertical ?? this.vertical,
-        horizontal: horizontal ?? this.horizontal,
-        columns: columns ?? this.columns,
-        gutter: gutter ?? this.gutter,
-        margin: margin ?? this.margin,
-        showSafeAreas: showSafeAreas ?? this.showSafeAreas,
-        framePreview:
-            clearFramePreview ? null : (framePreview ?? this.framePreview),
-      );
+  }) => GuidesSpec(
+    vertical: vertical ?? this.vertical,
+    horizontal: horizontal ?? this.horizontal,
+    columns: columns ?? this.columns,
+    gutter: gutter ?? this.gutter,
+    margin: margin ?? this.margin,
+    showSafeAreas: showSafeAreas ?? this.showSafeAreas,
+    framePreview: clearFramePreview
+        ? null
+        : (framePreview ?? this.framePreview),
+  );
 }
 
 /// Ponta do primeiro osso e do segundo, dada a solucao do IK. Util para

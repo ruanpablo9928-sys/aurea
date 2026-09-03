@@ -12,6 +12,7 @@ enum EasingType {
   random,
   steps,
   elasticSteps,
+  spring,
 }
 
 /// Easing do SEGMENTO que sai de um keyframe (modelo Alight: N keyframes =
@@ -26,6 +27,9 @@ class Easing {
     this.count = 4,
     this.smooth = 1.0,
     this.intensity = 0.5,
+    this.response = 0.55,
+    this.damping = 0.825,
+    this.initialVelocity = 0,
   });
 
   // Presets bezier (coluna de presets do graph editor).
@@ -36,6 +40,28 @@ class Easing {
   static const overshoot = Easing(x1: 0.34, y1: 1.56, x2: 0.64, y2: 1);
   static const bounce = Easing(type: EasingType.bounce);
   static const elastic = Easing(type: EasingType.elastic);
+
+  /// Timing usado nas transicoes de interface da Apple. As molas usam o
+  /// mesmo vocabulário do SwiftUI (resposta, amortecimento e velocidade
+  /// inicial), mas ficam limitadas a 1% para não produzir overshoot visível.
+  static const appleStandard = Easing(x1: 0.25, y1: 0.1, x2: 0.25, y2: 1);
+  static const appleEntrance = Easing(
+    type: EasingType.spring,
+    response: 0.55,
+    damping: 0.825,
+  );
+  static const appleExit = Easing(x1: 0.4, y1: 0, x2: 1, y2: 1);
+  static const interfaceSpring = Easing(
+    type: EasingType.spring,
+    response: 0.55,
+    damping: 0.825,
+    initialVelocity: 0,
+  );
+  static const softSpring = Easing(
+    type: EasingType.spring,
+    response: 0.8,
+    damping: 1,
+  );
 
   static const bezierPresets = [linear, easeIn, easeOut, easeInOut, overshoot];
 
@@ -53,6 +79,11 @@ class Easing {
   /// Random: forca do ruido.
   final double intensity;
 
+  /// Mola de interface no modelo do SwiftUI.
+  final double response;
+  final double damping;
+  final double initialVelocity;
+
   bool get isLinear =>
       type == EasingType.cubicBezier &&
       x1 == 0 &&
@@ -67,8 +98,12 @@ class Easing {
     switch (type) {
       case EasingType.cubicBezier:
         if (isLinear) return t;
-        return Cubic(x1.clamp(0.0, 1.0), y1, x2.clamp(0.0, 1.0), y2)
-            .transform(t);
+        return Cubic(
+          x1.clamp(0.0, 1.0),
+          y1,
+          x2.clamp(0.0, 1.0),
+          y2,
+        ).transform(t);
       case EasingType.bounce:
         return Curves.bounceOut.transform(t);
       case EasingType.elastic:
@@ -92,7 +127,34 @@ class Easing {
         final envelope = 4 * t * (1 - t);
         final noise = math.sin(t * 27.4) * 0.62 + math.sin(t * 61.7) * 0.38;
         return (t + intensity * 0.3 * envelope * noise).clamp(0.0, 1.0);
+      case EasingType.spring:
+        return _spring(t);
     }
+  }
+
+  double _spring(double t) {
+    final r = response.clamp(0.05, 10.0);
+    final zeta = damping.clamp(0.0, 4.0);
+    final omega = 2 * math.pi / r;
+    double value;
+    if ((zeta - 1).abs() < 1e-6) {
+      value = 1 - math.exp(-omega * t) * (1 + (omega - initialVelocity) * t);
+    } else if (zeta < 1) {
+      final wd = omega * math.sqrt(1 - zeta * zeta);
+      final c = (zeta * omega - initialVelocity) / wd;
+      value =
+          1 -
+          math.exp(-zeta * omega * t) *
+              (math.cos(wd * t) + c * math.sin(wd * t));
+    } else {
+      final root = math.sqrt(zeta * zeta - 1);
+      final a = -omega * (zeta - root);
+      final b = -omega * (zeta + root);
+      final c2 = (initialVelocity + a) / (b - a);
+      final c1 = -1 - c2;
+      value = 1 + c1 * math.exp(a * t) + c2 * math.exp(b * t);
+    }
+    return value.clamp(0.0, 1.009);
   }
 
   /// VELOCIDADE no progresso [x] (0..1): dy/dx da curva de valor, em
@@ -119,14 +181,17 @@ class Easing {
       final v = 1 - u;
       return 3 * v * v * u * ax + 3 * v * u * u * bx + u * u * u;
     }
+
     double dpx(double u) {
       final v = 1 - u;
       return 3 * v * v * ax + 6 * v * u * (bx - ax) + 3 * u * u * (1 - bx);
     }
+
     double dpy(double u) {
       final v = 1 - u;
       return 3 * v * v * y1 + 6 * v * u * (y2 - y1) + 3 * u * u * (1 - y2);
     }
+
     // Bissecao: 40 passos dao u com erro ~1e-12.
     var lo = 0.0, hi = 1.0;
     for (var i = 0; i < 40; i++) {
@@ -166,6 +231,9 @@ class Easing {
     int? count,
     double? smooth,
     double? intensity,
+    double? response,
+    double? damping,
+    double? initialVelocity,
   }) {
     return Easing(
       type: type ?? this.type,
@@ -176,18 +244,22 @@ class Easing {
       count: count ?? this.count,
       smooth: smooth ?? this.smooth,
       intensity: intensity ?? this.intensity,
+      response: response ?? this.response,
+      damping: damping ?? this.damping,
+      initialVelocity: initialVelocity ?? this.initialVelocity,
     );
   }
 
   String get label => switch (type) {
-        EasingType.cubicBezier => isLinear ? 'Linear' : 'Bezier',
-        EasingType.bounce => 'Quicar',
-        EasingType.elastic => 'Elastico',
-        EasingType.cyclic => 'Ciclico',
-        EasingType.random => 'Aleatorio',
-        EasingType.steps => 'Degraus',
-        EasingType.elasticSteps => 'Deg. elastico',
-      };
+    EasingType.cubicBezier => isLinear ? 'Linear' : 'Bezier',
+    EasingType.bounce => 'Quicar',
+    EasingType.elastic => 'Elastico',
+    EasingType.cyclic => 'Ciclico',
+    EasingType.random => 'Aleatorio',
+    EasingType.steps => 'Degraus',
+    EasingType.elasticSteps => 'Deg. elastico',
+    EasingType.spring => 'Mola',
+  };
 }
 
 class Keyframe<T> {
@@ -203,10 +275,10 @@ class Keyframe<T> {
   final Easing ease;
 
   Keyframe<T> copyWith({Duration? time, T? value, Easing? ease}) => Keyframe(
-        time: time ?? this.time,
-        value: value ?? this.value,
-        ease: ease ?? this.ease,
-      );
+    time: time ?? this.time,
+    value: value ?? this.value,
+    ease: ease ?? this.ease,
+  );
 }
 
 /// Mesmo frame se a diferenca for menor que isto.
@@ -309,12 +381,11 @@ class LoopSpec {
   bool get loopsBefore =>
       active && (when == LoopWhen.before || when == LoopWhen.both);
 
-  LoopSpec copyWith({LoopMode? mode, LoopWhen? when, int? count}) =>
-      LoopSpec(
-        mode: mode ?? this.mode,
-        when: when ?? this.when,
-        count: count ?? this.count,
-      );
+  LoopSpec copyWith({LoopMode? mode, LoopWhen? when, int? count}) => LoopSpec(
+    mode: mode ?? this.mode,
+    when: when ?? this.when,
+    count: count ?? this.count,
+  );
 
   static const none = LoopSpec();
 }
@@ -349,10 +420,7 @@ _LoopSample? _loopRemap(
       case LoopMode.pingPong:
         // Voltas impares correm de tras para frente.
         final backwards = n.isEven;
-        return (
-          time: backwards ? to - rem : from + rem,
-          cycles: 0,
-        );
+        return (time: backwards ? to - rem : from + rem, cycles: 0);
       case LoopMode.continueValue:
       case LoopMode.none:
         return null;
@@ -380,9 +448,11 @@ _LoopSample? _loopRemap(
 }
 
 class AnimatedDouble {
-  AnimatedDouble(this.base,
-      [List<Keyframe<double>>? keyframes, this.loop = LoopSpec.none])
-      : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<double>>[]);
+  AnimatedDouble(
+    this.base, [
+    List<Keyframe<double>>? keyframes,
+    this.loop = LoopSpec.none,
+  ]) : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<double>>[]);
 
   final double base;
   final List<Keyframe<double>> keyframes;
@@ -468,13 +538,15 @@ class AnimatedDouble {
   AnimatedDouble withLoop(LoopSpec spec) =>
       AnimatedDouble(base, keyframes, spec);
 
-  AnimatedDouble withKeyframe(Duration t, double v,
-          [Easing ease = Easing.linear]) =>
-      AnimatedDouble(
-          base,
-          _insertSorted(
-              keyframes, Keyframe(time: t, value: v, ease: ease)),
-          loop);
+  AnimatedDouble withKeyframe(
+    Duration t,
+    double v, [
+    Easing ease = Easing.linear,
+  ]) => AnimatedDouble(
+    base,
+    _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)),
+    loop,
+  );
 
   AnimatedDouble withoutKeyframe(Duration t) {
     final rest = _removeAt(keyframes, t);
@@ -496,21 +568,15 @@ class AnimatedDouble {
   }
 
   /// Troca o easing do keyframe em [t], se existir.
-  AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(
-      base,
-      [
-        for (final k in keyframes)
-          if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
-      ],
-      loop);
+  AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(base, [
+    for (final k in keyframes)
+      if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
+  ], loop);
 
   /// Aplica a curva a TODOS os segmentos ("Paste Curve to All Keyframes").
-  AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(
-      base,
-      [
-        for (final k in keyframes) k.copyWith(ease: ease),
-      ],
-      loop);
+  AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(base, [
+    for (final k in keyframes) k.copyWith(ease: ease),
+  ], loop);
 
   /// INVERTER NO TEMPO (assistente PR-X7): espelha os keyframes dentro
   /// do proprio intervalo — o percurso passa a correr de tras para
@@ -521,8 +587,7 @@ class AnimatedDouble {
     final last = keyframes.last.time;
     final flipped = <Keyframe<double>>[
       for (final k in keyframes)
-        Keyframe(
-            time: first + (last - k.time), value: k.value, ease: k.ease),
+        Keyframe(time: first + (last - k.time), value: k.value, ease: k.ease),
     ]..sort((a, b) => a.time.compareTo(b.time));
     return AnimatedDouble(base, flipped, loop);
   }
@@ -530,9 +595,11 @@ class AnimatedDouble {
 
 /// Propriedade Offset animavel (posicao, ancora...).
 class AnimatedOffset {
-  AnimatedOffset(this.base,
-      [List<Keyframe<Offset>>? keyframes, this.loop = LoopSpec.none])
-      : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<Offset>>[]);
+  AnimatedOffset(
+    this.base, [
+    List<Keyframe<Offset>>? keyframes,
+    this.loop = LoopSpec.none,
+  ]) : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<Offset>>[]);
 
   final Offset base;
   final List<Keyframe<Offset>> keyframes;
@@ -603,12 +670,15 @@ class AnimatedOffset {
   AnimatedOffset withLoop(LoopSpec spec) =>
       AnimatedOffset(base, keyframes, spec);
 
-  AnimatedOffset withKeyframe(Duration t, Offset v,
-          [Easing ease = Easing.linear]) =>
-      AnimatedOffset(
-          base,
-          _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)),
-          loop);
+  AnimatedOffset withKeyframe(
+    Duration t,
+    Offset v, [
+    Easing ease = Easing.linear,
+  ]) => AnimatedOffset(
+    base,
+    _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)),
+    loop,
+  );
 
   AnimatedOffset withoutKeyframe(Duration t) {
     final rest = _removeAt(keyframes, t);
@@ -626,20 +696,14 @@ class AnimatedOffset {
     return Easing.linear;
   }
 
-  AnimatedOffset withEase(Duration t, Easing ease) => AnimatedOffset(
-      base,
-      [
-        for (final k in keyframes)
-          if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
-      ],
-      loop);
+  AnimatedOffset withEase(Duration t, Easing ease) => AnimatedOffset(base, [
+    for (final k in keyframes)
+      if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
+  ], loop);
 
-  AnimatedOffset withEaseAll(Easing ease) => AnimatedOffset(
-      base,
-      [
-        for (final k in keyframes) k.copyWith(ease: ease),
-      ],
-      loop);
+  AnimatedOffset withEaseAll(Easing ease) => AnimatedOffset(base, [
+    for (final k in keyframes) k.copyWith(ease: ease),
+  ], loop);
 
   /// Inverter no tempo (PR-X7).
   AnimatedOffset reversedInTime() {
@@ -648,8 +712,7 @@ class AnimatedOffset {
     final last = keyframes.last.time;
     final flipped = <Keyframe<Offset>>[
       for (final k in keyframes)
-        Keyframe(
-            time: first + (last - k.time), value: k.value, ease: k.ease),
+        Keyframe(time: first + (last - k.time), value: k.value, ease: k.ease),
     ]..sort((a, b) => a.time.compareTo(b.time));
     return AnimatedOffset(base, flipped, loop);
   }

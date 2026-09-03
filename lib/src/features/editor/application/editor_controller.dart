@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +11,8 @@ import '../domain/blob_track.dart';
 import '../domain/caption.dart';
 import '../domain/camera3d.dart';
 import '../domain/camera_cuts.dart';
+import '../domain/cut.dart';
+import '../domain/cut_ops.dart';
 import '../domain/scene3d.dart';
 import '../domain/effect.dart';
 import '../domain/effect_preset.dart';
@@ -27,7 +29,9 @@ import '../domain/layer_meta.dart';
 import '../domain/layout_ops.dart';
 import '../domain/measure.dart';
 import 'media_preview_service.dart';
+import 'proxy_service.dart';
 import '../domain/audio_ops.dart';
+import '../domain/apple_motion.dart';
 import '../domain/mask.dart';
 import '../domain/nle_ops.dart';
 import '../domain/shape.dart';
@@ -52,6 +56,8 @@ final multiSelectProvider = StateProvider<Set<String>>((ref) => const {});
 class EditorController extends Notifier<VideoProject> {
   final List<VideoProject> _undoStack = [];
   final List<VideoProject> _redoStack = [];
+  final Map<String, Map<String, bool>> _visibilityBeforeIsolation = {};
+  final Map<String, String> _isolatedSceneNode = {};
   DateTime _lastPush = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
@@ -91,6 +97,8 @@ class EditorController extends Notifier<VideoProject> {
     state = project;
     _undoStack.clear();
     _redoStack.clear();
+    _visibilityBeforeIsolation.clear();
+    _isolatedSceneNode.clear();
     ref.read(selectedLayerProvider.notifier).state = null;
     // A selecao multipla tambem carrega ids do projeto anterior: sem
     // limpar, o cabecalho abre verde ("2 camadas") sobre camadas que nao
@@ -110,62 +118,79 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void _replace(Layer layer) {
-    _mutate(state.copyWith(layers: [
-      for (final l in state.layers) l.id == layer.id ? layer : l,
-    ]));
+    _mutate(
+      state.copyWith(
+        layers: [for (final l in state.layers) l.id == layer.id ? layer : l],
+      ),
+    );
   }
 
   Layer? _layer(String id) => state.layerById(id);
 
   void addTextLayer(Duration at, {String text = 'Seu texto'}) {
-    _push(TextLayer(
-      name: text,
-      startTime: at,
-      duration: const Duration(seconds: 3),
-      text: text,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      TextLayer(
+        name: text,
+        startTime: at,
+        duration: const Duration(seconds: 3),
+        text: text,
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
-  void addShapeLayer(Duration at,
-      {List<ShapeItem>? contents, String name = 'Forma'}) {
+  void addShapeLayer(
+    Duration at, {
+    List<ShapeItem>? contents,
+    String name = 'Forma',
+  }) {
     final n = state.layers.whereType<ShapeLayer>().length + 1;
-    _push(ShapeLayer(
-      name: '$name $n',
-      startTime: at,
-      duration: const Duration(seconds: 3),
-      contents: contents,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      ShapeLayer(
+        name: '$name $n',
+        startTime: at,
+        duration: const Duration(seconds: 3),
+        contents: contents,
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   /// Insere um icone do Iconify como FORMA vetorial editavel (nunca
   /// imagem): Trim, Repeater, morph, gradiente e mascaras funcionam.
   void addIconLayer(Duration at, String pathData, String name) {
-    _push(ShapeLayer(
-      name: name,
-      startTime: at,
-      duration: const Duration(seconds: 3),
-      contents: [
-        ShapeSvgPath(pathData: pathData),
-        ShapeFill(color: const Color(0xFFFFFFFF)),
-      ],
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      ShapeLayer(
+        name: name,
+        startTime: at,
+        duration: const Duration(seconds: 3),
+        contents: [
+          ShapeSvgPath(pathData: pathData),
+          ShapeFill(color: const Color(0xFFFFFFFF)),
+        ],
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   void addImageLayer(Duration at, String path, String name) {
-    _push(ImageLayer(
-      name: name,
-      startTime: at,
-      duration: const Duration(seconds: 3),
-      sourcePath: path,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      ImageLayer(
+        name: name,
+        startTime: at,
+        duration: const Duration(seconds: 3),
+        sourcePath: path,
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   String addVideoLayer(
-      Duration at, String path, String name, Duration duration) {
+    Duration at,
+    String path,
+    String name,
+    Duration duration,
+  ) {
     final layer = VideoLayer(
       name: name,
       startTime: at,
@@ -178,13 +203,18 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   Future<void> importVideoFromGallery(Duration at) async {
-    final file =
-        await ref.read(mediaImportServiceProvider).pickVideoFromGallery();
+    final file = await ref
+        .read(mediaImportServiceProvider)
+        .pickVideoFromGallery();
     if (file == null) return;
     // A camada entra NA HORA com duracao provisoria; a duracao real chega
     // do probe em background (inicializar um decoder travava o import).
-    final id = addVideoLayer(at, file.path, file.name,
-        const Duration(seconds: 4));
+    final id = addVideoLayer(
+      at,
+      file.path,
+      file.name,
+      const Duration(seconds: 4),
+    );
     _probeDuration(file.path).then((d) {
       final layer = _layer(id);
       if (layer is VideoLayer && d > Duration.zero) {
@@ -194,7 +224,11 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   String addAudioLayer(
-      Duration at, String path, String name, Duration duration) {
+    Duration at,
+    String path,
+    String name,
+    Duration duration,
+  ) {
     final layer = AudioLayer(
       name: name,
       startTime: at,
@@ -209,11 +243,14 @@ class EditorController extends Notifier<VideoProject> {
   /// Importa AUDIO pelo seletor de arquivos; duracao real chega do probe
   /// em background (mesmo fluxo do video).
   Future<void> importAudioFile(Duration at) async {
-    final file =
-        await ref.read(mediaImportServiceProvider).pickAudioFile();
+    final file = await ref.read(mediaImportServiceProvider).pickAudioFile();
     if (file == null) return;
     final id = addAudioLayer(
-        at, file.path, file.name, const Duration(seconds: 4));
+      at,
+      file.path,
+      file.name,
+      const Duration(seconds: 4),
+    );
     _probeDuration(file.path).then((d) {
       final layer = _layer(id);
       if (layer is AudioLayer && d > Duration.zero) {
@@ -231,18 +268,17 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Rotulo colorido (PR-X26).
   void setLayerLabel(String id, LayerLabel? label) => _updateMeta(
-      id,
-      (m) => label == null
-          ? m.copyWith(clearLabel: true)
-          : m.copyWith(label: label));
+    id,
+    (m) =>
+        label == null ? m.copyWith(clearLabel: true) : m.copyWith(label: label),
+  );
 
   /// SOLO: havendo qualquer solo, so os solos renderizam.
   void toggleSolo(String id) =>
       _updateMeta(id, (m) => m.copyWith(solo: !m.solo));
 
   /// TIMIDA: some da timeline, continua no render.
-  void toggleShy(String id) =>
-      _updateMeta(id, (m) => m.copyWith(shy: !m.shy));
+  void toggleShy(String id) => _updateMeta(id, (m) => m.copyWith(shy: !m.shy));
 
   void toggleLocked(String id) =>
       _updateMeta(id, (m) => m.copyWith(locked: !m.locked));
@@ -296,24 +332,32 @@ class EditorController extends Notifier<VideoProject> {
   void renameLayers(Iterable<String> ids, String pattern) {
     var n = 1;
     final byId = {for (final id in ids) id};
-    _mutate(state.copyWith(layers: [
-      for (final l in state.layers)
-        if (byId.contains(l.id))
-          l.copyLayer(
-              name: pattern.contains('#')
-                  ? pattern.replaceAll('#', '${n++}')
-                  : '$pattern ${n++}')
-        else
-          l,
-    ]));
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in state.layers)
+            if (byId.contains(l.id))
+              l.copyLayer(
+                name: pattern.contains('#')
+                    ? pattern.replaceAll('#', '${n++}')
+                    : '$pattern ${n++}',
+              )
+            else
+              l,
+        ],
+      ),
+    );
   }
 
   // ---------------------------------------------- presets de efeito
 
   /// Salva a pilha (ou parte dela) como preset, com keyframes relativos
   /// e parametros de distancia normalizados (PR-C2).
-  EffectPreset? saveEffectPresetFrom(String layerId, String name,
-      {Set<String>? onlyEffectIds}) {
+  EffectPreset? saveEffectPresetFrom(
+    String layerId,
+    String name, {
+    Set<String>? onlyEffectIds,
+  }) {
     final layer = _layer(layerId);
     if (layer == null || layer.effects.isEmpty) return null;
     final chosen = onlyEffectIds == null
@@ -354,9 +398,11 @@ class EditorController extends Notifier<VideoProject> {
       targetSize: layerBoxSize(layer, at),
       stretchTo: stretchTo,
     );
-    _replace(layer.copyLayer(
-      effects: replace ? applied : [...layer.effects, ...applied],
-    ));
+    _replace(
+      layer.copyLayer(
+        effects: replace ? applied : [...layer.effects, ...applied],
+      ),
+    );
     return compat.warnings;
   }
 
@@ -375,13 +421,13 @@ class EditorController extends Notifier<VideoProject> {
     // isso o assado bate com o procedural.
     final fx = effect;
     TremorSample sampleAt(Duration t) => tremorSample(
-          amplitudePx: fx.paramAt('amplitude', t),
-          phase: integratedPhase(fx.track('frequencia'), t),
-          style: fx.paramAt('estilo', t).round().clamp(0, 2),
-          seed: fx.paramAt('semente', t).round(),
-          zoom: fx.paramAt('zoom', t).clamp(0.0, 1.0),
-          tiltDeg: fx.paramAt('inclinacao', t),
-        );
+      amplitudePx: fx.paramAt('amplitude', t),
+      phase: integratedPhase(fx.track('frequencia'), t),
+      style: fx.paramAt('estilo', t).round().clamp(0, 2),
+      seed: fx.paramAt('semente', t).round(),
+      zoom: fx.paramAt('zoom', t).clamp(0.0, 1.0),
+      tiltDeg: fx.paramAt('inclinacao', t),
+    );
 
     final baked = bakeProceduralMotion(
       effect: effect,
@@ -398,16 +444,18 @@ class EditorController extends Notifier<VideoProject> {
       sampleScale: (t) => sampleAt(t).scale,
     );
 
-    _replace(layer.copyLayer(
-      position: baked.position,
-      rotation: baked.rotation,
-      scaleX: baked.scale,
-      scaleY: baked.scale,
-      effects: [
-        for (final e in layer.effects)
-          if (e.id != effectId) e,
-      ],
-    ));
+    _replace(
+      layer.copyLayer(
+        position: baked.position,
+        rotation: baked.rotation,
+        scaleX: baked.scale,
+        scaleY: baked.scale,
+        effects: [
+          for (final e in layer.effects)
+            if (e.id != effectId) e,
+        ],
+      ),
+    );
   }
 
   // ------------------------------------------------------ aparencia
@@ -416,8 +464,7 @@ class EditorController extends Notifier<VideoProject> {
   void setLayerStyles(String id, LayerStyles styles) =>
       _updateMeta(id, (m) => m.copyWith(styles: styles));
 
-  void updateLayerStyles(
-          String id, LayerStyles Function(LayerStyles) fn) =>
+  void updateLayerStyles(String id, LayerStyles Function(LayerStyles) fn) =>
       _updateMeta(id, (m) => m.copyWith(styles: fn(m.styles)));
 
   /// PALETA (PR-X11): trocar uma entrada muda TODAS as camadas
@@ -430,10 +477,11 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Vincula a cor da camada a uma entrada da paleta.
   void linkLayerColor(String id, String? paletteName) => _updateMeta(
-      id,
-      (m) => paletteName == null
-          ? m.copyWith(clearColorRef: true)
-          : m.copyWith(colorRef: paletteName));
+    id,
+    (m) => paletteName == null
+        ? m.copyWith(clearColorRef: true)
+        : m.copyWith(colorRef: paletteName),
+  );
 
   /// Estilos de texto nomeados (PR-X12).
   void upsertTextStyle(TextStyleDef style) {
@@ -456,10 +504,11 @@ class EditorController extends Notifier<VideoProject> {
   /// Forma CONTEINER que abraca um texto (PR-X14).
   void setContainer(String id, ContainerSpec? spec) {
     _updateMeta(
-        id,
-        (m) => spec == null
-            ? m.copyWith(clearContainer: true)
-            : m.copyWith(container: spec));
+      id,
+      (m) => spec == null
+          ? m.copyWith(clearContainer: true)
+          : m.copyWith(container: spec),
+    );
     if (spec != null) applyContainer(id);
   }
 
@@ -499,19 +548,21 @@ class EditorController extends Notifier<VideoProject> {
     final basePos = spec.follow
         ? target.position.valueAt(Duration.zero)
         : shape.position.valueAt(Duration.zero);
-    _replace(shape.copyLayer(
-      contents: contents,
-      position: shape.position.withBase(basePos + shift),
-    ));
+    _replace(
+      shape.copyLayer(
+        contents: contents,
+        position: shape.position.withBase(basePos + shift),
+      ),
+    );
   }
 
   /// Empilhamento automatico num grupo (PR-X15).
   void setStack(String id, StackSpec? spec) {
     _updateMeta(
-        id,
-        (m) => spec == null
-            ? m.copyWith(clearStack: true)
-            : m.copyWith(stack: spec));
+      id,
+      (m) =>
+          spec == null ? m.copyWith(clearStack: true) : m.copyWith(stack: spec),
+    );
     if (spec != null) applyStack(id);
   }
 
@@ -526,13 +577,17 @@ class EditorController extends Notifier<VideoProject> {
         (id: c.id, size: measureLayerBox(c, Duration.zero)),
     ];
     final places = stackLayout(spec, children);
-    _replace(group.copyLayer(children: [
-      for (final c in group.children)
-        if (places[c.id] case final p?)
-          c.copyLayer(position: c.position.withBase(p))
-        else
-          c,
-    ]));
+    _replace(
+      group.copyLayer(
+        children: [
+          for (final c in group.children)
+            if (places[c.id] case final p?)
+              c.copyLayer(position: c.position.withBase(p))
+            else
+              c,
+        ],
+      ),
+    );
   }
 
   /// Reaplica o layout responsivo de tudo que depende de [layerId] —
@@ -563,10 +618,14 @@ class EditorController extends Notifier<VideoProject> {
     _mutate(state.copyWith(exposed: [...rest, prop]));
   }
 
-  void unexposeProperty(String id) => _mutate(state.copyWith(exposed: [
+  void unexposeProperty(String id) => _mutate(
+    state.copyWith(
+      exposed: [
         for (final e in state.exposed)
           if (e.id != id) e,
-      ]));
+      ],
+    ),
+  );
 
   /// Mexer no controle do PAI altera a precomp sem abri-la.
   void setExposedValue(String exposedId, double value, Duration t) {
@@ -597,11 +656,14 @@ class EditorController extends Notifier<VideoProject> {
   void addDataBinding(DataBinding binding) =>
       _mutate(state.copyWith(bindings: [...state.bindings, binding]));
 
-  void removeDataBinding(String layerId) =>
-      _mutate(state.copyWith(bindings: [
+  void removeDataBinding(String layerId) => _mutate(
+    state.copyWith(
+      bindings: [
         for (final b in state.bindings)
           if (b.layerId != layerId) b,
-      ]));
+      ],
+    ),
+  );
 
   /// Aplica os vinculos: cada campo escreve no texto da sua camada.
   void applyDataBindings() {
@@ -626,8 +688,11 @@ class EditorController extends Notifier<VideoProject> {
 
   /// REPETIR POR LINHA (PR-X21): N copias de uma camada, uma por linha,
   /// com escalonamento de tempo automatico.
-  void repeatForEachRow(String layerId, String column,
-      {Duration stagger = const Duration(milliseconds: 120)}) {
+  void repeatForEachRow(
+    String layerId,
+    String column, {
+    Duration stagger = const Duration(milliseconds: 120),
+  }) {
     final data = state.data;
     final src = _layer(layerId);
     if (data == null || src is! TextLayer) return;
@@ -650,16 +715,14 @@ class EditorController extends Notifier<VideoProject> {
 
   void setGuides(GuidesSpec spec) => _mutate(state.copyWith(guides: spec));
 
-  void addGuide({double? x, double? y}) => _mutate(state.copyWith(
-        guides: state.guides.copyWith(
-          vertical: x == null
-              ? null
-              : [...state.guides.vertical, x],
-          horizontal: y == null
-              ? null
-              : [...state.guides.horizontal, y],
-        ),
-      ));
+  void addGuide({double? x, double? y}) => _mutate(
+    state.copyWith(
+      guides: state.guides.copyWith(
+        vertical: x == null ? null : [...state.guides.vertical, x],
+        horizontal: y == null ? null : [...state.guides.horizontal, y],
+      ),
+    ),
+  );
 
   /// Motion blur da composicao (PR-X9).
   void setMotionBlur(MotionBlurSpec spec) =>
@@ -672,18 +735,20 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Caixa renderizada da camada (px logicos).
   Size layerBoxSize(Layer layer, Duration t) => measureLayerBox(
-      layer, layer.localTime(t),
-      fallbackWidth: state.outputWidth.toDouble());
+    layer,
+    layer.localTime(t),
+    fallbackWidth: state.outputWidth.toDouble(),
+  );
 
   List<LayoutBox> _layoutBoxes(Iterable<String> ids, Duration t) => [
-        for (final id in ids)
-          if (_layer(id) case final l?)
-            (
-              id: l.id,
-              center: l.position.valueAt(l.localTime(t)),
-              size: layerBoxSize(l, t),
-            ),
-      ];
+    for (final id in ids)
+      if (_layer(id) case final l?)
+        (
+          id: l.id,
+          center: l.position.valueAt(l.localTime(t)),
+          size: layerBoxSize(l, t),
+        ),
+  ];
 
   void _applyCenters(Map<String, Offset> centers, Duration t) {
     if (centers.isEmpty) return;
@@ -692,9 +757,7 @@ class EditorController extends Notifier<VideoProject> {
       layers = [
         for (final l in layers)
           if (l.id == e.key)
-            l.copyLayer(
-                position: l.position
-                    .edited(l.localTime(t), e.value))
+            l.copyLayer(position: l.position.edited(l.localTime(t), e.value))
           else
             l,
       ];
@@ -704,30 +767,48 @@ class EditorController extends Notifier<VideoProject> {
 
   /// ALINHAR a selecao (PR-X1). Exato ao pixel: usa a caixa real de
   /// cada camada, entao tamanhos diferentes encostam no mesmo lugar.
-  void alignSelection(Iterable<String> ids, AlignEdge edge, Duration t,
-      {AlignTo to = AlignTo.composition, String? anchorId}) {
+  void alignSelection(
+    Iterable<String> ids,
+    AlignEdge edge,
+    Duration t, {
+    AlignTo to = AlignTo.composition,
+    String? anchorId,
+  }) {
     final boxes = _layoutBoxes(ids, t);
     if (boxes.isEmpty) return;
     _applyCenters(
-        alignLayers(boxes, edge,
-            to: to,
-            anchorId: anchorId,
-            compSize: Size(state.outputWidth.toDouble(),
-                state.outputHeight.toDouble())),
-        t);
+      alignLayers(
+        boxes,
+        edge,
+        to: to,
+        anchorId: anchorId,
+        compSize: Size(
+          state.outputWidth.toDouble(),
+          state.outputHeight.toDouble(),
+        ),
+      ),
+      t,
+    );
   }
 
   /// DISTRIBUIR (PR-X1): por centro OU por vao igual — sao operacoes
   /// diferentes quando as camadas tem tamanhos distintos.
-  void distributeSelection(Iterable<String> ids, DistributeAxis axis,
-      DistributeMode mode, Duration t) {
-    _applyCenters(
-        distributeLayers(_layoutBoxes(ids, t), axis, mode), t);
+  void distributeSelection(
+    Iterable<String> ids,
+    DistributeAxis axis,
+    DistributeMode mode,
+    Duration t,
+  ) {
+    _applyCenters(distributeLayers(_layoutBoxes(ids, t), axis, mode), t);
   }
 
   /// Espacamento exato em px entre as camadas da selecao.
-  void spaceSelection(Iterable<String> ids, DistributeAxis axis,
-      double gap, Duration t) {
+  void spaceSelection(
+    Iterable<String> ids,
+    DistributeAxis axis,
+    double gap,
+    Duration t,
+  ) {
     _applyCenters(spaceLayers(_layoutBoxes(ids, t), axis, gap), t);
   }
 
@@ -741,10 +822,12 @@ class EditorController extends Notifier<VideoProject> {
       case LayerProp.position:
         _replace(layer.copyLayer(position: layer.position.withLoop(spec)));
       case LayerProp.scale:
-        _replace(layer.copyLayer(
-          scaleX: layer.scaleX.withLoop(spec),
-          scaleY: layer.scaleY.withLoop(spec),
-        ));
+        _replace(
+          layer.copyLayer(
+            scaleX: layer.scaleX.withLoop(spec),
+            scaleY: layer.scaleY.withLoop(spec),
+          ),
+        );
       case LayerProp.rotation:
         _replace(layer.copyLayer(rotation: layer.rotation.withLoop(spec)));
       case LayerProp.opacity:
@@ -764,19 +847,18 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     switch (prop) {
       case LayerProp.position:
-        _replace(
-            layer.copyLayer(position: layer.position.reversedInTime()));
+        _replace(layer.copyLayer(position: layer.position.reversedInTime()));
       case LayerProp.scale:
-        _replace(layer.copyLayer(
-          scaleX: layer.scaleX.reversedInTime(),
-          scaleY: layer.scaleY.reversedInTime(),
-        ));
+        _replace(
+          layer.copyLayer(
+            scaleX: layer.scaleX.reversedInTime(),
+            scaleY: layer.scaleY.reversedInTime(),
+          ),
+        );
       case LayerProp.rotation:
-        _replace(
-            layer.copyLayer(rotation: layer.rotation.reversedInTime()));
+        _replace(layer.copyLayer(rotation: layer.rotation.reversedInTime()));
       case LayerProp.opacity:
-        _replace(
-            layer.copyLayer(opacity: layer.opacity.reversedInTime()));
+        _replace(layer.copyLayer(opacity: layer.opacity.reversedInTime()));
       case LayerProp.skew:
         _replace(layer.copyLayer(skewX: layer.skewX.reversedInTime()));
       case LayerProp.pivot:
@@ -789,34 +871,40 @@ class EditorController extends Notifier<VideoProject> {
   /// Camada de ajuste: efeitos aplicados ao composto de tudo abaixo.
   void addAdjustmentLayer(Duration at) {
     final n = state.layers.whereType<AdjustmentLayer>().length + 1;
-    _push(AdjustmentLayer(
-      name: 'Ajuste $n',
-      startTime: at,
-      duration: const Duration(seconds: 5),
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      AdjustmentLayer(
+        name: 'Ajuste $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   void addNullLayer(Duration at) {
     final n = state.layers.whereType<NullLayer>().length + 1;
-    _push(NullLayer(
-      name: 'Nulo $n',
-      startTime: at,
-      duration: const Duration(seconds: 5),
-      is3D: true,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      NullLayer(
+        name: 'Nulo $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        is3D: true,
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   void addParticlesLayer(Duration at) {
     final n = state.layers.whereType<ParticlesLayer>().length + 1;
-    _push(ParticlesLayer(
-      name: 'Particulas $n',
-      startTime: at,
-      duration: const Duration(seconds: 5),
-      is3D: true,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      ParticlesLayer(
+        name: 'Particulas $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        is3D: true,
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   /// Edita parametros do sistema de particulas.
@@ -830,18 +918,19 @@ class EditorController extends Notifier<VideoProject> {
   /// verdade no espaco, vinculavel a um nulo como qualquer camada.
   void addElement3DLayer(Duration at, Element3DKind kind) {
     final n = state.layers.whereType<Element3DLayer>().length + 1;
-    _push(Element3DLayer(
-      name: '${element3DLabel(kind)} $n',
-      startTime: at,
-      duration: const Duration(seconds: 5),
-      kind: kind,
-      is3D: true,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      Element3DLayer(
+        name: '${element3DLabel(kind)} $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        kind: kind,
+        is3D: true,
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
-  void updateElement3D(
-      String id, Element3DLayer Function(Element3DLayer) fn) {
+  void updateElement3D(String id, Element3DLayer Function(Element3DLayer) fn) {
     final layer = _layer(id);
     if (layer is! Element3DLayer) return;
     _replace(fn(layer));
@@ -851,13 +940,17 @@ class EditorController extends Notifier<VideoProject> {
   /// por dentro.
   void addScene3DLayer(Duration at) {
     final n = state.layers.whereType<Scene3DLayer>().length + 1;
-    _push(Scene3DLayer(
-      name: 'Cena 3D $n',
-      startTime: at,
-      duration: const Duration(seconds: 5),
-      scene: Scene3D.demo,
-      position: AnimatedOffset(_center),
-    ));
+    _push(
+      Scene3DLayer(
+        name: 'Cena 3D $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        // Nasce vazia, mas ja com luz de tres pontos, ambiente Estudio e
+        // grade. O primeiro objeto nunca aparece cinza no escuro.
+        scene: Scene3D(lights: Scene3D.tresPontos),
+        position: AnimatedOffset(_center),
+      ),
+    );
   }
 
   void updateScene3D(String id, Scene3D Function(Scene3D) fn) {
@@ -866,8 +959,7 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.withScene(fn(layer.scene)));
   }
 
-  void updateScene3DCamera(
-      String id, Camera3D Function(Camera3D) fn) {
+  void updateScene3DCamera(String id, Camera3D Function(Camera3D) fn) {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;
     _replace(layer.withCamera(fn(layer.camera)));
@@ -892,25 +984,26 @@ class EditorController extends Notifier<VideoProject> {
       filmWidth: base.filmWidth,
       orthographic: base.orthographic,
     );
-    _replace(layer.copyScene(
-        extraCameras: [...layer.extraCameras, nova]));
+    _replace(layer.copyScene(extraCameras: [...layer.extraCameras, nova]));
     return nova.id;
   }
 
   void removeScene3DCamera(String id, String cameraId) {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;
-    _replace(layer.copyScene(
-      extraCameras: [
-        for (final c in layer.extraCameras)
-          if (c.id != cameraId) c
-      ],
-      // Tomada que aponta para camera apagada viraria cena sem camera.
-      shots: [
-        for (final t in layer.shots)
-          if (t.cameraId != cameraId) t
-      ],
-    ));
+    _replace(
+      layer.copyScene(
+        extraCameras: [
+          for (final c in layer.extraCameras)
+            if (c.id != cameraId) c,
+        ],
+        // Tomada que aponta para camera apagada viraria cena sem camera.
+        shots: [
+          for (final t in layer.shots)
+            if (t.cameraId != cameraId) t,
+        ],
+      ),
+    );
   }
 
   /// CORTA para [cameraId] em [local]. Marcar de novo no mesmo instante
@@ -926,23 +1019,30 @@ class EditorController extends Notifier<VideoProject> {
     const tol = Duration(milliseconds: 60);
     final resto = [
       for (final t in layer.shots)
-        if ((t.time - local).inMicroseconds.abs() > tol.inMicroseconds) t
+        if ((t.time - local).inMicroseconds.abs() > tol.inMicroseconds) t,
     ];
-    _replace(layer.copyScene(shots: [
-      ...resto,
-      CameraShot(
-          time: local, cameraId: cameraId, transition: transition),
-    ]));
+    _replace(
+      layer.copyScene(
+        shots: [
+          ...resto,
+          CameraShot(time: local, cameraId: cameraId, transition: transition),
+        ],
+      ),
+    );
   }
 
   void removeCameraShot(String id, Duration local) {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;
     const tol = Duration(milliseconds: 60);
-    _replace(layer.copyScene(shots: [
-      for (final t in layer.shots)
-        if ((t.time - local).inMicroseconds.abs() > tol.inMicroseconds) t
-    ]));
+    _replace(
+      layer.copyScene(
+        shots: [
+          for (final t in layer.shots)
+            if ((t.time - local).inMicroseconds.abs() > tol.inMicroseconds) t,
+        ],
+      ),
+    );
   }
 
   void clearCameraShots(String id) {
@@ -991,8 +1091,9 @@ class EditorController extends Notifier<VideoProject> {
       extrudeDepth: depth,
       size: 120,
     );
-    _replace(cena.withScene(
-        cena.scene.copyWith(nodes: [...cena.scene.nodes, no])));
+    _replace(
+      cena.withScene(cena.scene.copyWith(nodes: [...cena.scene.nodes, no])),
+    );
     return no.id;
   }
 
@@ -1004,30 +1105,36 @@ class EditorController extends Notifier<VideoProject> {
       name: 'Nulo ${cena.scene.nodes.where((n) => n.isNull).length + 1}',
       isNull: true,
     );
-    _replace(cena.withScene(
-        cena.scene.copyWith(nodes: [...cena.scene.nodes, no])));
+    _replace(
+      cena.withScene(cena.scene.copyWith(nodes: [...cena.scene.nodes, no])),
+    );
     return no.id;
   }
 
   /// Parenteia um no da cena a outro. Passar null solta.
   ///
   /// Recusa o ciclo: A pai de B e B pai de A travaria o quadro.
-  void setSceneNodeParent(
-      String sceneId, String nodeId, String? parentId) {
+  void setSceneNodeParent(String sceneId, String nodeId, String? parentId) {
     final cena = _layer(sceneId);
     if (cena is! Scene3DLayer) return;
+    if (cena.scene.nodeById(nodeId)?.locked ?? false) return;
     if (parentId == nodeId) return;
-    if (parentId != null &&
-        _criaCiclo(cena.scene, nodeId, parentId)) {
+    if (parentId != null && _criaCiclo(cena.scene, nodeId, parentId)) {
       return;
     }
-    _replace(cena.withScene(cena.scene.copyWith(nodes: [
-      for (final n in cena.scene.nodes)
-        if (n.id == nodeId)
-          n.copyWith(parentId: parentId, clearParent: parentId == null)
-        else
-          n,
-    ])));
+    _replace(
+      cena.withScene(
+        cena.scene.copyWith(
+          nodes: [
+            for (final n in cena.scene.nodes)
+              if (n.id == nodeId)
+                n.copyWith(parentId: parentId, clearParent: parentId == null)
+              else
+                n,
+          ],
+        ),
+      ),
+    );
   }
 
   bool _criaCiclo(Scene3D cena, String nodeId, String parentId) {
@@ -1045,20 +1152,26 @@ class EditorController extends Notifier<VideoProject> {
   void setSceneCameraParent(String sceneId, String? nodeId) {
     final cena = _layer(sceneId);
     if (cena is! Scene3DLayer) return;
-    _replace(cena.withScene(cena.scene.copyWith(
-      cameraParentId: nodeId,
-      clearCameraParent: nodeId == null,
-    )));
+    _replace(
+      cena.withScene(
+        cena.scene.copyWith(
+          cameraParentId: nodeId,
+          clearCameraParent: nodeId == null,
+        ),
+      ),
+    );
   }
 
   /// De qual NULO DA COMPOSICAO a camera da cena e filha. Null solta.
   void setSceneCameraCompParent(String sceneId, String? layerId) {
     final cena = _layer(sceneId);
     if (cena is! Scene3DLayer) return;
-    _replace(cena.copyScene(
-      cameraParentLayerId: layerId,
-      clearCameraParent: layerId == null,
-    ));
+    _replace(
+      cena.copyScene(
+        cameraParentLayerId: layerId,
+        clearCameraParent: layerId == null,
+      ),
+    );
   }
 
   /// RIG DE ORBITA EM UM TOQUE.
@@ -1078,10 +1191,14 @@ class EditorController extends Notifier<VideoProject> {
           .withKeyframe(Duration.zero, 0)
           .withKeyframe(dur, 360),
     );
-    _replace(cena.withScene(cena.scene.copyWith(
-      nodes: [...cena.scene.nodes, no],
-      cameraParentId: no.id,
-    )));
+    _replace(
+      cena.withScene(
+        cena.scene.copyWith(
+          nodes: [...cena.scene.nodes, no],
+          cameraParentId: no.id,
+        ),
+      ),
+    );
   }
 
   /// TRAZ UM MODELO .glb para dentro da cena.
@@ -1089,16 +1206,42 @@ class EditorController extends Notifier<VideoProject> {
   /// Devolve o id do no criado. Erro de leitura sobe como [GlbException]
   /// para a interface poder dizer o que houve — engolir e mostrar cena
   /// vazia seria pior.
-  String addGlbNode(String sceneId, GlbResult modelo) {
+  String addGlbNode(
+    String sceneId,
+    GlbResult modelo, {
+    String sourcePath = '',
+  }) {
     final cena = _layer(sceneId);
     if (cena is! Scene3DLayer) return '';
     final no = SceneNode(
       name: modelo.name,
       mesh: modelo.mesh,
+      mediumMesh: modelo.mediumMesh,
+      lowMesh: modelo.lowMesh,
       size: 120,
+      credit: ModelCredit3D(
+        author: modelo.author,
+        license: modelo.license,
+        url: modelo.sourceUrl,
+      ),
+      modelSource: ModelSource3D(
+        path: sourcePath,
+        triangles: modelo.triangles,
+        bytes: modelo.report.bytes,
+        meshes: modelo.report.meshes,
+        materials: modelo.report.materials,
+        textures: modelo.report.textures,
+        animations: modelo.report.animations,
+        nodeNames: modelo.nodeNames,
+        animationNames: modelo.animationNames,
+        overBudget: modelo.report.overBudget,
+        lodCount: modelo.report.lodCount,
+        warning: modelo.warning,
+      ),
     );
-    _replace(cena.withScene(
-        cena.scene.copyWith(nodes: [...cena.scene.nodes, no])));
+    _replace(
+      cena.withScene(cena.scene.copyWith(nodes: [...cena.scene.nodes, no])),
+    );
     return no.id;
   }
 
@@ -1107,16 +1250,23 @@ class EditorController extends Notifier<VideoProject> {
   void setExtrudeDepth(String sceneId, String nodeId, double depth) {
     final cena = _layer(sceneId);
     if (cena is! Scene3DLayer) return;
-    _replace(cena.withScene(cena.scene.copyWith(nodes: [
-      for (final n in cena.scene.nodes)
-        if (n.id == nodeId && n.outline != null)
-          n.copyWith(
-            mesh: extrudeOutline(n.outline!, depth: depth),
-            extrudeDepth: depth,
-          )
-        else
-          n,
-    ])));
+    if (cena.scene.nodeById(nodeId)?.locked ?? false) return;
+    _replace(
+      cena.withScene(
+        cena.scene.copyWith(
+          nodes: [
+            for (final n in cena.scene.nodes)
+              if (n.id == nodeId && n.outline != null)
+                n.copyWith(
+                  mesh: extrudeOutline(n.outline!, depth: depth),
+                  extrudeDepth: depth,
+                )
+              else
+                n,
+          ],
+        ),
+      ),
+    );
   }
 
   void setScene3DHelpers(String id, bool show) {
@@ -1135,31 +1285,59 @@ class EditorController extends Notifier<VideoProject> {
   void addSceneNode(String layerId, Element3DKind kind) {
     updateScene3D(layerId, (s) {
       final n = s.nodes.length + 1;
-      return s.copyWith(nodes: [
-        ...s.nodes,
-        SceneNode(
-          name: '${element3DLabel(kind)} $n',
-          kind: kind,
-          x: AnimatedDouble((n.isEven ? 1 : -1) * 60.0 * (n ~/ 2 + 1)),
-        ),
-      ]);
+      return s.copyWith(
+        nodes: [
+          ...s.nodes,
+          SceneNode(
+            name: '${element3DLabel(kind)} $n',
+            kind: kind,
+            x: AnimatedDouble((n.isEven ? 1 : -1) * 60.0 * (n ~/ 2 + 1)),
+          ),
+        ],
+      );
     });
   }
 
   void updateSceneNode(
-      String layerId, String nodeId, SceneNode Function(SceneNode) fn) {
-    updateScene3D(layerId, (s) => s.copyWith(nodes: [
-          for (final n in s.nodes) n.id == nodeId ? fn(n) : n,
-        ]));
+    String layerId,
+    String nodeId,
+    SceneNode Function(SceneNode) fn,
+  ) {
+    updateScene3D(layerId, (s) {
+      final target = s.nodeById(nodeId);
+      if (target == null || target.locked) return s;
+      return s.copyWith(
+        nodes: [for (final n in s.nodes) n.id == nodeId ? fn(n) : n],
+      );
+    });
+  }
+
+  /// O cadeado precisa conseguir destravar a si proprio; todas as outras
+  /// mutacoes passam por [updateSceneNode] e respeitam o bloqueio.
+  void setSceneNodeLocked(String layerId, String nodeId, bool locked) {
+    updateScene3D(
+      layerId,
+      (s) => s.copyWith(
+        nodes: [
+          for (final n in s.nodes)
+            if (n.id == nodeId) n.copyWith(locked: locked) else n,
+        ],
+      ),
+    );
   }
 
   void removeSceneNode(String layerId, String nodeId) {
-    updateScene3D(
-        layerId,
-        (s) => s.copyWith(nodes: [
-              for (final n in s.nodes)
-                if (n.id != nodeId) n,
-            ]));
+    updateScene3D(layerId, (s) {
+      if (s.nodeById(nodeId)?.locked ?? false) return s;
+      return s.copyWith(
+        nodes: [
+          for (final n in s.nodes)
+            if (n.id != nodeId)
+              n.parentId == nodeId ? n.copyWith(clearParent: true) : n,
+        ],
+        clearCameraParent: s.cameraParentId == nodeId,
+      );
+    });
   }
 
   /// RIG DE CAMERA em um toque — gera keyframes REAIS, editaveis.
@@ -1167,50 +1345,69 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer) return;
     final bounds = sceneBounds(layer.scene, Duration.zero);
-    _replace(layer.withCamera(applyCameraRig(
-      layer.camera,
-      rig,
-      duration: layer.duration,
-      target: bounds.center,
-      radius: bounds.radius <= 0 ? 600 : bounds.radius * 2.2,
-    )));
+    _replace(
+      layer.withCamera(
+        applyCameraRig(
+          layer.camera,
+          rig,
+          duration: layer.duration,
+          target: bounds.center,
+          radius: bounds.radius <= 0 ? 600 : bounds.radius * 2.2,
+        ),
+      ),
+    );
   }
 
   /// Enquadrar tudo / alinhar camera a vista.
   void frameSceneAll(String layerId) {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer) return;
-    _replace(layer.withCamera(frameBounds(
-        layer.camera, sceneBounds(layer.scene, Duration.zero),
-        Duration.zero)));
+    _replace(
+      layer.withCamera(
+        frameBounds(
+          layer.camera,
+          sceneBounds(layer.scene, Duration.zero),
+          Duration.zero,
+        ),
+      ),
+    );
   }
 
   void addSceneLight(String layerId, Light3DKind kind) {
     updateScene3D(
-        layerId,
-        (s) => s.copyWith(lights: [
-              ...s.lights,
-              Light3D(
-                kind: kind,
-                castsShadow: s.lights.isEmpty,
-              ),
-            ]));
+      layerId,
+      (s) => s.copyWith(
+        lights: [
+          ...s.lights,
+          Light3D(kind: kind, castsShadow: s.lights.isEmpty),
+        ],
+      ),
+    );
   }
 
   void updateSceneLight(
-      String layerId, String lightId, Light3D Function(Light3D) fn) {
-    updateScene3D(layerId, (s) => s.copyWith(lights: [
-          for (final l in s.lights) l.id == lightId ? fn(l) : l,
-        ]));
+    String layerId,
+    String lightId,
+    Light3D Function(Light3D) fn,
+  ) {
+    updateScene3D(
+      layerId,
+      (s) => s.copyWith(
+        lights: [for (final l in s.lights) l.id == lightId ? fn(l) : l],
+      ),
+    );
   }
 
   void removeSceneLight(String layerId, String lightId) {
     updateScene3D(
-        layerId,
-        (s) => s.copyWith(lights: [
-              for (final l in s.lights)
-                if (l.id != lightId) l,
-            ]));
+      layerId,
+      (s) => s.copyWith(
+        lights: [
+          for (final l in s.lights)
+            if (l.id != lightId) l,
+        ],
+      ),
+    );
   }
 
   /// DUPLICAR EM ARRAY — o modulo Grade direto em 3D: 200 objetos numa
@@ -1233,11 +1430,13 @@ class EditorController extends Notifier<VideoProject> {
       for (var ix = 0; ix < cx; ix++) {
         for (var iy = 0; iy < cy; iy++) {
           for (var iz = 0; iz < cz; iz++) {
-            out.add(Vec3(
-              (ix - (cx - 1) / 2) * spacing,
-              (iy - (cy - 1) / 2) * spacing,
-              (iz - (cz - 1) / 2) * spacing,
-            ));
+            out.add(
+              Vec3(
+                (ix - (cx - 1) / 2) * spacing,
+                (iy - (cy - 1) / 2) * spacing,
+                (iz - (cz - 1) / 2) * spacing,
+              ),
+            );
           }
         }
       }
@@ -1249,12 +1448,25 @@ class EditorController extends Notifier<VideoProject> {
   /// novo com o mesmo no mostra todos outra vez.
   void isolateSceneNode(String layerId, String nodeId) {
     updateScene3D(layerId, (s) {
-      final isolated = s.nodes.every((n) => n.id == nodeId || !n.visible) &&
-          s.nodes.any((n) => n.id == nodeId && n.visible);
-      return s.copyWith(nodes: [
-        for (final n in s.nodes)
-          n.copyWith(visible: isolated || n.id == nodeId),
-      ]);
+      final previous = _visibilityBeforeIsolation[layerId];
+      if (_isolatedSceneNode[layerId] == nodeId && previous != null) {
+        _visibilityBeforeIsolation.remove(layerId);
+        _isolatedSceneNode.remove(layerId);
+        return s.copyWith(
+          nodes: [
+            for (final n in s.nodes)
+              n.copyWith(visible: previous[n.id] ?? n.visible),
+          ],
+        );
+      }
+      _visibilityBeforeIsolation.putIfAbsent(
+        layerId,
+        () => {for (final n in s.nodes) n.id: n.visible},
+      );
+      _isolatedSceneNode[layerId] = nodeId;
+      return s.copyWith(
+        nodes: [for (final n in s.nodes) n.copyWith(visible: n.id == nodeId)],
+      );
     });
   }
 
@@ -1263,53 +1475,67 @@ class EditorController extends Notifier<VideoProject> {
   void focusCameraOnNode(String layerId, String nodeId) {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer) return;
-    final node =
-        layer.scene.nodes.where((n) => n.id == nodeId).firstOrNull;
+    final node = layer.scene.nodes.where((n) => n.id == nodeId).firstOrNull;
     if (node == null) return;
-    final d = (node.positionAt(Duration.zero) -
-            layer.camera.positionAt(Duration.zero))
-        .length;
-    _replace(layer.withCamera(layer.camera.copyWith(
-      dof: layer.camera.dof.copyWith(
-        enabled: true,
-        focusDistance: layer.camera.dof.focusDistance.withBase(d),
+    final worldPosition = resolveNodeTransform(
+      layer.scene,
+      node,
+      Duration.zero,
+    ).position;
+    final d = (worldPosition - layer.camera.positionAt(Duration.zero)).length;
+    _replace(
+      layer.withCamera(
+        layer.camera.copyWith(
+          dof: layer.camera.dof.copyWith(
+            enabled: true,
+            focusDistance: layer.camera.dof.focusDistance.withBase(d),
+          ),
+        ),
       ),
-    )));
+    );
   }
 
   /// ENQUADRAR SELECIONADO.
   void frameSceneNode(String layerId, String nodeId) {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer) return;
-    final node =
-        layer.scene.nodes.where((n) => n.id == nodeId).firstOrNull;
+    final node = layer.scene.nodes.where((n) => n.id == nodeId).firstOrNull;
     if (node == null) return;
-    final r = node.size * node.scale.valueAt(Duration.zero) * 1.8;
-    _replace(layer.withCamera(frameBounds(
-      layer.camera,
-      Bounds3D(node.positionAt(Duration.zero), r),
-      Duration.zero,
-    )));
+    final transform = resolveNodeTransform(layer.scene, node, Duration.zero);
+    final r = node.size * transform.scale.abs() * 1.8;
+    _replace(
+      layer.withCamera(
+        frameBounds(
+          layer.camera,
+          Bounds3D(transform.position, r),
+          Duration.zero,
+        ),
+      ),
+    );
   }
 
   /// SALVAR VISTA: guarda o enquadramento atual com nome.
   void saveSceneView(String layerId, String name, RenderCamera cam) {
     updateScene3D(
-        layerId,
-        (s) => s.copyWith(savedViews: [
-              ...s.savedViews,
-              SavedView(
-                  name: name, position: cam.position, target: cam.target),
-            ]));
+      layerId,
+      (s) => s.copyWith(
+        savedViews: [
+          ...s.savedViews,
+          SavedView(name: name, position: cam.position, target: cam.target),
+        ],
+      ),
+    );
   }
 
   void removeSceneView(String layerId, int index) {
     updateScene3D(layerId, (s) {
       if (index < 0 || index >= s.savedViews.length) return s;
-      return s.copyWith(savedViews: [
-        for (var i = 0; i < s.savedViews.length; i++)
-          if (i != index) s.savedViews[i],
-      ]);
+      return s.copyWith(
+        savedViews: [
+          for (var i = 0; i < s.savedViews.length; i++)
+            if (i != index) s.savedViews[i],
+        ],
+      );
     });
   }
 
@@ -1317,10 +1543,14 @@ class EditorController extends Notifier<VideoProject> {
   void applySavedView(String layerId, SavedView view) {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer) return;
-    _replace(layer.withCamera(alignToView(
-      layer.camera,
-      RenderCamera(position: view.position, target: view.target),
-    )));
+    _replace(
+      layer.withCamera(
+        alignToView(
+          layer.camera,
+          RenderCamera(position: view.position, target: view.target),
+        ),
+      ),
+    );
   }
 
   /// ALINHAR CAMERA A VISTA a partir de uma camera de render arbitraria
@@ -1329,30 +1559,44 @@ class EditorController extends Notifier<VideoProject> {
   void alignCameraToRender(String layerId, RenderCamera cam) {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer) return;
-    _replace(layer
-        .withCamera(alignToView(layer.camera, cam))
-        .copyScene(view: SceneView.camera));
+    _replace(
+      layer
+          .withCamera(alignToView(layer.camera, cam))
+          .copyScene(view: SceneView.camera),
+    );
   }
 
   void alignCameraToCurrentView(String layerId) {
     final layer = _layer(layerId);
     if (layer is! Scene3DLayer || layer.view == SceneView.camera) return;
-    _replace(layer
-        .withCamera(alignToView(layer.camera, orthoViewCamera(layer.view)))
-        .copyScene(view: SceneView.camera));
+    _replace(
+      layer
+          .withCamera(alignToView(layer.camera, orthoViewCamera(layer.view)))
+          .copyScene(view: SceneView.camera),
+    );
   }
 
   Future<void> importImageFromGallery(Duration at) async {
-    final file =
-        await ref.read(mediaImportServiceProvider).pickImageFromGallery();
+    final file = await ref
+        .read(mediaImportServiceProvider)
+        .pickImageFromGallery();
     if (file == null) return;
     addImageLayer(at, file.path, file.name);
   }
 
   void removeLayer(String id) {
-    _mutate(state.copyWith(
-      layers: state.layers.where((l) => l.id != id).toList(),
-    ));
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in state.layers)
+            if (l.id != id)
+              if (l is VideoLayer && l.transitionIn?.outgoingLayerId == id)
+                l.copyLayer(clearTransitionIn: true)
+              else
+                l,
+        ],
+      ),
+    );
     if (ref.read(selectedLayerProvider) == id) {
       ref.read(selectedLayerProvider.notifier).state = null;
     }
@@ -1363,9 +1607,19 @@ class EditorController extends Notifier<VideoProject> {
   void removeLayers(Iterable<String> ids) {
     final set = ids.toSet();
     if (set.isEmpty) return;
-    _mutate(state.copyWith(
-      layers: state.layers.where((l) => !set.contains(l.id)).toList(),
-    ));
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in state.layers)
+            if (!set.contains(l.id))
+              if (l is VideoLayer &&
+                  set.contains(l.transitionIn?.outgoingLayerId))
+                l.copyLayer(clearTransitionIn: true)
+              else
+                l,
+        ],
+      ),
+    );
     if (set.contains(ref.read(selectedLayerProvider))) {
       ref.read(selectedLayerProvider.notifier).state = null;
     }
@@ -1375,10 +1629,10 @@ class EditorController extends Notifier<VideoProject> {
   // ------------------------------------------------------- audio
 
   AudioSpec? audioSpecOf(String id) => switch (_layer(id)) {
-        AudioLayer a => a.audio,
-        VideoLayer v => v.audio,
-        _ => null,
-      };
+    AudioLayer a => a.audio,
+    VideoLayer v => v.audio,
+    _ => null,
+  };
 
   void updateAudioSpec(String id, AudioSpec Function(AudioSpec) fn) {
     final layer = _layer(id);
@@ -1424,8 +1678,12 @@ class EditorController extends Notifier<VideoProject> {
     if (peaks == null || peaks.isEmpty) return null;
 
     final offset = _sourceOffsetOf(layer);
-    final pausas = detectSilence(peaks,
-        threshold: threshold, minSilence: minSilence, padding: padding);
+    final pausas = detectSilence(
+      peaks,
+      threshold: threshold,
+      minSilence: minSilence,
+      padding: padding,
+    );
 
     // Tempo do ARQUIVO -> tempo da LINHA, aparado na camada.
     final out = <(Duration, Duration)>[];
@@ -1466,13 +1724,15 @@ class EditorController extends Notifier<VideoProject> {
     double threshold = 0.035,
     Duration minSilence = const Duration(milliseconds: 350),
   }) {
-    final pausas = silenceRangesOf(id,
-        threshold: threshold, minSilence: minSilence);
+    final pausas = silenceRangesOf(
+      id,
+      threshold: threshold,
+      minSilence: minSilence,
+    );
     if (pausas == null) return null;
     if (pausas.isEmpty) return 1;
     final antes = state.layers.length;
-    final novas =
-        removeRangesFrom(state.layers, id, pausas, ripple: true);
+    final novas = removeRangesFrom(state.layers, id, pausas, ripple: true);
     _mutate(state.copyWith(layers: novas));
     final pedacos = novas.length - antes + 1;
     final primeiro = novas.where((l) => l.id == id).firstOrNull;
@@ -1499,8 +1759,7 @@ class EditorController extends Notifier<VideoProject> {
   }) async {
     final path = _audioPathOf(id);
     if (path == null) return null;
-    final env =
-        await MediaPreviewService.instance.bandEnvelopeOf(path, band);
+    final env = await MediaPreviewService.instance.bandEnvelopeOf(path, band);
     if (env.isEmpty) return null;
 
     // 0..100 na tela vira o multiplicador do detector, INVERTIDO: mais
@@ -1530,8 +1789,7 @@ class EditorController extends Notifier<VideoProject> {
   /// mais rapido e mais certo que reanalisar.
   void setBpm(double bpm, {int denominador = 4}) {
     if (bpm <= 0) return;
-    final primeira =
-        state.beats.isEmpty ? Duration.zero : state.beats.first;
+    final primeira = state.beats.isEmpty ? Duration.zero : state.beats.first;
     final grade = beatGrid(
       first: primeira,
       bpm: bpm,
@@ -1592,10 +1850,12 @@ class EditorController extends Notifier<VideoProject> {
       final idx = i.clamp(0, tempos.length - 1);
       final inicio = tempos[idx];
       final fim = idx + 1 < tempos.length ? tempos[idx + 1] : null;
-      novas.add(l.copyLayer(
-        startTime: inicio,
-        duration: fim == null ? l.duration : fim - inicio,
-      ));
+      novas.add(
+        l.copyLayer(
+          startTime: inicio,
+          duration: fim == null ? l.duration : fim - inicio,
+        ),
+      );
       i++;
     }
     _mutate(state.copyWith(layers: novas));
@@ -1614,16 +1874,16 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Ponto de entrada na midia, para video e audio.
   static Duration _sourceOffsetOf(Layer l) => switch (l) {
-        VideoLayer v => v.sourceOffset,
-        AudioLayer a => a.sourceOffset,
-        _ => Duration.zero,
-      };
+    VideoLayer v => v.sourceOffset,
+    AudioLayer a => a.sourceOffset,
+    _ => Duration.zero,
+  };
 
   String? _audioPathOf(String id) => switch (_layer(id)) {
-        AudioLayer a => a.sourcePath,
-        VideoLayer v => v.sourcePath,
-        _ => null,
-      };
+    AudioLayer a => a.sourcePath,
+    VideoLayer v => v.sourcePath,
+    _ => null,
+  };
 
   // -------------------------------------------------- rastrear regioes
 
@@ -1649,8 +1909,7 @@ class EditorController extends Notifier<VideoProject> {
       sourcePath: layer.sourcePath,
       start: layer.sourceOffset,
       duration: layer.sourceSpan,
-      by: BlobDetectBy
-          .values[fx.paramAt('detect_by', t0).round().clamp(0, 3)],
+      by: BlobDetectBy.values[fx.paramAt('detect_by', t0).round().clamp(0, 3)],
       threshold: fx.paramAt('threshold', t0),
       sensitivity: fx.paramAt('sensitivity', t0),
       minBlobSize: fx.paramAt('min_blob_size', t0),
@@ -1689,8 +1948,7 @@ class EditorController extends Notifier<VideoProject> {
     );
     if (frames.length < 4) return null;
 
-    final centro = Offset(
-        frames.first.width / 2, frames.first.height / 2);
+    final centro = Offset(frames.first.width / 2, frames.first.height / 2);
     final track = trackSequence(frames, centro);
     final offs = stabilizeOffsets(track, janela: janela);
     if (offs.isEmpty) return 0;
@@ -1698,8 +1956,7 @@ class EditorController extends Notifier<VideoProject> {
     // O rastreio roda em resolucao baixa: o deslocamento volta para a
     // escala da composicao antes de virar keyframe.
     final escala = state.outputWidth / frames.first.width;
-    final zoom = stabilizeZoom(offs, frames.first.width,
-        frames.first.height);
+    final zoom = stabilizeZoom(offs, frames.first.width, frames.first.height);
 
     final base = layer.position.valueAt(Duration.zero);
     final passoUs = layer.duration.inMicroseconds / offs.length;
@@ -1713,11 +1970,13 @@ class EditorController extends Notifier<VideoProject> {
 
     final zx = layer.scaleX.valueAt(Duration.zero) * zoom;
     final zy = layer.scaleY.valueAt(Duration.zero) * zoom;
-    _replace(layer.copyLayer(
-      position: pos,
-      scaleX: AnimatedDouble(zx),
-      scaleY: AnimatedDouble(zy),
-    ));
+    _replace(
+      layer.copyLayer(
+        position: pos,
+        scaleX: AnimatedDouble(zx),
+        scaleY: AnimatedDouble(zy),
+      ),
+    );
     return offs.length;
   }
 
@@ -1742,15 +2001,13 @@ class EditorController extends Notifier<VideoProject> {
     );
     if (frames.length < 4) return null;
 
-    final centro =
-        Offset(frames.first.width / 2, frames.first.height / 2);
+    final centro = Offset(frames.first.width / 2, frames.first.height / 2);
     final track = trackSequence(frames, centro, patch: 20, busca: 40);
 
     // Suaviza MUITO mais que a estabilizacao: aqui nao se quer copiar o
     // movimento do assunto, e sim acompanhar de longe. Enquadramento que
     // treme junto com o assunto e pior que enquadramento parado.
-    final caminho =
-        smoothPath([for (final p in track) p.position], janela: 31);
+    final caminho = smoothPath([for (final p in track) p.position], janela: 31);
 
     // Escala que preenche o quadro do projeto com o video da fonte.
     final larguraFonte = frames.first.width.toDouble();
@@ -1761,8 +2018,7 @@ class EditorController extends Notifier<VideoProject> {
         ? state.outputHeight / alturaFonte
         : state.outputWidth / larguraFonte;
 
-    final centroComp =
-        Offset(state.outputWidth / 2, state.outputHeight / 2);
+    final centroComp = Offset(state.outputWidth / 2, state.outputHeight / 2);
     final passoUs = layer.duration.inMicroseconds / caminho.length;
 
     var pos = AnimatedOffset(centroComp);
@@ -1774,11 +2030,13 @@ class EditorController extends Notifier<VideoProject> {
     }
 
     final escala = preenche * larguraFonte / state.outputWidth;
-    _replace(layer.copyLayer(
-      position: pos,
-      scaleX: AnimatedDouble(escala),
-      scaleY: AnimatedDouble(escala),
-    ));
+    _replace(
+      layer.copyLayer(
+        position: pos,
+        scaleX: AnimatedDouble(escala),
+        scaleY: AnimatedDouble(escala),
+      ),
+    );
     return caminho.length;
   }
 
@@ -1786,9 +2044,11 @@ class EditorController extends Notifier<VideoProject> {
   void clearStabilization(String id) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      position: AnimatedOffset(layer.position.valueAt(Duration.zero)),
-    ));
+    _replace(
+      layer.copyLayer(
+        position: AnimatedOffset(layer.position.valueAt(Duration.zero)),
+      ),
+    );
   }
 
   // ------------------------------------------------------ pulso na batida
@@ -1857,10 +2117,12 @@ class EditorController extends Notifier<VideoProject> {
   void clearScaleKeyframes(String id) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      scaleX: AnimatedDouble(layer.scaleX.valueAt(Duration.zero)),
-      scaleY: AnimatedDouble(layer.scaleY.valueAt(Duration.zero)),
-    ));
+    _replace(
+      layer.copyLayer(
+        scaleX: AnimatedDouble(layer.scaleX.valueAt(Duration.zero)),
+        scaleY: AnimatedDouble(layer.scaleY.valueAt(Duration.zero)),
+      ),
+    );
   }
 
   // -------------------------------------------------------- velocidade
@@ -1873,21 +2135,26 @@ class EditorController extends Notifier<VideoProject> {
   void setClipSpeed(String id, double speed) {
     final layer = _layer(id);
     if (layer == null) return;
-    final v = speed.clamp(0.1, 8.0);
+    final v = speed.clamp(0.1, 10.0);
 
     final atual = switch (layer) {
-      VideoLayer l => l.speed,
+      VideoLayer l =>
+        videoSourceSpan(l).inMicroseconds / l.duration.inMicroseconds,
       AudioLayer l => l.speed,
       _ => 1.0,
     };
     if (atual <= 0) return;
     final novaDur = Duration(
-        microseconds:
-            (layer.duration.inMicroseconds * atual / v).round());
+      microseconds: (layer.duration.inMicroseconds * atual / v).round(),
+    );
     if (novaDur.inMilliseconds < 50) return;
 
     final novo = switch (layer) {
-      VideoLayer l => l.copyLayer(speed: v, duration: novaDur),
+      VideoLayer l => l.copyLayer(
+        speed: v,
+        duration: novaDur,
+        effects: replaceTimeRemap(l, null),
+      ),
       AudioLayer l => l.copyLayer(speed: v, duration: novaDur),
       _ => null,
     };
@@ -1896,22 +2163,560 @@ class EditorController extends Notifier<VideoProject> {
     // O que vinha depois anda junto: acelerar um clipe no meio nao pode
     // deixar buraco nem sobreposicao.
     final delta = novaDur - layer.duration;
-    _mutate(state.copyWith(layers: [
-      for (final l in state.layers)
-        if (l.id == id)
-          novo
-        else if (l.startTime >= layer.endTime)
-          l.copyLayer(startTime: l.startTime + delta)
-        else
-          l,
-    ]));
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in state.layers)
+            if (l.id == id)
+              novo
+            else if (l.startTime >= layer.endTime)
+              l.copyLayer(startTime: l.startTime + delta)
+            else
+              l,
+        ],
+      ),
+    );
   }
 
   double clipSpeedOf(String id) => switch (_layer(id)) {
-        VideoLayer l => l.speed,
-        AudioLayer l => l.speed,
-        _ => 1.0,
-      };
+    VideoLayer l =>
+      videoSourceSpan(l).inMicroseconds / l.duration.inMicroseconds,
+    AudioLayer l => l.speed,
+    _ => 1.0,
+  };
+
+  bool clipHasTimeRemap(String id) => switch (_layer(id)) {
+    VideoLayer l => hasTimeRemap(l),
+    _ => false,
+  };
+
+  AnimatedDouble? clipTimeRemapTrack(String id) => switch (_layer(id)) {
+    VideoLayer l => timeRemapTrackOf(l),
+    _ => null,
+  };
+
+  void setClipPreservePitch(String id, bool preserve) {
+    final layer = _layer(id);
+    switch (layer) {
+      case VideoLayer l:
+        _replace(l.copyLayer(audio: l.audio.copyWith(preservePitch: preserve)));
+      case AudioLayer l:
+        _replace(l.copyLayer(audio: l.audio.copyWith(preservePitch: preserve)));
+      case _:
+        return;
+    }
+  }
+
+  void applySpeedRamp(String id, SpeedRampPreset preset) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return;
+    final span = videoSourceSpan(layer);
+    final track = speedRampTrack(preset, layer.duration, span);
+    _replace(
+      layer.copyLayer(speed: 1, effects: replaceTimeRemap(layer, track)),
+    );
+  }
+
+  /// Liga o modo avancado com identidade linear ou volta a velocidade
+  /// constante equivalente, sem alterar o quadro nem a duracao.
+  void setClipTimeRemapEnabled(String id, bool enabled) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return;
+    if (enabled) {
+      if (hasTimeRemap(layer)) return;
+      final span = videoSourceSpan(layer);
+      final track = AnimatedDouble(0)
+          .withKeyframe(Duration.zero, 0)
+          .withKeyframe(layer.duration, span.inMicroseconds / 1000000.0);
+      _replace(
+        layer.copyLayer(speed: 1, effects: replaceTimeRemap(layer, track)),
+      );
+      return;
+    }
+    final average = clipSpeedOf(id).clamp(0.1, 10.0);
+    _replace(
+      layer.copyLayer(speed: average, effects: replaceTimeRemap(layer, null)),
+    );
+  }
+
+  void setClipTimeRemapKeyframe(
+    String id,
+    Duration localTime,
+    double sourceSeconds,
+  ) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return;
+    var track = timeRemapTrackOf(layer);
+    if (track == null) {
+      setClipTimeRemapEnabled(id, true);
+      final updated = _layer(id);
+      if (updated is! VideoLayer) return;
+      track = timeRemapTrackOf(updated);
+      if (track == null) return;
+      _replace(
+        updated.copyLayer(
+          effects: replaceTimeRemap(
+            updated,
+            track.edited(localTime, sourceSeconds),
+          ),
+        ),
+      );
+      return;
+    }
+    _replace(
+      layer.copyLayer(
+        effects: replaceTimeRemap(
+          layer,
+          track.edited(localTime, sourceSeconds),
+        ),
+      ),
+    );
+  }
+
+  void setClipSpeedBlur(String id, bool enabled) {
+    final layer = _layer(id);
+    if (layer is VideoLayer) {
+      _replace(layer.copyLayer(speedBlur: enabled));
+    }
+  }
+
+  bool reverseNeedsProxy(String id) {
+    final layer = _layer(id);
+    return layer is VideoLayer &&
+        layer.duration >= const Duration(seconds: 10) &&
+        ProxyService.instance.proxyOf(layer.sourcePath) == null;
+  }
+
+  /// Devolve false quando um video longo ainda precisa do proxy curto.
+  bool setClipReverse(
+    String id,
+    bool reverse, {
+    bool allowWithoutProxy = false,
+  }) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return false;
+    if (reverse && !allowWithoutProxy && reverseNeedsProxy(id)) return false;
+    _replace(layer.copyLayer(reverse: reverse));
+    return true;
+  }
+
+  // --------------------------------------------------------- transicoes
+
+  VideoLayer? clipAfter(String outgoingId) =>
+      videoAfter(state.layers, outgoingId);
+
+  ClipTransition? transitionAfter(String outgoingId) =>
+      clipAfter(outgoingId)?.transitionIn;
+
+  TransitionHandleReport? transitionHandleReport(
+    String outgoingId, {
+    ClipTransitionType type = ClipTransitionType.dissolve,
+    Duration duration = const Duration(milliseconds: 300),
+    TransitionAlignment alignment = TransitionAlignment.center,
+  }) => transitionHandles(
+    state.layers,
+    outgoingId,
+    ClipTransition(
+      outgoingLayerId: outgoingId,
+      type: type,
+      duration: duration,
+      alignment: alignment,
+    ),
+  );
+
+  Duration _endATrim(ClipTransition? transition) =>
+      transition != null &&
+          transition.enabled &&
+          transition.alignment == TransitionAlignment.endA
+      ? transition.duration
+      : Duration.zero;
+
+  ClipTransition _fitEndATrim(
+    VideoLayer outgoing,
+    ClipTransition requested,
+    ClipTransition? previous,
+  ) {
+    if (requested.alignment != TransitionAlignment.endA) return requested;
+    final restoredDuration = outgoing.duration + _endATrim(previous);
+    final maximum = restoredDuration - const Duration(milliseconds: 50);
+    if (maximum <= Duration.zero) {
+      return requested.copyWith(duration: Duration.zero);
+    }
+    if (requested.duration <= maximum) {
+      return requested;
+    }
+    return requested.copyWith(duration: maximum);
+  }
+
+  /// Grava a transicao e o ajuste magnetico numa unica mutacao. Em
+  /// "Fim de A", a janela inteira ocupa o fim do primeiro clipe: A e
+  /// encurtado e tudo a direita acompanha. Trocar alinhamento, duracao ou
+  /// remover a transicao restaura exatamente o ajuste anterior antes de
+  /// aplicar o novo, portanto a operacao nunca acumula trims ocultos.
+  void _commitTransition(
+    VideoLayer outgoing,
+    VideoLayer incoming,
+    ClipTransition? previous,
+    ClipTransition? next,
+  ) {
+    final durationDelta = _endATrim(previous) - _endATrim(next);
+    final junction = incoming.startTime;
+    final previousWasEndA = previous?.alignment == TransitionAlignment.endA;
+    final nextIsEndA = next?.alignment == TransitionAlignment.endA;
+    final rippleIds =
+        previousWasEndA && (previous?.rippleLayerIds.isNotEmpty ?? false)
+        ? previous!.rippleLayerIds.toSet()
+        : nextIsEndA
+        ? {
+            incoming.id,
+            for (final layer in state.layers)
+              if (layer.startTime >= junction) layer.id,
+          }
+        : <String>{};
+    final storedNext = nextIsEndA
+        ? next!.copyWith(rippleLayerIds: rippleIds.toList(growable: false))
+        : next;
+    final shiftedOutgoing = outgoing.copyLayer(
+      duration: outgoing.duration + durationDelta,
+    );
+    // A tolerancia serve para encontrar a juncao, mas ao grava-la o
+    // magnetico faz snap exato. Assim preview e export nao herdam um gap
+    // ou overlap de poucos milissegundos.
+    final snappedJunction = shiftedOutgoing.endTime;
+    final timelineDelta = snappedJunction - incoming.startTime;
+    final shiftedIncoming = incoming.copyLayer(
+      startTime: snappedJunction,
+      transitionIn: storedNext,
+      clearTransitionIn: storedNext == null,
+    );
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final layer in state.layers)
+            if (layer.id == outgoing.id)
+              shiftedOutgoing
+            else if (layer.id == incoming.id)
+              shiftedIncoming
+            else if (timelineDelta != Duration.zero &&
+                rippleIds.contains(layer.id))
+              layer.copyLayer(startTime: layer.startTime + timelineDelta)
+            else
+              layer,
+        ],
+      ),
+    );
+  }
+
+  /// Cria/atualiza a transicao na juncao depois de [outgoingId]. Quando
+  /// faltam handles, nao altera nada ate a interface escolher encurtar ou
+  /// congelar as pontas.
+  bool applyTransition(
+    String outgoingId,
+    ClipTransitionType type, {
+    Duration duration = const Duration(milliseconds: 300),
+    TransitionAlignment alignment = TransitionAlignment.center,
+    Easing curve = Easing.easeInOut,
+    TransitionEdgeFallback fallback = TransitionEdgeFallback.none,
+    EffectType? effectType,
+  }) {
+    var requested = ClipTransition(
+      outgoingLayerId: outgoingId,
+      type: type,
+      duration: duration < Duration.zero ? Duration.zero : duration,
+      alignment: alignment,
+      curve: curve,
+      effect: type == ClipTransitionType.effect && effectType != null
+          ? EffectInstance(type: effectType)
+          : null,
+    );
+    final report = transitionHandles(state.layers, outgoingId, requested);
+    if (report == null) return false;
+    if (!report.hasEnough) {
+      switch (fallback) {
+        case TransitionEdgeFallback.none:
+          return false;
+        case TransitionEdgeFallback.shorten:
+          final shortened = report.maximumDuration;
+          if (shortened < const Duration(milliseconds: 50)) return false;
+          requested = requested.copyWith(duration: shortened);
+        case TransitionEdgeFallback.freeze:
+          requested = requested.copyWith(freezeEdges: true);
+      }
+    }
+    requested = _fitEndATrim(
+      report.outgoing,
+      requested,
+      report.incoming.transitionIn,
+    );
+    if (duration > Duration.zero && requested.duration == Duration.zero) {
+      return false;
+    }
+    if (requested.duration < const Duration(milliseconds: 50) &&
+        requested.duration > Duration.zero) {
+      return false;
+    }
+    _commitTransition(
+      report.outgoing,
+      report.incoming,
+      report.incoming.transitionIn,
+      requested,
+    );
+    return true;
+  }
+
+  void removeTransition(String outgoingId) {
+    final incoming = clipAfter(outgoingId);
+    if (incoming == null || incoming.transitionIn == null) return;
+    final outgoing = _layer(outgoingId);
+    if (outgoing is! VideoLayer) return;
+    _commitTransition(outgoing, incoming, incoming.transitionIn, null);
+  }
+
+  void updateTransition(
+    String outgoingId,
+    ClipTransition Function(ClipTransition) update,
+  ) {
+    final incoming = clipAfter(outgoingId);
+    final current = incoming?.transitionIn;
+    if (incoming == null || current == null) return;
+    _replace(incoming.copyLayer(transitionIn: update(current)));
+  }
+
+  void setTransitionDuration(String outgoingId, Duration duration) {
+    final incoming = clipAfter(outgoingId);
+    final current = incoming?.transitionIn;
+    if (incoming == null || current == null) return;
+    var next = current.copyWith(
+      duration: duration < Duration.zero ? Duration.zero : duration,
+    );
+    final report = transitionHandles(state.layers, outgoingId, next);
+    if (report != null && !report.hasEnough && !next.freezeEdges) {
+      next = next.copyWith(duration: report.maximumDuration);
+    }
+    final outgoing = _layer(outgoingId);
+    if (outgoing is! VideoLayer) return;
+    next = _fitEndATrim(outgoing, next, current);
+    _commitTransition(outgoing, incoming, current, next);
+  }
+
+  void setTransitionAlignment(
+    String outgoingId,
+    TransitionAlignment alignment,
+  ) {
+    final incoming = clipAfter(outgoingId);
+    final current = incoming?.transitionIn;
+    if (incoming == null || current == null) return;
+    var next = current.copyWith(alignment: alignment);
+    final report = transitionHandles(state.layers, outgoingId, next);
+    if (report != null && !report.hasEnough && !next.freezeEdges) {
+      next = next.copyWith(duration: report.maximumDuration);
+    }
+    final outgoing = _layer(outgoingId);
+    if (outgoing is! VideoLayer) return;
+    next = _fitEndATrim(outgoing, next, current);
+    _commitTransition(outgoing, incoming, current, next);
+  }
+
+  void setTransitionCurve(String outgoingId, Easing curve) {
+    updateTransition(outgoingId, (t) => t.copyWith(curve: curve));
+  }
+
+  void setTransitionAudioCrossfade(String outgoingId, bool enabled) {
+    updateTransition(outgoingId, (t) => t.copyWith(crossfadeAudio: enabled));
+  }
+
+  void setTransitionEffect(String outgoingId, EffectType effectType) {
+    updateTransition(
+      outgoingId,
+      (t) => t.copyWith(
+        type: ClipTransitionType.effect,
+        effect: EffectInstance(type: effectType),
+      ),
+    );
+  }
+
+  void setTransitionEffectParam(String outgoingId, String key, double value) {
+    updateTransition(outgoingId, (t) {
+      final effect = t.effect;
+      if (effect == null) return t;
+      return t.copyWith(
+        effect: effect.copyWith(
+          params: {...effect.params, key: effect.track(key).withBase(value)},
+        ),
+      );
+    });
+  }
+
+  // ------------------------------------------------------------ congelar
+
+  ({Duration sourceOffset, AnimatedDouble track}) _sliceVideoTrack(
+    VideoLayer layer,
+    Duration from,
+    Duration to,
+  ) {
+    final originalTrack = timeRemapTrackOf(layer);
+    final times = <Duration>{from, to};
+    if (originalTrack != null) {
+      for (final k in originalTrack.keyframes) {
+        if (k.time > from && k.time < to) times.add(k.time);
+      }
+    }
+    final sorted = times.toList()..sort();
+    final values = <double>[
+      for (final t in sorted)
+        videoSourceTimeAt(layer, t).inMicroseconds / 1000000.0,
+    ];
+    var minimum = values.first;
+    for (final value in values) {
+      if (value < minimum) minimum = value;
+    }
+    var track = AnimatedDouble(values.first - minimum);
+    for (var i = 0; i < sorted.length; i++) {
+      track = track.withKeyframe(
+        sorted[i] - from,
+        values[i] - minimum,
+        originalTrack?.easeAt(sorted[i]) ?? Easing.linear,
+      );
+    }
+    return (
+      sourceOffset:
+          layer.sourceOffset +
+          Duration(microseconds: (minimum * 1000000).round()),
+      track: track,
+    );
+  }
+
+  /// Congela o quadro do cabecote e ripla tudo que comeca dali para a
+  /// direita. [insideClip] grava o hold no proprio Time Remap;
+  /// [separateClip] divide e insere uma camada de quadro parado.
+  bool freezeFrame(
+    String id,
+    Duration globalTime, {
+    Duration duration = const Duration(seconds: 1),
+    FreezePlacement placement = FreezePlacement.separateClip,
+  }) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer ||
+        duration <= Duration.zero ||
+        !layer.activeAt(globalTime)) {
+      return false;
+    }
+    final at = layer.localTime(globalTime);
+    if (at < const Duration(milliseconds: 50) ||
+        layer.duration - at < const Duration(milliseconds: 50)) {
+      return false;
+    }
+
+    if (placement == FreezePlacement.insideClip) {
+      final before = _sliceVideoTrack(layer, Duration.zero, at);
+      final after = _sliceVideoTrack(layer, at, layer.duration);
+      final frozenValue =
+          videoSourceTimeAt(layer, at).inMicroseconds / 1000000.0;
+      var track = AnimatedDouble(
+        videoSourceTimeAt(layer, Duration.zero).inMicroseconds / 1000000.0,
+      );
+      for (final k in before.track.keyframes) {
+        final absolute =
+            before.sourceOffset.inMicroseconds / 1000000.0 +
+            k.value -
+            layer.sourceOffset.inMicroseconds / 1000000.0;
+        track = track.withKeyframe(k.time, absolute, k.ease);
+      }
+      track = track
+          .withKeyframe(at, frozenValue)
+          .withKeyframe(at + duration, frozenValue);
+      for (final k in after.track.keyframes.skip(1)) {
+        final absolute =
+            after.sourceOffset.inMicroseconds / 1000000.0 +
+            k.value -
+            layer.sourceOffset.inMicroseconds / 1000000.0;
+        track = track.withKeyframe(at + duration + k.time, absolute, k.ease);
+      }
+      final extended = layer.copyLayer(
+        duration: layer.duration + duration,
+        speed: 1,
+        reverse: false,
+        effects: replaceTimeRemap(layer, track),
+      );
+      _mutate(
+        state.copyWith(
+          layers: [
+            for (final l in state.layers)
+              if (l.id == id)
+                extended
+              else if (l.startTime >= globalTime)
+                l.copyLayer(startTime: l.startTime + duration)
+              else
+                l,
+          ],
+        ),
+      );
+      return true;
+    }
+
+    final firstSlice = _sliceVideoTrack(layer, Duration.zero, at);
+    final secondSlice = _sliceVideoTrack(layer, at, layer.duration);
+    final first = layer.copyLayer(
+      duration: at,
+      sourceOffset: firstSlice.sourceOffset,
+      speed: 1,
+      reverse: false,
+      effects: replaceTimeRemap(layer, firstSlice.track),
+    );
+    final second = layer.duplicated().copyLayer(
+      name: layer.name,
+      startTime: globalTime + duration,
+      duration: layer.duration - at,
+      sourceOffset: secondSlice.sourceOffset,
+      speed: 1,
+      reverse: false,
+      effects: replaceTimeRemap(layer, secondSlice.track),
+      clearTransitionIn: true,
+    );
+    final frozenSource = videoAbsoluteSourceTimeAt(layer, at);
+    final hold = AnimatedDouble(0)
+        .withKeyframe(Duration.zero, 0)
+        .withKeyframe(duration, 0);
+    final frozen = layer.duplicated().copyLayer(
+      name: '${layer.name} · quadro parado',
+      startTime: globalTime,
+      duration: duration,
+      sourceOffset: frozenSource,
+      speed: 1,
+      reverse: false,
+      volume: 0,
+      audio: layer.audio.copyWith(muted: true),
+      effects: replaceTimeRemap(layer, hold),
+      clearTransitionIn: true,
+    );
+
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in state.layers)
+            if (l.id == id) ...[
+              second,
+              frozen,
+              first,
+            ] else if (l is VideoLayer && l.transitionIn?.outgoingLayerId == id)
+              l.copyLayer(
+                startTime: l.startTime >= globalTime
+                    ? l.startTime + duration
+                    : l.startTime,
+                transitionIn: l.transitionIn!.copyWith(
+                  outgoingLayerId: second.id,
+                ),
+              )
+            else if (l.startTime >= globalTime)
+              l.copyLayer(startTime: l.startTime + duration)
+            else
+              l,
+        ],
+      ),
+    );
+    ref.read(selectedLayerProvider.notifier).state = frozen.id;
+    return true;
+  }
 
   // ------------------------------------------------------- marcadores
 
@@ -1921,14 +2726,24 @@ class EditorController extends Notifier<VideoProject> {
     const tol = Duration(milliseconds: 120);
     final existente = state.markerNear(t, tol);
     if (existente != null) {
-      _mutate(state.copyWith(markers: [
-        for (final m in state.markers)
-          if (m.time != existente.time) m,
-      ]));
+      _mutate(
+        state.copyWith(
+          markers: [
+            for (final m in state.markers)
+              if (m.time != existente.time) m,
+          ],
+        ),
+      );
       return;
     }
-    _mutate(state.copyWith(
-        markers: [...state.markers, Marker(time: t, label: label)]));
+    _mutate(
+      state.copyWith(
+        markers: [
+          ...state.markers,
+          Marker(time: t, label: label),
+        ],
+      ),
+    );
   }
 
   /// Renomeia a marca em [t] (a mais proxima).
@@ -1936,10 +2751,14 @@ class EditorController extends Notifier<VideoProject> {
     const tol = Duration(milliseconds: 120);
     final alvo = state.markerNear(t, tol);
     if (alvo == null) return;
-    _mutate(state.copyWith(markers: [
-      for (final m in state.markers)
-        if (m.time == alvo.time) m.copyWith(label: label) else m,
-    ]));
+    _mutate(
+      state.copyWith(
+        markers: [
+          for (final m in state.markers)
+            if (m.time == alvo.time) m.copyWith(label: label) else m,
+        ],
+      ),
+    );
   }
 
   /// Arrasta uma marca de [de] para [para].
@@ -1948,10 +2767,14 @@ class EditorController extends Notifier<VideoProject> {
     final alvo = state.markerNear(de, tol);
     if (alvo == null) return;
     final t = para < Duration.zero ? Duration.zero : para;
-    _mutate(state.copyWith(markers: [
-      for (final m in state.markers)
-        if (m.time == alvo.time) m.copyWith(time: t) else m,
-    ]));
+    _mutate(
+      state.copyWith(
+        markers: [
+          for (final m in state.markers)
+            if (m.time == alvo.time) m.copyWith(time: t) else m,
+        ],
+      ),
+    );
   }
 
   /// Pinta a marca. Cor de marcador nao e enfeite: e como se separa
@@ -1960,20 +2783,28 @@ class EditorController extends Notifier<VideoProject> {
     const tol = Duration(milliseconds: 120);
     final alvo = state.markerNear(t, tol);
     if (alvo == null) return;
-    _mutate(state.copyWith(markers: [
-      for (final m in state.markers)
-        if (m.time == alvo.time) m.copyWith(color: cor) else m,
-    ]));
+    _mutate(
+      state.copyWith(
+        markers: [
+          for (final m in state.markers)
+            if (m.time == alvo.time) m.copyWith(color: cor) else m,
+        ],
+      ),
+    );
   }
 
   void removeMarker(Duration t) {
     const tol = Duration(milliseconds: 120);
     final alvo = state.markerNear(t, tol);
     if (alvo == null) return;
-    _mutate(state.copyWith(markers: [
-      for (final m in state.markers)
-        if (m.time != alvo.time) m,
-    ]));
+    _mutate(
+      state.copyWith(
+        markers: [
+          for (final m in state.markers)
+            if (m.time != alvo.time) m,
+        ],
+      ),
+    );
   }
 
   void clearMarkers() {
@@ -2008,8 +2839,7 @@ class EditorController extends Notifier<VideoProject> {
   bool joinWithNeighbour(String id) {
     final vizinho = joinableNeighbour(state.layers, id);
     if (vizinho == null) return false;
-    _mutate(state.copyWith(
-        layers: joinAdjacent(state.layers, id, vizinho.id)));
+    _mutate(state.copyWith(layers: joinAdjacent(state.layers, id, vizinho.id)));
     return true;
   }
 
@@ -2017,13 +2847,23 @@ class EditorController extends Notifier<VideoProject> {
   bool hasJoinableNeighbour(String id) =>
       joinableNeighbour(state.layers, id) != null;
 
-
   /// EXCLUSAO COM ARRASTO: tira a camada e puxa para tras o que vinha
   /// depois. E a diferenca entre "apaguei um trecho" e "apaguei um
   /// trecho e agora tenho um silencio no meio".
   void rippleDeleteLayer(String id) {
     if (_layer(id) == null) return;
-    _mutate(state.copyWith(layers: rippleDelete(state.layers, id)));
+    final deleted = rippleDelete(state.layers, id);
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in deleted)
+            if (l is VideoLayer && l.transitionIn?.outgoingLayerId == id)
+              l.copyLayer(clearTransitionIn: true)
+            else
+              l,
+        ],
+      ),
+    );
     if (ref.read(selectedLayerProvider) == id) {
       ref.read(selectedLayerProvider.notifier).state = null;
     }
@@ -2059,15 +2899,17 @@ class EditorController extends Notifier<VideoProject> {
   /// LEVANTAR: tira o trecho e deixa o buraco (mantem a sincronia).
   void liftTimeRange(Duration from, Duration to, {Set<String>? only}) {
     if (to <= from) return;
-    _mutate(state.copyWith(
-        layers: liftRange(state.layers, from, to, only: only)));
+    _mutate(
+      state.copyWith(layers: liftRange(state.layers, from, to, only: only)),
+    );
   }
 
   /// EXTRAIR: tira o trecho e fecha o buraco.
   void extractTimeRange(Duration from, Duration to, {Set<String>? only}) {
     if (to <= from) return;
-    _mutate(state.copyWith(
-        layers: extractRange(state.layers, from, to, only: only)));
+    _mutate(
+      state.copyWith(layers: extractRange(state.layers, from, to, only: only)),
+    );
   }
 
   void duplicateLayer(String id) {
@@ -2116,18 +2958,49 @@ class EditorController extends Notifier<VideoProject> {
     if (start > maxStart) start = maxStart;
     final delta = start - layer.startTime;
     if (layer is VideoLayer) {
-      var offset = layer.sourceOffset + delta;
+      if (hasTimeRemap(layer) || layer.reverse) {
+        final sliced = _sliceVideoTrack(layer, delta, layer.duration);
+        _replace(
+          layer.copyLayer(
+            startTime: start,
+            duration: layer.endTime - start,
+            sourceOffset: sliced.sourceOffset,
+            speed: 1,
+            reverse: false,
+            effects: replaceTimeRemap(layer, sliced.track),
+          ),
+        );
+      } else {
+        var offset =
+            layer.sourceOffset +
+            Duration(
+              microseconds: (delta.inMicroseconds * layer.speed).round(),
+            );
+        if (offset < Duration.zero) offset = Duration.zero;
+        _replace(
+          layer.copyLayer(
+            startTime: start,
+            duration: layer.endTime - start,
+            sourceOffset: offset,
+          ),
+        );
+      }
+    } else if (layer is AudioLayer) {
+      var offset =
+          layer.sourceOffset +
+          Duration(microseconds: (delta.inMicroseconds * layer.speed).round());
       if (offset < Duration.zero) offset = Duration.zero;
-      _replace(layer.copyLayer(
-        startTime: start,
-        duration: layer.endTime - start,
-        sourceOffset: offset,
-      ));
+      _replace(
+        layer.copyLayer(
+          startTime: start,
+          duration: layer.endTime - start,
+          sourceOffset: offset,
+        ),
+      );
     } else {
-      _replace(layer.copyLayer(
-        startTime: start,
-        duration: layer.endTime - start,
-      ));
+      _replace(
+        layer.copyLayer(startTime: start, duration: layer.endTime - start),
+      );
     }
   }
 
@@ -2137,6 +3010,21 @@ class EditorController extends Notifier<VideoProject> {
     var duration = newEnd - layer.startTime;
     if (duration < const Duration(milliseconds: 100)) {
       duration = const Duration(milliseconds: 100);
+    }
+    if (layer is VideoLayer &&
+        duration < layer.duration &&
+        (layer.reverse || hasTimeRemap(layer))) {
+      final slice = _sliceVideoTrack(layer, Duration.zero, duration);
+      _replace(
+        layer.copyLayer(
+          duration: duration,
+          sourceOffset: slice.sourceOffset,
+          speed: 1,
+          reverse: false,
+          effects: replaceTimeRemap(layer, slice.track),
+        ),
+      );
+      return;
     }
     _replace(layer.copyLayer(duration: duration));
   }
@@ -2151,15 +3039,47 @@ class EditorController extends Notifier<VideoProject> {
       return;
     }
 
-    final first = layer.copyLayer(duration: firstDur);
+    Layer first = layer.copyLayer(duration: firstDur);
     Layer second = layer.duplicated().copyLayer(
-          startTime: at,
-          duration: secondDur,
-        );
+      startTime: at,
+      duration: secondDur,
+    );
     if (second is VideoLayer && layer is VideoLayer) {
-      second = second.copyLayer(sourceOffset: layer.sourceOffset + firstDur);
+      if (hasTimeRemap(layer) || layer.reverse) {
+        final a = _sliceVideoTrack(layer, Duration.zero, firstDur);
+        final b = _sliceVideoTrack(layer, firstDur, layer.duration);
+        first = layer.copyLayer(
+          duration: firstDur,
+          sourceOffset: a.sourceOffset,
+          speed: 1,
+          reverse: false,
+          effects: replaceTimeRemap(layer, a.track),
+        );
+        second = second.copyLayer(
+          sourceOffset: b.sourceOffset,
+          speed: 1,
+          reverse: false,
+          effects: replaceTimeRemap(layer, b.track),
+          clearTransitionIn: true,
+        );
+      } else {
+        second = second.copyLayer(
+          sourceOffset:
+              layer.sourceOffset +
+              Duration(
+                microseconds: (firstDur.inMicroseconds * layer.speed).round(),
+              ),
+          clearTransitionIn: true,
+        );
+      }
     } else if (second is AudioLayer && layer is AudioLayer) {
-      second = second.copyLayer(sourceOffset: layer.sourceOffset + firstDur);
+      second = second.copyLayer(
+        sourceOffset:
+            layer.sourceOffset +
+            Duration(
+              microseconds: (firstDur.inMicroseconds * layer.speed).round(),
+            ),
+      );
     }
 
     final layers = <Layer>[];
@@ -2167,6 +3087,14 @@ class EditorController extends Notifier<VideoProject> {
       if (l.id == id) {
         layers.add(second);
         layers.add(first);
+      } else if (l is VideoLayer &&
+          second is VideoLayer &&
+          l.transitionIn?.outgoingLayerId == id) {
+        layers.add(
+          l.copyLayer(
+            transitionIn: l.transitionIn!.copyWith(outgoingLayerId: second.id),
+          ),
+        );
       } else {
         layers.add(l);
       }
@@ -2223,63 +3151,81 @@ class EditorController extends Notifier<VideoProject> {
   void editPosition(String id, Duration globalTime, Offset value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      position: layer.position.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        position: layer.position.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   void editScaleUniform(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
     final t = layer.localTime(globalTime);
-    _replace(layer.copyLayer(
-      scaleX: layer.scaleX.edited(t, value),
-      scaleY: layer.scaleY.edited(t, value),
-    ));
+    _replace(
+      layer.copyLayer(
+        scaleX: layer.scaleX.edited(t, value),
+        scaleY: layer.scaleY.edited(t, value),
+      ),
+    );
   }
 
   void editScaleX(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      scaleX: layer.scaleX.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        scaleX: layer.scaleX.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   void editScaleY(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      scaleY: layer.scaleY.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        scaleY: layer.scaleY.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   /// Rotacao e uma propriedade GLOBAL de 3 eixos: com animacao ligada,
   /// editar qualquer eixo (X, Y ou Z) marca keyframe nos TRES ao mesmo
   /// tempo — os eixos ficam sempre sincronizados na timeline.
-  void _editRotationAxis(String id, Duration globalTime,
-      {double? z, double? x, double? y}) {
+  void _editRotationAxis(
+    String id,
+    Duration globalTime, {
+    double? z,
+    double? x,
+    double? y,
+  }) {
     final layer = _layer(id);
     if (layer == null) return;
     final t = layer.localTime(globalTime);
-    final anyAnimated = layer.rotation.isAnimated ||
+    final anyAnimated =
+        layer.rotation.isAnimated ||
         layer.rotationX.isAnimated ||
         layer.rotationY.isAnimated;
     if (!anyAnimated) {
-      _replace(layer.copyLayer(
-        rotation: z == null ? null : layer.rotation.withBase(z),
-        rotationX: x == null ? null : layer.rotationX.withBase(x),
-        rotationY: y == null ? null : layer.rotationY.withBase(y),
-      ));
+      _replace(
+        layer.copyLayer(
+          rotation: z == null ? null : layer.rotation.withBase(z),
+          rotationX: x == null ? null : layer.rotationX.withBase(x),
+          rotationY: y == null ? null : layer.rotationY.withBase(y),
+        ),
+      );
       return;
     }
     AnimatedDouble key(AnimatedDouble track, double? v) =>
         track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t));
-    _replace(layer.copyLayer(
-      rotation: key(layer.rotation, z),
-      rotationX: key(layer.rotationX, x),
-      rotationY: key(layer.rotationY, y),
-    ));
+    _replace(
+      layer.copyLayer(
+        rotation: key(layer.rotation, z),
+        rotationX: key(layer.rotationX, x),
+        rotationY: key(layer.rotationY, y),
+      ),
+    );
   }
 
   void editRotation(String id, Duration globalTime, double value) =>
@@ -2294,34 +3240,44 @@ class EditorController extends Notifier<VideoProject> {
   void editOpacity(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      opacity:
-          layer.opacity.edited(layer.localTime(globalTime), value.clamp(0, 1)),
-    ));
+    _replace(
+      layer.copyLayer(
+        opacity: layer.opacity.edited(
+          layer.localTime(globalTime),
+          value.clamp(0, 1),
+        ),
+      ),
+    );
   }
 
   void editSkewX(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      skewX: layer.skewX.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        skewX: layer.skewX.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   void editSkewY(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      skewY: layer.skewY.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        skewY: layer.skewY.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   void editPivot(String id, Duration globalTime, Offset value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      pivot: layer.pivot.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        pivot: layer.pivot.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   /// Escolhe um dos modos PROPRIOS (Linear Burn, Vivid Light...), que
@@ -2329,11 +3285,13 @@ class EditorController extends Notifier<VideoProject> {
   void setCustomBlend(String id, AureaBlend? mode) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      blendMode: BlendMode.srcOver,
-      customBlend: mode,
-      clearCustomBlend: mode == null,
-    ));
+    _replace(
+      layer.copyLayer(
+        blendMode: BlendMode.srcOver,
+        customBlend: mode,
+        clearCustomBlend: mode == null,
+      ),
+    );
   }
 
   void setBlendMode(String id, BlendMode mode) {
@@ -2351,19 +3309,23 @@ class EditorController extends Notifier<VideoProject> {
       case LayerProp.position:
         _replace(layer.copyLayer(position: AnimatedOffset(_center)));
       case LayerProp.scale:
-        _replace(layer.copyLayer(
-            scaleX: AnimatedDouble(1), scaleY: AnimatedDouble(1)));
+        _replace(
+          layer.copyLayer(scaleX: AnimatedDouble(1), scaleY: AnimatedDouble(1)),
+        );
       case LayerProp.rotation:
-        _replace(layer.copyLayer(
-          rotation: AnimatedDouble(0),
-          rotationX: AnimatedDouble(0),
-          rotationY: AnimatedDouble(0),
-        ));
+        _replace(
+          layer.copyLayer(
+            rotation: AnimatedDouble(0),
+            rotationX: AnimatedDouble(0),
+            rotationY: AnimatedDouble(0),
+          ),
+        );
       case LayerProp.opacity:
         _replace(layer.copyLayer(opacity: AnimatedDouble(1)));
       case LayerProp.skew:
-        _replace(layer.copyLayer(
-            skewX: AnimatedDouble(0), skewY: AnimatedDouble(0)));
+        _replace(
+          layer.copyLayer(skewX: AnimatedDouble(0), skewY: AnimatedDouble(0)),
+        );
       case LayerProp.pivot:
         _replace(layer.copyLayer(pivot: AnimatedOffset(Offset.zero)));
       case LayerProp.parent:
@@ -2402,21 +3364,25 @@ class EditorController extends Notifier<VideoProject> {
       case LayerProp.position:
         _replace(layer.copyLayer(position: togO(layer.position)));
       case LayerProp.scale:
-        _replace(layer.copyLayer(
-            scaleX: tog(layer.scaleX), scaleY: tog(layer.scaleY)));
+        _replace(
+          layer.copyLayer(scaleX: tog(layer.scaleX), scaleY: tog(layer.scaleY)),
+        );
       case LayerProp.rotation:
         // Keyframe de rotacao e GLOBAL: marca/desmarca X, Y e Z juntos,
         // seja qual for o eixo que o usuario esta usando.
-        _replace(layer.copyLayer(
-          rotation: tog(layer.rotation),
-          rotationX: tog(layer.rotationX),
-          rotationY: tog(layer.rotationY),
-        ));
+        _replace(
+          layer.copyLayer(
+            rotation: tog(layer.rotation),
+            rotationX: tog(layer.rotationX),
+            rotationY: tog(layer.rotationY),
+          ),
+        );
       case LayerProp.opacity:
         _replace(layer.copyLayer(opacity: tog(layer.opacity)));
       case LayerProp.skew:
         _replace(
-            layer.copyLayer(skewX: tog(layer.skewX), skewY: tog(layer.skewY)));
+          layer.copyLayer(skewX: tog(layer.skewX), skewY: tog(layer.skewY)),
+        );
       case LayerProp.pivot:
         _replace(layer.copyLayer(pivot: togO(layer.pivot)));
       case LayerProp.parent:
@@ -2425,35 +3391,50 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void setSegmentEase(
-      String id, LayerProp prop, Duration segStartLocal, Easing ease) {
+    String id,
+    LayerProp prop,
+    Duration segStartLocal,
+    Easing ease,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     switch (prop) {
       case LayerProp.position:
-        _replace(layer.copyLayer(
-            position: layer.position.withEase(segStartLocal, ease)));
+        _replace(
+          layer.copyLayer(
+            position: layer.position.withEase(segStartLocal, ease),
+          ),
+        );
       case LayerProp.scale:
-        _replace(layer.copyLayer(
-          scaleX: layer.scaleX.withEase(segStartLocal, ease),
-          scaleY: layer.scaleY.withEase(segStartLocal, ease),
-        ));
+        _replace(
+          layer.copyLayer(
+            scaleX: layer.scaleX.withEase(segStartLocal, ease),
+            scaleY: layer.scaleY.withEase(segStartLocal, ease),
+          ),
+        );
       case LayerProp.rotation:
-        _replace(layer.copyLayer(
-          rotation: layer.rotation.withEase(segStartLocal, ease),
-          rotationX: layer.rotationX.withEase(segStartLocal, ease),
-          rotationY: layer.rotationY.withEase(segStartLocal, ease),
-        ));
+        _replace(
+          layer.copyLayer(
+            rotation: layer.rotation.withEase(segStartLocal, ease),
+            rotationX: layer.rotationX.withEase(segStartLocal, ease),
+            rotationY: layer.rotationY.withEase(segStartLocal, ease),
+          ),
+        );
       case LayerProp.opacity:
-        _replace(layer.copyLayer(
-            opacity: layer.opacity.withEase(segStartLocal, ease)));
+        _replace(
+          layer.copyLayer(opacity: layer.opacity.withEase(segStartLocal, ease)),
+        );
       case LayerProp.skew:
-        _replace(layer.copyLayer(
-          skewX: layer.skewX.withEase(segStartLocal, ease),
-          skewY: layer.skewY.withEase(segStartLocal, ease),
-        ));
+        _replace(
+          layer.copyLayer(
+            skewX: layer.skewX.withEase(segStartLocal, ease),
+            skewY: layer.skewY.withEase(segStartLocal, ease),
+          ),
+        );
       case LayerProp.pivot:
         _replace(
-            layer.copyLayer(pivot: layer.pivot.withEase(segStartLocal, ease)));
+          layer.copyLayer(pivot: layer.pivot.withEase(segStartLocal, ease)),
+        );
       case LayerProp.parent:
         break;
     }
@@ -2466,23 +3447,29 @@ class EditorController extends Notifier<VideoProject> {
       case LayerProp.position:
         _replace(layer.copyLayer(position: layer.position.withEaseAll(ease)));
       case LayerProp.scale:
-        _replace(layer.copyLayer(
-          scaleX: layer.scaleX.withEaseAll(ease),
-          scaleY: layer.scaleY.withEaseAll(ease),
-        ));
+        _replace(
+          layer.copyLayer(
+            scaleX: layer.scaleX.withEaseAll(ease),
+            scaleY: layer.scaleY.withEaseAll(ease),
+          ),
+        );
       case LayerProp.rotation:
-        _replace(layer.copyLayer(
-          rotation: layer.rotation.withEaseAll(ease),
-          rotationX: layer.rotationX.withEaseAll(ease),
-          rotationY: layer.rotationY.withEaseAll(ease),
-        ));
+        _replace(
+          layer.copyLayer(
+            rotation: layer.rotation.withEaseAll(ease),
+            rotationX: layer.rotationX.withEaseAll(ease),
+            rotationY: layer.rotationY.withEaseAll(ease),
+          ),
+        );
       case LayerProp.opacity:
         _replace(layer.copyLayer(opacity: layer.opacity.withEaseAll(ease)));
       case LayerProp.skew:
-        _replace(layer.copyLayer(
-          skewX: layer.skewX.withEaseAll(ease),
-          skewY: layer.skewY.withEaseAll(ease),
-        ));
+        _replace(
+          layer.copyLayer(
+            skewX: layer.skewX.withEaseAll(ease),
+            skewY: layer.skewY.withEaseAll(ease),
+          ),
+        );
       case LayerProp.pivot:
         _replace(layer.copyLayer(pivot: layer.pivot.withEaseAll(ease)));
       case LayerProp.parent:
@@ -2495,9 +3482,14 @@ class EditorController extends Notifier<VideoProject> {
   void addEffect(String layerId, EffectType type) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      effects: [...layer.effects, EffectInstance(type: type)],
-    ));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          ...layer.effects,
+          EffectInstance(type: type),
+        ],
+      ),
+    );
   }
 
   /// AS TRES PROFUNDIDADES (constituicao, regra 2): descer e subir nao
@@ -2505,30 +3497,39 @@ class EditorController extends Notifier<VideoProject> {
   void setEffectDepth(String layerId, String effectId, EffectDepth depth) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.withDepth(depth) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.withDepth(depth) : e,
+        ],
+      ),
+    );
   }
 
   /// PRONTO: o preset crava os numeros dele (e a cor, quando o preset
   /// manda nela) e deixa o resto como estava.
-  void applyEffectPronto(
-      String layerId, String effectId, EffectPronto pronto) {
+  void applyEffectPronto(String layerId, String effectId, EffectPronto pronto) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.withPreset(pronto) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.withPreset(pronto) : e,
+        ],
+      ),
+    );
   }
 
   void removeEffect(String layerId, String effectId) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      effects: layer.effects.where((e) => e.id != effectId).toList(),
-    ));
+    _replace(
+      layer.copyLayer(
+        effects: layer.effects.where((e) => e.id != effectId).toList(),
+      ),
+    );
   }
 
   void reorderEffect(String layerId, String effectId, int delta) {
@@ -2547,90 +3548,141 @@ class EditorController extends Notifier<VideoProject> {
   void toggleEffectEnabled(String layerId, String effectId) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.copyWith(enabled: !e.enabled) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.copyWith(enabled: !e.enabled) : e,
+        ],
+      ),
+    );
   }
 
   /// Edita valor do parametro no tempo global (auto-keyframe se anima).
-  void editEffectParam(String layerId, String effectId, String key,
-      Duration globalTime, double value) {
+  void editEffectParam(
+    String layerId,
+    String effectId,
+    String key,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.withParamEdited(key, local, value) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.withParamEdited(key, local, value) : e,
+        ],
+      ),
+    );
   }
 
   /// Diamante do EFEITO: keyframe universal neste instante.
   void toggleEffectKeyframe(
-      String layerId, String effectId, Duration globalTime) {
+    String layerId,
+    String effectId,
+    Duration globalTime,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.withKeyframeToggled(local) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.withKeyframeToggled(local) : e,
+        ],
+      ),
+    );
   }
 
   /// CURVA DO EFEITO: o easing do trecho que comeca em [segStartLocal],
   /// em TODOS os parametros. O keyframe e universal; a curva tambem.
-  void setEffectSegmentEase(String layerId, String effectId,
-      Duration segStartLocal, Easing ease) {
+  void setEffectSegmentEase(
+    String layerId,
+    String effectId,
+    Duration segStartLocal,
+    Easing ease,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId
-            ? e.copyWith(params: {
-                for (final p in e.params.entries)
-                  p.key: p.value.hasKeyframeAt(segStartLocal)
-                      ? p.value.withEase(segStartLocal, ease)
-                      : p.value,
-              })
-            : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId
+                ? e.copyWith(
+                    params: {
+                      for (final p in e.params.entries)
+                        p.key: p.value.hasKeyframeAt(segStartLocal)
+                            ? p.value.withEase(segStartLocal, ease)
+                            : p.value,
+                    },
+                  )
+                : e,
+        ],
+      ),
+    );
   }
 
   /// A mesma curva em todos os trechos de todos os parametros do efeito.
   void applyEaseToAllEffectSegments(
-      String layerId, String effectId, Easing ease) {
+    String layerId,
+    String effectId,
+    Easing ease,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId
-            ? e.copyWith(params: {
-                for (final p in e.params.entries)
-                  p.key: p.value.withEaseAll(ease),
-              })
-            : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId
+                ? e.copyWith(
+                    params: {
+                      for (final p in e.params.entries)
+                        p.key: p.value.withEaseAll(ease),
+                    },
+                  )
+                : e,
+        ],
+      ),
+    );
   }
 
   /// Diamante do parametro do efeito.
   void toggleEffectParamKeyframe(
-      String layerId, String effectId, String key, Duration globalTime) {
+    String layerId,
+    String effectId,
+    String key,
+    Duration globalTime,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.withParamKeyframeToggled(key, local) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.withParamKeyframeToggled(key, local) : e,
+        ],
+      ),
+    );
   }
 
   void setEffectColor(String layerId, String effectId, Color color) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.copyWith(color: color) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.copyWith(color: color) : e,
+        ],
+      ),
+    );
   }
 
   // ---------------------------------------------------------- modulo grid
@@ -2658,13 +3710,20 @@ class EditorController extends Notifier<VideoProject> {
   /// Easing do SEGMENTO de uma trilha da grade (curve editor por
   /// parametro — inclui 'transition', o morph).
   void setGridSegmentEase(
-      String nullId, String key, Duration segStartLocal, Easing ease) {
+    String nullId,
+    String key,
+    Duration segStartLocal,
+    Easing ease,
+  ) {
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
     final track = gridTrackOf(layer.grid!, key);
     if (track == null) return;
-    _replace(layer.withGrid(gridWithTrack(
-        layer.grid!, key, track.withEase(segStartLocal, ease))));
+    _replace(
+      layer.withGrid(
+        gridWithTrack(layer.grid!, key, track.withEase(segStartLocal, ease)),
+      ),
+    );
   }
 
   void applyEaseToAllGridSegments(String nullId, String key, Easing ease) {
@@ -2672,8 +3731,9 @@ class EditorController extends Notifier<VideoProject> {
     if (layer is! NullLayer || layer.grid == null) return;
     final track = gridTrackOf(layer.grid!, key);
     if (track == null) return;
-    _replace(layer
-        .withGrid(gridWithTrack(layer.grid!, key, track.withEaseAll(ease))));
+    _replace(
+      layer.withGrid(gridWithTrack(layer.grid!, key, track.withEaseAll(ease))),
+    );
   }
 
   /// Nulo CONTROLADOR da grade: o transform dele modula os parametros
@@ -2681,68 +3741,79 @@ class EditorController extends Notifier<VideoProject> {
   void setGridController(String nullId, String? controllerId) {
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
-    _replace(layer.withGrid(controllerId == null
-        ? layer.grid!.copyWith(clearController: true)
-        : layer.grid!.copyWith(controllerId: controllerId)));
+    _replace(
+      layer.withGrid(
+        controllerId == null
+            ? layer.grid!.copyWith(clearController: true)
+            : layer.grid!.copyWith(controllerId: controllerId),
+      ),
+    );
   }
 
   AnimatedDouble? _gridTrack(GridRig g, String key) => switch (key) {
-        'spacingX' => g.spacingX,
-        'spacingY' => g.spacingY,
-        'radius' => g.radius,
-        'rotation' => g.gridRotationDeg,
-        'twist' => g.twistDeg,
-        'stagger' => g.staggerDeg,
-        'zDepth' => g.zDepth,
-        'scaleFront' => g.scaleFront,
-        'scaleBack' => g.scaleBack,
-        'randomOffset' => g.randomOffset,
-        _ => null,
-      };
+    'spacingX' => g.spacingX,
+    'spacingY' => g.spacingY,
+    'radius' => g.radius,
+    'rotation' => g.gridRotationDeg,
+    'twist' => g.twistDeg,
+    'stagger' => g.staggerDeg,
+    'zDepth' => g.zDepth,
+    'scaleFront' => g.scaleFront,
+    'scaleBack' => g.scaleBack,
+    'randomOffset' => g.randomOffset,
+    _ => null,
+  };
 
-  GridRig _gridWith(GridRig g, String key, AnimatedDouble v) =>
-      switch (key) {
-        'spacingX' => g.copyWith(spacingX: v),
-        'spacingY' => g.copyWith(spacingY: v),
-        'radius' => g.copyWith(radius: v),
-        'rotation' => g.copyWith(gridRotationDeg: v),
-        'twist' => g.copyWith(twistDeg: v),
-        'stagger' => g.copyWith(staggerDeg: v),
-        'zDepth' => g.copyWith(zDepth: v),
-        'scaleFront' => g.copyWith(scaleFront: v),
-        'scaleBack' => g.copyWith(scaleBack: v),
-        'randomOffset' => g.copyWith(randomOffset: v),
-        _ => g,
-      };
+  GridRig _gridWith(GridRig g, String key, AnimatedDouble v) => switch (key) {
+    'spacingX' => g.copyWith(spacingX: v),
+    'spacingY' => g.copyWith(spacingY: v),
+    'radius' => g.copyWith(radius: v),
+    'rotation' => g.copyWith(gridRotationDeg: v),
+    'twist' => g.copyWith(twistDeg: v),
+    'stagger' => g.copyWith(staggerDeg: v),
+    'zDepth' => g.copyWith(zDepth: v),
+    'scaleFront' => g.copyWith(scaleFront: v),
+    'scaleBack' => g.copyWith(scaleBack: v),
+    'randomOffset' => g.copyWith(randomOffset: v),
+    _ => g,
+  };
 
   /// Edita um parametro da grade com AUTO-KEYFRAME quando ja anima —
   /// cada parametro tem sua propria trilha.
   void editGridParam(
-      String nullId, String key, Duration globalTime, double value) {
+    String nullId,
+    String key,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
     final local = layer.localTime(globalTime);
     final track = _gridTrack(layer.grid!, key);
     if (track == null) return;
-    _replace(layer.withGrid(
-        _gridWith(layer.grid!, key, track.edited(local, value))));
+    _replace(
+      layer.withGrid(_gridWith(layer.grid!, key, track.edited(local, value))),
+    );
   }
 
   /// Diamante do parametro da grade: liga/desliga keyframe no playhead.
-  void toggleGridParamKeyframe(
-      String nullId, String key, Duration globalTime) {
+  void toggleGridParamKeyframe(String nullId, String key, Duration globalTime) {
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
     final local = layer.localTime(globalTime);
     final track = _gridTrack(layer.grid!, key);
     if (track == null) return;
-    _replace(layer.withGrid(_gridWith(
-      layer.grid!,
-      key,
-      track.hasKeyframeAt(local)
-          ? track.withoutKeyframe(local)
-          : track.withKeyframe(local, track.valueAt(local)),
-    )));
+    _replace(
+      layer.withGrid(
+        _gridWith(
+          layer.grid!,
+          key,
+          track.hasKeyframeAt(local)
+              ? track.withoutKeyframe(local)
+              : track.withKeyframe(local, track.valueAt(local)),
+        ),
+      ),
+    );
   }
 
   /// Morph da grade: [transition] anima entre layouts pelo SEGMENTO de
@@ -2751,8 +3822,13 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
     final local = layer.localTime(globalTime);
-    _replace(layer.withGrid(layer.grid!
-        .copyWith(transition: layer.grid!.transition.edited(local, v))));
+    _replace(
+      layer.withGrid(
+        layer.grid!.copyWith(
+          transition: layer.grid!.transition.edited(local, v),
+        ),
+      ),
+    );
   }
 
   void toggleGridTransitionKeyframe(String nullId, Duration globalTime) {
@@ -2760,11 +3836,15 @@ class EditorController extends Notifier<VideoProject> {
     if (layer is! NullLayer || layer.grid == null) return;
     final local = layer.localTime(globalTime);
     final track = layer.grid!.transition;
-    _replace(layer.withGrid(layer.grid!.copyWith(
-      transition: track.hasKeyframeAt(local)
-          ? track.withoutKeyframe(local)
-          : track.withKeyframe(local, track.valueAt(local)),
-    )));
+    _replace(
+      layer.withGrid(
+        layer.grid!.copyWith(
+          transition: track.hasKeyframeAt(local)
+              ? track.withoutKeyframe(local)
+              : track.withKeyframe(local, track.valueAt(local)),
+        ),
+      ),
+    );
   }
 
   // -------------------------------------------------------------- mascaras
@@ -2775,27 +3855,68 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.copyLayer(masks: [...layer.masks, mask]));
   }
 
+  /// Aplica uma revelacao pronta, mas grava uma mascara comum com dois
+  /// keyframes reais para que Montar/Avancado possam continuar editando-a.
+  void applyMaskReveal(
+    String layerId,
+    MaskRevealPreset preset,
+    Duration globalTime,
+  ) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    // A mascara vive antes do transform da camada. Neutralizar a escala
+    // evita aplicar scale duas vezes ao tamanho usado pelo caminho local.
+    final localLayer = layer.copyLayer(
+      scaleX: AnimatedDouble(1),
+      scaleY: AnimatedDouble(1),
+    );
+    final size = measureLayerBox(
+      localLayer,
+      local,
+      fallbackWidth: state.outputWidth.toDouble(),
+    );
+    addMask(layerId, createRevealMask(preset, size, local));
+  }
+
   void removeMask(String layerId, String maskId) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      masks: layer.masks.where((m) => m.id != maskId).toList(),
-    ));
+    _replace(
+      layer.copyLayer(masks: layer.masks.where((m) => m.id != maskId).toList()),
+    );
+  }
+
+  void reorderMask(String layerId, String maskId, int delta) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final masks = [...layer.masks];
+    final idx = masks.indexWhere((m) => m.id == maskId);
+    if (idx < 0) return;
+    final to = (idx + delta).clamp(0, masks.length - 1);
+    if (to == idx) return;
+    final mask = masks.removeAt(idx);
+    masks.insert(to, mask);
+    _replace(layer.copyLayer(masks: masks));
   }
 
   void updateMask(
-      String layerId, String maskId, LayerMask Function(LayerMask) fn) {
+    String layerId,
+    String maskId,
+    LayerMask Function(LayerMask) fn,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(masks: [
-      for (final m in layer.masks) m.id == maskId ? fn(m) : m,
-    ]));
+    _replace(
+      layer.copyLayer(
+        masks: [for (final m in layer.masks) m.id == maskId ? fn(m) : m],
+      ),
+    );
   }
 
   void cycleMaskMode(String layerId, String maskId) {
     updateMask(layerId, maskId, (m) {
-      final next =
-          MaskMode.values[(m.mode.index + 1) % MaskMode.values.length];
+      final next = MaskMode.values[(m.mode.index + 1) % MaskMode.values.length];
       return m.copyWith(mode: next);
     });
   }
@@ -2805,8 +3926,13 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// Edita feather/expansao/opacidade da mascara com auto-keyframe.
-  void editMaskParam(String layerId, String maskId, String param,
-      Duration globalTime, double value) {
+  void editMaskParam(
+    String layerId,
+    String maskId,
+    String param,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -2814,9 +3940,9 @@ class EditorController extends Notifier<VideoProject> {
       return switch (param) {
         'feather' => m.copyWith(feather: m.feather.edited(local, value)),
         'featherY' => m.copyWith(
-            featherY: m.featherVertical.edited(local, value)),
-        'expansion' =>
-          m.copyWith(expansion: m.expansion.edited(local, value)),
+          featherY: m.featherVertical.edited(local, value),
+        ),
+        'expansion' => m.copyWith(expansion: m.expansion.edited(local, value)),
         'opacity' => m.copyWith(opacity: m.opacity.edited(local, value)),
         _ => m,
       };
@@ -2843,13 +3969,67 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    updateMask(layerId, maskId,
-        (m) => m.copyWith(path: m.path.edited(local, fn(m.path.valueAt(local)))));
+    updateMask(
+      layerId,
+      maskId,
+      (m) => m.copyWith(path: m.path.edited(local, fn(m.path.valueAt(local)))),
+    );
+  }
+
+  /// Substitui a geometria no tempo atual, respeitando o contrato de
+  /// auto-keyframe quando o caminho da mascara ja esta animado.
+  void replaceMaskPath(
+    String layerId,
+    String maskId,
+    BezierPath path,
+    Duration globalTime,
+  ) {
+    editMaskPath(layerId, maskId, globalTime, (_) => path);
+  }
+
+  /// Usa a primeira geometria convertivel da propria ShapeLayer como
+  /// caminho da mascara. Fill, stroke e operadores sao ignorados.
+  bool setMaskFromOwnShape(String layerId, String maskId, Duration globalTime) {
+    final layer = _layer(layerId);
+    if (layer is! ShapeLayer || !layer.masks.any((m) => m.id == maskId)) {
+      return false;
+    }
+    final local = layer.localTime(globalTime);
+    for (final item in layer.contents) {
+      final path = bezierOfShapeItem(item, local);
+      if (path != null && path.vertices.isNotEmpty) {
+        // A ShapeView normaliza o bounds para (0,0) e centraliza o widget.
+        // A mascara, por sua vez, usa a origem no centro da camada; trazer
+        // o mesmo caminho para essa origem evita deslocar formas desenhadas
+        // cujos vertices nao nasceram ao redor de Offset.zero.
+        final center = path.build().getBounds().center;
+        final centered = center == Offset.zero
+            ? path
+            : BezierPath(
+                closed: path.closed,
+                vertices: [
+                  for (final v in path.vertices)
+                    PathVertex(
+                      p: v.p - center,
+                      inT: v.inT,
+                      outT: v.outT,
+                      corner: v.corner,
+                    ),
+                ],
+              );
+        replaceMaskPath(layerId, maskId, centered, globalTime);
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Keyframe do CAMINHO da mascara no tempo atual (PR-M1 aplicado).
   void toggleMaskPathKeyframe(
-      String layerId, String maskId, Duration globalTime) {
+    String layerId,
+    String maskId,
+    Duration globalTime,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -2864,26 +4044,58 @@ class EditorController extends Notifier<VideoProject> {
 
   // ----------------------------------------------------------------- matte
 
+  /// A ordem do projeto e de cima para baixo; track matte usa exatamente
+  /// a vizinha anterior e nao atravessa uma camada sem saida visual.
+  Layer? matteSourceAbove(String layerId) {
+    final idx = state.layers.indexWhere((l) => l.id == layerId);
+    if (idx <= 0) return null;
+    final source = state.layers[idx - 1];
+    if (source is AudioLayer ||
+        source is NullLayer ||
+        source is AdjustmentLayer) {
+      return null;
+    }
+    return source;
+  }
+
+  bool setMatteFromAbove(String layerId, MatteMode mode) {
+    if (_layer(layerId) == null) return false;
+    if (mode == MatteMode.none) {
+      setMatte(layerId, mode, null);
+      return true;
+    }
+    final source = matteSourceAbove(layerId);
+    if (source == null) return false;
+    setMatte(layerId, mode, source.id);
+    return true;
+  }
+
   /// Define o matte da camada (PR-M5): [sourceId] pode ser QUALQUER
   /// camada da cena; a fonte fica oculta automaticamente no render.
   void setMatte(String layerId, MatteMode mode, String? sourceId) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      matteMode: mode,
-      matteSourceId: sourceId,
-    ));
+    _replace(
+      layer.copyLayer(
+        matteMode: mode,
+        matteSourceId: sourceId,
+        clearMatteSource: mode == MatteMode.none,
+      ),
+    );
   }
 
   /// Modo do Trim Paths: individual (cascata) ou continuo (PR-M8).
   void setTrimMode(String layerId, String itemId, bool individually) {
-    _updateShape(layerId, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is TrimOperator)
-              i.copyWith(individually: individually)
-            else
-              i,
-        ]);
+    _updateShape(
+      layerId,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is TrimOperator)
+            i.copyWith(individually: individually)
+          else
+            i,
+      ],
+    );
   }
 
   // -------------------------------------------------------------- legendas
@@ -2892,14 +4104,17 @@ class EditorController extends Notifier<VideoProject> {
   int addCaptionLayer(List<Cue> cues) {
     if (cues.isEmpty) return 0;
     final end = cues.last.end + const Duration(milliseconds: 300);
-    _push(CaptionLayer(
-      name: 'Legendas',
-      startTime: Duration.zero,
-      duration: end,
-      cues: cues,
-      position: AnimatedOffset(
-          Offset(state.outputWidth / 2, state.outputHeight * 0.88)),
-    ));
+    _push(
+      CaptionLayer(
+        name: 'Legendas',
+        startTime: Duration.zero,
+        duration: end,
+        cues: cues,
+        position: AnimatedOffset(
+          Offset(state.outputWidth / 2, state.outputHeight * 0.88),
+        ),
+      ),
+    );
     return cues.length;
   }
 
@@ -2922,19 +4137,24 @@ class EditorController extends Notifier<VideoProject> {
   void updateCueText(String layerId, String cueId, String text) {
     final layer = _layer(layerId);
     if (layer is! CaptionLayer) return;
-    _replace(layer.copyLayer(cues: [
-      for (final c in layer.cues)
-        c.id == cueId
-            ? c.copyWith(text: wrapCaptionText(text), locked: true)
-            : c,
-    ]));
+    _replace(
+      layer.copyLayer(
+        cues: [
+          for (final c in layer.cues)
+            c.id == cueId
+                ? c.copyWith(text: wrapCaptionText(text), locked: true)
+                : c,
+        ],
+      ),
+    );
   }
 
   void removeCue(String layerId, String cueId) {
     final layer = _layer(layerId);
     if (layer is! CaptionLayer) return;
-    _replace(layer.copyLayer(
-        cues: layer.cues.where((c) => c.id != cueId).toList()));
+    _replace(
+      layer.copyLayer(cues: layer.cues.where((c) => c.id != cueId).toList()),
+    );
   }
 
   String? exportCaptionsSrt(String layerId) {
@@ -2952,18 +4172,22 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void _updateAnimator(
-      String id, String animatorId, TextAnimator Function(TextAnimator) fn) {
+    String id,
+    String animatorId,
+    TextAnimator Function(TextAnimator) fn,
+  ) {
     _updateTextLayer(id, (l) {
-      return l.copyLayer(animators: [
-        for (final a in l.animators) a.id == animatorId ? fn(a) : a,
-      ]);
+      return l.copyLayer(
+        animators: [
+          for (final a in l.animators) a.id == animatorId ? fn(a) : a,
+        ],
+      );
     });
   }
 
   /// Aplica um preset substituindo a pilha de animadores.
   void applyTextPreset(String id, TextPreset preset) {
-    _updateTextLayer(
-        id, (l) => l.copyLayer(animators: preset.build()));
+    _updateTextLayer(id, (l) => l.copyLayer(animators: preset.build()));
   }
 
   /// PRECOMP: duracao interna, remapeamento de tempo, colapsar e
@@ -2979,36 +4203,38 @@ class EditorController extends Notifier<VideoProject> {
   }) {
     final layer = _layer(id);
     if (layer is! GroupLayer) return;
-    _replace(GroupLayer(
-      id: layer.id,
-      name: layer.name,
-      startTime: layer.startTime,
-      duration: layer.duration,
-      children: layer.children,
-      sourceDuration: clearSourceDuration
-          ? null
-          : (sourceDuration ?? layer.sourceDuration),
-      timeRemap: clearRemap ? null : (timeRemap ?? layer.timeRemap),
-      collapse: collapse ?? layer.collapse,
-      clipToComp: clipToComp ?? layer.clipToComp,
-      position: layer.position,
-      scaleX: layer.scaleX,
-      scaleY: layer.scaleY,
-      rotation: layer.rotation,
-      rotationX: layer.rotationX,
-      rotationY: layer.rotationY,
-      opacity: layer.opacity,
-      skewX: layer.skewX,
-      skewY: layer.skewY,
-      pivot: layer.pivot,
-      blendMode: layer.blendMode,
-      is3D: layer.is3D,
-      positionZ: layer.positionZ,
-      effects: layer.effects,
-      masks: layer.masks,
-      matteMode: layer.matteMode,
-      matteSourceId: layer.matteSourceId,
-    ));
+    _replace(
+      GroupLayer(
+        id: layer.id,
+        name: layer.name,
+        startTime: layer.startTime,
+        duration: layer.duration,
+        children: layer.children,
+        sourceDuration: clearSourceDuration
+            ? null
+            : (sourceDuration ?? layer.sourceDuration),
+        timeRemap: clearRemap ? null : (timeRemap ?? layer.timeRemap),
+        collapse: collapse ?? layer.collapse,
+        clipToComp: clipToComp ?? layer.clipToComp,
+        position: layer.position,
+        scaleX: layer.scaleX,
+        scaleY: layer.scaleY,
+        rotation: layer.rotation,
+        rotationX: layer.rotationX,
+        rotationY: layer.rotationY,
+        opacity: layer.opacity,
+        skewX: layer.skewX,
+        skewY: layer.skewY,
+        pivot: layer.pivot,
+        blendMode: layer.blendMode,
+        is3D: layer.is3D,
+        positionZ: layer.positionZ,
+        effects: layer.effects,
+        masks: layer.masks,
+        matteMode: layer.matteMode,
+        matteSourceId: layer.matteSourceId,
+      ),
+    );
   }
 
   /// Liga o remapeamento com dois keyframes que reproduzem normal — a
@@ -3017,22 +4243,22 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(id);
     if (layer is! GroupLayer || layer.timeRemap != null) return;
     final dur = layer.innerDuration.inMicroseconds / 1000000.0;
-    updatePrecomp(id,
-        timeRemap: AnimatedDouble(0)
-            .withKeyframe(Duration.zero, 0)
-            .withKeyframe(layer.duration, dur));
+    updatePrecomp(
+      id,
+      timeRemap: AnimatedDouble(0)
+          .withKeyframe(Duration.zero, 0)
+          .withKeyframe(layer.duration, dur),
+    );
   }
 
   /// Qual instante do conteudo aparece AGORA. Com a trilha animada,
   /// vira keyframe; sem, muda o valor fixo (congelado).
-  void setPrecompContentTime(
-      String id, Duration globalTime, double seconds) {
+  void setPrecompContentTime(String id, Duration globalTime, double seconds) {
     final layer = _layer(id);
     if (layer is! GroupLayer) return;
     final r = layer.timeRemap ?? AnimatedDouble(0);
     final v = seconds < 0 ? 0.0 : seconds;
-    updatePrecomp(id,
-        timeRemap: r.edited(layer.localTime(globalTime), v));
+    updatePrecomp(id, timeRemap: r.edited(layer.localTime(globalTime), v));
   }
 
   /// Congela a precomp no instante que esta aparecendo agora.
@@ -3040,8 +4266,10 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(id);
     if (layer is! GroupLayer) return;
     final agora = layer.contentTimeAt(layer.localTime(globalTime));
-    updatePrecomp(id,
-        timeRemap: AnimatedDouble(agora.inMicroseconds / 1000000.0));
+    updatePrecomp(
+      id,
+      timeRemap: AnimatedDouble(agora.inMicroseconds / 1000000.0),
+    );
   }
 
   /// Roda a precomp de tras para frente, do fim ao comeco.
@@ -3049,10 +4277,12 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(id);
     if (layer is! GroupLayer) return;
     final dur = layer.innerDuration.inMicroseconds / 1000000.0;
-    updatePrecomp(id,
-        timeRemap: AnimatedDouble(0)
-            .withKeyframe(Duration.zero, dur)
-            .withKeyframe(layer.duration, 0));
+    updatePrecomp(
+      id,
+      timeRemap: AnimatedDouble(0)
+          .withKeyframe(Duration.zero, dur)
+          .withKeyframe(layer.duration, 0),
+    );
   }
 
   /// TEXTO EM CAMINHO: selo circular, arco, ou seguindo outra forma.
@@ -3087,39 +4317,55 @@ class EditorController extends Notifier<VideoProject> {
       ];
       if (specId == null) return l.copyLayer(anims: rest);
       return l.copyLayer(
-          anims: [...rest, TextAnim(specId: specId, slot: slot)]);
+        anims: [
+          ...rest,
+          TextAnim(specId: specId, slot: slot),
+        ],
+      );
     });
   }
 
   void updateTextAnim(
-      String id, String animId, TextAnim Function(TextAnim) fn) {
-    _updateTextLayer(id, (l) => l.copyLayer(anims: [
-          for (final a in l.anims) a.id == animId ? fn(a) : a,
-        ]));
+    String id,
+    String animId,
+    TextAnim Function(TextAnim) fn,
+  ) {
+    _updateTextLayer(
+      id,
+      (l) => l.copyLayer(
+        anims: [for (final a in l.anims) a.id == animId ? fn(a) : a],
+      ),
+    );
   }
 
-  void setTextAnimParam(
-      String id, String animId, String key, double value) {
-    updateTextAnim(id, animId,
-        (a) => a.copyWith(params: {...a.params, key: value}));
+  void setTextAnimParam(String id, String animId, String key, double value) {
+    updateTextAnim(
+      id,
+      animId,
+      (a) => a.copyWith(params: {...a.params, key: value}),
+    );
   }
 
   void addTextAnimator(String id) {
     _updateTextLayer(id, (l) {
       final n = l.animators.length + 1;
-      return l.copyLayer(animators: [
-        ...l.animators,
-        TextAnimator(name: 'Animador $n'),
-      ]);
+      return l.copyLayer(
+        animators: [
+          ...l.animators,
+          TextAnimator(name: 'Animador $n'),
+        ],
+      );
     });
   }
 
   void removeTextAnimator(String id, String animatorId) {
     _updateTextLayer(id, (l) {
-      return l.copyLayer(animators: [
-        for (final a in l.animators)
-          if (a.id != animatorId) a,
-      ]);
+      return l.copyLayer(
+        animators: [
+          for (final a in l.animators)
+            if (a.id != animatorId) a,
+        ],
+      );
     });
   }
 
@@ -3128,8 +4374,7 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// Chip de propriedade: adiciona se falta, remove se presente.
-  void toggleAnimatorPropType(
-      String id, String animatorId, TextAnimProp type) {
+  void toggleAnimatorPropType(String id, String animatorId, TextAnimProp type) {
     _updateAnimator(id, animatorId, (a) {
       final has = a.properties.any((p) => p.type == type);
       return a.copyWith(
@@ -3143,46 +4388,61 @@ class EditorController extends Notifier<VideoProject> {
     });
   }
 
-  void editAnimatorPropValue(String id, String animatorId, String propId,
-      Duration globalTime, double value) {
+  void editAnimatorPropValue(
+    String id,
+    String animatorId,
+    String propId,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
     _updateAnimator(id, animatorId, (a) {
-      return a.copyWith(properties: [
-        for (final p in a.properties)
-          p.id == propId
-              ? p.copyWith(value: p.value.edited(local, value))
-              : p,
-      ]);
+      return a.copyWith(
+        properties: [
+          for (final p in a.properties)
+            p.id == propId
+                ? p.copyWith(value: p.value.edited(local, value))
+                : p,
+        ],
+      );
     });
   }
 
   void toggleAnimatorPropKeyframe(
-      String id, String animatorId, String propId, Duration globalTime) {
+    String id,
+    String animatorId,
+    String propId,
+    Duration globalTime,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
     _updateAnimator(id, animatorId, (a) {
-      return a.copyWith(properties: [
-        for (final p in a.properties)
-          p.id == propId
-              ? p.copyWith(
-                  value: p.value.hasKeyframeAt(local)
-                      ? p.value.withoutKeyframe(local)
-                      : p.value.withKeyframe(local, p.value.valueAt(local)),
-                )
-              : p,
-      ]);
+      return a.copyWith(
+        properties: [
+          for (final p in a.properties)
+            p.id == propId
+                ? p.copyWith(
+                    value: p.value.hasKeyframeAt(local)
+                        ? p.value.withoutKeyframe(local)
+                        : p.value.withKeyframe(local, p.value.valueAt(local)),
+                  )
+                : p,
+        ],
+      );
     });
   }
 
   void addTextSelector(String id, String animatorId, {bool wiggly = false}) {
     _updateAnimator(id, animatorId, (a) {
-      return a.copyWith(selectors: [
-        ...a.selectors,
-        if (wiggly) WigglySelector() else RangeSelector(),
-      ]);
+      return a.copyWith(
+        selectors: [
+          ...a.selectors,
+          if (wiggly) WigglySelector() else RangeSelector(),
+        ],
+      );
     });
   }
 
@@ -3193,24 +4453,29 @@ class EditorController extends Notifier<VideoProject> {
           if (s.id != selectorId) s,
       ];
       // Animador sem seletor nao seleciona nada; mantem ao menos um.
-      return a.copyWith(
-          selectors: rest.isEmpty ? [RangeSelector()] : rest);
+      return a.copyWith(selectors: rest.isEmpty ? [RangeSelector()] : rest);
     });
   }
 
-  void _updateSelector(String id, String animatorId, String selectorId,
-      TextSelector Function(TextSelector) fn) {
+  void _updateSelector(
+    String id,
+    String animatorId,
+    String selectorId,
+    TextSelector Function(TextSelector) fn,
+  ) {
     _updateAnimator(id, animatorId, (a) {
-      return a.copyWith(selectors: [
-        for (final s in a.selectors) s.id == selectorId ? fn(s) : s,
-      ]);
+      return a.copyWith(
+        selectors: [
+          for (final s in a.selectors) s.id == selectorId ? fn(s) : s,
+        ],
+      );
     });
   }
 
   void cycleSelectorMode(String id, String animatorId, String selectorId) {
     _updateSelector(id, animatorId, selectorId, (s) {
-      final next = SelectorMode
-          .values[(s.mode.index + 1) % SelectorMode.values.length];
+      final next =
+          SelectorMode.values[(s.mode.index + 1) % SelectorMode.values.length];
       return switch (s) {
         RangeSelector r => r.copyWith(mode: next),
         WigglySelector w => w.copyWith(mode: next),
@@ -3222,7 +4487,11 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void setRangeSelectorShape(
-      String id, String animatorId, String selectorId, SelectorShape shape) {
+    String id,
+    String animatorId,
+    String selectorId,
+    SelectorShape shape,
+  ) {
     _updateSelector(id, animatorId, selectorId, (s) {
       return s is RangeSelector ? s.copyWith(shape: shape) : s;
     });
@@ -3230,8 +4499,14 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Edita um parametro do seletor (auto-key se ja anima).
   /// Range: start, end, offset, amount. Wiggly: freq, correlation, min, max.
-  void editSelectorParam(String id, String animatorId, String selectorId,
-      String param, Duration globalTime, double value) {
+  void editSelectorParam(
+    String id,
+    String animatorId,
+    String selectorId,
+    String param,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -3248,9 +4523,11 @@ class EditorController extends Notifier<VideoProject> {
       if (s is WigglySelector) {
         return switch (param) {
           'freq' => s.copyWith(
-              wigglesPerSecond: s.wigglesPerSecond.edited(local, value)),
-          'correlation' =>
-            s.copyWith(correlation: s.correlation.edited(local, value)),
+            wigglesPerSecond: s.wigglesPerSecond.edited(local, value),
+          ),
+          'correlation' => s.copyWith(
+            correlation: s.correlation.edited(local, value),
+          ),
           'min' => s.copyWith(minAmount: s.minAmount.edited(local, value)),
           'max' => s.copyWith(maxAmount: s.maxAmount.edited(local, value)),
           _ => s,
@@ -3262,22 +4539,26 @@ class EditorController extends Notifier<VideoProject> {
 
   // ------------------------------------------------------------- conteudo
 
-  void editTextLayer(String id,
-      {String? text,
-      double? fontSize,
-      Color? color,
-      String? fontFamily,
-      bool clearFont = false}) {
+  void editTextLayer(
+    String id, {
+    String? text,
+    double? fontSize,
+    Color? color,
+    String? fontFamily,
+    bool clearFont = false,
+  }) {
     final layer = _layer(id);
     if (layer is! TextLayer) return;
-    _replace(layer.copyLayer(
-      text: text,
-      name: text ?? layer.name,
-      fontSize: fontSize,
-      color: color,
-      fontFamily: fontFamily,
-      clearFont: clearFont,
-    ));
+    _replace(
+      layer.copyLayer(
+        text: text,
+        name: text ?? layer.name,
+        fontSize: fontSize,
+        color: color,
+        fontFamily: fontFamily,
+        clearFont: clearFont,
+      ),
+    );
     // A forma-conteiner acompanha o texto SOZINHA (PR-X14).
     _refreshResponsive(id);
   }
@@ -3301,7 +4582,9 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void _updateParametric(
-      String id, ShapeParametric Function(ShapeParametric) fn) {
+    String id,
+    ShapeParametric Function(ShapeParametric) fn,
+  ) {
     _updateShape(id, (items) {
       var done = false;
       return [
@@ -3319,7 +4602,11 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Edita um parametro da geometria (auto-key quando a trilha ja anima).
   void editShapeParam(
-      String id, String key, Duration globalTime, double value) {
+    String id,
+    String key,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -3330,8 +4617,7 @@ class EditorController extends Notifier<VideoProject> {
     });
   }
 
-  void toggleShapeParamKeyframe(
-      String id, String key, Duration globalTime) {
+  void toggleShapeParamKeyframe(String id, String key, Duration globalTime) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -3349,17 +4635,19 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void setShapeParamSegmentEase(
-      String id, String key, Duration segStartLocal, Easing ease) {
+    String id,
+    String key,
+    Duration segStartLocal,
+    Easing ease,
+  ) {
     _updateParametric(id, (s) {
       final track = shapeParamTrackOf(s, key);
       if (track == null) return s;
-      return shapeParamWithTrack(
-          s, key, track.withEase(segStartLocal, ease));
+      return shapeParamWithTrack(s, key, track.withEase(segStartLocal, ease));
     });
   }
 
-  void applyEaseToAllShapeParamSegments(
-      String id, String key, Easing ease) {
+  void applyEaseToAllShapeParamSegments(String id, String key, Easing ease) {
     _updateParametric(id, (s) {
       final track = shapeParamTrackOf(s, key);
       if (track == null) return s;
@@ -3396,46 +4684,50 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   ShapeParametric? _paramFromLegacy(ShapePath p) => switch (p.primitive) {
-        ShapePrimitive.rectangle => ShapeParametric(
-            kind: ParamShapeKind.rect,
-            sizeX: AnimatedDouble(p.width),
-            sizeY: AnimatedDouble(p.height),
-            roundness: AnimatedDouble(0)),
-        ShapePrimitive.roundedRectangle => ShapeParametric(
-            kind: ParamShapeKind.rect,
-            sizeX: AnimatedDouble(p.width),
-            sizeY: AnimatedDouble(p.height),
-            roundnessPercent: false,
-            roundness: AnimatedDouble(p.cornerRadius)),
-        ShapePrimitive.ellipse => ShapeParametric(
-            kind: ParamShapeKind.ellipse,
-            sizeX: AnimatedDouble(p.width),
-            sizeY: AnimatedDouble(p.height)),
-        ShapePrimitive.polygon => ShapeParametric(
-            kind: ParamShapeKind.polygon,
-            points: AnimatedDouble(p.points.toDouble()),
-            outerRadius: AnimatedDouble(p.width / 2)),
-        ShapePrimitive.star => ShapeParametric(
-            kind: ParamShapeKind.star,
-            points: AnimatedDouble(p.points.toDouble()),
-            outerRadius: AnimatedDouble(p.width / 2),
-            innerRadius:
-                AnimatedDouble(p.width / 2 * p.innerRadiusRatio)),
-        ShapePrimitive.ring => ShapeParametric(
-            kind: ParamShapeKind.sector,
-            outerRadius: AnimatedDouble(p.width / 2),
-            sectorInner:
-                AnimatedDouble((p.width / 2 - p.thickness).clamp(0, 1e9)),
-            sweep: AnimatedDouble(360)),
-        ShapePrimitive.arc => ShapeParametric(
-            kind: ParamShapeKind.sector,
-            outerRadius: AnimatedDouble(p.width / 2),
-            sectorInner:
-                AnimatedDouble((p.width / 2 - p.thickness).clamp(0, 1e9)),
-            startAngle: AnimatedDouble(p.startAngle),
-            sweep: AnimatedDouble(p.sweepAngle)),
-        _ => null,
-      };
+    ShapePrimitive.rectangle => ShapeParametric(
+      kind: ParamShapeKind.rect,
+      sizeX: AnimatedDouble(p.width),
+      sizeY: AnimatedDouble(p.height),
+      roundness: AnimatedDouble(0),
+    ),
+    ShapePrimitive.roundedRectangle => ShapeParametric(
+      kind: ParamShapeKind.rect,
+      sizeX: AnimatedDouble(p.width),
+      sizeY: AnimatedDouble(p.height),
+      roundnessPercent: false,
+      roundness: AnimatedDouble(p.cornerRadius),
+    ),
+    ShapePrimitive.ellipse => ShapeParametric(
+      kind: ParamShapeKind.ellipse,
+      sizeX: AnimatedDouble(p.width),
+      sizeY: AnimatedDouble(p.height),
+    ),
+    ShapePrimitive.polygon => ShapeParametric(
+      kind: ParamShapeKind.polygon,
+      points: AnimatedDouble(p.points.toDouble()),
+      outerRadius: AnimatedDouble(p.width / 2),
+    ),
+    ShapePrimitive.star => ShapeParametric(
+      kind: ParamShapeKind.star,
+      points: AnimatedDouble(p.points.toDouble()),
+      outerRadius: AnimatedDouble(p.width / 2),
+      innerRadius: AnimatedDouble(p.width / 2 * p.innerRadiusRatio),
+    ),
+    ShapePrimitive.ring => ShapeParametric(
+      kind: ParamShapeKind.sector,
+      outerRadius: AnimatedDouble(p.width / 2),
+      sectorInner: AnimatedDouble((p.width / 2 - p.thickness).clamp(0, 1e9)),
+      sweep: AnimatedDouble(360),
+    ),
+    ShapePrimitive.arc => ShapeParametric(
+      kind: ParamShapeKind.sector,
+      outerRadius: AnimatedDouble(p.width / 2),
+      sectorInner: AnimatedDouble((p.width / 2 - p.thickness).clamp(0, 1e9)),
+      startAngle: AnimatedDouble(p.startAngle),
+      sweep: AnimatedDouble(p.sweepAngle),
+    ),
+    _ => null,
+  };
 
   /// Troca a cor do primeiro fill/stroke (painel Cor e preenchimento).
   void setShapePrimaryColor(String id, Color color) {
@@ -3463,8 +4755,9 @@ class EditorController extends Notifier<VideoProject> {
   void addShapeOperator(String id, {required bool repeater}) {
     _updateShape(id, (items) {
       // Operador entra antes das pinturas para afetar os caminhos.
-      final paintIdx = items.indexWhere((i) =>
-          i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill);
+      final paintIdx = items.indexWhere(
+        (i) => i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill,
+      );
       final op = repeater
           ? RepeaterOperator()
           : TrimOperator(end: AnimatedDouble(0.6));
@@ -3480,14 +4773,16 @@ class EditorController extends Notifier<VideoProject> {
   /// o traco pintado depois sai com a espessura certa.
   void addPathOperator(String id, ShapePathOp kind) {
     _updateShape(id, (items) {
-      final paintIdx = items.indexWhere((i) =>
-          i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill);
+      final paintIdx = items.indexWhere(
+        (i) => i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill,
+      );
       final op = switch (kind) {
         ShapePathOp.offset => OffsetPathOperator(),
         ShapePathOp.roundCorners => RoundCornersOperator(),
         ShapePathOp.zigZag => ZigZagOperator(),
         ShapePathOp.puckerBloat => PuckerBloatOperator(
-            amount: AnimatedDouble(0.4)),
+          amount: AnimatedDouble(0.4),
+        ),
         ShapePathOp.twist => TwistOperator(),
         ShapePathOp.wiggle => WigglePathOperator(),
         ShapePathOp.merge => MergePathsOperator(),
@@ -3498,43 +4793,107 @@ class EditorController extends Notifier<VideoProject> {
     });
   }
 
+  /// Acrescenta uma segunda geometria na mesma ShapeLayer, antes do
+  /// Merge Paths e das pinturas. Assim uniao/subtracao/interseccao sao
+  /// utilizaveis no fluxo comum sem precisar importar um SVG composto.
+  void addCompoundShapeGeometry(String id, ParamShapeKind kind) {
+    final geometry = switch (kind) {
+      ParamShapeKind.rect => ShapeParametric(
+        kind: ParamShapeKind.rect,
+        sizeX: AnimatedDouble(190),
+        sizeY: AnimatedDouble(190),
+        roundness: AnimatedDouble(12),
+      ),
+      ParamShapeKind.ellipse => ShapeParametric(
+        kind: ParamShapeKind.ellipse,
+        sizeX: AnimatedDouble(230),
+        sizeY: AnimatedDouble(230),
+      ),
+      ParamShapeKind.polygon => ShapeParametric(
+        kind: ParamShapeKind.polygon,
+        points: AnimatedDouble(6),
+        outerRadius: AnimatedDouble(120),
+      ),
+      ParamShapeKind.star => ShapeParametric(
+        kind: ParamShapeKind.star,
+        points: AnimatedDouble(5),
+        outerRadius: AnimatedDouble(125),
+        innerRadius: AnimatedDouble(62),
+      ),
+      ParamShapeKind.sector => ShapeParametric(
+        kind: ParamShapeKind.sector,
+        outerRadius: AnimatedDouble(125),
+        sweep: AnimatedDouble(270),
+      ),
+    };
+    _updateShape(id, (items) {
+      final insertAt = items.indexWhere(
+        (item) =>
+            item is MergePathsOperator ||
+            item is ShapeFill ||
+            item is ShapeStroke ||
+            item is ShapeGradientFill,
+      );
+      final out = [...items];
+      out.insert(insertAt < 0 ? out.length : insertAt, geometry);
+      return out;
+    });
+  }
+
   /// Edita o valor principal de um operador de caminho, com keyframe
   /// automatico quando a propriedade ja anima.
   void editPathOperator(
-      String id, String itemId, Duration local, double value) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id != itemId)
-              i
-            else
-              switch (i) {
-                OffsetPathOperator o =>
-                  o.copyWith(amount: o.amount.edited(local, value)),
-                RoundCornersOperator r =>
-                  r.copyWith(radius: r.radius.edited(local, value)),
-                ZigZagOperator z =>
-                  z.copyWith(amplitude: z.amplitude.edited(local, value)),
-                PuckerBloatOperator pb =>
-                  pb.copyWith(amount: pb.amount.edited(local, value)),
-                TwistOperator tw =>
-                  tw.copyWith(angle: tw.angle.edited(local, value)),
-                WigglePathOperator w =>
-                  w.copyWith(amount: w.amount.edited(local, value)),
-                _ => i,
-              },
-        ]);
+    String id,
+    String itemId,
+    Duration local,
+    double value,
+  ) {
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id != itemId)
+            i
+          else
+            switch (i) {
+              OffsetPathOperator o => o.copyWith(
+                amount: o.amount.edited(local, value),
+              ),
+              RoundCornersOperator r => r.copyWith(
+                radius: r.radius.edited(local, value),
+              ),
+              ZigZagOperator z => z.copyWith(
+                amplitude: z.amplitude.edited(local, value),
+              ),
+              PuckerBloatOperator pb => pb.copyWith(
+                amount: pb.amount.edited(local, value),
+              ),
+              TwistOperator tw => tw.copyWith(
+                angle: tw.angle.edited(local, value),
+              ),
+              WigglePathOperator w => w.copyWith(
+                amount: w.amount.edited(local, value),
+              ),
+              _ => i,
+            },
+      ],
+    );
   }
 
   void cycleMergeMode(String id, String itemId) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i is MergePathsOperator && i.id == itemId)
-              i.copyWith(
-                  mode: MergeMode.values[
-                      (i.mode.index + 1) % MergeMode.values.length])
-            else
-              i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i is MergePathsOperator && i.id == itemId)
+            i.copyWith(
+              mode: MergeMode
+                  .values[(i.mode.index + 1) % MergeMode.values.length],
+            )
+          else
+            i,
+      ],
+    );
   }
 
   /// Transforma a forma num MORPH: a primeira ShapePath (ou o destino do
@@ -3542,8 +4901,7 @@ class EditorController extends Notifier<VideoProject> {
   /// anima por keyframe como qualquer propriedade.
   void convertShapeToMorph(String id, ShapePath target) {
     _updateShape(id, (items) {
-      final idx =
-          items.indexWhere((i) => i is ShapePath || i is ShapeMorph);
+      final idx = items.indexWhere((i) => i is ShapePath || i is ShapeMorph);
       if (idx < 0) return items;
       final out = [...items];
       final current = out[idx];
@@ -3565,24 +4923,30 @@ class EditorController extends Notifier<VideoProject> {
   /// viram nos exatos; o resto e amostrado. Devolve false se o item nao
   /// e geometria.
   bool convertShapeItemToBezier(
-      String layerId, String itemId, Duration globalTime) {
+    String layerId,
+    String itemId,
+    Duration globalTime,
+  ) {
     final layer = _layer(layerId);
     if (layer is! ShapeLayer) return false;
     final local = layer.localTime(globalTime);
     var ok = false;
-    _updateShape(layerId, (items) => [
-          for (final i in items)
-            if (i.id != itemId || i is ShapeBezier)
-              i
-            else
-              switch (bezierOfShapeItem(i, local)) {
-                null => i,
-                final BezierPath b => () {
-                    ok = true;
-                    return ShapeBezier(id: i.id, path: AnimatedPath(b));
-                  }(),
-              },
-        ]);
+    _updateShape(
+      layerId,
+      (items) => [
+        for (final i in items)
+          if (i.id != itemId || i is ShapeBezier)
+            i
+          else
+            switch (bezierOfShapeItem(i, local)) {
+              null => i,
+              final BezierPath b => () {
+                ok = true;
+                return ShapeBezier(id: i.id, path: AnimatedPath(b));
+              }(),
+            },
+      ],
+    );
     return ok;
   }
 
@@ -3617,72 +4981,93 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShape(layerId, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is ShapeBezier)
-              i.copyWith(path: i.path.edited(local, fn(i.path.valueAt(local))))
-            else
-              i,
-        ]);
+    _updateShape(
+      layerId,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is ShapeBezier)
+            i.copyWith(path: i.path.edited(local, fn(i.path.valueAt(local))))
+          else
+            i,
+      ],
+    );
   }
 
   /// Keyframe do CAMINHO da forma no tempo atual.
   void toggleShapeBezierKeyframe(
-      String layerId, String itemId, Duration globalTime) {
+    String layerId,
+    String itemId,
+    Duration globalTime,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShape(layerId, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is ShapeBezier)
-              i.copyWith(
-                path: i.path.hasKeyframeAt(local)
-                    ? i.path.withoutKeyframe(local)
-                    : i.path.withKeyframe(local, i.path.valueAt(local)),
-              )
-            else
-              i,
-        ]);
+    _updateShape(
+      layerId,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is ShapeBezier)
+            i.copyWith(
+              path: i.path.hasKeyframeAt(local)
+                  ? i.path.withoutKeyframe(local)
+                  : i.path.withKeyframe(local, i.path.valueAt(local)),
+            )
+          else
+            i,
+      ],
+    );
   }
 
   /// Desfaz o morph mantendo a forma de ORIGEM.
   void removeMorph(String id, String itemId) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is ShapeMorph) i.from else i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is ShapeMorph) i.from else i,
+      ],
+    );
   }
 
   void editMorphProgress(
-      String id, String itemId, Duration globalTime, double value) {
+    String id,
+    String itemId,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is ShapeMorph)
-              i.copyWith(progress: i.progress.edited(local, value))
-            else
-              i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is ShapeMorph)
+            i.copyWith(progress: i.progress.edited(local, value))
+          else
+            i,
+      ],
+    );
   }
 
   void toggleMorphKeyframe(String id, String itemId, Duration globalTime) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is ShapeMorph)
-              i.copyWith(
-                progress: i.progress.hasKeyframeAt(local)
-                    ? i.progress.withoutKeyframe(local)
-                    : i.progress
-                        .withKeyframe(local, i.progress.valueAt(local)),
-              )
-            else
-              i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is ShapeMorph)
+            i.copyWith(
+              progress: i.progress.hasKeyframeAt(local)
+                  ? i.progress.withoutKeyframe(local)
+                  : i.progress.withKeyframe(local, i.progress.valueAt(local)),
+            )
+          else
+            i,
+      ],
+    );
   }
 
   // ------------------------------------------------------------------
@@ -3695,55 +5080,69 @@ class EditorController extends Notifier<VideoProject> {
   static AnimatedDouble? shapeItemTrack(ShapeItem item, String key) =>
       switch (item) {
         TrimOperator t => switch (key) {
-            'start' => t.start,
-            'end' => t.end,
-            'offset' => t.offset,
-            _ => null,
-          },
+          'start' => t.start,
+          'end' => t.end,
+          'offset' => t.offset,
+          _ => null,
+        },
         ShapeStroke s => switch (key) {
-            'width' => s.width,
-            'opacity' => s.opacity,
-            'dashLength' => s.dashLength,
-            'gapLength' => s.gapLength,
-            'dashOffset' => s.dashOffset,
-            _ => null,
-          },
+          'width' => s.width,
+          'opacity' => s.opacity,
+          'dashLength' => s.dashLength,
+          'gapLength' => s.gapLength,
+          'dashOffset' => s.dashOffset,
+          _ => null,
+        },
         _ => null,
       };
 
   static ShapeItem _shapeItemWithTrack(
-          ShapeItem item, String key, AnimatedDouble v) =>
-      switch (item) {
-        TrimOperator t => switch (key) {
-            'start' => t.copyWith(start: v),
-            'end' => t.copyWith(end: v),
-            'offset' => t.copyWith(offset: v),
-            _ => t,
-          },
-        ShapeStroke s => switch (key) {
-            'width' => s.copyWith(width: v),
-            'opacity' => s.copyWith(opacity: v),
-            'dashLength' => s.copyWith(dashLength: v),
-            'gapLength' => s.copyWith(gapLength: v),
-            'dashOffset' => s.copyWith(dashOffset: v),
-            _ => s,
-          },
-        _ => item,
-      };
+    ShapeItem item,
+    String key,
+    AnimatedDouble v,
+  ) => switch (item) {
+    TrimOperator t => switch (key) {
+      'start' => t.copyWith(start: v),
+      'end' => t.copyWith(end: v),
+      'offset' => t.copyWith(offset: v),
+      _ => t,
+    },
+    ShapeStroke s => switch (key) {
+      'width' => s.copyWith(width: v),
+      'opacity' => s.copyWith(opacity: v),
+      'dashLength' => s.copyWith(dashLength: v),
+      'gapLength' => s.copyWith(gapLength: v),
+      'dashOffset' => s.copyWith(dashOffset: v),
+      _ => s,
+    },
+    _ => item,
+  };
 
-  void _updateShapeItemTrack(String id, String itemId, String key,
-      AnimatedDouble Function(AnimatedDouble) fn) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id == itemId && shapeItemTrack(i, key) != null)
-              _shapeItemWithTrack(i, key, fn(shapeItemTrack(i, key)!))
-            else
-              i,
-        ]);
+  void _updateShapeItemTrack(
+    String id,
+    String itemId,
+    String key,
+    AnimatedDouble Function(AnimatedDouble) fn,
+  ) {
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && shapeItemTrack(i, key) != null)
+            _shapeItemWithTrack(i, key, fn(shapeItemTrack(i, key)!))
+          else
+            i,
+      ],
+    );
   }
 
-  void editShapeItemTrack(String id, String itemId, String key,
-      Duration globalTime, double value) {
+  void editShapeItemTrack(
+    String id,
+    String itemId,
+    String key,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -3751,31 +5150,50 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void toggleShapeItemTrackKeyframe(
-      String id, String itemId, String key, Duration globalTime) {
+    String id,
+    String itemId,
+    String key,
+    Duration globalTime,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
     _updateShapeItemTrack(
-        id,
-        itemId,
-        key,
-        (t) => t.hasKeyframeAt(local)
-            ? t.withoutKeyframe(local)
-            : t.withKeyframe(local, t.valueAt(local)));
+      id,
+      itemId,
+      key,
+      (t) => t.hasKeyframeAt(local)
+          ? t.withoutKeyframe(local)
+          : t.withKeyframe(local, t.valueAt(local)),
+    );
   }
 
-  void setShapeItemTrackSegmentEase(String id, String itemId, String key,
-          Duration segStartLocal, Easing ease) =>
-      _updateShapeItemTrack(
-          id, itemId, key, (t) => t.withEase(segStartLocal, ease));
+  void setShapeItemTrackSegmentEase(
+    String id,
+    String itemId,
+    String key,
+    Duration segStartLocal,
+    Easing ease,
+  ) => _updateShapeItemTrack(
+    id,
+    itemId,
+    key,
+    (t) => t.withEase(segStartLocal, ease),
+  );
 
   void applyEaseToAllShapeItemTrackSegments(
-          String id, String itemId, String key, Easing ease) =>
-      _updateShapeItemTrack(id, itemId, key, (t) => t.withEaseAll(ease));
+    String id,
+    String itemId,
+    String key,
+    Easing ease,
+  ) => _updateShapeItemTrack(id, itemId, key, (t) => t.withEaseAll(ease));
 
   /// O traco da forma (Border & Shadow): garante um e devolve o id.
-  String? ensureShapeStroke(String id,
-      {double width = 10, Color color = const Color(0xFFFFFFFF)}) {
+  String? ensureShapeStroke(
+    String id, {
+    double width = 10,
+    Color color = const Color(0xFFFFFFFF),
+  }) {
     final layer = _layer(id);
     if (layer is! ShapeLayer) return null;
     for (final i in layer.contents) {
@@ -3787,17 +5205,23 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void updateShapeStroke(String id, ShapeStroke Function(ShapeStroke) fn) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i is ShapeStroke) fn(i) else i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i is ShapeStroke) fn(i) else i,
+      ],
+    );
   }
 
   void removeShapeStroke(String id) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i is! ShapeStroke) i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i is! ShapeStroke) i,
+      ],
+    );
   }
 
   /// DRAWING PROGRESS (o Trim Paths da AM): garante um na forma, antes
@@ -3810,8 +5234,9 @@ class EditorController extends Notifier<VideoProject> {
     }
     final op = TrimOperator();
     _updateShape(id, (items) {
-      final paintIdx = items.indexWhere((i) =>
-          i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill);
+      final paintIdx = items.indexWhere(
+        (i) => i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill,
+      );
       final out = [...items];
       out.insert(paintIdx < 0 ? out.length : paintIdx, op);
       return out;
@@ -3820,10 +5245,13 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void removeShapeTrim(String id) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i is! TrimOperator) i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i is! TrimOperator) i,
+      ],
+    );
   }
 
   /// A geometria da forma como caminho bezier (converte a parametrica
@@ -3845,7 +5273,8 @@ class EditorController extends Notifier<VideoProject> {
     if (geo == null) {
       // Forma vazia (desenho vetorial recem-criado): nasce um caminho.
       final b = ShapeBezier(
-          path: AnimatedPath(BezierPath(vertices: const [], closed: false)));
+        path: AnimatedPath(BezierPath(vertices: const [], closed: false)),
+      );
       _updateShape(id, (items) => [b, ...items]);
       return b.id;
     }
@@ -3854,52 +5283,72 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void removeShapeItem(String id, String itemId) {
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id != itemId) i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id != itemId) i,
+      ],
+    );
   }
 
   /// Edita parametro de Trim (start/end/offset) com auto-keyframe.
-  void editTrim(String id, String itemId, String param, Duration globalTime,
-      double value) {
+  void editTrim(
+    String id,
+    String itemId,
+    String param,
+    Duration globalTime,
+    double value,
+  ) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is TrimOperator)
-              switch (param) {
-                'start' => i.copyWith(start: i.start.edited(local, value)),
-                'end' => i.copyWith(end: i.end.edited(local, value)),
-                'offset' =>
-                  i.copyWith(offset: i.offset.edited(local, value)),
-                _ => i,
-              }
-            else
-              i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is TrimOperator)
+            switch (param) {
+              'start' => i.copyWith(start: i.start.edited(local, value)),
+              'end' => i.copyWith(end: i.end.edited(local, value)),
+              'offset' => i.copyWith(offset: i.offset.edited(local, value)),
+              _ => i,
+            }
+          else
+            i,
+      ],
+    );
   }
 
-  void editRepeater(String id, String itemId, Duration globalTime,
-      {int? copies, double? dx, double? dy, double? rotationDeg}) {
+  void editRepeater(
+    String id,
+    String itemId,
+    Duration globalTime, {
+    int? copies,
+    double? dx,
+    double? dy,
+    double? rotationDeg,
+  }) {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShape(id, (items) => [
-          for (final i in items)
-            if (i.id == itemId && i is RepeaterOperator)
-              i.copyWith(
-                copies: copies,
-                dx: dx,
-                dy: dy,
-                rotation: rotationDeg == null
-                    ? null
-                    : i.rotation.edited(local, rotationDeg),
-              )
-            else
-              i,
-        ]);
+    _updateShape(
+      id,
+      (items) => [
+        for (final i in items)
+          if (i.id == itemId && i is RepeaterOperator)
+            i.copyWith(
+              copies: copies,
+              dx: dx,
+              dy: dy,
+              rotation: rotationDeg == null
+                  ? null
+                  : i.rotation.edited(local, rotationDeg),
+            )
+          else
+            i,
+      ],
+    );
   }
 
   // ------------------------------------------------------------ precomp/3D
@@ -3929,8 +5378,7 @@ class EditorController extends Notifier<VideoProject> {
       duration: end - start,
       position: AnimatedOffset(_center),
       children: [
-        for (final l in picked)
-          l.copyLayer(startTime: l.startTime - start),
+        for (final l in picked) l.copyLayer(startTime: l.startTime - start),
       ],
     );
     final layers = <Layer>[];
@@ -3960,10 +5408,14 @@ class EditorController extends Notifier<VideoProject> {
       position: AnimatedOffset(_center),
       children: [layer.copyLayer(startTime: Duration.zero)],
     );
-    _mutate(state.copyWith(layers: [
-      for (final l in state.layers)
-        if (l.id == id) group else l,
-    ]));
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final l in state.layers)
+            if (l.id == id) group else l,
+        ],
+      ),
+    );
     ref.read(selectedLayerProvider.notifier).state = group.id;
   }
 
@@ -3984,8 +5436,9 @@ class EditorController extends Notifier<VideoProject> {
       }
     }
     _mutate(state.copyWith(layers: layers));
-    ref.read(selectedLayerProvider.notifier).state =
-        children.isEmpty ? null : children.first.id;
+    ref.read(selectedLayerProvider.notifier).state = children.isEmpty
+        ? null
+        : children.first.id;
   }
 
   /// MOTION BLUR REAL na camada: liga a amostragem por quadro desta
@@ -3995,8 +5448,9 @@ class EditorController extends Notifier<VideoProject> {
     final ligado = state.metaOf(id).motionBlur;
     _updateMeta(id, (m) => m.copyWith(motionBlur: !ligado));
     if (!ligado && !state.motionBlur.enabled) {
-      _mutate(state.copyWith(
-          motionBlur: state.motionBlur.copyWith(enabled: true)));
+      _mutate(
+        state.copyWith(motionBlur: state.motionBlur.copyWith(enabled: true)),
+      );
     }
   }
 
@@ -4006,13 +5460,21 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Cor EXTRA de um efeito (gradiente de quatro cores e afins).
   void setEffectExtraColor(
-      String layerId, String effectId, int index, Color color) {
+    String layerId,
+    String effectId,
+    int index,
+    Color color,
+  ) {
     final layer = _layer(layerId);
     if (layer == null) return;
-    _replace(layer.copyLayer(effects: [
-      for (final e in layer.effects)
-        e.id == effectId ? e.withExtraColor(index, color) : e,
-    ]));
+    _replace(
+      layer.copyLayer(
+        effects: [
+          for (final e in layer.effects)
+            e.id == effectId ? e.withExtraColor(index, color) : e,
+        ],
+      ),
+    );
   }
 
   void toggle3D(String id) {
@@ -4024,17 +5486,161 @@ class EditorController extends Notifier<VideoProject> {
   void editPositionZ(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
-    _replace(layer.copyLayer(
-      positionZ: layer.positionZ.edited(layer.localTime(globalTime), value),
-    ));
+    _replace(
+      layer.copyLayer(
+        positionZ: layer.positionZ.edited(layer.localTime(globalTime), value),
+      ),
+    );
   }
 
   // ------------------------------------------------------------- pickwhip
 
+  /// Escalona a selecao inteira em um unico passo de undo. Os keyframes
+  /// continuam pertencendo a cada camada e, por isso, seguem editaveis.
+  void cascadeSelection(
+    Iterable<String> ids, {
+    Duration interval = const Duration(milliseconds: 40),
+    CascadeOrder order = CascadeOrder.start,
+    Easing? ease,
+  }) {
+    final selected = ids.toSet();
+    if (selected.length < 2 || interval <= Duration.zero) return;
+    _mutate(
+      state.copyWith(
+        layers: cascadeLayerKeyframes(
+          state.layers,
+          selected,
+          interval: interval,
+          order: order,
+          ease: ease,
+        ),
+      ),
+    );
+  }
+
+  /// Variante avancada da cascata: a primeira camada vira a fonte e as
+  /// demais recebem o mesmo vinculo com atraso incremental. Os offsets
+  /// sao capturados no instante atrasado para a composicao nao saltar.
+  void linkCascadeSelection(
+    Iterable<String> ids,
+    Duration globalTime, {
+    Duration interval = const Duration(milliseconds: 40),
+    CascadeOrder order = CascadeOrder.start,
+    required Easing ease,
+    required LayerProp property,
+  }) {
+    if (property != LayerProp.position &&
+        property != LayerProp.scale &&
+        property != LayerProp.rotation &&
+        property != LayerProp.opacity) {
+      return;
+    }
+    final ordered = orderedCascadeLayers(
+      state.layers,
+      ids.toSet(),
+      order: order,
+    );
+    if (ordered.length < 2) return;
+
+    final source = ordered.first;
+    final orderedIds = {for (final layer in ordered) layer.id};
+
+    // O vinculo amostra a trilha real da fonte; gravar a curva escolhida
+    // nessas trilhas faz todos herdarem o mesmo easing sem um efeito
+    // procedural escondido. Mantemos tambem a curva nas trilhas dos alvos
+    // para que ela continue editavel (e sobreviva a um futuro desvinculo).
+    Layer withSharedEase(Layer layer) => switch (property) {
+      LayerProp.position => layer.copyLayer(
+        position: layer.position.withEaseAll(ease),
+      ),
+      LayerProp.scale => layer.copyLayer(
+        scaleX: layer.scaleX.withEaseAll(ease),
+        scaleY: layer.scaleY.withEaseAll(ease),
+      ),
+      LayerProp.rotation => layer.copyLayer(
+        rotation: layer.rotation.withEaseAll(ease),
+      ),
+      LayerProp.opacity => layer.copyLayer(
+        opacity: layer.opacity.withEaseAll(ease),
+      ),
+      LayerProp.skew || LayerProp.pivot || LayerProp.parent => layer,
+    };
+
+    // O offset e calculado contra a fonte JA com a curva nova. Assim a
+    // propriedade visivel do alvo nao salta no instante em que o usuario
+    // confirma a cascata.
+    final sourceWithEase = withSharedEase(source);
+    final links = <PropertyLink>[
+      for (final link in state.links)
+        if (!(ordered.skip(1).any((layer) => layer.id == link.targetLayerId) &&
+            link.targetProp == property))
+          link,
+    ];
+
+    for (var i = 1; i < ordered.length; i++) {
+      final target = ordered[i];
+      final delay = interval * i;
+      final sourceTime = globalTime - delay;
+      final targetLocal = target.localTime(globalTime);
+      final sourceLocal = sourceWithEase.localTime(sourceTime);
+      var offsetX = 0.0;
+      var offsetY = 0.0;
+      switch (property) {
+        case LayerProp.position:
+          final delta =
+              target.position.valueAt(targetLocal) -
+              sourceWithEase.position.valueAt(sourceLocal);
+          offsetX = delta.dx;
+          offsetY = delta.dy;
+        case LayerProp.rotation:
+          offsetX =
+              target.rotation.valueAt(targetLocal) -
+              sourceWithEase.rotation.valueAt(sourceLocal);
+        case LayerProp.opacity:
+          offsetX =
+              target.opacity.valueAt(targetLocal) -
+              sourceWithEase.opacity.valueAt(sourceLocal);
+        case LayerProp.scale:
+          final sourceScale = sourceWithEase.scaleX.valueAt(sourceLocal);
+          offsetX = sourceScale.abs() < 1e-9
+              ? 1
+              : target.scaleX.valueAt(targetLocal) / sourceScale;
+        case LayerProp.skew:
+        case LayerProp.pivot:
+        case LayerProp.parent:
+          return;
+      }
+      links.add(
+        PropertyLink(
+          targetLayerId: target.id,
+          targetProp: property,
+          sourceLayerId: source.id,
+          offsetX: offsetX,
+          offsetY: offsetY,
+          delay: delay,
+        ),
+      );
+    }
+
+    _mutate(
+      state.copyWith(
+        layers: [
+          for (final layer in state.layers)
+            if (orderedIds.contains(layer.id)) withSharedEase(layer) else layer,
+        ],
+        links: links,
+      ),
+    );
+  }
+
   /// Vincula a propriedade da camada alvo a MESMA propriedade da fonte,
   /// capturando o offset do instante (a relacao espacial nao pula).
   void linkProperty(
-      String targetId, LayerProp prop, String sourceId, Duration globalTime) {
+    String targetId,
+    LayerProp prop,
+    String sourceId,
+    Duration globalTime,
+  ) {
     final target = _layer(targetId);
     final source = _layer(sourceId);
     if (target == null || source == null || targetId == sourceId) return;
@@ -4044,13 +5650,12 @@ class EditorController extends Notifier<VideoProject> {
     double ox = 0, oy = 0;
     switch (prop) {
       case LayerProp.position:
-        final d = target.position.valueAt(tLocal) -
-            source.position.valueAt(sLocal);
+        final d =
+            target.position.valueAt(tLocal) - source.position.valueAt(sLocal);
         ox = d.dx;
         oy = d.dy;
       case LayerProp.rotation:
-        ox = target.rotation.valueAt(tLocal) -
-            source.rotation.valueAt(sLocal);
+        ox = target.rotation.valueAt(tLocal) - source.rotation.valueAt(sLocal);
       case LayerProp.opacity:
         ox = target.opacity.valueAt(tLocal) - source.opacity.valueAt(sLocal);
       case LayerProp.scale:
@@ -4101,10 +5706,14 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void unlinkProperty(String targetId, LayerProp prop) {
-    _mutate(state.copyWith(links: [
-      for (final l in state.links)
-        if (!(l.targetLayerId == targetId && l.targetProp == prop)) l,
-    ]));
+    _mutate(
+      state.copyWith(
+        links: [
+          for (final l in state.links)
+            if (!(l.targetLayerId == targetId && l.targetProp == prop)) l,
+        ],
+      ),
+    );
   }
 
   void editVideoVolume(String id, double volume) {

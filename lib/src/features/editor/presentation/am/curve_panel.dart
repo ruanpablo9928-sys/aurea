@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter/scheduler.dart';
@@ -41,6 +42,7 @@ class CurvePanel extends ConsumerStatefulWidget {
 
 class _CurvePanelState extends ConsumerState<CurvePanel> {
   bool _overshoot = false;
+  bool _aplicarEmTodos = false;
 
   /// GRAFICO DE VELOCIDADE em vez do de valor.
   ///
@@ -103,14 +105,14 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
   }
 
   Easing _easeOf(Layer layer, Duration segStart) => switch (widget.prop) {
-        LayerProp.position => layer.position.easeAt(segStart),
-        LayerProp.scale => layer.scaleX.easeAt(segStart),
-        LayerProp.rotation => layer.rotation.easeAt(segStart),
-        LayerProp.opacity => layer.opacity.easeAt(segStart),
-        LayerProp.skew => layer.skewX.easeAt(segStart),
-        LayerProp.pivot => layer.pivot.easeAt(segStart),
-        LayerProp.parent => Easing.linear,
-      };
+    LayerProp.position => layer.position.easeAt(segStart),
+    LayerProp.scale => layer.scaleX.easeAt(segStart),
+    LayerProp.rotation => layer.rotation.easeAt(segStart),
+    LayerProp.opacity => layer.opacity.easeAt(segStart),
+    LayerProp.skew => layer.skewX.easeAt(segStart),
+    LayerProp.pivot => layer.pivot.easeAt(segStart),
+    LayerProp.parent => Easing.linear,
+  };
 
   (Duration, Duration)? _segmentAt(Layer layer, Duration local) {
     final times = _kfTimes(layer);
@@ -178,8 +180,10 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
     if (!foraDoTrecho && segment != null) {
       final span = (segment.$2 - segment.$1).inMicroseconds;
       if (span > 0) {
-        percorrido =
-            ((local - segment.$1).inMicroseconds / span).clamp(0.0, 1.0);
+        percorrido = ((local - segment.$1).inMicroseconds / span).clamp(
+          0.0,
+          1.0,
+        );
       }
     }
 
@@ -200,8 +204,10 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                   const SizedBox(height: 12),
                   CupertinoButton(
                     onPressed: widget.onBack,
-                    child: const Text('Voltar',
-                        style: TextStyle(color: AmColors.accent)),
+                    child: const Text(
+                      'Voltar',
+                      style: TextStyle(color: AmColors.accent),
+                    ),
                   ),
                 ],
               ),
@@ -214,8 +220,11 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                   children: [
                     AmRailButton(
                       onTap: widget.onBack,
-                      child: const Icon(CupertinoIcons.chevron_back,
-                          size: 24, color: AmColors.text),
+                      child: const Icon(
+                        CupertinoIcons.chevron_back,
+                        size: 24,
+                        color: AmColors.text,
+                      ),
                     ),
                     const Spacer(),
                     AmRailButton(
@@ -233,22 +242,30 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                           ),
                         );
                       },
-                      child: const Icon(CupertinoIcons.arrow_2_squarepath,
-                          size: 22, color: AmColors.text),
+                      child: const Icon(
+                        CupertinoIcons.arrow_2_squarepath,
+                        size: 22,
+                        color: AmColors.text,
+                      ),
                     ),
                     // VALOR / VELOCIDADE: o mesmo segmento, visto pela
                     // derivada. E onde a curva em S se ajusta de verdade.
                     AmRailButton(
                       selected: _velocidade,
                       onTap: () => setState(() => _velocidade = !_velocidade),
-                      child: Icon(CupertinoIcons.speedometer,
-                          size: 20,
-                          color: _velocidade ? AmColors.accent : AmColors.text),
+                      child: Icon(
+                        CupertinoIcons.speedometer,
+                        size: 20,
+                        color: _velocidade ? AmColors.accent : AmColors.text,
+                      ),
                     ),
                     AmRailButton(
                       onTap: () => _showMenu(context, id, ease, segment?.$1),
-                      child: const Icon(CupertinoIcons.ellipsis,
-                          size: 20, color: AmColors.text),
+                      child: const Icon(
+                        CupertinoIcons.ellipsis,
+                        size: 20,
+                        color: AmColors.text,
+                      ),
                     ),
                     const SizedBox(height: 4),
                   ],
@@ -269,7 +286,11 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                                   percorrido: percorrido,
                                   onBezierChanged: (e) =>
                                       controller.setSegmentEase(
-                                          id, widget.prop, segment!.$1, e),
+                                        id,
+                                        widget.prop,
+                                        segment!.$1,
+                                        e,
+                                      ),
                                 )
                               : _CurveGraph(
                                   ease: ease,
@@ -277,7 +298,11 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                                   percorrido: percorrido,
                                   onBezierChanged: (e) =>
                                       controller.setSegmentEase(
-                                          id, widget.prop, segment!.$1, e),
+                                        id,
+                                        widget.prop,
+                                        segment!.$1,
+                                        e,
+                                      ),
                                 ),
                         ),
                       ),
@@ -288,30 +313,36 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                             CupertinoButton(
                               padding: const EdgeInsets.all(8),
                               onPressed: () => _jumpSegment(layer, -1),
-                              child: const Icon(CupertinoIcons.chevron_left,
-                                  size: 18, color: AmColors.muted),
+                              child: const Icon(
+                                CupertinoIcons.chevron_left,
+                                size: 18,
+                                color: AmColors.muted,
+                              ),
                             ),
                             Expanded(
                               child: Text(
                                 foraDoTrecho
                                     ? 'Trecho ${times.indexOf(segment.$1) + 1}'
-                                        '\u2192${times.indexOf(segment.$1) + 2}'
-                                        ' \u00b7 ${ease.label}'
-                                        ' (cabecote fora)'
+                                          '\u2192${times.indexOf(segment.$1) + 2}'
+                                          ' \u00b7 ${ease.label}'
+                                          ' (cabecote fora)'
                                     : 'Efeito Ease de ${ease.label}',
                                 textAlign: TextAlign.center,
                                 maxLines: 2,
                                 style: const TextStyle(
-                                    fontSize: 12, color: AmColors.muted),
+                                  fontSize: 12,
+                                  color: AmColors.muted,
+                                ),
                               ),
                             ),
                             CupertinoButton(
                               padding: const EdgeInsets.all(8),
                               onPressed: () => _jumpSegment(layer, 1),
                               child: const Icon(
-                                  CupertinoIcons.chevron_right,
-                                  size: 18,
-                                  color: AmColors.muted),
+                                CupertinoIcons.chevron_right,
+                                size: 18,
+                                color: AmColors.muted,
+                              ),
                             ),
                           ],
                         ),
@@ -325,12 +356,28 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(6, 10, 10, 10),
                     children: [
+                      _ScopeToggle(
+                        todos: _aplicarEmTodos,
+                        onChanged: (v) => setState(() => _aplicarEmTodos = v),
+                      ),
+                      const SizedBox(height: 8),
                       for (final preset in _presets)
                         _PresetTile(
-                          ease: preset,
-                          selected: _samePreset(ease, preset),
-                          onTap: () => controller.setSegmentEase(
-                              id, widget.prop, segment!.$1, preset),
+                          ease: preset.ease,
+                          label: preset.nome,
+                          selected: _samePreset(ease, preset.ease),
+                          onTap: () => _aplicarEmTodos
+                              ? controller.applyEaseToAllSegments(
+                                  id,
+                                  widget.prop,
+                                  preset.ease,
+                                )
+                              : controller.setSegmentEase(
+                                  id,
+                                  widget.prop,
+                                  segment!.$1,
+                                  preset.ease,
+                                ),
                         ),
                     ],
                   ),
@@ -340,20 +387,30 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
     );
   }
 
-  static const _presets = [
-    Easing.linear,
-    Easing.easeIn,
-    Easing.easeOut,
-    Easing.easeInOut,
-    Easing.overshoot,
-    Easing.bounce,
-    Easing.elastic,
-    Easing(type: EasingType.steps),
-    Easing(type: EasingType.cyclic),
+  static const _presets = <({String nome, Easing ease})>[
+    (nome: 'Apple padrão', ease: Easing.appleStandard),
+    (nome: 'Apple entrada', ease: Easing.appleEntrance),
+    (nome: 'Apple saída', ease: Easing.appleExit),
+    (nome: 'Mola interface', ease: Easing.interfaceSpring),
+    (nome: 'Mola suave', ease: Easing.softSpring),
+    (nome: 'Linear', ease: Easing.linear),
+    (nome: 'Ease in', ease: Easing.easeIn),
+    (nome: 'Ease out', ease: Easing.easeOut),
+    (nome: 'Ease in-out', ease: Easing.easeInOut),
+    (nome: 'Overshoot', ease: Easing.overshoot),
+    (nome: 'Quicar', ease: Easing.bounce),
+    (nome: 'Elástico', ease: Easing.elastic),
+    (nome: 'Degraus', ease: Easing(type: EasingType.steps)),
+    (nome: 'Cíclico', ease: Easing(type: EasingType.cyclic)),
   ];
 
   static bool _samePreset(Easing a, Easing b) {
     if (a.type != b.type) return false;
+    if (a.type == EasingType.spring) {
+      return (a.response - b.response).abs() < 0.001 &&
+          (a.damping - b.damping).abs() < 0.001 &&
+          (a.initialVelocity - b.initialVelocity).abs() < 0.001;
+    }
     if (a.type != EasingType.cubicBezier) return true;
     return (a.x1 - b.x1).abs() < 0.01 &&
         (a.y1 - b.y1).abs() < 0.01 &&
@@ -361,8 +418,12 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
         (a.y2 - b.y2).abs() < 0.01;
   }
 
-  Future<void> _showMenu(BuildContext context, String layerId, Easing ease,
-      Duration? segStart) async {
+  Future<void> _showMenu(
+    BuildContext context,
+    String layerId,
+    Easing ease,
+    Duration? segStart,
+  ) async {
     final controller = ref.read(editorControllerProvider.notifier);
     await showModalBottomSheet<void>(
       context: context,
@@ -372,8 +433,10 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SwitchListTile(
-              title: const Text('Ativar overshoot',
-                  style: TextStyle(color: AmColors.text, fontSize: 15)),
+              title: const Text(
+                'Ativar overshoot',
+                style: TextStyle(color: AmColors.text, fontSize: 15),
+              ),
               activeTrackColor: AmColors.accent,
               value: _overshoot,
               onChanged: (v) {
@@ -384,10 +447,15 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
             // COPIAR / COLAR a curva: o mesmo timing em outro trecho, outro
             // parametro, outra camada — sem redesenhar a alca.
             ListTile(
-              leading: const Icon(CupertinoIcons.doc_on_doc,
-                  color: AmColors.muted, size: 20),
-              title: const Text('Copiar curva',
-                  style: TextStyle(color: AmColors.text, fontSize: 15)),
+              leading: const Icon(
+                CupertinoIcons.doc_on_doc,
+                color: AmColors.muted,
+                size: 20,
+              ),
+              title: const Text(
+                'Copiar curva',
+                style: TextStyle(color: AmColors.text, fontSize: 15),
+              ),
               onTap: () {
                 EasingClipboard.valor = ease;
                 Navigator.of(sheetContext).pop();
@@ -395,14 +463,20 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
             ),
             ListTile(
               enabled: EasingClipboard.valor != null && segStart != null,
-              leading: const Icon(CupertinoIcons.doc_on_clipboard,
-                  color: AmColors.muted, size: 20),
-              title: Text('Colar curva',
-                  style: TextStyle(
-                      color: EasingClipboard.valor != null && segStart != null
-                          ? AmColors.text
-                          : AmColors.muted,
-                      fontSize: 15)),
+              leading: const Icon(
+                CupertinoIcons.doc_on_clipboard,
+                color: AmColors.muted,
+                size: 20,
+              ),
+              title: Text(
+                'Colar curva',
+                style: TextStyle(
+                  color: EasingClipboard.valor != null && segStart != null
+                      ? AmColors.text
+                      : AmColors.muted,
+                  fontSize: 15,
+                ),
+              ),
               onTap: () {
                 final v = EasingClipboard.valor;
                 if (v != null && segStart != null) {
@@ -412,11 +486,12 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
               },
             ),
             ListTile(
-              title: const Text('Aplicar curva a todos os keyframes',
-                  style: TextStyle(color: AmColors.text, fontSize: 15)),
+              title: const Text(
+                'Aplicar curva a todos os keyframes',
+                style: TextStyle(color: AmColors.text, fontSize: 15),
+              ),
               onTap: () {
-                controller.applyEaseToAllSegments(
-                    layerId, widget.prop, ease);
+                controller.applyEaseToAllSegments(layerId, widget.prop, ease);
                 Navigator.of(sheetContext).pop();
               },
             ),
@@ -473,198 +548,233 @@ Future<void> showTrackCurveSheet(
   VoidCallback? onClosed,
 }) async {
   final myGen = paramSheetGeneration + 1;
+  var aplicarEmTodos = false;
   await showParamSheet(
     context,
     heightFactor: 0.5,
     builder: (sheetContext) => StatefulBuilder(
       builder: (sheetContext, setSheetState) =>
           ValueListenableBuilder<Duration>(
-        valueListenable: playback.time,
-        builder: (sheetContext, t, _) {
-          final project = ref.read(editorControllerProvider);
-          final layer = project.layerById(layerId);
-          if (layer == null) return const SizedBox.shrink();
-          final track = trackOf(layer);
-          if (track == null) return const SizedBox.shrink();
-          final local = layer.localTime(t);
-          final times = [for (final k in track.keyframes) k.time];
+            valueListenable: playback.time,
+            builder: (sheetContext, t, _) {
+              final project = ref.read(editorControllerProvider);
+              final layer = project.layerById(layerId);
+              if (layer == null) return const SizedBox.shrink();
+              final track = trackOf(layer);
+              if (track == null) return const SizedBox.shrink();
+              final local = layer.localTime(t);
+              final times = [for (final k in track.keyframes) k.time];
 
-          (Duration, Duration)? seg;
-          for (var i = 0; i < times.length - 1; i++) {
-            if (local >= times[i] && local < times[i + 1]) {
-              seg = (times[i], times[i + 1]);
-              break;
-            }
-          }
+              (Duration, Duration)? seg;
+              for (var i = 0; i < times.length - 1; i++) {
+                if (local >= times[i] && local < times[i + 1]) {
+                  seg = (times[i], times[i + 1]);
+                  break;
+                }
+              }
 
-          void jump(int dir) {
-            if (times.length < 2) return;
-            final mids = [
-              for (var i = 0; i < times.length - 1; i++)
-                times[i] + (times[i + 1] - times[i]) ~/ 2,
-            ];
-            var idx = 0;
-            for (var i = 0; i < mids.length; i++) {
-              if (local >= times[i]) idx = i;
-            }
-            final target = (idx + dir).clamp(0, mids.length - 1);
-            playback.seek(layer.startTime + mids[target]);
-          }
+              void jump(int dir) {
+                if (times.length < 2) return;
+                final mids = [
+                  for (var i = 0; i < times.length - 1; i++)
+                    times[i] + (times[i + 1] - times[i]) ~/ 2,
+                ];
+                var idx = 0;
+                for (var i = 0; i < mids.length; i++) {
+                  if (local >= times[i]) idx = i;
+                }
+                final target = (idx + dir).clamp(0, mids.length - 1);
+                playback.seek(layer.startTime + mids[target]);
+              }
 
-          final ease = seg == null ? null : track.easeAt(seg.$1);
+              final ease = seg == null ? null : track.easeAt(seg.$1);
 
-          return SafeArea(
-            // Scroll: em tela baixa o sheet e capado para nao cobrir o
-            // preview — o conteudo rola em vez de estourar.
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Curva — $label',
-                      style: const TextStyle(
+              return SafeArea(
+                // Scroll: em tela baixa o sheet e capado para nao cobrir o
+                // preview — o conteudo rola em vez de estourar.
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Curva — $label',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
-                  SheetTransport(
-                    playback: playback,
-                    duration: project.duration,
-                    fps: project.fps,
-                  ),
-                  const SizedBox(height: 6),
-                  if (seg == null || ease == null)
-                    Container(
-                      height: 150,
-                      alignment: Alignment.center,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Crie 2+ keyframes neste parametro e leve o\n'
-                            'playhead para DENTRO do trecho entre eles.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: AmColors.muted, fontSize: 13),
-                          ),
-                          if (times.length >= 2)
-                            CupertinoButton(
-                              onPressed: () {
-                                playback.seek(layer.startTime +
-                                    times[0] +
-                                    (times[1] - times[0]) ~/ 2);
-                              },
-                              child: const Text('Ir ao primeiro trecho',
-                                  style: TextStyle(
+                          color: AmColors.text,
+                        ),
+                      ),
+                      SheetTransport(
+                        playback: playback,
+                        duration: project.duration,
+                        fps: project.fps,
+                      ),
+                      const SizedBox(height: 6),
+                      if (seg == null || ease == null)
+                        Container(
+                          height: 150,
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Crie 2+ keyframes neste parametro e leve o\n'
+                                'playhead para DENTRO do trecho entre eles.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AmColors.muted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              if (times.length >= 2)
+                                CupertinoButton(
+                                  onPressed: () {
+                                    playback.seek(
+                                      layer.startTime +
+                                          times[0] +
+                                          (times[1] - times[0]) ~/ 2,
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Ir ao primeiro trecho',
+                                    style: TextStyle(
                                       color: AmColors.accent,
-                                      fontSize: 14)),
-                            ),
-                        ],
-                      ),
-                    )
-                  else ...[
-                    SizedBox(
-                      height: 150,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          CupertinoButton(
-                            padding: const EdgeInsets.all(6),
-                            onPressed: () => jump(-1),
-                            child: const Icon(CupertinoIcons.chevron_left,
-                                size: 18, color: AmColors.muted),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                          Expanded(
-                            child: _CurveGraph(
-                              ease: ease,
-                              overshootEnabled: true,
-                              onBezierChanged: (e) {
-                                onSetEase(seg!.$1, e);
-                                setSheetState(() {});
-                              },
-                            ),
-                          ),
-                          CupertinoButton(
-                            padding: const EdgeInsets.all(6),
-                            onPressed: () => jump(1),
-                            child: const Icon(
-                                CupertinoIcons.chevron_right,
-                                size: 18,
-                                color: AmColors.muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      height: 70,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          for (final preset in _CurvePanelState._presets)
-                            SizedBox(
-                              width: 74,
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.only(right: 8),
-                                child: _PresetTile(
-                                  ease: preset,
-                                  selected: _CurvePanelState._samePreset(
-                                      ease, preset),
-                                  onTap: () {
-                                    onSetEase(seg!.$1, preset);
+                        )
+                      else ...[
+                        SizedBox(
+                          height: 150,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              CupertinoButton(
+                                padding: const EdgeInsets.all(6),
+                                onPressed: () => jump(-1),
+                                child: const Icon(
+                                  CupertinoIcons.chevron_left,
+                                  size: 18,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                              Expanded(
+                                child: _CurveGraph(
+                                  ease: ease,
+                                  overshootEnabled: true,
+                                  onBezierChanged: (e) {
+                                    onSetEase(seg!.$1, e);
                                     setSheetState(() {});
                                   },
                                 ),
                               ),
-                            ),
-                          CupertinoButton(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10),
-                            onPressed: () {
-                              onSetEaseAll(ease);
-                              setSheetState(() {});
-                            },
-                            child: const Text('Aplicar a\ntodos',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
+                              CupertinoButton(
+                                padding: const EdgeInsets.all(6),
+                                onPressed: () => jump(1),
+                                child: const Icon(
+                                  CupertinoIcons.chevron_right,
+                                  size: 18,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          height: 70,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              SizedBox(
+                                width: 112,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _ScopeToggle(
+                                    todos: aplicarEmTodos,
+                                    horizontal: true,
+                                    onChanged: (v) {
+                                      aplicarEmTodos = v;
+                                      setSheetState(() {});
+                                    },
+                                  ),
+                                ),
+                              ),
+                              for (final preset in _CurvePanelState._presets)
+                                SizedBox(
+                                  width: 74,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: _PresetTile(
+                                      ease: preset.ease,
+                                      label: preset.nome,
+                                      selected: _CurvePanelState._samePreset(
+                                        ease,
+                                        preset.ease,
+                                      ),
+                                      onTap: () {
+                                        if (aplicarEmTodos) {
+                                          onSetEaseAll(preset.ease);
+                                        } else {
+                                          onSetEase(seg!.$1, preset.ease);
+                                        }
+                                        setSheetState(() {});
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              CupertinoButton(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                onPressed: () {
+                                  EasingClipboard.valor = ease;
+                                  setSheetState(() {});
+                                },
+                                child: const Text(
+                                  'Copiar',
+                                  style: TextStyle(
                                     fontSize: 12,
-                                    color: AmColors.accent)),
+                                    color: AmColors.accent,
+                                  ),
+                                ),
+                              ),
+                              CupertinoButton(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                                onPressed: EasingClipboard.valor == null
+                                    ? null
+                                    : () {
+                                        onSetEase(
+                                          seg!.$1,
+                                          EasingClipboard.valor!,
+                                        );
+                                        setSheetState(() {});
+                                      },
+                                child: const Text(
+                                  'Colar',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AmColors.accent,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          CupertinoButton(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10),
-                            onPressed: () {
-                              EasingClipboard.valor = ease;
-                              setSheetState(() {});
-                            },
-                            child: const Text('Copiar',
-                                style: TextStyle(
-                                    fontSize: 12, color: AmColors.accent)),
-                          ),
-                          CupertinoButton(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10),
-                            onPressed: EasingClipboard.valor == null
-                                ? null
-                                : () {
-                                    onSetEase(seg!.$1, EasingClipboard.valor!);
-                                    setSheetState(() {});
-                                  },
-                            child: const Text('Colar',
-                                style: TextStyle(
-                                    fontSize: 12, color: AmColors.accent)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
     ),
   );
   // Fechou o editor de curvas: devolve o painel que o abriu — o usuario
@@ -692,14 +802,14 @@ class _CurveGraph extends StatelessWidget {
   static const double _yMax = 1.5;
 
   Offset _toPlot(Size size, double x, double y) => Offset(
-        x * size.width,
-        size.height - (y - _yMin) / (_yMax - _yMin) * size.height,
-      );
+    x * size.width,
+    size.height - (y - _yMin) / (_yMax - _yMin) * size.height,
+  );
 
   (double, double) _fromPlot(Size size, Offset p) => (
-        (p.dx / size.width).clamp(0.0, 1.0),
-        _yMin + (size.height - p.dy) / size.height * (_yMax - _yMin),
-      );
+    (p.dx / size.width).clamp(0.0, 1.0),
+    _yMin + (size.height - p.dy) / size.height * (_yMax - _yMin),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -711,13 +821,12 @@ class _CurveGraph extends StatelessWidget {
 
         void drag(DragUpdateDetails d) {
           final p = d.localPosition;
-          final near1 =
-              (p - h1).distanceSquared < (p - h2).distanceSquared;
+          final near1 = (p - h1).distanceSquared < (p - h2).distanceSquared;
           var (x, y) = _fromPlot(size, p);
           if (!overshootEnabled) y = y.clamp(0.0, 1.0);
-          onBezierChanged(near1
-              ? ease.copyWith(x1: x, y1: y)
-              : ease.copyWith(x2: x, y2: y));
+          onBezierChanged(
+            near1 ? ease.copyWith(x1: x, y1: y) : ease.copyWith(x2: x, y2: y),
+          );
         }
 
         final enabled = ease.type == EasingType.cubicBezier;
@@ -732,10 +841,11 @@ class _CurveGraph extends StatelessWidget {
           child: CustomPaint(
             size: size,
             painter: _AmCurvePainter(
-                ease: ease,
-                yMin: _yMin,
-                yMax: _yMax,
-                percorrido: percorrido),
+              ease: ease,
+              yMin: _yMin,
+              yMax: _yMax,
+              percorrido: percorrido,
+            ),
           ),
         );
       },
@@ -773,49 +883,56 @@ class _SpeedGraph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final size = Size(c.maxWidth, c.maxHeight);
-      Offset plot(double x, double v) =>
-          Offset(x * size.width, size.height - v / _vMax * size.height);
+    return LayoutBuilder(
+      builder: (context, c) {
+        final size = Size(c.maxWidth, c.maxHeight);
+        Offset plot(double x, double v) =>
+            Offset(x * size.width, size.height - v / _vMax * size.height);
 
-      final pIni = plot(ease.x1, _vIni(ease));
-      final pFim = plot(ease.x2, _vFim(ease));
+        final pIni = plot(ease.x1, _vIni(ease));
+        final pFim = plot(ease.x2, _vFim(ease));
 
-      void drag(DragUpdateDetails d) {
-        final p = d.localPosition;
-        final pertoIni =
-            (p - pIni).distanceSquared <= (p - pFim).distanceSquared;
-        final x = (p.dx / size.width).clamp(0.02, 0.98);
-        final v = ((size.height - p.dy) / size.height * _vMax)
-            .clamp(0.0, _vMax);
-        if (pertoIni) {
-          // influencia = x1; velocidade inicial = y1/x1 -> y1 = v * x1.
-          final x1 = math.min(x, ease.x2 - 0.02);
-          onBezierChanged(ease.copyWith(x1: x1, y1: (v * x1).clamp(-2.0, 2.0)));
-        } else {
-          // influencia = 1-x2; velocidade final = (1-y2)/(1-x2).
-          final x2 = math.max(x, ease.x1 + 0.02);
-          onBezierChanged(
-              ease.copyWith(x2: x2, y2: (1 - v * (1 - x2)).clamp(-1.0, 3.0)));
+        void drag(DragUpdateDetails d) {
+          final p = d.localPosition;
+          final pertoIni =
+              (p - pIni).distanceSquared <= (p - pFim).distanceSquared;
+          final x = (p.dx / size.width).clamp(0.02, 0.98);
+          final v = ((size.height - p.dy) / size.height * _vMax).clamp(
+            0.0,
+            _vMax,
+          );
+          if (pertoIni) {
+            // influencia = x1; velocidade inicial = y1/x1 -> y1 = v * x1.
+            final x1 = math.min(x, ease.x2 - 0.02);
+            onBezierChanged(
+              ease.copyWith(x1: x1, y1: (v * x1).clamp(-2.0, 2.0)),
+            );
+          } else {
+            // influencia = 1-x2; velocidade final = (1-y2)/(1-x2).
+            final x2 = math.max(x, ease.x1 + 0.02);
+            onBezierChanged(
+              ease.copyWith(x2: x2, y2: (1 - v * (1 - x2)).clamp(-1.0, 3.0)),
+            );
+          }
         }
-      }
 
-      final editavel = ease.type == EasingType.cubicBezier;
-      return GestureDetector(
-        onVerticalDragUpdate: editavel ? drag : null,
-        onHorizontalDragUpdate: editavel ? drag : null,
-        child: CustomPaint(
-          size: size,
-          painter: _SpeedPainter(
-            ease: ease,
-            vMax: _vMax,
-            pIni: pIni,
-            pFim: pFim,
-            percorrido: percorrido,
+        final editavel = ease.type == EasingType.cubicBezier;
+        return GestureDetector(
+          onVerticalDragUpdate: editavel ? drag : null,
+          onHorizontalDragUpdate: editavel ? drag : null,
+          child: CustomPaint(
+            size: size,
+            painter: _SpeedPainter(
+              ease: ease,
+              vMax: _vMax,
+              pIni: pIni,
+              pFim: pFim,
+              percorrido: percorrido,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -857,8 +974,10 @@ class _SpeedPainter extends CustomPainter {
 
     // A derivada ANALITICA da curva de valor (ver Easing.speedAt): e o
     // que faz o grafico sair liso em vez de serrilhado.
-    Offset plot(double x, double v) =>
-        Offset(x * size.width, size.height - v.clamp(0, vMax) / vMax * size.height);
+    Offset plot(double x, double v) => Offset(
+      x * size.width,
+      size.height - v.clamp(0, vMax) / vMax * size.height,
+    );
     final path = Path();
     const n = 96;
     for (var i = 0; i <= n; i++) {
@@ -876,7 +995,10 @@ class _SpeedPainter extends CustomPainter {
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
-    canvas.drawPath(area, Paint()..color = AmColors.accent.withValues(alpha: 0.12));
+    canvas.drawPath(
+      area,
+      Paint()..color = AmColors.accent.withValues(alpha: 0.12),
+    );
     canvas.drawPath(
       path,
       Paint()
@@ -890,8 +1012,11 @@ class _SpeedPainter extends CustomPainter {
     final andando = percorrido;
     if (andando != null) {
       final p = plot(andando, ease.speedAt(andando));
-      canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height),
-          Paint()..color = AmColors.pink.withValues(alpha: 0.35));
+      canvas.drawLine(
+        Offset(p.dx, 0),
+        Offset(p.dx, size.height),
+        Paint()..color = AmColors.pink.withValues(alpha: 0.35),
+      );
       canvas.drawCircle(p, 8, Paint()..color = AmColors.pink);
     }
 
@@ -929,9 +1054,9 @@ class _AmCurvePainter extends CustomPainter {
   final double? percorrido;
 
   Offset _pt(Size size, double x, double y) => Offset(
-        x * size.width,
-        size.height - (y - yMin) / (yMax - yMin) * size.height,
-      );
+    x * size.width,
+    size.height - (y - yMin) / (yMax - yMin) * size.height,
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1010,12 +1135,13 @@ class _AmCurvePainter extends CustomPainter {
       canvas.drawLine(Offset(p.dx, 0), Offset(p.dx, size.height), guia);
       canvas.drawCircle(p, 8, Paint()..color = AmColors.pink);
       canvas.drawCircle(
-          p,
-          8,
-          Paint()
-            ..color = Colors.white
-            ..strokeWidth = 2
-            ..style = PaintingStyle.stroke);
+        p,
+        8,
+        Paint()
+          ..color = Colors.white
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke,
+      );
     }
 
     // Pontos das extremidades + alcas.
@@ -1037,11 +1163,13 @@ class _AmCurvePainter extends CustomPainter {
 class _PresetTile extends StatelessWidget {
   const _PresetTile({
     required this.ease,
+    required this.label,
     required this.selected,
     required this.onTap,
   });
 
   final Easing ease;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1059,11 +1187,82 @@ class _PresetTile extends StatelessWidget {
               ? Border.all(color: AmColors.accent, width: 1.5)
               : null,
         ),
-        child: CustomPaint(
-          painter: _PresetThumbPainter(ease: ease, selected: selected),
+        child: Column(
+          children: [
+            Expanded(
+              child: CustomPaint(
+                painter: _PresetThumbPainter(ease: ease, selected: selected),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(3, 0, 3, 4),
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 8.5,
+                  height: 1,
+                  color: selected ? AmColors.accent : AmColors.muted,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+}
+
+/// Escolha explícita exigida antes de aplicar um preset: só o trecho sob o
+/// playhead ou todos os segmentos da propriedade.
+class _ScopeToggle extends StatelessWidget {
+  const _ScopeToggle({
+    required this.todos,
+    required this.onChanged,
+    this.horizontal = false,
+  });
+
+  final bool todos;
+  final ValueChanged<bool> onChanged;
+  final bool horizontal;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(String text, bool value) => GestureDetector(
+      onTap: () => onChanged(value),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        decoration: BoxDecoration(
+          color: todos == value ? AmColors.accent : AmColors.bg,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            color: todos == value ? AmColors.bg : AmColors.muted,
+          ),
+        ),
+      ),
+    );
+    final children = [item('Trecho', false), item('Todos', true)];
+    return horizontal
+        ? Row(
+            children: [
+              Expanded(child: children[0]),
+              const SizedBox(width: 4),
+              Expanded(child: children[1]),
+            ],
+          )
+        : Column(
+            children: [children[0], const SizedBox(height: 4), children[1]],
+          );
   }
 }
 
