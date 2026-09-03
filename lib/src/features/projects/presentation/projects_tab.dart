@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/aurea_logo.dart';
 import '../../about/presentation/report_sheet.dart';
+import '../../autoedit/presentation/autoedit_screen.dart';
 import '../../editor/application/editor_controller.dart';
 import '../../editor/domain/template_pack.dart';
 import '../../editor/domain/video_project.dart';
@@ -233,7 +234,9 @@ class ProjectsTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 18),
-          // CRIAR: um botao so, e o template ao lado como icone.
+          // AS DUAS PORTAS: comecar do zero, ou deixar o AutoEdit montar
+          // o projeto a partir de um video falado. Sao caminhos
+          // diferentes para a mesma coisa — um projeto editavel.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -245,6 +248,21 @@ class ProjectsTab extends ConsumerWidget {
                       icon: const Icon(CupertinoIcons.plus, size: 19),
                       label: const Text('Novo projeto'),
                       onPressed: () => _createProject(context, ref),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(CupertinoIcons.sparkles, size: 18),
+                      label: const Text('AutoEdit'),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const AutoEditScreen(),
+                        ),
+                      ),
                     ),
                   ),
                 ),

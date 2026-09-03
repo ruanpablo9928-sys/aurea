@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../domain/audio_ops.dart';
+import '../domain/loudness.dart';
 import '../domain/peak_pyramid.dart';
 
 /// FORMA DE ONDA e TIRA DE MINIATURAS.
@@ -52,6 +53,10 @@ class MediaPreviewService {
 
   final Map<String, Float32List> _peaks = {};
 
+  /// A SONORIDADE de cada arquivo, em LUFS. Medir custa uma decodificacao
+  /// inteira; o numero nao muda enquanto o arquivo for o mesmo.
+  final Map<String, double?> _lufs = {};
+
   /// A PIRAMIDE por arquivo — o que o desenho usa. Ampliar troca de
   /// nivel, nunca recalcula.
   final Map<String, PeakPyramid> _pyramids = {};
@@ -66,6 +71,10 @@ class MediaPreviewService {
   /// E o envelope simples de sempre (100 baldes por segundo), que os
   /// detectores de silencio e batida consomem.
   Float32List? peaksOf(String path) => _peaks[path];
+
+  /// A SONORIDADE integrada de [path], em LUFS, ou null quando a faixa e
+  /// muda ou ainda nao foi analisada.
+  double? loudnessOf(String path) => _lufs[path];
 
   /// A PIRAMIDE de [path] — min, max e RMS em seis niveis de detalhe.
   PeakPyramid? pyramidOf(String path) => _pyramids[path];
@@ -164,6 +173,13 @@ class MediaPreviewService {
 
       final out = computePeaks(samples, 16000, peaksPerSecond);
       _pyramids[path] = buildPeakPyramid(samples, 16000);
+      // A SONORIDADE sai da mesma decodificacao. Medir depois obrigaria a
+      // decodificar o arquivo de novo so para isso.
+      final flutuante = Float32List(samples.length);
+      for (var i = 0; i < samples.length; i++) {
+        flutuante[i] = samples[i] / 32768.0;
+      }
+      _lufs[path] = integratedLufs(flutuante, 16000);
 
       await cache.writeAsBytes(out.buffer.asUint8List(), flush: true);
       _peaks[path] = out;

@@ -103,6 +103,16 @@ double? integratedLufs(Float32List samples, int rate) {
 /// entrega mais alto que isso e abaixado por elas de qualquer jeito.
 const double lufsAlvoPadrao = -14.0;
 
+/// O ganho que leva uma faixa JA MEDIDA ao alvo.
+///
+/// Separado de [normalizeGainLufs] porque quem ja tem a medida guardada
+/// nao pode ser obrigado a decodificar o arquivo de novo so para
+/// converter um numero.
+double normalizeGainForLufs(double lufs, {double target = lufsAlvoPadrao}) {
+  if (!lufs.isFinite) return 1;
+  return math.pow(10, (target - lufs) / 20).toDouble().clamp(0.05, 12.0);
+}
+
 /// GANHO DE NORMALIZACAO por sonoridade.
 ///
 /// O teto de 12x nao e capricho: uma gravacao quase muda pediria ganho

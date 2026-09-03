@@ -24,6 +24,7 @@ import '../domain/tracker2d.dart';
 import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
+import '../domain/loudness.dart';
 import '../domain/layer.dart';
 import '../domain/layer_meta.dart';
 import '../domain/layout_ops.dart';
@@ -70,13 +71,41 @@ class EditorController extends Notifier<VideoProject> {
   /// coalescidas num unico passo de undo.
   void _mutate(VideoProject next) {
     final now = DateTime.now();
-    if (now.difference(_lastPush) > const Duration(milliseconds: 450)) {
+    // Dentro de um grupo, ninguem empilha: o snapshot foi tirado uma vez
+    // no comeco, e desfazer volta o passo inteiro.
+    if (!_agrupando &&
+        now.difference(_lastPush) > const Duration(milliseconds: 450)) {
       _undoStack.add(state);
       if (_undoStack.length > 100) _undoStack.removeAt(0);
     }
     _lastPush = now;
     _redoStack.clear();
     state = next;
+  }
+
+  bool _agrupando = false;
+
+  /// N EDICOES, UM UNDO SO.
+  ///
+  /// O AutoEdit corta trinta silencios num passo. Sem isto, desfazer
+  /// "os cortes" seria tocar trinta vezes em desfazer — e a pessoa
+  /// desistiria no quinto. A janela de 450 ms nao resolve porque o
+  /// trabalho leva segundos.
+  void runAsOneUndo(void Function() body) {
+    if (_agrupando) {
+      body();
+      return;
+    }
+    _undoStack.add(state);
+    if (_undoStack.length > 100) _undoStack.removeAt(0);
+    _redoStack.clear();
+    _agrupando = true;
+    try {
+      body();
+    } finally {
+      _agrupando = false;
+      _lastPush = DateTime.now();
+    }
   }
 
   void undo() {
@@ -221,6 +250,27 @@ class EditorController extends Notifier<VideoProject> {
         _replace(layer.copyLayer(duration: d));
       }
     });
+  }
+
+  /// IMPORTA UM VIDEO JA ESCOLHIDO e so devolve quando a duracao real
+  /// chegou do probe.
+  ///
+  /// O caminho de sempre poe a camada na hora com duracao provisoria e
+  /// deixa o probe corrigir depois — otimo para o import a mao, ruim para
+  /// o AutoEdit: ele calcula corte em cima da duracao, e cortar um video
+  /// de "4 segundos" que na verdade tem tres minutos nao da nada certo.
+  Future<String> importVideoAwaitingDuration(
+    Duration at,
+    String path,
+    String name,
+  ) async {
+    final id = addVideoLayer(at, path, name, const Duration(seconds: 4));
+    final d = await _probeDuration(path);
+    final layer = _layer(id);
+    if (layer is VideoLayer && d > Duration.zero) {
+      _replace(layer.copyLayer(duration: d));
+    }
+    return id;
   }
 
   String addAudioLayer(
@@ -1643,14 +1693,29 @@ class EditorController extends Notifier<VideoProject> {
     }
   }
 
-  /// NORMALIZAR: leva o pico da faixa ao alvo. Usa o percentil 99, entao
-  /// um estalo isolado nao decide o volume do resto.
+  /// NORMALIZAR POR SONORIDADE.
   ///
-  /// Devolve o ganho aplicado, ou null se a forma de onda ainda nao
-  /// esta pronta — quem chama avisa em vez de fingir que fez.
-  double? normalizeAudio(String id) {
+  /// Pico normalizado ainda soa desigual: uma locucao seca e um trecho de
+  /// bateria podem ter o mesmo pico e 10 dB de diferenca na percepcao. O
+  /// alvo e -14 LUFS, que e o que as plataformas de video usam — entregar
+  /// mais alto so faz elas abaixarem depois.
+  ///
+  /// Cai para o pico quando a sonoridade ainda nao foi medida (faixa
+  /// recem-importada) — melhor um ganho aproximado que nenhum.
+  ///
+  /// Devolve o ganho aplicado, ou null se a forma de onda ainda nao esta
+  /// pronta — quem chama avisa em vez de fingir que fez.
+  double? normalizeAudio(String id, {double alvoLufs = lufsAlvoPadrao}) {
     final path = _audioPathOf(id);
     if (path == null) return null;
+    final lufs = MediaPreviewService.instance.loudnessOf(path);
+    if (lufs != null && lufs.isFinite) {
+      final g =
+          normalizeGainForLufs(lufs, target: alvoLufs);
+      updateAudioSpec(id, (a) =>
+          a.copyWith(gain: g, normalizeTargetLufs: alvoLufs));
+      return g;
+    }
     final peaks = MediaPreviewService.instance.peaksOf(path);
     if (peaks == null || peaks.isEmpty) return null;
     final g = normalizeGain(peaks);
@@ -3156,6 +3221,25 @@ class EditorController extends Notifier<VideoProject> {
         position: layer.position.edited(layer.localTime(globalTime), value),
       ),
     );
+  }
+
+  /// CRAVA UMA TRILHA DE ESCALA INTEIRA de uma vez.
+  ///
+  /// O AutoEdit calcula dezenas de keyframes de zoom antes de tocar no
+  /// projeto; aplicar um por um passaria pela coalescencia de undo e pelo
+  /// recalculo do preview a cada um. Aqui entra a trilha pronta — e ela
+  /// e uma trilha COMUM, que abre no editor e se arrasta como qualquer
+  /// outra.
+  void setScaleKeyframes(String id, List<Keyframe<double>> keyframes) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    final ordenados = [...keyframes]
+      ..sort((a, b) => a.time.compareTo(b.time));
+    _replace(layer.copyLayer(
+      scaleX: AnimatedDouble(layer.scaleX.base, ordenados),
+      scaleY: AnimatedDouble(layer.scaleY.base, ordenados),
+    ));
+    _push(layer);
   }
 
   void editScaleUniform(String id, Duration globalTime, double value) {
