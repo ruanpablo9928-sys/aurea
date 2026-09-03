@@ -16,8 +16,10 @@ import 'am_widgets.dart';
 ///   ALTURA FIXA      igual entre tipos de camada e entre secoes. Painel
 ///                    que muda de tamanho redimensiona o preview, e o
 ///                    enquadramento pula debaixo do dedo.
-///   ABAS EM FILEIRA  trocar de parametro e UM toque lateral, nao
-///                    voltar-e-entrar. Com indicador de que ha mais.
+///   ABAS A DIREITA   trocar de parametro e UM toque lateral, nao
+///                    voltar-e-entrar. Ficam na coluna da direita para o
+///                    trilho da esquerda (voltar, keyframe, curva) nunca
+///                    sair do lugar quando a aba muda.
 ///   TRILHO FIXO      voltar, keyframe, curva e mais num trilho vertical
 ///                    a esquerda, na mesma posicao em toda aba. Memoria
 ///                    muscular so existe se o botao nao anda.
@@ -75,23 +77,35 @@ class AmPanelChrome extends StatelessWidget {
           Expanded(
             child: Column(
               children: [
-                if (abas.isNotEmpty)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AmParamTabs(
-                          abas: abas,
-                          ativa: abaAtiva,
-                          onAba: onAba ?? (_) {},
-                        ),
-                      ),
-                      ...acoes,
-                    ],
+                if (acoes.isNotEmpty)
+                  SizedBox(
+                    height: 38,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: acoes,
+                    ),
                   ),
-                Expanded(child: corpo),
+                // CANTOS EM L: delimitam a area de arrasto sem desenhar
+                // uma caixa. Sem eles nao se sabe onde o dedo vale, e a
+                // pessoa arrasta fora e nada acontece.
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 6, 6, 10),
+                    child: _Cantos(child: corpo),
+                  ),
+                ),
               ],
             ),
           ),
+          // TRILHO DIREITO: as sub-abas do parametro, em coluna. A ativa
+          // com fundo solido — trocar de aba pela direita nao move o
+          // botao de cravar keyframe, que fica na esquerda.
+          if (abas.isNotEmpty)
+            AmRightTabs(
+              abas: abas,
+              ativa: abaAtiva,
+              onAba: onAba ?? (_) {},
+            ),
         ],
       ),
     );
@@ -157,11 +171,16 @@ class ParamTab {
   const ParamTab({
     required this.id,
     required this.label,
+    this.icone,
     this.animated = false,
   });
 
   final String id;
   final String label;
+
+  /// O icone da sub-aba no trilho direito. Sem ele a aba mostra so o
+  /// rotulo, em duas linhas.
+  final IconData? icone;
 
   /// Tem keyframes: a aba ganha um ponto, para se achar o que ja foi
   /// animado sem entrar em cada uma.
@@ -423,4 +442,137 @@ class AmPanelAcao extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// AS SUB-ABAS DO PARAMETRO, na coluna da direita.
+///
+/// A ativa tem fundo solido, nao so texto colorido: numa tela de celular,
+/// no sol, cor de texto sozinha nao diz qual esta ligada.
+///
+/// Rola quando ha muitas (a forma tem oito), mas as quatro primeiras
+/// cabem sem rolar — que sao as que se usa o tempo todo.
+class AmRightTabs extends StatelessWidget {
+  const AmRightTabs({
+    super.key,
+    required this.abas,
+    required this.ativa,
+    required this.onAba,
+  });
+
+  final List<ParamTab> abas;
+  final String? ativa;
+  final ValueChanged<String> onAba;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 58,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          children: [
+            for (final aba in abas)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onAba(aba.id),
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(4, 0, 6, 6),
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  decoration: BoxDecoration(
+                    color: ativa == aba.id
+                        ? AmColors.accent
+                        : AmColors.chip,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (aba.icone != null)
+                        Icon(
+                          aba.icone,
+                          size: 19,
+                          color: ativa == aba.id
+                              ? AmColors.panel
+                              : AmColors.text,
+                        ),
+                      if (aba.icone != null) const SizedBox(height: 3),
+                      Text(
+                        aba.label,
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 9,
+                          height: 1.1,
+                          fontWeight: FontWeight.w600,
+                          color: ativa == aba.id
+                              ? AmColors.panel
+                              : AmColors.text,
+                        ),
+                      ),
+                      // O PONTO diz que aquela aba ja tem keyframe, sem
+                      // precisar entrar em cada uma para descobrir.
+                      if (aba.animated) ...[
+                        const SizedBox(height: 3),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: ativa == aba.id
+                                ? AmColors.panel
+                                : AmColors.accent,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Os quatro cantos em L em volta do corpo do painel.
+class _Cantos extends StatelessWidget {
+  const _Cantos({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        painter: _CantosPainter(),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: child,
+        ),
+      );
+}
+
+class _CantosPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final tinta = Paint()
+      ..color = AmColors.muted.withValues(alpha: 0.45)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    const b = 14.0;
+    void canto(Offset o, double dx, double dy) {
+      canvas.drawLine(o, o.translate(b * dx, 0), tinta);
+      canvas.drawLine(o, o.translate(0, b * dy), tinta);
+    }
+
+    canto(Offset.zero, 1, 1);
+    canto(Offset(size.width, 0), -1, 1);
+    canto(Offset(0, size.height), 1, -1);
+    canto(Offset(size.width, size.height), -1, -1);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CantosPainter oldDelegate) => false;
 }

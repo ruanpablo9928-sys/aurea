@@ -376,20 +376,24 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                   child: Center(
                     child: ValueListenableBuilder<Duration>(
                       valueListenable: widget.playback.time,
+                      // O TEMPO NUMA CAIXA SOBRE O CABECOTE, nao num
+                      // canto: ele acompanha a posicao do cabecote, e e o
+                      // que faz ler a hora sem procurar.
                       builder: (context, t, _) => Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
+                          horizontal: 8,
+                          vertical: 2,
                         ),
-                        color: AmColors.bg,
+                        decoration: BoxDecoration(
+                          color: AmColors.bg,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
                         child: Text(
                           formatTimecode(t, project.fps),
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
-                            decoration: TextDecoration.underline,
-                            decorationColor: Colors.white70,
                             fontFeatures: [FontFeature.tabularFigures()],
                           ),
                         ),

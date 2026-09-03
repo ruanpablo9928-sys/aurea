@@ -104,7 +104,6 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     bool hasKfHere,
     bool animated,
   ) {
-    const completo = true;
     return AmPanelChrome(
       onBack: widget.onBack,
       animado: animated,
@@ -126,33 +125,35 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
       abas: [
         ParamTab(
             id: TransformTool.position.name,
-            label: 'Posicao',
+            label: 'Mover',
+            icone: CupertinoIcons.move,
             animated: layer.position.isAnimated),
         ParamTab(
             id: TransformTool.rotation.name,
-            label: 'Rotacao',
+            label: 'Girar',
+            icone: CupertinoIcons.rotate_right,
             animated: layer.rotation.isAnimated ||
                 layer.rotationX.isAnimated ||
                 layer.rotationY.isAnimated),
         ParamTab(
             id: TransformTool.scale.name,
-            label: 'Escala',
+            label: 'Escalar',
+            icone: CupertinoIcons.arrow_up_left_arrow_down_right,
             animated: layer.scaleX.isAnimated || layer.scaleY.isAnimated),
-        // NUCLEO: quatro propriedades — posicao, escala, rotacao e
-        // opacidade. Inclinar e pivo sao estudio.
-        if (completo)
-          ParamTab(
-              id: TransformTool.skew.name,
-              label: 'Inclinar',
-              animated: layer.skewX.isAnimated || layer.skewY.isAnimated),
-        if (completo)
-          ParamTab(
-              id: TransformTool.pivot.name,
-              label: 'Pivo',
-              animated: layer.pivot.isAnimated),
+        ParamTab(
+            id: TransformTool.skew.name,
+            label: 'Inclinar',
+            icone: CupertinoIcons.rectangle_expand_vertical,
+            animated: layer.skewX.isAnimated || layer.skewY.isAnimated),
+        ParamTab(
+            id: TransformTool.pivot.name,
+            label: 'Pivo',
+            icone: CupertinoIcons.smallcircle_circle,
+            animated: layer.pivot.isAnimated),
         ParamTab(
             id: TransformTool.opacity.name,
-            label: 'Opacidade',
+            label: 'Opacid.',
+            icone: CupertinoIcons.circle_lefthalf_fill,
             animated: layer.opacity.isAnimated),
       ],
       abaAtiva: widget.tool.name,

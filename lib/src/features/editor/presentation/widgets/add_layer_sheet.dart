@@ -902,47 +902,65 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
       _abasVisiveis.contains(_aba) ? _aba : _abasVisiveis.first;
 
   Widget _abas() {
+    // ICONE EM CIMA, ROTULO EMBAIXO. So texto obriga a ler para escolher;
+    // com o icone a aba se reconhece de relance, e e a mesma anatomia dos
+    // tiles da grade logo abaixo.
     const nomes = {
-      _AbaAdd.forma: 'Forma',
-      _AbaAdd.midia: 'Midia',
-      _AbaAdd.audio: 'Audio',
-      _AbaAdd.objeto: 'Objeto',
-      _AbaAdd.modelo: 'Modelo',
+      _AbaAdd.forma: ('Forma', CupertinoIcons.square_on_circle),
+      _AbaAdd.midia: ('Midia', CupertinoIcons.photo_on_rectangle),
+      _AbaAdd.audio: ('Audio', CupertinoIcons.music_note),
+      _AbaAdd.objeto: ('Objeto', CupertinoIcons.cube),
+      _AbaAdd.modelo: ('Modelo', CupertinoIcons.rectangle_grid_2x2),
     };
     return SizedBox(
-      height: 36,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final a in _abasVisiveis)
-              GestureDetector(
+      height: 50,
+      child: Row(
+        children: [
+          for (final a in _abasVisiveis)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => setState(() {
                   _aba = a;
                   _explicando = null;
                 }),
                 child: Container(
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  alignment: Alignment.center,
+                  margin: const EdgeInsets.only(right: 5),
                   decoration: BoxDecoration(
                     color: _abaVisivel == a
                         ? AmColors.accentDim
                         : AmColors.chip,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    nomes[a]!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: _abaVisivel == a ? AmColors.accent : AmColors.text,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        nomes[a]!.$2,
+                        size: 17,
+                        color: _abaVisivel == a
+                            ? AmColors.accent
+                            : AmColors.text,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        nomes[a]!.$1,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _abaVisivel == a
+                              ? AmColors.accent
+                              : AmColors.text,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
