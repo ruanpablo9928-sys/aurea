@@ -27,6 +27,14 @@ jobs:
           channel: stable
           flutter-version: 3.47.2
 
+      # Plugin novo costuma pedir SDK novo; pegar o Xcode mais recente da
+      # imagem evita ter que subir o runner a cada atualizacao de pacote.
+      - name: Xcode mais novo da imagem
+        run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          xcodebuild -version
+
       - name: Dependencias
         run: flutter pub get
 
