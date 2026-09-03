@@ -60,7 +60,7 @@ void main() {
           'lib/src/features/editor/presentation/am/layer_menu.dart');
       final codigo = _semComentarios(f);
       // Existe como tile da grade...
-      expect(codigo, contains("label: 'Clonar'"));
+      expect(codigo, contains("rotulo: 'Clonar'"));
       // ...e nao como item do menu escondido. (O texto 'Modulo Grade'
       // continua existindo: e o TITULO da folha que o tile abre.)
       expect(codigo.contains("item(CupertinoIcons.circle_grid_3x3"), isFalse);
@@ -80,6 +80,20 @@ void main() {
       final codigo = _semComentarios(f);
       expect(codigo.contains('_menuMais'), isFalse);
       expect(codigo, contains("rotulo: 'Resetar'"));
+    });
+
+    test('nenhum menu de tres pontinhos restou no aplicativo', () {
+      // A tarefa de aceite do 10.1.3: percorrer as dez secoes e contar
+      // quantos tres pontinhos sobraram. O resultado tem de ser zero.
+      final culpados = <String>[];
+      for (final f in _fontes()) {
+        if (_semComentarios(f).contains('CupertinoIcons.ellipsis')) {
+          culpados.add(f.path);
+        }
+      }
+      expect(culpados, isEmpty,
+          reason: 'funcao nenhuma pode existir so dentro de menu '
+              'escondido: $culpados');
     });
 
     test('nenhuma gaveta no aplicativo', () {

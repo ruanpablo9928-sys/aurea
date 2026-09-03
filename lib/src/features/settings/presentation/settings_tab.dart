@@ -10,9 +10,7 @@ import '../../../core/ui/snack.dart';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../../../core/app_mode.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../laboratory/presentation/laboratory_screen.dart';
 import '../../projects/domain/project_presets.dart';
 import '../application/settings_controller.dart';
 
@@ -50,7 +48,6 @@ class SettingsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsControllerProvider);
-    final modo = ref.watch(appModeProvider);
     final controller = ref.read(settingsControllerProvider.notifier);
 
     return SafeArea(
@@ -102,34 +99,6 @@ class SettingsTab extends ConsumerWidget {
                 subtitle: 'Copia o video exportado para a galeria',
                 value: settings.saveToGallery,
                 onChanged: controller.setSaveToGallery,
-              ),
-            ],
-          ),
-          const SizedBox(height: 26),
-          // O INTERRUPTOR (AUREA-reset-ao-nucleo.md): o nucleo e o
-          // padrao; o estudio inteiro continua no codigo e liga aqui.
-          const _GroupHeader('Modo'),
-          _Group(
-            children: [
-              _SwitchRow(
-                title: 'Estudio completo',
-                subtitle: modo.isFull
-                    ? 'Efeitos, texto, formas, 3D, particulas e o resto ligados'
-                    : 'Desligado: so o nucleo (video, imagem, audio, cortes, marcadores, keyframes, exportar)',
-                value: modo.isFull,
-                onChanged: (v) => ref
-                    .read(appModeProvider.notifier)
-                    .set(v ? AppMode.full : AppMode.core),
-              ),
-              const _GroupDivider(),
-              _TapRow(
-                title: 'Laboratório',
-                subtitle: 'Ligue níveis e rode as tarefas de aceite',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const LaboratoryScreen(),
-                  ),
-                ),
               ),
             ],
           ),

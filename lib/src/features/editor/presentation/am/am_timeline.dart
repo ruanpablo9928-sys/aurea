@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/feature_access.dart';
 import '../../../../core/utils/time_format.dart';
 import '../../../../core/ui/snack.dart';
 import '../../application/editor_controller.dart';
@@ -1139,9 +1138,6 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
           Consumer(
             builder: (context, ref, _) {
               final ctrl = ref.read(editorControllerProvider.notifier);
-              final transitions = ref.watch(
-                featureAccessProvider(LaboratoryLevelId.cut),
-              );
               if (layer is! VideoLayer || ctrl.clipAfter(layer.id) == null) {
                 return const SizedBox.shrink();
               }
@@ -1155,9 +1151,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                 height: kAmBarHeight,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: transitions
-                      ? () => showTransitionSheet(context, ref, layer.id)
-                      : null,
+                  onTap: () => showTransitionSheet(context, ref, layer.id),
                   onLongPress: ctrl.hasJoinableNeighbour(layer.id)
                       ? () {
                           if (ctrl.joinWithNeighbour(layer.id)) {
@@ -1170,14 +1164,14 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                           }
                         }
                       : null,
-                  onHorizontalDragStart: !transitions || transition == null
+                  onHorizontalDragStart: transition == null
                       ? null
                       : (_) {
                           onEditStart();
                           _transitionDuration0 = transition.duration;
                           _transitionAccumPx = 0;
                         },
-                  onHorizontalDragUpdate: !transitions || transition == null
+                  onHorizontalDragUpdate: transition == null
                       ? null
                       : (details) {
                           _transitionAccumPx += details.delta.dx;
@@ -1191,32 +1185,26 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                           }
                           ctrl.setTransitionDuration(layer.id, duration);
                         },
-                  onHorizontalDragEnd: !transitions || transition == null
+                  onHorizontalDragEnd: transition == null
                       ? null
                       : (_) => onEditEnd(),
-                  onHorizontalDragCancel: !transitions || transition == null
+                  onHorizontalDragCancel: transition == null
                       ? null
                       : onEditEnd,
                   child: Center(
                     child: Container(
-                      key: transitions
-                          ? ValueKey('level5-transition-${layer.id}')
-                          : null,
+                      key: ValueKey('level5-transition-${layer.id}'),
                       constraints: const BoxConstraints(minWidth: 4),
                       height: kAmBarHeight - 10,
-                      padding: !transitions || transition == null
+                      padding: transition == null
                           ? EdgeInsets.zero
                           : const EdgeInsets.symmetric(horizontal: 5),
                       decoration: BoxDecoration(
-                        color: transitions
-                            ? AmColors.accent.withValues(alpha: 0.85)
-                            : AmColors.hairline,
+                        color: AmColors.accent.withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       alignment: Alignment.center,
-                      child: !transitions
-                          ? null
-                          : transition == null
+                      child: transition == null
                           ? const Icon(
                               CupertinoIcons.timer,
                               size: 12,

@@ -3522,6 +3522,32 @@ class EditorController extends Notifier<VideoProject> {
     );
   }
 
+  /// DUPLICAR UM EFEITO, com os valores e os keyframes que ele tem.
+  ///
+  /// Entra logo abaixo do original: dois Glows um sobre o outro e a
+  /// receita de brilho mais usada que existe, e ate agora so dava para
+  /// aplicar de novo do zero e reajustar tudo na mao.
+  void duplicateEffect(String layerId, String effectId) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final idx = layer.effects.indexWhere((e) => e.id == effectId);
+    if (idx < 0) return;
+    final original = layer.effects[idx];
+    // Sem id: a instancia nova sorteia o proprio. Os keyframes vao junto
+    // porque AnimatedDouble e imutavel — compartilhar a trilha aqui e
+    // seguro, e e o que faz o duplicado nascer identico.
+    final copia = EffectInstance(
+      type: original.type,
+      params: {...original.params},
+      color: original.color,
+      enabled: original.enabled,
+      depth: original.depth,
+      extraColors: [...original.extraColors],
+    );
+    final novos = [...layer.effects]..insert(idx + 1, copia);
+    _replace(layer.copyLayer(effects: novos));
+  }
+
   void removeEffect(String layerId, String effectId) {
     final layer = _layer(layerId);
     if (layer == null) return;

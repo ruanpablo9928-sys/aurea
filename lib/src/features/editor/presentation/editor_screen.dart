@@ -12,8 +12,6 @@ import '../application/video_layer_manager.dart';
 import '../domain/gear.dart';
 import '../domain/layer.dart';
 import 'am/align_sheet.dart';
-import '../../../core/app_mode.dart';
-import '../../../core/feature_access.dart';
 import '../domain/shape.dart';
 import 'am/points_panel.dart';
 import 'am/shape_panel.dart';
@@ -250,16 +248,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       case LayerMenuAction.transform:
         setState(() => _mode = _Mode.transform);
       case LayerMenuAction.blending:
-        // NUCLEO: opacidade e uma sub-aba do transform (quatro
-        // propriedades num painel so); mesclagem e matte sao estudio.
-        if (!ref.read(featureAccessProvider(LaboratoryLevelId.mask))) {
-          setState(() {
-            _tool = TransformTool.opacity;
-            _mode = _Mode.transform;
-          });
-        } else {
-          setState(() => _mode = _Mode.blending);
-        }
+        setState(() => _mode = _Mode.blending);
       case LayerMenuAction.colorFill:
         setState(() => _mode = _Mode.colorFill);
       case LayerMenuAction.effects:
@@ -1035,7 +1024,10 @@ class _TopBar extends ConsumerWidget {
                       .layerById(selectedId);
                   if (layer != null) onLayerMenu(layer);
                 },
-                child: Icon(CupertinoIcons.ellipsis, size: 24, color: tinta),
+                // Grade de secoes, nao "mais opcoes": o icone diz o que
+                // abre. Tres pontinhos prometem menu escondido.
+                child: Icon(CupertinoIcons.square_grid_2x2,
+                    size: 22, color: tinta),
               ),
             ],
             // Agrupar e excluir com os mesmos icones da barra de acoes,
@@ -1180,10 +1172,8 @@ class _ActionBar extends ConsumerWidget {
     final multi = ref.watch(multiSelectProvider);
     final targets = <String>{...multi, ?selId};
     final n = targets.length;
-    final completo = ref.watch(appModeProvider).isFull;
-    final parenting = ref.watch(
-      featureAccessProvider(LaboratoryLevelId.nullAndClone),
-    );
+    const completo = true;
+    const parenting = true;
 
     Widget btn({
       required IconData icon,
@@ -1401,10 +1391,8 @@ class _TransportBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final duration = ref.watch(editorControllerProvider).duration;
     final selectedId = ref.watch(selectedLayerProvider);
-    final shapes = ref.watch(featureAccessProvider(LaboratoryLevelId.shapes));
-    final nullAndClone = ref.watch(
-      featureAccessProvider(LaboratoryLevelId.nullAndClone),
-    );
+    const shapes = true;
+    const nullAndClone = true;
 
     final controller = ref.read(editorControllerProvider.notifier);
     return SizedBox(

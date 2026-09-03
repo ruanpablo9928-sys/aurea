@@ -105,138 +105,23 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
     );
   }
 
-  Future<void> _menuDoEfeito(
-    BuildContext context,
-    String layerId,
-    EffectInstance effect,
-    int index,
-    int total,
-  ) async {
+  /// RESETAR OS PARAMETROS deste efeito no instante atual.
+  ///
+  /// O tempo e lido NO TOQUE: o painel nao pausa a reproducao, e o
+  /// keyframe do reset tem de cair onde o cabecote esta agora. As N
+  /// edicoes viram um undo so (coalesce de 450 ms).
+  void _resetarEfeito(String layerId, EffectInstance effect) {
     final controller = ref.read(editorControllerProvider.notifier);
-    const estilo = TextStyle(color: AmColors.text, fontSize: 15);
-    // ListTile so esmaece via tema, e nossas cores explicitas vencem o
-    // tema: nas pontas o item ficaria igual ao ativo e inerte. Opacity
-    // 0.32 e a mesma de _MenuTile, para o "desligado" ter uma cara so.
-    final podeSubir = index > 0;
-    final podeDescer = index < total - 1;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Titulo: qual efeito esta sendo mexido, ja que o menu cobre
-            // a lista.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(effect.spec.name,
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
-              ),
-            ),
-            // Nas pontas o item fica esmaecido em vez de sumir: a pessoa
-            // ve que o comando existe, so nao faz sentido agora.
-            Opacity(
-              opacity: podeSubir ? 1 : 0.32,
-              child: ListTile(
-                enabled: podeSubir,
-                leading: const Icon(CupertinoIcons.arrow_up,
-                    color: AmColors.muted, size: 20),
-                title: const Text('Mover para cima', style: estilo),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  controller.reorderEffect(layerId, effect.id, -1);
-                },
-              ),
-            ),
-            Opacity(
-              opacity: podeDescer ? 1 : 0.32,
-              child: ListTile(
-                enabled: podeDescer,
-                leading: const Icon(CupertinoIcons.arrow_down,
-                    color: AmColors.muted, size: 20),
-                title: const Text('Mover para baixo', style: estilo),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  controller.reorderEffect(layerId, effect.id, 1);
-                },
-              ),
-            ),
-            ListTile(
-              leading: Icon(
-                  effect.enabled
-                      ? CupertinoIcons.eye_slash
-                      : CupertinoIcons.eye,
-                  color: AmColors.muted,
-                  size: 20),
-              title: Text(effect.enabled ? 'Desligar' : 'Ligar',
-                  style: estilo),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                controller.toggleEffectEnabled(layerId, effect.id);
-              },
-            ),
-            // RESET = cada parametro volta ao valor inicial da ficha NESTE
-            // tempo: num parametro animado isso grava um keyframe com o
-            // inicial (edited), nao apaga a trilha — nao ha API para isso.
-            // As N edicoes viram um undo so (coalesce de 450 ms).
-            ListTile(
-              leading: const Icon(CupertinoIcons.arrow_counterclockwise,
-                  color: AmColors.muted, size: 20),
-              title: const Text('Resetar parametros', style: estilo),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                // O tempo e lido NO TOQUE, nao ao abrir o menu: o painel
-                // nao pausa a reproducao, e o menu pode ficar aberto por
-                // segundos — o keyframe do reset tem de cair onde o
-                // cabecote esta agora, nao onde estava.
-                final agora = widget.playback.time.value;
-                for (final e in effect.spec.params.entries) {
-                  controller.editEffectParam(
-                      layerId, effect.id, e.key, agora, e.value.initial);
-                }
-                if (effect.spec.hasColor) {
-                  controller.setEffectColor(
-                      layerId, effect.id, const Color(0xFFFF5566));
-                }
-              },
-            ),
-            // PRESET DA PESSOA: a receita deste efeito, com keyframes,
-            // guardada fora do projeto — aparece em qualquer outro.
-            ListTile(
-              leading: const Icon(CupertinoIcons.square_stack_3d_down_right,
-                  color: AmColors.muted, size: 20),
-              title: const Text('Salvar como preset', style: estilo),
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                await _salvarComoPreset(context, layerId, effect);
-              },
-            ),
-            ListTile(
-              leading: const Icon(CupertinoIcons.trash,
-                  color: AmColors.pink, size: 20),
-              title: const Text('Remover',
-                  style: TextStyle(color: AmColors.pink, fontSize: 15)),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                controller.removeEffect(layerId, effect.id);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+    final agora = widget.playback.time.value;
+    for (final e in effect.spec.params.entries) {
+      controller.editEffectParam(
+          layerId, effect.id, e.key, agora, e.value.initial);
+    }
+    if (effect.spec.hasColor) {
+      controller.setEffectColor(layerId, effect.id, const Color(0xFFFF5566));
+    }
   }
+
 
   /// CATALOGO (PR-C4): o gargalo de quem tem muitos efeitos nao e ter —
   /// e ACHAR. Busca com sinonimos, chips por categoria com contador,
@@ -631,8 +516,20 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                         selectedParam: _selectedParam,
                         onToggleExpanded: () =>
                             _alternarExpandido(layer.effects[i].id),
-                        onMenu: () => _menuDoEfeito(context, id,
-                            layer.effects[i], i, layer.effects.length),
+                        onSubir: i == 0
+                            ? null
+                            : () => controller.reorderEffect(
+                                id, layer.effects[i].id, -1),
+                        onDescer: i == layer.effects.length - 1
+                            ? null
+                            : () => controller.reorderEffect(
+                                id, layer.effects[i].id, 1),
+                        onDuplicar: () =>
+                            controller.duplicateEffect(id, layer.effects[i].id),
+                        onResetar: () =>
+                            _resetarEfeito(id, layer.effects[i]),
+                        onSalvarPreset: () => _salvarComoPreset(
+                            context, id, layer.effects[i]),
                         onSelectParam: (p) =>
                             setState(() => _selectedParam = p),
                         onParam: (key, v) => controller.editEffectParam(
@@ -674,7 +571,11 @@ class _EffectCard extends StatelessWidget {
     required this.expanded,
     required this.selectedParam,
     required this.onToggleExpanded,
-    required this.onMenu,
+    required this.onSubir,
+    required this.onDescer,
+    required this.onDuplicar,
+    required this.onResetar,
+    required this.onSalvarPreset,
     required this.onSelectParam,
     required this.onParam,
     required this.onParamKeyframe,
@@ -694,7 +595,13 @@ class _EffectCard extends StatelessWidget {
   final bool expanded;
   final String? selectedParam;
   final VoidCallback onToggleExpanded;
-  final VoidCallback onMenu;
+  /// Nulo quando o efeito ja esta na ponta: o botao fica esmaecido, nao
+  /// some — botao que some troca o lugar dos vizinhos.
+  final VoidCallback? onSubir;
+  final VoidCallback? onDescer;
+  final VoidCallback onDuplicar;
+  final VoidCallback onResetar;
+  final VoidCallback onSalvarPreset;
   final ValueChanged<String> onSelectParam;
   final void Function(String key, double value) onParam;
   final void Function(String key) onParamKeyframe;
@@ -863,12 +770,35 @@ class _EffectCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 14),
+                // ORDEM E DUPLICAR NA PROPRIA LINHA.
+                //
+                // A ordem dos efeitos e o resultado: Blur depois de Glow
+                // nao e a mesma imagem que Glow depois de Blur. Isso
+                // morava dentro de um tres pontinhos.
                 GestureDetector(
-                  onTap: onMenu,
-                  child: const Icon(CupertinoIcons.ellipsis,
-                      size: 22, color: AmColors.text),
+                  onTap: onSubir,
+                  child: Opacity(
+                    opacity: onSubir == null ? 0.32 : 1,
+                    child: const Icon(CupertinoIcons.chevron_up,
+                        size: 20, color: AmColors.text),
+                  ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: onDescer,
+                  child: Opacity(
+                    opacity: onDescer == null ? 0.32 : 1,
+                    child: const Icon(CupertinoIcons.chevron_down,
+                        size: 20, color: AmColors.text),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: onDuplicar,
+                  child: const Icon(CupertinoIcons.plus_square_on_square,
+                      size: 20, color: AmColors.text),
+                ),
+                const SizedBox(width: 12),
                 GestureDetector(
                   onTap: onRemove,
                   child: const Icon(CupertinoIcons.trash,
@@ -889,6 +819,27 @@ class _EffectCard extends StatelessWidget {
             ),
             // Recolhido: nem constroi o corpo.
             if (expanded) ...[
+              const SizedBox(height: 8),
+              // OS DOIS COMANDOS QUE FALTAVAM, VISIVEIS.
+              //
+              // Resetar e salvar como preset moravam dentro do tres
+              // pontinhos da linha. Ficam no cartao aberto, que e onde os
+              // parametros estao — e onde faz sentido zerar ou guardar.
+              Row(
+                children: [
+                  _ComandoDoEfeito(
+                    rotulo: 'Resetar',
+                    icone: CupertinoIcons.arrow_counterclockwise,
+                    onTap: onResetar,
+                  ),
+                  const SizedBox(width: 6),
+                  _ComandoDoEfeito(
+                    rotulo: 'Salvar preset',
+                    icone: CupertinoIcons.square_stack_3d_down_right,
+                    onTap: onSalvarPreset,
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               if (effect.spec.temProfundidades) ...[
                 _ProntoRow(effect: effect, onPronto: onPronto),
@@ -1617,4 +1568,47 @@ class _CaminhoRow extends StatelessWidget {
       ],
     );
   }
+}
+
+
+/// UM COMANDO VISIVEL do cartao do efeito. Chip preenchido, sem contorno.
+class _ComandoDoEfeito extends StatelessWidget {
+  const _ComandoDoEfeito({
+    required this.rotulo,
+    required this.icone,
+    required this.onTap,
+  });
+
+  final String rotulo;
+  final IconData icone;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: AmColors.chip,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icone, size: 13, color: AmColors.text),
+              const SizedBox(width: 5),
+              Text(
+                rotulo,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AmColors.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }

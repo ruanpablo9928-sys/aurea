@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../../../core/app_mode.dart';
 import '../../application/editor_controller.dart';
 import '../../../export/domain/export_settings.dart';
 import '../../../export/presentation/export_video_screen.dart';
@@ -82,7 +81,7 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
   final controller = ref.read(editorControllerProvider.notifier);
   // NUCLEO: exportar MP4, uma resolucao, uma qualidade — o botao e so.
   // Tamanho, codec, taxa, Lottie, SVG e template sao estudio.
-  final completo = ref.read(appModeProvider).isFull;
+  const completo = true;
   String? status;
   var busy = false;
   var ajustes = const ExportSettings();

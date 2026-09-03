@@ -289,14 +289,28 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
                   onTap: () => ref.read(pathEditModeProvider.notifier).state =
                       PointsMode.add,
                 ),
-                const Spacer(),
-                AmRailButton(
-                  onTap: () => _menu(context, temSel, caminho?.closed ?? true),
-                  child: const Icon(
-                    CupertinoIcons.ellipsis,
-                    size: 20,
-                    color: AmColors.text,
-                  ),
+                // OS COMANDOS DO PONTO, VISIVEIS.
+                //
+                // Eram uma lista dentro de um tres pontinhos. Sao os tres
+                // que se usa o tempo todo ao desenhar, e cada um custava
+                // dois toques a mais por estar escondido. Sem ponto
+                // selecionado ficam esmaecidos, nao somem.
+                _ModoBotao(
+                  ativo: false,
+                  icon: CupertinoIcons.slider_horizontal_below_rectangle,
+                  onTap: temSel ? _toggleCanto : null,
+                ),
+                _ModoBotao(
+                  ativo: false,
+                  icon: CupertinoIcons.trash,
+                  onTap: temSel ? _apagar : null,
+                ),
+                _ModoBotao(
+                  ativo: false,
+                  icon: (caminho?.closed ?? true)
+                      ? CupertinoIcons.lock_open
+                      : CupertinoIcons.lock,
+                  onTap: _fecharAbrir,
                 ),
               ],
             ),
@@ -346,68 +360,6 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
     );
   }
 
-  Future<void> _menu(BuildContext context, bool temSel, bool fechado) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panelHigh,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (c) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            _Item(
-              icon: CupertinoIcons.rhombus,
-              texto: temKeyframeAqui
-                  ? 'Tirar o keyframe dos pontos aqui'
-                  : 'Cravar keyframe dos pontos aqui',
-              onTap: () {
-                Navigator.of(c).pop();
-                toggleKeyframe();
-              },
-            ),
-            _Item(
-              icon: CupertinoIcons.plus,
-              texto: 'Adicionar ponto no cursor',
-              onTap: () {
-                Navigator.of(c).pop();
-                addPoint();
-              },
-            ),
-            if (temSel) ...[
-              _Item(
-                icon: CupertinoIcons.slider_horizontal_below_rectangle,
-                texto: 'Canto / suave',
-                onTap: () {
-                  Navigator.of(c).pop();
-                  _toggleCanto();
-                },
-              ),
-              _Item(
-                icon: CupertinoIcons.trash,
-                texto: 'Apagar ponto',
-                onTap: () {
-                  Navigator.of(c).pop();
-                  _apagar();
-                },
-              ),
-            ],
-            _Item(
-              icon: fechado ? CupertinoIcons.lock_open : CupertinoIcons.lock,
-              texto: fechado ? 'Abrir o caminho' : 'Fechar o caminho',
-              onTap: () {
-                Navigator.of(c).pop();
-                _fecharAbrir();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ModoBotao extends StatelessWidget {
@@ -419,7 +371,7 @@ class _ModoBotao extends StatelessWidget {
 
   final bool ativo;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -435,36 +387,6 @@ class _ModoBotao extends StatelessWidget {
   }
 }
 
-class _Item extends StatelessWidget {
-  const _Item({required this.icon, required this.texto, required this.onTap});
-
-  final IconData icon;
-  final String texto;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: AmColors.accent),
-              const SizedBox(width: 14),
-              Text(
-                texto,
-                style: const TextStyle(fontSize: 15, color: AmColors.text),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// O trackpad: cantos marcados, e um ⊹ no meio como lembrete.
 class _TrackpadPainter extends CustomPainter {

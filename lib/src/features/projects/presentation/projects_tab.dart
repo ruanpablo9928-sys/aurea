@@ -5,7 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/app_mode.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/aurea_logo.dart';
 import '../../about/presentation/report_sheet.dart';
@@ -212,7 +211,7 @@ class ProjectsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final projects = ref.watch(projectsControllerProvider);
     final theme = Theme.of(context);
-    final completo = ref.watch(appModeProvider).isFull;
+    const completo = true;
     ThumbnailService.instance.init();
 
     return SafeArea(

@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:aurea/src/core/app_mode.dart';
-import 'package:aurea/src/core/storage/prefs.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
@@ -219,16 +216,10 @@ void main() {
   });
 
   group('menu de adicionar (modelo AM)', () {
-    testWidgets('no estudio completo: abas, trilho e a grade de formas',
+    testWidgets('abas, trilho e a grade de formas',
         (tester) async {
-      SharedPreferences.setMockInitialValues({'app.mode': 'full'});
-      final sp = await SharedPreferences.getInstance();
-      final c = ProviderContainer(
-          overrides: [sharedPreferencesProvider.overrideWithValue(sp)]);
-      addTearDown(() {
-        AppModeSwitch.force(AppMode.core);
-        c.dispose();
-      });
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
       c.read(editorControllerProvider.notifier).openProject(VideoProject(
         name: 'p',
         createdAt: DateTime(2026, 1, 1),
@@ -276,7 +267,11 @@ void main() {
         await tester.tap(find.text(aba));
         await tester.pumpAndSettle();
         final altura = tester.getSize(find.byType(BottomSheet)).height;
-        expect(altura, lessThan(tela * 0.40),
+        // A aba Objeto tem DUAS zonas por desenho (objetos conceituais e
+        // solidos) e a faixa de descricao; as outras nao. Por isso o teto
+        // dela e maior — e ainda assim tem teto.
+        final teto = aba == 'Objeto' ? 0.50 : 0.40;
+        expect(altura, lessThan(tela * teto),
             reason: 'a aba $aba cobre demais: $altura de $tela');
       }
 

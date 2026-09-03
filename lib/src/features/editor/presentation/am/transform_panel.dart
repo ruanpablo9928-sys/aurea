@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/app_mode.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
@@ -105,7 +104,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     bool hasKfHere,
     bool animated,
   ) {
-    final completo = ref.watch(appModeProvider).isFull;
+    const completo = true;
     return AmPanelChrome(
       onBack: widget.onBack,
       animado: animated,
