@@ -15,7 +15,9 @@ on:
 
 jobs:
   build-ipa:
-    runs-on: macos-14
+    # macos-15: o Xcode 15 do macos-14 nao conhece isiOSAppOnVision, usado
+    # pelo device_info_plus que o Laboratorio usa para nomear o aparelho.
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
