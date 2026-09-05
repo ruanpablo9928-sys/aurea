@@ -448,6 +448,15 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
     if (g.stops.isNotEmpty) 'stops': g.stops,
     if (g.center != Offset.zero) 'center': [g.center.dx, g.center.dy],
     if (g.radiusScale != 1) 'radiusScale': g.radiusScale,
+    if (g.colorFrames.isNotEmpty)
+      'colorFrames': [
+        for (final k in g.colorFrames)
+          {
+            't': _dur(k.time),
+            'v': [for (final c in k.value) _col(c)],
+            'e': _easing(k.ease),
+          },
+      ],
   },
   ShapeSvgPath p => {
     'kind': 'svg',
@@ -586,14 +595,27 @@ ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
     angleDeg: (m['ang'] as num).toDouble(),
     radial: m['radial'] as bool,
     opacity: (m['op'] as num).toDouble(),
-    extras: [
-      for (final c in (m['mid'] as List? ?? const [])) _asCol(c),
+    extras: [for (final c in (m['mid'] as List? ?? const [])) _asCol(c)],
+    stops: [
+      for (final s in (m['stops'] as List? ?? const [])) (s as num).toDouble(),
     ],
-    stops: [for (final s in (m['stops'] as List? ?? const [])) (s as num).toDouble()],
     center: m['center'] is List && (m['center'] as List).length == 2
-        ? Offset((m['center'][0] as num).toDouble(), (m['center'][1] as num).toDouble())
+        ? Offset(
+            (m['center'][0] as num).toDouble(),
+            (m['center'][1] as num).toDouble(),
+          )
         : Offset.zero,
     radiusScale: (m['radiusScale'] as num?)?.toDouble() ?? 1,
+    colorFrames: [
+      for (final k in (m['colorFrames'] as List? ?? const []))
+        Keyframe(
+          time: _asDur(k['t']),
+          value: [for (final c in k['v']) _asCol(c)],
+          ease: k['e'] == null
+              ? const Easing()
+              : _asEasing(k['e'] as Map<String, dynamic>),
+        ),
+    ],
   ),
   'svg' => ShapeSvgPath(
     id: m['id'] as String,
@@ -857,9 +879,11 @@ AudioSpec _asAudioSpec(Object? raw) {
     duckAgainstId: m['duck'] as String?,
     duckAmount: (m['duckAmt'] as num?)?.toDouble() ?? 0.7,
     duckAttack: Duration(
-        microseconds: (m['duckAtk'] as num?)?.toInt() ?? 120000),
+      microseconds: (m['duckAtk'] as num?)?.toInt() ?? 120000,
+    ),
     duckRelease: Duration(
-        microseconds: (m['duckRel'] as num?)?.toInt() ?? 450000),
+      microseconds: (m['duckRel'] as num?)?.toInt() ?? 450000,
+    ),
     duckThreshold: (m['duckThr'] as num?)?.toDouble() ?? 0.05,
     normalizeTargetLufs: (m['lufs'] as num?)?.toDouble(),
     processing: _asProcessing(m['proc']),
@@ -901,7 +925,8 @@ CaptionHighlightStyle _asHighlight(Object? raw) {
     tracking: (m['tr'] as num?)?.toDouble() ?? 0,
     entrelinha: (m['lh'] as num?)?.toDouble() ?? 1.05,
     duracaoInflar: Duration(
-        microseconds: (m['dur'] as num?)?.toInt() ?? 220000),
+      microseconds: (m['dur'] as num?)?.toInt() ?? 220000,
+    ),
     contextoPorLado: (m['ctx'] as num?)?.toInt() ?? kMaxContextoPorLado,
     atrasDaPessoa: m['atras'] as bool? ?? false,
   );

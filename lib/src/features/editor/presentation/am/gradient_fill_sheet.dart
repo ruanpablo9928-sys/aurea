@@ -3,28 +3,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
+import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import '../../domain/shape.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 
-Future<void> showGradientFillSheet(BuildContext context, String layerId) =>
-    showParamSheet(
-      context,
-      title: 'Gradiente vetorial',
-      heightFactor: .60,
-      builder: (_) => _GradientPanel(layerId: layerId),
-    );
+Future<void> showGradientFillSheet(
+  BuildContext context,
+  String layerId, {
+  PlaybackController? playback,
+}) => showParamSheet(
+  context,
+  title: 'Gradiente vetorial',
+  heightFactor: .60,
+  builder: (_) => playback == null
+      ? _GradientPanel(layerId: layerId)
+      : ValueListenableBuilder<Duration>(
+          valueListenable: playback.time,
+          builder: (_, t, _) => _GradientPanel(layerId: layerId, time: t),
+        ),
+);
 
 class _GradientPanel extends ConsumerWidget {
-  const _GradientPanel({required this.layerId});
+  const _GradientPanel({required this.layerId, this.time = Duration.zero});
   final String layerId;
+  final Duration time;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final layer = ref.watch(editorControllerProvider).layerById(layerId);
     if (layer is! ShapeLayer) return const SizedBox.shrink();
     final controller = ref.read(editorControllerProvider.notifier);
+    final local = layer.localTime(time);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -38,10 +49,53 @@ class _GradientPanel extends ConsumerWidget {
             height: 28,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: g.paradas,
+                colors: g.colorsAt(local),
                 stops: g.resolvedStops,
               ),
             ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: SwitchListTile.adaptive(
+                  title: const Text('Animar cores'),
+                  value: g.colorFrames.isNotEmpty,
+                  onChanged: (enabled) => controller.updateShapeGradient(
+                    layerId,
+                    g.id,
+                    (old) {
+                      if (enabled) return old.withColorsAt(local, old.paradas);
+                      final colors = old.colorsAt(local);
+                      return old.copyWith(
+                        colorA: colors.first,
+                        colorB: colors.last,
+                        extras: colors.sublist(1, colors.length - 1),
+                        colorFrames: [],
+                      );
+                    },
+                  ),
+                ),
+              ),
+              if (g.colorFrames.isNotEmpty)
+                CupertinoButton(
+                  onPressed: () => controller.updateShapeGradient(
+                    layerId,
+                    g.id,
+                    (old) => old.colorFrames.any((k) => k.time == local)
+                        ? old.copyWith(
+                            colorFrames: old.colorFrames
+                                .where((k) => k.time != local)
+                                .toList(),
+                          )
+                        : old.withColorsAt(local, old.colorsAt(local)),
+                  ),
+                  child: Icon(
+                    g.colorFrames.any((k) => k.time == local)
+                        ? CupertinoIcons.rhombus_fill
+                        : CupertinoIcons.rhombus,
+                  ),
+                ),
+            ],
           ),
           SwitchListTile.adaptive(
             title: const Text('Radial'),
@@ -61,13 +115,16 @@ class _GradientPanel extends ConsumerWidget {
                     final index = i;
                     final color = await showColorPicker(
                       context,
-                      initial: g.paradas[index],
+                      initial: g.colorsAt(local)[index],
                     );
                     if (color == null || !context.mounted) return;
                     controller.updateShapeGradient(layerId, g.id, (old) {
-                      final colors = [...old.paradas];
+                      final colors = [...old.colorsAt(local)];
                       if (index >= colors.length) return old;
                       colors[index] = color;
+                      if (old.colorFrames.isNotEmpty) {
+                        return old.withColorsAt(local, colors);
+                      }
                       return old.copyWith(
                         colorA: colors.first,
                         colorB: colors.last,
@@ -75,7 +132,11 @@ class _GradientPanel extends ConsumerWidget {
                       );
                     });
                   },
-                  child: Container(width: 28, height: 28, color: g.paradas[i]),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    color: g.colorsAt(local)[i],
+                  ),
                 ),
                 Text(
                   '${(g.resolvedStops[i] * 100).round()}%',

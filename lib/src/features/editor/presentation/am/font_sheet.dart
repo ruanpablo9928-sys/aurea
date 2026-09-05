@@ -91,7 +91,7 @@ Future<void> showFontSheet(
                       controller.editTextLayer(layerId, fontFamily: f);
                       setSheetState(() {});
                     },
-                    onRemove: () async {
+                    onRemove: servico.isBundled(f) ? null : () async {
                       await servico.remove(f);
                       if (atual == f) {
                         controller.editTextLayer(layerId, clearFont: true);

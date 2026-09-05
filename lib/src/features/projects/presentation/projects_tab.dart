@@ -15,6 +15,8 @@ import '../../editor/domain/video_project.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../application/projects_controller.dart';
 import '../application/reference_rebuild_assets.dart';
+import '../application/dnyx_remix_assets.dart';
+import '../application/vhf_motion_assets.dart';
 import '../application/thumbnail_service.dart';
 import '../domain/alight_xml_import.dart';
 import '../domain/notes_motion_template.dart';
@@ -57,6 +59,32 @@ class ProjectsTab extends ConsumerWidget {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const EditorScreen()),
     );
+  }
+
+  /// Prepara a trilha empacotada antes de abrir a nova recriacao.
+  Future<void> _openVhfMotion(BuildContext context, WidgetRef ref) async {
+    try {
+      final model = await prepareVhfMotion();
+      if (context.mounted) await _abrirModelo(context, ref, model);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Nao consegui preparar o motion VHF. Tente novamente.'),
+      ));
+    }
+  }
+
+  /// Prepara a trilha empacotada antes de abrir a nova recriacao.
+  Future<void> _openDnyxRemix(BuildContext context, WidgetRef ref) async {
+    try {
+      final model = await prepareDnyxRemix();
+      if (context.mounted) await _abrirModelo(context, ref, model);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Nao consegui preparar o motion. Tente abrir novamente.'),
+      ));
+    }
   }
 
   /// Prepara a trilha empacotada antes de abrir a nova recriacao.
@@ -374,6 +402,18 @@ class ProjectsTab extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
+                  _CartaoModelo(
+                    imagem: 'assets/templates/vhf/thumbnail.jpg',
+                    titulo: 'VHF · Neon Orbit',
+                    detalhe: '12 cenas · vetores e gradientes animados',
+                    onTap: () => _openVhfMotion(context, ref),
+                  ),
+                  _CartaoModelo(
+                    imagem: 'assets/templates/dnyx/thumbnail.jpg',
+                    titulo: 'Aurea App · RMK Dnyx',
+                    detalhe: 'Texto, fotos, cursores e audio editaveis',
+                    onTap: () => _openDnyxRemix(context, ref),
+                  ),
                   _CartaoModelo(
                     imagem: 'assets/templates/reference-rebuild.jpg',
                     titulo: 'Nova recriacao · Codex',

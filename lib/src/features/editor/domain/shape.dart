@@ -805,8 +805,53 @@ class ShapeGradientFill extends ShapeItem {
     List<double>? stops,
     this.center = Offset.zero,
     this.radiusScale = 1,
+    List<Keyframe<List<Color>>>? colorFrames,
   }) : extras = List.unmodifiable(extras ?? const <Color>[]),
-       stops = List.unmodifiable(stops ?? const <double>[]);
+       stops = List.unmodifiable(stops ?? const <double>[]),
+       colorFrames = List.unmodifiable(
+         (colorFrames ?? const <Keyframe<List<Color>>>[])
+             .map(
+               (k) => Keyframe(
+                 time: k.time,
+                 value: List<Color>.unmodifiable(k.value),
+                 ease: k.ease,
+               ),
+             )
+             .toList()
+           ..sort((a, b) => a.time.compareTo(b.time)),
+       );
+
+  /// Cores animadas por parada: preserva o gradiente vetorial na exportacao.
+  final List<Keyframe<List<Color>>> colorFrames;
+
+  List<Color> colorsAt(Duration t) {
+    final valid = colorFrames
+        .where((k) => k.value.length == paradas.length)
+        .toList();
+    if (valid.isEmpty) return paradas;
+    if (t <= valid.first.time) return valid.first.value;
+    for (var i = 1; i < valid.length; i++) {
+      final a = valid[i - 1], b = valid[i];
+      if (t < b.time) {
+        final span = (b.time - a.time).inMicroseconds;
+        if (span <= 0) return b.value;
+        final u = a.ease.transform((t - a.time).inMicroseconds / span);
+        return [
+          for (var j = 0; j < a.value.length; j++)
+            Color.lerp(a.value[j], b.value[j], u)!,
+        ];
+      }
+    }
+    return valid.last.value;
+  }
+
+  ShapeGradientFill withColorsAt(Duration t, List<Color> colors) => copyWith(
+    colorFrames: [
+      for (final k in colorFrames)
+        if (k.time != t) k,
+      Keyframe(time: t, value: colors),
+    ],
+  );
 
   final Color colorA;
   final Color colorB;
@@ -822,6 +867,7 @@ class ShapeGradientFill extends ShapeItem {
   /// Posicoes explicitas das cores, incluindo as extremidades (0..1).
   /// Vazio ou invalido preserva o espacamento uniforme de projetos antigos.
   final List<double> stops;
+
   /// Deslocamento do centro em fracoes dos bounds, nao pixels de exportacao.
   final Offset center;
   final double radiusScale;
@@ -853,6 +899,7 @@ class ShapeGradientFill extends ShapeItem {
     List<double>? stops,
     Offset? center,
     double? radiusScale,
+    List<Keyframe<List<Color>>>? colorFrames,
   }) {
     return ShapeGradientFill(
       id: id,
@@ -865,6 +912,7 @@ class ShapeGradientFill extends ShapeItem {
       stops: stops ?? this.stops,
       center: center ?? this.center,
       radiusScale: radiusScale ?? this.radiusScale,
+      colorFrames: colorFrames ?? this.colorFrames,
     );
   }
 }
@@ -1595,16 +1643,19 @@ List<ShapeDraw> evaluateShape(
           final dir = Offset(math.cos(rad), math.sin(rad));
           final half = Offset(dir.dx * b.width / 2, dir.dy * b.height / 2);
           final colors = [
-            for (final c in g.paradas)
+            for (final c in g.colorsAt(t))
               c.withValues(alpha: c.a * g.opacity * opacity),
           ];
           final stops = g.resolvedStops;
-          final center = b.center + Offset(
-            g.center.dx.isFinite ? g.center.dx * b.width : 0,
-            g.center.dy.isFinite ? g.center.dy * b.height : 0,
-          );
+          final center =
+              b.center +
+              Offset(
+                g.center.dx.isFinite ? g.center.dx * b.width : 0,
+                g.center.dy.isFinite ? g.center.dy * b.height : 0,
+              );
           final radius = g.radiusScale.isFinite
-              ? g.radiusScale.clamp(0.001, 100.0) : 1.0;
+              ? g.radiusScale.clamp(0.001, 100.0)
+              : 1.0;
           draws.add(
             ShapeDraw(
               path: path,
@@ -1612,9 +1663,17 @@ List<ShapeDraw> evaluateShape(
                 ..style = PaintingStyle.fill
                 ..shader = g.radial
                     ? Gradient.radial(
-                        center, b.longestSide / 2 * radius, colors, stops)
+                        center,
+                        b.longestSide / 2 * radius,
+                        colors,
+                        stops,
+                      )
                     : Gradient.linear(
-                        center - half * radius, center + half * radius, colors, stops),
+                        center - half * radius,
+                        center + half * radius,
+                        colors,
+                        stops,
+                      ),
             ),
           );
         }

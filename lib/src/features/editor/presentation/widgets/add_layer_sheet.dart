@@ -1125,7 +1125,9 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
           for (final l in ref.read(editorControllerProvider).layers) {
             if (!antes.contains(l.id)) novo = l.id;
           }
-          if (novo != null) _controller.updateGrid(novo, (g) => g);
+          // updateGrid so altera rigs existentes; um nulo novo ainda
+          // nao tem rig. Inicializa-o para o Grid abrir ja ativo.
+          if (novo != null) _controller.setGridAssets(novo, const []);
           _fecha();
         },
       ),

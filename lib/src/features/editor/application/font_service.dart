@@ -28,10 +28,14 @@ class FontService {
   /// Avisa a interface quando uma fonte nova ficou pronta.
   final ValueNotifier<int> revision = ValueNotifier(0);
 
-  /// Famílias importadas, em ordem alfabetica.
-  List<String> get families => _familias.keys.toList()..sort();
+  /// Familias importadas e a fonte empacotada dos motions.
+  List<String> get families =>
+      {..._familias.keys, 'Aurea Motion Sans'}.toList()..sort();
 
-  bool has(String family) => _familias.containsKey(family);
+  bool has(String family) =>
+      family == 'Aurea Motion Sans' || _familias.containsKey(family);
+
+  bool isBundled(String family) => family == 'Aurea Motion Sans';
 
   /// Para a bancada de render (testes): declara uma familia que ja foi
   /// carregada por fora (FontLoader), sem arquivo na pasta do app.
@@ -95,7 +99,9 @@ class FontService {
       if (ext != 'ttf' && ext != 'otf') return null;
 
       final familia = nomeArquivo.substring(
-          0, nomeArquivo.length - ext.length - 1);
+        0,
+        nomeArquivo.length - ext.length - 1,
+      );
       if (familia.isEmpty) return null;
 
       final dir = await _pasta();

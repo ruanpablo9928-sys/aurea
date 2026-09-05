@@ -72,6 +72,7 @@ Future<LayerMenuAction?> showLayerMenu(
   // widget: e assim que "no maximo sete" e "nada inerte" viram teste.
   final secoes = secoesDe(layer);
   final controller = ref.read(editorControllerProvider.notifier);
+  var menuFechado = false;
 
   return showModalBottomSheet<LayerMenuAction>(
     context: context,
@@ -88,11 +89,22 @@ Future<LayerMenuAction?> showLayerMenu(
     // precisa redesenhar no lugar.
     builder: (_) => StatefulBuilder(
       builder: (sheetContext, setSheetState) {
+        // So este menu pode ser fechado, uma unica vez. Um segundo pop
+        // consumiria a rota do editor (ou outro painel aberto depois).
+        bool fecharMenu([LayerMenuAction? action]) {
+          if (menuFechado || !sheetContext.mounted) return false;
+          final route = ModalRoute.of(sheetContext);
+          if (route is! PopupRoute || !route.isCurrent) return false;
+          menuFechado = true;
+          Navigator.of(sheetContext).pop(action);
+          return true;
+        }
+
         // Fecha o modal e so DEPOIS abre o sheet: showParamSheet mora no
         // Scaffold hospedeiro (paramSheetHostKey); aberto com o modal em
         // pe ficaria atras da barreira.
         void abrirDepois(void Function() abrir) {
-          Navigator.of(sheetContext).pop();
+          if (!fecharMenu()) return;
           Future.microtask(() {
             if (context.mounted) abrir();
           });
@@ -390,22 +402,16 @@ Future<LayerMenuAction?> showLayerMenu(
                         _UtilIcon(
                           icon: CupertinoIcons.textformat,
                           label: 'Fonte',
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            abrirDepois(
-                              () => showFontSheet(context, ref, layer.id),
-                            );
-                          },
+                          onTap: () => abrirDepois(
+                            () => showFontSheet(context, ref, layer.id),
+                          ),
                         ),
                         _UtilIcon(
                           icon: CupertinoIcons.circle_grid_hex,
                           label: 'Caminho',
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            abrirDepois(
-                              () => showTextPathSheet(context, ref, layer.id),
-                            );
-                          },
+                          onTap: () => abrirDepois(
+                            () => showTextPathSheet(context, ref, layer.id),
+                          ),
                         ),
                         _UtilIcon(
                           icon: CupertinoIcons.textformat_abc_dottedunderline,
@@ -419,34 +425,28 @@ Future<LayerMenuAction?> showLayerMenu(
                         _UtilIcon(
                           icon: CupertinoIcons.videocam,
                           label: 'Cameras',
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            abrirDepois(
-                              () => showCamerasSheet(
-                                context,
-                                ref,
-                                layer.id,
-                                playback,
-                              ),
-                            );
-                          },
+                          onTap: () => abrirDepois(
+                            () => showCamerasSheet(
+                              context,
+                              ref,
+                              layer.id,
+                              playback,
+                            ),
+                          ),
                         ),
                       ],
                       if (layer is GroupLayer) ...[
                         _UtilIcon(
                           icon: CupertinoIcons.timer,
                           label: 'Tempo',
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            abrirDepois(
-                              () => showPrecompSheet(
-                                context,
-                                ref,
-                                layer.id,
-                                playback,
-                              ),
-                            );
-                          },
+                          onTap: () => abrirDepois(
+                            () => showPrecompSheet(
+                              context,
+                              ref,
+                              layer.id,
+                              playback,
+                            ),
+                          ),
                         ),
                         _UtilIcon(
                           icon: CupertinoIcons.square_stack_3d_down_right,
@@ -496,7 +496,7 @@ Future<LayerMenuAction?> showLayerMenu(
                   (secao) => _tileDaSecao(
                     secao,
                     context: context,
-                    sheetContext: sheetContext,
+                    fecharCom: fecharMenu,
                     ref: ref,
                     layer: layer,
                     playback: playback,
@@ -564,18 +564,12 @@ List<Widget> _fileiras(Set<AmSecao> secoes, _Tile? Function(AmSecao) tile) {
 _Tile? _tileDaSecao(
   AmSecao secao, {
   required BuildContext context,
-  required BuildContext sheetContext,
+  required ValueChanged<LayerMenuAction> fecharCom,
   required WidgetRef ref,
   required Layer layer,
   required PlaybackController playback,
   required void Function(VoidCallback) abrirDepois,
 }) {
-  void fecharCom(LayerMenuAction a) => Navigator.of(sheetContext).pop(a);
-  void depois(VoidCallback f) {
-    Navigator.of(sheetContext).pop();
-    abrirDepois(f);
-  }
-
   return switch (secao) {
     AmSecao.moverTransformar => (
       icone: CupertinoIcons.move,
@@ -589,9 +583,9 @@ _Tile? _tileDaSecao(
         // Cena 3D: a cor mora no material de cada objeto. Elemento 3D
         // edita cor e forma no sheet proprio.
         if (layer is Scene3DLayer) {
-          depois(() => showScene3DSheet(context, ref, layer.id));
+          abrirDepois(() => showScene3DSheet(context, ref, layer.id));
         } else if (layer is Element3DLayer) {
-          depois(() => showElement3DSheet(context, ref, layer.id));
+          abrirDepois(() => showElement3DSheet(context, ref, layer.id));
         } else {
           fecharCom(LayerMenuAction.colorFill);
         }
@@ -606,7 +600,9 @@ _Tile? _tileDaSecao(
         if (layer is ShapeLayer) {
           fecharCom(LayerMenuAction.stroke);
         } else {
-          depois(() => showLayerStylesSheet(context, ref, layer.id, playback));
+          abrirDepois(
+            () => showLayerStylesSheet(context, ref, layer.id, playback),
+          );
         }
       },
     ),
@@ -618,12 +614,12 @@ _Tile? _tileDaSecao(
     AmSecao.volume => (
       icone: CupertinoIcons.speaker_2,
       rotulo: 'Volume',
-      onTap: () => depois(() => showAudioSheet(context, ref, layer.id)),
+      onTap: () => abrirDepois(() => showAudioSheet(context, ref, layer.id)),
     ),
     AmSecao.fade => (
       icone: CupertinoIcons.slider_horizontal_below_rectangle,
       rotulo: 'Fade',
-      onTap: () => depois(() => showAudioSheet(context, ref, layer.id)),
+      onTap: () => abrirDepois(() => showAudioSheet(context, ref, layer.id)),
     ),
     AmSecao.editarForma => (
       icone: CupertinoIcons.slider_horizontal_below_rectangle,
@@ -634,7 +630,7 @@ _Tile? _tileDaSecao(
       icone: CupertinoIcons.circle_grid_3x3,
       rotulo: 'Clonar',
       onTap: () =>
-          depois(() => showGridSheet(context, ref, layer.id, playback)),
+          abrirDepois(() => showGridSheet(context, ref, layer.id, playback)),
     ),
     AmSecao.editarTexto => (
       icone: CupertinoIcons.textformat,
@@ -644,18 +640,20 @@ _Tile? _tileDaSecao(
     AmSecao.editarLegendas => (
       icone: CupertinoIcons.captions_bubble,
       rotulo: 'Editar\nlegendas',
-      onTap: () =>
-          depois(() => showCaptionCuesSheet(context, ref, layer.id, playback)),
+      onTap: () => abrirDepois(
+        () => showCaptionCuesSheet(context, ref, layer.id, playback),
+      ),
     ),
     AmSecao.particulas => (
       icone: CupertinoIcons.sparkles,
       rotulo: 'Particulas',
-      onTap: () => depois(() => showParticlesSheet(context, ref, layer.id)),
+      onTap: () =>
+          abrirDepois(() => showParticlesSheet(context, ref, layer.id)),
     ),
     AmSecao.cena3d => (
       icone: CupertinoIcons.cube_box,
       rotulo: layer is Scene3DLayer ? 'Cena 3D' : 'Elemento\n3D',
-      onTap: () => depois(
+      onTap: () => abrirDepois(
         () => layer is Scene3DLayer
             ? showScene3DSheet(context, ref, layer.id)
             : showElement3DSheet(context, ref, layer.id),
@@ -664,7 +662,7 @@ _Tile? _tileDaSecao(
     AmSecao.presets => (
       icone: CupertinoIcons.square_stack_3d_down_right,
       rotulo: 'Presets',
-      onTap: () => depois(
+      onTap: () => abrirDepois(
         () => showEffectPresetsSheet(context, ref, layer.id, playback),
       ),
     ),
@@ -3347,7 +3345,11 @@ Future<void> showShapeParamsSheet(
                   const SizedBox(height: 6),
                   if (layer.contents.any((item) => item is ShapeGradientFill))
                     CupertinoButton(
-                      onPressed: () => showGradientFillSheet(context, layerId),
+                      onPressed: () => showGradientFillSheet(
+                        context,
+                        layerId,
+                        playback: playback,
+                      ),
                       child: const Text('Gradiente: cores, posicoes e alcance'),
                     ),
                   // EDITAR NOS: a forma vira caminho bezier (se ainda nao

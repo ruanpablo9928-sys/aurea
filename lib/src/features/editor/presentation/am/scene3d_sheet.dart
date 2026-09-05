@@ -101,8 +101,8 @@ Future<void> showScene3DSheet(
                       ),
                     ),
                     const SizedBox(width: 10),
-                    _BudgetBadge(layer: layer),
-                    const Spacer(),
+                    Expanded(child: _BudgetBadge(layer: layer)),
+                    const SizedBox(width: 8),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       onPressed: () {

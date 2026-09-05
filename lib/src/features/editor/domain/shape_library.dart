@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'keyframe.dart';
 import 'mask.dart';
 import 'shape.dart';
+import 'svg_path.dart';
 
 /// A BIBLIOTECA DE FORMAS do menu de adicionar (modelo Alight Motion:
 /// grade de 7 por linha, em paginas). Cada entrada e um nome e um
@@ -49,82 +50,140 @@ final List<ShapeLibraryEntry> shapeLibrary = [
   ShapeLibraryEntry('Arco', ShapePresets.arc),
   ShapeLibraryEntry('Retangulo', ShapePresets.paramRect),
   ShapeLibraryEntry('Poligono', ShapePresets.paramPolygon),
+  ShapeLibraryEntry('Cursor seta', ShapeLibrary.cursorArrow),
+  ShapeLibraryEntry('Cursor mao', ShapeLibrary.cursorHand),
 ];
 
 /// Construtores das formas novas.
 class ShapeLibrary {
   ShapeLibrary._();
 
+  /// Cursores sao Beziers normais: cor, contorno e pontos ficam editaveis.
+  static List<ShapeItem> cursorArrow() => [
+    ShapeBezier(
+      path: AnimatedPath(
+        svgPathToBezier(
+          'M -22 -32 L 23 8 L 4 10 L 17 32 L 5 39 L -8 16 L -22 31 Z',
+        ),
+      ),
+    ),
+    ShapeFill(color: const Color(0xFF080909)),
+    ShapeStroke(
+      color: const Color(0xFFFFFFFF),
+      width: AnimatedDouble(1.4),
+      join: StrokeJoin.round,
+    ),
+  ];
+
+  static List<ShapeItem> cursorHand() => [
+    ShapeBezier(
+      path: AnimatedPath(
+        svgPathToBezier(
+          'M -12 24 L -31 -1 C -40 -13 -31 -22 -23 -16 L -13 -7 '
+          'L -17 -43 C -18 -56 -5 -59 -2 -46 L 4 -23 '
+          'C 9 -32 19 -29 19 -19 C 25 -27 35 -23 34 -12 '
+          'C 42 -21 49 -14 47 -3 L 44 20 Q 43 28 36 33 '
+          'L 36 43 L 22 43 L 16 36 L 12 43 L -4 43 L -5 33 Z',
+        ),
+      ),
+    ),
+    ShapeFill(color: const Color(0xFFFFFFFF)),
+    ShapeStroke(
+      color: const Color(0xFF070808),
+      width: AnimatedDouble(4),
+      join: StrokeJoin.round,
+    ),
+    for (final x in [5.0, 17.0, 29.0])
+      ShapeBezier(
+        path: AnimatedPath(
+          BezierPath(
+            closed: false,
+            vertices: [
+              PathVertex(p: Offset(x, 1)),
+              PathVertex(p: Offset(x + 1, 21)),
+            ],
+          ),
+        ),
+      ),
+    ShapeStroke(
+      color: const Color(0xFF070808),
+      width: AnimatedDouble(3),
+      cap: StrokeCap.round,
+    ),
+  ];
+
   static const Color _corPadrao = Color(0xFF4A7BA6);
 
   static ShapeBezier _bezier(List<PathVertex> vs, {bool closed = true}) =>
-      ShapeBezier(path: AnimatedPath(BezierPath(vertices: vs, closed: closed)));
+      ShapeBezier(
+        path: AnimatedPath(BezierPath(vertices: vs, closed: closed)),
+      );
 
   static PathVertex _v(double x, double y) => PathVertex(p: Offset(x, y));
 
   /// Quadrado com o raio em 25%: e o "Rounded Rectangle" da AM — animar
   /// o raio de 0 a 100% vira o quadrado em circulo.
   static List<ShapeItem> roundedSquare() => [
-        ShapeParametric(
-          kind: ParamShapeKind.rect,
-          sizeX: AnimatedDouble(320),
-          sizeY: AnimatedDouble(320),
-          roundness: AnimatedDouble(25),
-          roundnessPercent: true,
-        ),
-        ShapeFill(color: const Color(0xFFFFFFFF)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.rect,
+      sizeX: AnimatedDouble(320),
+      sizeY: AnimatedDouble(320),
+      roundness: AnimatedDouble(25),
+      roundnessPercent: true,
+    ),
+    ShapeFill(color: const Color(0xFFFFFFFF)),
+  ];
 
   static List<ShapeItem> square() => [
-        ShapeParametric(
-          kind: ParamShapeKind.rect,
-          sizeX: AnimatedDouble(320),
-          sizeY: AnimatedDouble(320),
-          roundness: AnimatedDouble(0),
-          roundnessPercent: true,
-        ),
-        ShapeFill(color: _corPadrao),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.rect,
+      sizeX: AnimatedDouble(320),
+      sizeY: AnimatedDouble(320),
+      roundness: AnimatedDouble(0),
+      roundnessPercent: true,
+    ),
+    ShapeFill(color: _corPadrao),
+  ];
 
   static List<ShapeItem> triangle() => [
-        ShapeParametric(
-          kind: ParamShapeKind.polygon,
-          sizeX: AnimatedDouble(340),
-          sizeY: AnimatedDouble(340),
-          points: AnimatedDouble(3),
-          outerRadius: AnimatedDouble(170),
-          roundness: AnimatedDouble(0),
-          roundnessPercent: true,
-        ),
-        ShapeFill(color: const Color(0xFFFFB020)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.polygon,
+      sizeX: AnimatedDouble(340),
+      sizeY: AnimatedDouble(340),
+      points: AnimatedDouble(3),
+      outerRadius: AnimatedDouble(170),
+      roundness: AnimatedDouble(0),
+      roundnessPercent: true,
+    ),
+    ShapeFill(color: const Color(0xFFFFB020)),
+  ];
 
   static List<ShapeItem> hexagon() => [
-        ShapeParametric(
-          kind: ParamShapeKind.polygon,
-          sizeX: AnimatedDouble(340),
-          sizeY: AnimatedDouble(340),
-          points: AnimatedDouble(6),
-          outerRadius: AnimatedDouble(170),
-          roundness: AnimatedDouble(0),
-          roundnessPercent: true,
-        ),
-        ShapeFill(color: const Color(0xFF7C62FF)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.polygon,
+      sizeX: AnimatedDouble(340),
+      sizeY: AnimatedDouble(340),
+      points: AnimatedDouble(6),
+      outerRadius: AnimatedDouble(170),
+      roundness: AnimatedDouble(0),
+      roundnessPercent: true,
+    ),
+    ShapeFill(color: const Color(0xFF7C62FF)),
+  ];
 
   /// Pizza: um setor de 90 graus sem miolo.
   static List<ShapeItem> pie() => [
-        ShapeParametric(
-          kind: ParamShapeKind.sector,
-          sizeX: AnimatedDouble(340),
-          sizeY: AnimatedDouble(340),
-          outerRadius: AnimatedDouble(170),
-          startAngle: AnimatedDouble(-90),
-          sweep: AnimatedDouble(270),
-          sectorInner: AnimatedDouble(0),
-        ),
-        ShapeFill(color: const Color(0xFFFF7A18)),
-      ];
+    ShapeParametric(
+      kind: ParamShapeKind.sector,
+      sizeX: AnimatedDouble(340),
+      sizeY: AnimatedDouble(340),
+      outerRadius: AnimatedDouble(170),
+      startAngle: AnimatedDouble(-90),
+      sweep: AnimatedDouble(270),
+      sectorInner: AnimatedDouble(0),
+    ),
+    ShapeFill(color: const Color(0xFFFF7A18)),
+  ];
 
   /// Cruz grega: doze cantos, bracos de um terco.
   static List<ShapeItem> cross() {
@@ -146,28 +205,36 @@ class ShapeLibrary {
     // (volta por dentro, mais a direita).
     return [
       ShapeBezier(
-        path: AnimatedPath(BezierPath(vertices: [
-          PathVertex(
-              p: const Offset(0, -r),
-              inT: const Offset(k * 0.55, 0),
-              outT: const Offset(-k, 0),
-              corner: false),
-          PathVertex(
-              p: const Offset(-r, 0),
-              inT: const Offset(0, -k),
-              outT: const Offset(0, k),
-              corner: false),
-          PathVertex(
-              p: const Offset(0, r),
-              inT: const Offset(-k, 0),
-              outT: const Offset(k * 0.55, 0),
-              corner: false),
-          PathVertex(
-              p: const Offset(-r * 0.25, 0),
-              inT: const Offset(0, k * 0.7),
-              outT: const Offset(0, -k * 0.7),
-              corner: false),
-        ])),
+        path: AnimatedPath(
+          BezierPath(
+            vertices: [
+              PathVertex(
+                p: const Offset(0, -r),
+                inT: const Offset(k * 0.55, 0),
+                outT: const Offset(-k, 0),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(-r, 0),
+                inT: const Offset(0, -k),
+                outT: const Offset(0, k),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(0, r),
+                inT: const Offset(-k, 0),
+                outT: const Offset(k * 0.55, 0),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(-r * 0.25, 0),
+                inT: const Offset(0, k * 0.7),
+                outT: const Offset(0, -k * 0.7),
+                corner: false,
+              ),
+            ],
+          ),
+        ),
       ),
       ShapeFill(color: const Color(0xFFFFD36A)),
     ];
@@ -180,20 +247,56 @@ class ShapeLibrary {
     const w2 = w / 2, h2 = h / 2;
     return [
       ShapeBezier(
-        path: AnimatedPath(BezierPath(vertices: [
-          PathVertex(p: const Offset(-w2 + r, -h2), inT: const Offset(-k, 0), corner: false),
-          PathVertex(p: const Offset(w2 - r, -h2), outT: const Offset(k, 0), corner: false),
-          PathVertex(p: const Offset(w2, -h2 + r), inT: const Offset(0, -k), corner: false),
-          PathVertex(p: const Offset(w2, h2 - r), outT: const Offset(0, k), corner: false),
-          PathVertex(p: const Offset(w2 - r, h2), inT: const Offset(k, 0), corner: false),
-          // Rabinho.
-          _v(-w2 * 0.15, h2),
-          _v(-w2 * 0.42, h2 + 74),
-          _v(-w2 * 0.38, h2),
-          PathVertex(p: const Offset(-w2 + r, h2), outT: const Offset(-k, 0), corner: false),
-          PathVertex(p: const Offset(-w2, h2 - r), inT: const Offset(0, k), corner: false),
-          PathVertex(p: const Offset(-w2, -h2 + r), outT: const Offset(0, -k), corner: false),
-        ])),
+        path: AnimatedPath(
+          BezierPath(
+            vertices: [
+              PathVertex(
+                p: const Offset(-w2 + r, -h2),
+                inT: const Offset(-k, 0),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(w2 - r, -h2),
+                outT: const Offset(k, 0),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(w2, -h2 + r),
+                inT: const Offset(0, -k),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(w2, h2 - r),
+                outT: const Offset(0, k),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(w2 - r, h2),
+                inT: const Offset(k, 0),
+                corner: false,
+              ),
+              // Rabinho.
+              _v(-w2 * 0.15, h2),
+              _v(-w2 * 0.42, h2 + 74),
+              _v(-w2 * 0.38, h2),
+              PathVertex(
+                p: const Offset(-w2 + r, h2),
+                outT: const Offset(-k, 0),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(-w2, h2 - r),
+                inT: const Offset(0, k),
+                corner: false,
+              ),
+              PathVertex(
+                p: const Offset(-w2, -h2 + r),
+                outT: const Offset(0, -k),
+                corner: false,
+              ),
+            ],
+          ),
+        ),
       ),
       ShapeFill(color: const Color(0xFFFFFFFF)),
     ];
@@ -216,17 +319,14 @@ class ShapeLibrary {
     lobo(80, -10, 85, math.pi * 1.25, math.pi * 2.0, 4);
     lobo(140, 50, 60, math.pi * 1.5, math.pi * 2.5, 4);
     vs.add(_v(-40, 110));
-    return [
-      _bezier(vs),
-      ShapeFill(color: const Color(0xFFDDE6F2)),
-    ];
+    return [_bezier(vs), ShapeFill(color: const Color(0xFFDDE6F2))];
   }
 
   /// Linha: caminho aberto com traco, sem preenchimento.
   static List<ShapeItem> line() => [
-        _bezier([_v(-200, 0), _v(200, 0)], closed: false),
-        ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(14)),
-      ];
+    _bezier([_v(-200, 0), _v(200, 0)], closed: false),
+    ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(14)),
+  ];
 
   /// X: duas barras cruzadas, doze cantos.
   static List<ShapeItem> xMark() {
@@ -244,9 +344,9 @@ class ShapeLibrary {
   }
 
   static List<ShapeItem> rightTriangle() => [
-        _bezier([_v(-160, 160), _v(160, 160), _v(-160, -160)]),
-        ShapeFill(color: const Color(0xFF2BE3A0)),
-      ];
+    _bezier([_v(-160, 160), _v(160, 160), _v(-160, -160)]),
+    ShapeFill(color: const Color(0xFF2BE3A0)),
+  ];
 
   /// Padrao de pontos: uma grade 4x4 de bolinhas, cada uma um subcaminho.
   static List<ShapeItem> dotPattern() {
@@ -256,14 +356,40 @@ class ShapeLibrary {
     for (var j = 0; j < 4; j++) {
       for (var i = 0; i < 4; i++) {
         final c = Offset(-passo * 1.5 + i * passo, -passo * 1.5 + j * passo);
-        items.add(ShapeBezier(
-          path: AnimatedPath(BezierPath(vertices: [
-            PathVertex(p: c + const Offset(0, -r), inT: const Offset(-k, 0), outT: const Offset(k, 0), corner: false),
-            PathVertex(p: c + const Offset(r, 0), inT: const Offset(0, -k), outT: const Offset(0, k), corner: false),
-            PathVertex(p: c + const Offset(0, r), inT: const Offset(k, 0), outT: const Offset(-k, 0), corner: false),
-            PathVertex(p: c + const Offset(-r, 0), inT: const Offset(0, k), outT: const Offset(0, -k), corner: false),
-          ])),
-        ));
+        items.add(
+          ShapeBezier(
+            path: AnimatedPath(
+              BezierPath(
+                vertices: [
+                  PathVertex(
+                    p: c + const Offset(0, -r),
+                    inT: const Offset(-k, 0),
+                    outT: const Offset(k, 0),
+                    corner: false,
+                  ),
+                  PathVertex(
+                    p: c + const Offset(r, 0),
+                    inT: const Offset(0, -k),
+                    outT: const Offset(0, k),
+                    corner: false,
+                  ),
+                  PathVertex(
+                    p: c + const Offset(0, r),
+                    inT: const Offset(k, 0),
+                    outT: const Offset(-k, 0),
+                    corner: false,
+                  ),
+                  PathVertex(
+                    p: c + const Offset(-r, 0),
+                    inT: const Offset(0, k),
+                    outT: const Offset(0, -k),
+                    corner: false,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
       }
     }
     items.add(ShapeFill(color: const Color(0xFFFFFFFF)));
@@ -330,7 +456,10 @@ List<Offset> simplifyPolyline(List<Offset> pts, double tolerancia) {
       pilha.add((idx, b));
     }
   }
-  return [for (var i = 0; i < pts.length; i++) if (keep[i]) pts[i]];
+  return [
+    for (var i = 0; i < pts.length; i++)
+      if (keep[i]) pts[i],
+  ];
 }
 
 /// Rabisco -> caminho suave: pontos simplificados viram vertices suaves
@@ -343,11 +472,14 @@ BezierPath freehandToPath(List<Offset> pts, {double tolerancia = 4}) {
     final prev = s[i == 0 ? 0 : i - 1];
     final next = s[i == s.length - 1 ? s.length - 1 : i + 1];
     final t = (next - prev) / 6;
-    vs.add(PathVertex(
+    vs.add(
+      PathVertex(
         p: s[i],
         inT: i == 0 ? Offset.zero : -t,
         outT: i == s.length - 1 ? Offset.zero : t,
-        corner: false));
+        corner: false,
+      ),
+    );
   }
   return BezierPath(vertices: vs, closed: false);
 }

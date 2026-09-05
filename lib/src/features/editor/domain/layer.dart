@@ -264,7 +264,8 @@ class AudioProcessing {
 
   /// A CHAVE DO CACHE. Duas fichas iguais tem de dar a mesma chave, ou o
   /// audio seria reprocessado a cada abertura do projeto.
-  String get cacheKey => 'd${denoise.toStringAsFixed(3)}'
+  String get cacheKey =>
+      'd${denoise.toStringAsFixed(3)}'
       'v${voice.toStringAsFixed(3)}'
       's${deEsser.toStringAsFixed(3)}'
       'l${lowDb.toStringAsFixed(2)}'
@@ -901,6 +902,8 @@ class ShapeLayer extends Layer {
           out.addAll(_times(m.progress.keyframes));
         case ShapeBezier b:
           out.addAll(_times(b.path.keyframes));
+        case ShapeGradientFill g:
+          out.addAll(_times(g.colorFrames));
         case ShapeStroke s:
           out
             ..addAll(_times(s.width.keyframes))
