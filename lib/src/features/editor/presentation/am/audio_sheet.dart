@@ -12,7 +12,10 @@ import 'am_widgets.dart';
 /// comandos que economizam mais tempo numa edicao falada, normalizar e
 /// remover silencio.
 Future<void> showAudioSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   await showParamSheet(
     context,
     title: 'Som',
@@ -43,29 +46,41 @@ Future<void> showAudioSheet(
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                16 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              14,
+              18,
+              16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(CupertinoIcons.speaker_2,
-                        size: 18, color: AmColors.accent),
+                    const Icon(
+                      CupertinoIcons.speaker_2,
+                      size: 18,
+                      color: AmColors.accent,
+                    ),
                     const SizedBox(width: 8),
-                    const Text('Som',
-                        style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: AmColors.text)),
+                    const Text(
+                      'Som',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text,
+                      ),
+                    ),
                     const Spacer(),
                     Text(
                       spec.muted
                           ? 'mudo'
                           : '${db.isFinite ? db.toStringAsFixed(1) : '-∞'} dB',
                       style: const TextStyle(
-                          fontSize: 13, color: AmColors.accent),
+                        fontSize: 13,
+                        color: AmColors.accent,
+                      ),
                     ),
                   ],
                 ),
@@ -91,8 +106,11 @@ Future<void> showAudioSheet(
                   max: dur.clamp(0.5, 10.0),
                   decimals: 2,
                   suffix: 's',
-                  onChanged: (v) => edit((a) => a.copyWith(
-                      fadeIn: Duration(milliseconds: (v * 1000).round()))),
+                  onChanged: (v) => edit(
+                    (a) => a.copyWith(
+                      fadeIn: Duration(milliseconds: (v * 1000).round()),
+                    ),
+                  ),
                 ),
                 _Slider(
                   label: 'Fade de saida',
@@ -101,35 +119,48 @@ Future<void> showAudioSheet(
                   max: dur.clamp(0.5, 10.0),
                   decimals: 2,
                   suffix: 's',
-                  onChanged: (v) => edit((a) => a.copyWith(
-                      fadeOut: Duration(milliseconds: (v * 1000).round()))),
+                  onChanged: (v) => edit(
+                    (a) => a.copyWith(
+                      fadeOut: Duration(milliseconds: (v * 1000).round()),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
                   'O fade e de igual potencia: fade reto de volume soa '
                   'como um buraco no meio.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
 
                 const SizedBox(height: 14),
-                const Text('Abaixar pela voz',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Abaixar pela voz',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 const Text(
                   'A trilha desce quando a voz entra e volta quando ela '
                   'para — sem desenhar envelope na mao.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 if (vozes.isEmpty)
-                  const Text('Nao ha outra faixa com som no projeto.',
-                      style:
-                          TextStyle(fontSize: 11, color: AmColors.muted))
+                  const Text(
+                    'Nao ha outra faixa com som no projeto.',
+                    style: TextStyle(fontSize: 11, color: AmColors.muted),
+                  )
                 else
                   Wrap(
                     spacing: 8,
@@ -138,8 +169,7 @@ Future<void> showAudioSheet(
                       _Chip(
                         label: 'Nenhuma',
                         selected: spec.duckAgainstId == null,
-                        onTap: () =>
-                            edit((a) => a.copyWith(clearDuck: true)),
+                        onTap: () => edit((a) => a.copyWith(clearDuck: true)),
                       ),
                       for (final v in vozes)
                         _Chip(
@@ -157,8 +187,7 @@ Future<void> showAudioSheet(
                     min: 0,
                     max: 1,
                     decimals: 2,
-                    onChanged: (v) =>
-                        edit((a) => a.copyWith(duckAmount: v)),
+                    onChanged: (v) => edit((a) => a.copyWith(duckAmount: v)),
                   ),
 
                 const SizedBox(height: 16),
@@ -178,7 +207,7 @@ Future<void> showAudioSheet(
                           g == null
                               ? 'A forma de onda ainda esta sendo lida'
                               : 'Ganho ajustado para '
-                                  '${gainToDb(g).toStringAsFixed(1)} dB',
+                                    '${gainToDb(g).toStringAsFixed(1)} dB',
                         );
                       },
                     ),
@@ -188,12 +217,11 @@ Future<void> showAudioSheet(
                       onTap: () {
                         final n = controller.removeSilence(layerId);
                         if (!context.mounted) return;
-                        Navigator.of(sheetContext).maybePop();
+                        closeParamSheet(sheetContext);
                         AureaSnack.show(
                           context,
                           switch (n) {
-                            null =>
-                              'A forma de onda ainda esta sendo lida',
+                            null => 'A forma de onda ainda esta sendo lida',
                             <= 1 => 'Nao achei pausa longa o bastante',
                             _ => 'Ficaram $n pedacos, sem as pausas',
                           },
@@ -213,9 +241,9 @@ Future<void> showAudioSheet(
                           b == null
                               ? 'A forma de onda ainda esta sendo lida'
                               : b.isEmpty
-                                  ? 'Nao achei ataque nesta faixa'
-                                  : '${b.length} batidas — a primeira em '
-                                      '${(b.first.inMilliseconds / 1000).toStringAsFixed(2)}s',
+                              ? 'Nao achei ataque nesta faixa'
+                              : '${b.length} batidas — a primeira em '
+                                    '${(b.first.inMilliseconds / 1000).toStringAsFixed(2)}s',
                         );
                       },
                     ),
@@ -257,28 +285,30 @@ class _Slider extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontSize: 12, color: AmColors.muted)),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
           ),
           Expanded(
             child: AmTickRuler(
-  value: value.clamp(min, max),
-  min: min,
-  max: max,
-  unitsPerPixel: ((max) - (min)) / 420,
-  height: 40,
-  onChanged: onChanged,
-),
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              unitsPerPixel: ((max) - (min)) / 420,
+              height: 40,
+              onChanged: onChanged,
+            ),
           ),
           SizedBox(
             width: 52,
-            child: Text('${value.toStringAsFixed(decimals)}$suffix',
-                textAlign: TextAlign.right,
-                style:
-                    const TextStyle(fontSize: 12, color: AmColors.text)),
+            child: Text(
+              '${value.toStringAsFixed(decimals)}$suffix',
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 12, color: AmColors.text),
+            ),
           ),
         ],
       ),
@@ -299,22 +329,23 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AmColors.text)),
-            ),
-            CupertinoSwitch(
-              value: value,
-              activeTrackColor: AmColors.accent,
-              onChanged: onChanged,
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: AmColors.text),
+          ),
         ),
-      );
+        CupertinoSwitch(
+          value: value,
+          activeTrackColor: AmColors.accent,
+          onChanged: onChanged,
+        ),
+      ],
+    ),
+  );
 }
 
 class _Chip extends StatelessWidget {
@@ -330,30 +361,28 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? AmColors.accentDim : AmColors.chip,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: selected ? AmColors.accent : AmColors.muted)),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: selected ? AmColors.accentDim : AmColors.chip,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 11,
+          color: selected ? AmColors.accent : AmColors.muted,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _Action extends StatelessWidget {
-  const _Action({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _Action({required this.icon, required this.label, required this.onTap});
 
   final IconData icon;
   final String label;
@@ -361,24 +390,24 @@ class _Action extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(9),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AmColors.accent),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AmColors.accent),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: AmColors.accent),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, color: AmColors.accent)),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }

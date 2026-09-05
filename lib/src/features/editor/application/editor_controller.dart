@@ -4696,6 +4696,15 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.copyLayer(contents: fn(layer.contents)));
   }
 
+  /// Edita somente o preenchimento escolhido, preservando a geometria.
+  void updateShapeGradient(String id, String itemId,
+      ShapeGradientFill Function(ShapeGradientFill) update) {
+    _updateShape(id, (items) => [
+      for (final item in items)
+        if (item is ShapeGradientFill && item.id == itemId) update(item) else item,
+    ]);
+  }
+
   /// Primeira geometria PARAMETRICA da forma (painel de parametros).
   ShapeParametric? shapeParametricOf(String id) {
     final layer = _layer(id);

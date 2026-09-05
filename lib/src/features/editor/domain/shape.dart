@@ -802,7 +802,11 @@ class ShapeGradientFill extends ShapeItem {
     this.radial = false,
     this.opacity = 1,
     List<Color>? extras,
-  }) : extras = List.unmodifiable(extras ?? const <Color>[]);
+    List<double>? stops,
+    this.center = Offset.zero,
+    this.radiusScale = 1,
+  }) : extras = List.unmodifiable(extras ?? const <Color>[]),
+       stops = List.unmodifiable(stops ?? const <double>[]);
 
   final Color colorA;
   final Color colorB;
@@ -814,6 +818,23 @@ class ShapeGradientFill extends ShapeItem {
   /// vira uma mistura suja que nao existe na referencia. Vazio mantem o
   /// gradiente de duas cores de sempre.
   final List<Color> extras;
+
+  /// Posicoes explicitas das cores, incluindo as extremidades (0..1).
+  /// Vazio ou invalido preserva o espacamento uniforme de projetos antigos.
+  final List<double> stops;
+  /// Deslocamento do centro em fracoes dos bounds, nao pixels de exportacao.
+  final Offset center;
+  final double radiusScale;
+
+  List<double> get resolvedStops {
+    final n = extras.length + 2;
+    if (stops.length == n &&
+        stops.every((v) => v.isFinite && v >= 0 && v <= 1) &&
+        List.generate(n - 1, (i) => stops[i] <= stops[i + 1]).every((v) => v)) {
+      return stops;
+    }
+    return List.generate(n, (i) => i / (n - 1));
+  }
 
   final double angleDeg;
   final bool radial;
@@ -829,6 +850,9 @@ class ShapeGradientFill extends ShapeItem {
     bool? radial,
     double? opacity,
     List<Color>? extras,
+    List<double>? stops,
+    Offset? center,
+    double? radiusScale,
   }) {
     return ShapeGradientFill(
       id: id,
@@ -838,6 +862,9 @@ class ShapeGradientFill extends ShapeItem {
       radial: radial ?? this.radial,
       opacity: opacity ?? this.opacity,
       extras: extras ?? this.extras,
+      stops: stops ?? this.stops,
+      center: center ?? this.center,
+      radiusScale: radiusScale ?? this.radiusScale,
     );
   }
 }
@@ -1563,6 +1590,7 @@ List<ShapeDraw> evaluateShape(
       case ShapeGradientFill g:
         for (final path in paths) {
           final b = path.getBounds();
+          if (b.isEmpty) continue;
           final rad = g.angleDeg * math.pi / 180;
           final dir = Offset(math.cos(rad), math.sin(rad));
           final half = Offset(dir.dx * b.width / 2, dir.dy * b.height / 2);
@@ -1570,15 +1598,13 @@ List<ShapeDraw> evaluateShape(
             for (final c in g.paradas)
               c.withValues(alpha: c.a * g.opacity * opacity),
           ];
-          // Com mais de duas paradas o Gradient exige as POSICOES: sem
-          // elas ele nem desenha. Espacadas por igual e o que a faixa do
-          // horizonte quer — cada cor manda num pedaco do mesmo tamanho.
-          final stops = colors.length == 2
-              ? null
-              : [
-                  for (var i = 0; i < colors.length; i++)
-                    i / (colors.length - 1),
-                ];
+          final stops = g.resolvedStops;
+          final center = b.center + Offset(
+            g.center.dx.isFinite ? g.center.dx * b.width : 0,
+            g.center.dy.isFinite ? g.center.dy * b.height : 0,
+          );
+          final radius = g.radiusScale.isFinite
+              ? g.radiusScale.clamp(0.001, 100.0) : 1.0;
           draws.add(
             ShapeDraw(
               path: path,
@@ -1586,9 +1612,9 @@ List<ShapeDraw> evaluateShape(
                 ..style = PaintingStyle.fill
                 ..shader = g.radial
                     ? Gradient.radial(
-                        b.center, b.longestSide / 2, colors, stops)
+                        center, b.longestSide / 2 * radius, colors, stops)
                     : Gradient.linear(
-                        b.center - half, b.center + half, colors, stops),
+                        center - half * radius, center + half * radius, colors, stops),
             ),
           );
         }

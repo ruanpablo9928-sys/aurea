@@ -35,6 +35,7 @@ import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
 import 'decupagem_screen.dart';
 import 'font_sheet.dart';
+import 'gradient_fill_sheet.dart';
 import 'oficio_sheets.dart';
 import 'panel_chrome.dart';
 import 'path_edit_sheet.dart';
@@ -143,349 +144,345 @@ Future<LayerMenuAction?> showLayerMenu(
                 // (dividir/duplicar/agrupar/excluir) vivem na barra de
                 // acoes, nao aqui.
                 SizedBox(
-                    height: 40,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                if (temSom) ...[
-                                    _UtilIcon(
-                                      icon: CupertinoIcons.speedometer,
-                                      label: 'Velocidade',
-                                      onTap: () => abrirDepois(
-                                        () => showSpeedSheet(
-                                          context,
-                                          ref,
-                                          layer.id,
-                                        ),
-                                      ),
-                                    ),
-                                    _UtilIcon(
-                                      icon: CupertinoIcons.scissors,
-                                      label: 'Cortes',
-                                      onTap: () => abrirDepois(
-                                        () => openDecupagem(
-                                          context,
-                                          ref,
-                                          layer.id,
-                                        ),
-                                      ),
-                                    ),
-                                  // Mudo e toggle no lugar (nao abre nada):
-                                  // nao ha metodo de mudo no controller, e
-                                  // composto com updateAudioSpec + copyWith.
-                                  _UtilIcon(
-                                    icon: mudo
-                                        ? CupertinoIcons.speaker_slash_fill
-                                        : CupertinoIcons.speaker_slash,
-                                    label: mudo ? 'Ativar som' : 'Mudo',
-                                    aceso: mudo,
-                                    onTap: () {
-                                      controller.updateAudioSpec(
-                                        layer.id,
-                                        (a) => a.copyWith(muted: !a.muted),
-                                      );
-                                      setSheetState(() {});
-                                    },
+                  height: 40,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              if (temSom) ...[
+                                _UtilIcon(
+                                  icon: CupertinoIcons.speedometer,
+                                  label: 'Velocidade',
+                                  onTap: () => abrirDepois(
+                                    () =>
+                                        showSpeedSheet(context, ref, layer.id),
                                   ),
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.waveform,
-                                    label: 'Som',
-                                    onTap: () => abrirDepois(
-                                      () => showAudioSheet(
-                                        context,
-                                        ref,
-                                        layer.id,
-                                      ),
-                                    ),
+                                ),
+                                _UtilIcon(
+                                  icon: CupertinoIcons.scissors,
+                                  label: 'Cortes',
+                                  onTap: () => abrirDepois(
+                                    () => openDecupagem(context, ref, layer.id),
                                   ),
-                                    _UtilIcon(
-                                      icon: CupertinoIcons.metronome,
-                                      label: 'Batidas',
-                                      onTap: () => abrirDepois(
-                                        () => showBeatsSheet(
-                                          context,
-                                          ref,
-                                          layer.id,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                                if (layer is VideoLayer)
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.captions_bubble,
-                                    label: 'Legendar',
-                                    onTap: () {
-                                      Navigator.of(sheetContext).pop();
-                                      Future.microtask(() {
-                                        if (context.mounted) {
-                                          showCaptionCreationSheet(
-                                            context,
-                                            ref,
-                                          );
-                                        }
-                                      });
-                                    },
+                                ),
+                                // Mudo e toggle no lugar (nao abre nada):
+                                // nao ha metodo de mudo no controller, e
+                                // composto com updateAudioSpec + copyWith.
+                                _UtilIcon(
+                                  icon: mudo
+                                      ? CupertinoIcons.speaker_slash_fill
+                                      : CupertinoIcons.speaker_slash,
+                                  label: mudo ? 'Ativar som' : 'Mudo',
+                                  aceso: mudo,
+                                  onTap: () {
+                                    controller.updateAudioSpec(
+                                      layer.id,
+                                      (a) => a.copyWith(muted: !a.muted),
+                                    );
+                                    setSheetState(() {});
+                                  },
+                                ),
+                                _UtilIcon(
+                                  icon: CupertinoIcons.waveform,
+                                  label: 'Som',
+                                  onTap: () => abrirDepois(
+                                    () =>
+                                        showAudioSheet(context, ref, layer.id),
                                   ),
-                                if (layer is VideoLayer) ...[
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.crop,
-                                    label: 'Reenquadrar sozinho',
-                                    onTap: () async {
-                                      Navigator.of(sheetContext).pop();
-                                      if (!context.mounted) return;
-                                      AureaSnack.show(
-                                        context,
-                                        'Achando o assunto...',
-                                      );
-                                      final n = await controller
-                                          .autoReframeLayer(layer.id);
-                                      if (!context.mounted) return;
-                                      if (n == null) {
-                                        AureaSnack.show(
-                                          context,
-                                          'Nao consegui ler esse video',
-                                        );
-                                        return;
-                                      }
-                                      AureaSnack.show(
-                                        context,
-                                        'Reenquadrado seguindo o assunto',
-                                        actionLabel: 'Desfazer',
-                                        onAction: controller.undo,
-                                      );
-                                    },
+                                ),
+                                _UtilIcon(
+                                  icon: CupertinoIcons.metronome,
+                                  label: 'Batidas',
+                                  onTap: () => abrirDepois(
+                                    () =>
+                                        showBeatsSheet(context, ref, layer.id),
                                   ),
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.hand_raised,
-                                    label: 'Estabilizar',
-                                    onTap: () async {
-                                      Navigator.of(sheetContext).pop();
-                                      if (!context.mounted) return;
-                                      AureaSnack.show(
-                                        context,
-                                        'Lendo o video para estabilizar...',
-                                      );
-                                      final n = await controller.stabilizeLayer(
-                                        layer.id,
-                                      );
-                                      if (!context.mounted) return;
-                                      if (n == null) {
-                                        AureaSnack.show(
-                                          context,
-                                          'Nao consegui ler esse video',
-                                        );
-                                        return;
-                                      }
-                                      AureaSnack.show(
-                                        context,
-                                        'Estabilizado com $n quadros de referencia',
-                                        actionLabel: 'Desfazer',
-                                        onAction: controller.undo,
-                                      );
-                                    },
-                                  ),
-                                ],
-                                // 3D DA CAMADA e MOTION BLUR nesta fileira.
-                                // Mascara agora mora dentro de Mesclagem e
-                                // opacidade, sem criar uma oitava secao.
-                                // Tudo daqui em diante e ESTUDIO (fora do
-                                // nucleo).
-                                  _UtilIcon(
-                                    icon: layer.is3D
-                                        ? CupertinoIcons.cube_fill
-                                        : CupertinoIcons.cube,
-                                    label: layer.is3D
-                                        ? '3D ligado'
-                                        : 'Ligar 3D',
-                                    aceso: layer.is3D,
-                                    onTap: () {
-                                      controller.toggle3D(layer.id);
-                                      setSheetState(() {});
-                                    },
-                                  ),
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.speedometer,
-                                    label: 'Motion blur',
-                                    aceso: ref
-                                        .read(editorControllerProvider)
-                                        .metaOf(layer.id)
-                                        .motionBlur,
-                                    onTap: () {
-                                      controller.toggleLayerMotionBlurReal(
-                                        layer.id,
-                                      );
-                                      setSheetState(() {});
-                                    },
-                                  ),
-                                if (layer is! NullLayer &&
-                                    layer is! VideoLayer &&
-                                    layer is! ParticlesLayer &&
-                                    layer is! Element3DLayer)
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.cube,
-                                    label: 'Extrude 3D',
-                                    aceso:
-                                        ref
-                                            .read(editorControllerProvider)
-                                            .metaOf(layer.id)
-                                            .extrude >
-                                        0,
-                                    onTap: () => abrirDepois(
-                                      () => showExtrudeSheet(
-                                        context,
-                                        ref,
-                                        layer.id,
-                                      ),
-                                    ),
-                                  ),
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.music_note_2,
-                                    label: 'Pulsar na batida',
-                                    onTap: () => abrirDepois(
-                                      () => showBeatPulseSheet(
-                                        context,
-                                        ref,
-                                        layer.id,
-                                      ),
-                                    ),
-                                  ),
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.repeat,
-                                    label: 'Loop de keyframes',
-                                    onTap: () => abrirDepois(
-                                      () =>
-                                          showLoopSheet(context, ref, layer.id),
-                                    ),
-                                  ),
-                                  _UtilIcon(
-                                    icon: CupertinoIcons.tag,
-                                    label: 'Organizar (rotulo, solo, timida)',
-                                    onTap: () => abrirDepois(
-                                      () => showOrganizeSheet(
-                                        context,
-                                        ref,
-                                        layer.id,
-                                      ),
-                                    ),
-                                  ),
-                                  _UtilIcon(
-                                    icon: pai != null
-                                        ? CupertinoIcons.link_circle_fill
-                                        : CupertinoIcons.link,
-                                    label: pai != null
-                                        ? 'Soltar do pai'
-                                        : 'Vincular ao pai',
-                                    aceso: pai != null,
-                                    onTap: () {
-                                      if (pai != null) {
-                                        Navigator.of(sheetContext).pop();
-                                        controller.unlinkProperty(
-                                          layer.id,
-                                          LayerProp.parent,
-                                        );
-                                        return;
-                                      }
-                                      abrirDepois(
-                                        () => showParentSheet(
-                                          context,
-                                          ref,
-                                          layer,
-                                          playback.time.value,
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                ),
                               ],
-                            ),
+                              if (layer is VideoLayer)
+                                _UtilIcon(
+                                  icon: CupertinoIcons.captions_bubble,
+                                  label: 'Legendar',
+                                  onTap: () {
+                                    Navigator.of(sheetContext).pop();
+                                    Future.microtask(() {
+                                      if (context.mounted) {
+                                        showCaptionCreationSheet(context, ref);
+                                      }
+                                    });
+                                  },
+                                ),
+                              if (layer is VideoLayer) ...[
+                                _UtilIcon(
+                                  icon: CupertinoIcons.crop,
+                                  label: 'Reenquadrar sozinho',
+                                  onTap: () async {
+                                    Navigator.of(sheetContext).pop();
+                                    if (!context.mounted) return;
+                                    AureaSnack.show(
+                                      context,
+                                      'Achando o assunto...',
+                                    );
+                                    final n = await controller.autoReframeLayer(
+                                      layer.id,
+                                    );
+                                    if (!context.mounted) return;
+                                    if (n == null) {
+                                      AureaSnack.show(
+                                        context,
+                                        'Nao consegui ler esse video',
+                                      );
+                                      return;
+                                    }
+                                    AureaSnack.show(
+                                      context,
+                                      'Reenquadrado seguindo o assunto',
+                                      actionLabel: 'Desfazer',
+                                      onAction: controller.undo,
+                                    );
+                                  },
+                                ),
+                                _UtilIcon(
+                                  icon: CupertinoIcons.hand_raised,
+                                  label: 'Estabilizar',
+                                  onTap: () async {
+                                    Navigator.of(sheetContext).pop();
+                                    if (!context.mounted) return;
+                                    AureaSnack.show(
+                                      context,
+                                      'Lendo o video para estabilizar...',
+                                    );
+                                    final n = await controller.stabilizeLayer(
+                                      layer.id,
+                                    );
+                                    if (!context.mounted) return;
+                                    if (n == null) {
+                                      AureaSnack.show(
+                                        context,
+                                        'Nao consegui ler esse video',
+                                      );
+                                      return;
+                                    }
+                                    AureaSnack.show(
+                                      context,
+                                      'Estabilizado com $n quadros de referencia',
+                                      actionLabel: 'Desfazer',
+                                      onAction: controller.undo,
+                                    );
+                                  },
+                                ),
+                              ],
+                              // 3D DA CAMADA e MOTION BLUR nesta fileira.
+                              // Mascara agora mora dentro de Mesclagem e
+                              // opacidade, sem criar uma oitava secao.
+                              // Tudo daqui em diante e ESTUDIO (fora do
+                              // nucleo).
+                              _UtilIcon(
+                                icon: layer.is3D
+                                    ? CupertinoIcons.cube_fill
+                                    : CupertinoIcons.cube,
+                                label: layer.is3D ? '3D ligado' : 'Ligar 3D',
+                                aceso: layer.is3D,
+                                onTap: () {
+                                  controller.toggle3D(layer.id);
+                                  setSheetState(() {});
+                                },
+                              ),
+                              _UtilIcon(
+                                icon: CupertinoIcons.speedometer,
+                                label: 'Motion blur',
+                                aceso: ref
+                                    .read(editorControllerProvider)
+                                    .metaOf(layer.id)
+                                    .motionBlur,
+                                onTap: () {
+                                  controller.toggleLayerMotionBlurReal(
+                                    layer.id,
+                                  );
+                                  setSheetState(() {});
+                                },
+                              ),
+                              if (layer is! NullLayer &&
+                                  layer is! VideoLayer &&
+                                  layer is! ParticlesLayer &&
+                                  layer is! Element3DLayer)
+                                _UtilIcon(
+                                  icon: CupertinoIcons.cube,
+                                  label: 'Extrude 3D',
+                                  aceso:
+                                      ref
+                                          .read(editorControllerProvider)
+                                          .metaOf(layer.id)
+                                          .extrude >
+                                      0,
+                                  onTap: () => abrirDepois(
+                                    () => showExtrudeSheet(
+                                      context,
+                                      ref,
+                                      layer.id,
+                                    ),
+                                  ),
+                                ),
+                              _UtilIcon(
+                                icon: CupertinoIcons.music_note_2,
+                                label: 'Pulsar na batida',
+                                onTap: () => abrirDepois(
+                                  () => showBeatPulseSheet(
+                                    context,
+                                    ref,
+                                    layer.id,
+                                  ),
+                                ),
+                              ),
+                              _UtilIcon(
+                                icon: CupertinoIcons.repeat,
+                                label: 'Loop de keyframes',
+                                onTap: () => abrirDepois(
+                                  () => showLoopSheet(context, ref, layer.id),
+                                ),
+                              ),
+                              _UtilIcon(
+                                icon: CupertinoIcons.tag,
+                                label: 'Organizar (rotulo, solo, timida)',
+                                onTap: () => abrirDepois(
+                                  () =>
+                                      showOrganizeSheet(context, ref, layer.id),
+                                ),
+                              ),
+                              _UtilIcon(
+                                icon: pai != null
+                                    ? CupertinoIcons.link_circle_fill
+                                    : CupertinoIcons.link,
+                                label: pai != null
+                                    ? 'Soltar do pai'
+                                    : 'Vincular ao pai',
+                                aceso: pai != null,
+                                onTap: () {
+                                  if (pai != null) {
+                                    Navigator.of(sheetContext).pop();
+                                    controller.unlinkProperty(
+                                      layer.id,
+                                      LayerProp.parent,
+                                    );
+                                    return;
+                                  }
+                                  abrirDepois(
+                                    () => showParentSheet(
+                                      context,
+                                      ref,
+                                      layer,
+                                      playback.time.value,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                        // OS COMANDOS QUE SOBRARAM DO MENU ESCONDIDO.
-                        // Cada um aqui e um icone visivel, nao um item de
-                        // lista dentro de um "Mais".
-                        if (layer is TextLayer) ...[
-                          _UtilIcon(
-                            icon: CupertinoIcons.textformat,
-                            label: 'Fonte',
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              abrirDepois(
-                                  () => showFontSheet(context, ref, layer.id));
-                            },
-                          ),
-                          _UtilIcon(
-                            icon: CupertinoIcons.circle_grid_hex,
-                            label: 'Caminho',
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              abrirDepois(() =>
-                                  showTextPathSheet(context, ref, layer.id));
-                            },
-                          ),
-                          _UtilIcon(
-                            icon: CupertinoIcons.textformat_abc_dottedunderline,
-                            label: 'Animar',
-                            onTap: () => Navigator.of(sheetContext)
-                                .pop(LayerMenuAction.textAnimators),
-                          ),
-                        ],
-                        if (layer is Scene3DLayer) ...[
-                          _UtilIcon(
-                            icon: CupertinoIcons.videocam,
-                            label: 'Cameras',
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              abrirDepois(() => showCamerasSheet(
-                                  context, ref, layer.id, playback));
-                            },
-                          ),
-                        ],
-                        if (layer is GroupLayer) ...[
-                          _UtilIcon(
-                            icon: CupertinoIcons.timer,
-                            label: 'Tempo',
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              abrirDepois(() => showPrecompSheet(
-                                  context, ref, layer.id, playback));
-                            },
-                          ),
-                          _UtilIcon(
-                            icon: CupertinoIcons.square_stack_3d_down_right,
-                            label: 'Desagrupar',
-                            onTap: () {
-                              Navigator.of(sheetContext).pop();
-                              controller.ungroupLayer(layer.id);
-                            },
-                          ),
-                        ],
+                      ),
+                      // OS COMANDOS QUE SOBRARAM DO MENU ESCONDIDO.
+                      // Cada um aqui e um icone visivel, nao um item de
+                      // lista dentro de um "Mais".
+                      if (layer is TextLayer) ...[
                         _UtilIcon(
-                          icon: CupertinoIcons.delete_left,
-                          label: 'Excluir e\nfechar',
+                          icon: CupertinoIcons.textformat,
+                          label: 'Fonte',
                           onTap: () {
                             Navigator.of(sheetContext).pop();
-                            controller.rippleDeleteLayer(layer.id);
+                            abrirDepois(
+                              () => showFontSheet(context, ref, layer.id),
+                            );
                           },
                         ),
                         _UtilIcon(
-                          icon: CupertinoIcons.arrow_left_to_line,
-                          label: 'Fechar\nburacos',
+                          icon: CupertinoIcons.circle_grid_hex,
+                          label: 'Caminho',
                           onTap: () {
                             Navigator.of(sheetContext).pop();
-                            if (controller.gapCount() == 0) {
-                              showReasonToast(
-                                  context, 'Nao ha buraco para fechar');
-                              return;
-                            }
-                            controller.closeTimelineGaps();
+                            abrirDepois(
+                              () => showTextPathSheet(context, ref, layer.id),
+                            );
+                          },
+                        ),
+                        _UtilIcon(
+                          icon: CupertinoIcons.textformat_abc_dottedunderline,
+                          label: 'Animar',
+                          onTap: () =>
+                              Navigator.of(sheetContext)
+                                  .pop(LayerMenuAction.textAnimators),
+                        ),
+                      ],
+                      if (layer is Scene3DLayer) ...[
+                        _UtilIcon(
+                          icon: CupertinoIcons.videocam,
+                          label: 'Cameras',
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            abrirDepois(
+                              () => showCamerasSheet(
+                                context,
+                                ref,
+                                layer.id,
+                                playback,
+                              ),
+                            );
                           },
                         ),
                       ],
-                    ),
+                      if (layer is GroupLayer) ...[
+                        _UtilIcon(
+                          icon: CupertinoIcons.timer,
+                          label: 'Tempo',
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            abrirDepois(
+                              () => showPrecompSheet(
+                                context,
+                                ref,
+                                layer.id,
+                                playback,
+                              ),
+                            );
+                          },
+                        ),
+                        _UtilIcon(
+                          icon: CupertinoIcons.square_stack_3d_down_right,
+                          label: 'Desagrupar',
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            controller.ungroupLayer(layer.id);
+                          },
+                        ),
+                      ],
+                      _UtilIcon(
+                        icon: CupertinoIcons.delete_left,
+                        label: 'Excluir e\nfechar',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          controller.rippleDeleteLayer(layer.id);
+                        },
+                      ),
+                      _UtilIcon(
+                        icon: CupertinoIcons.arrow_left_to_line,
+                        label: 'Fechar\nburacos',
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          if (controller.gapCount() == 0) {
+                            showReasonToast(
+                              context,
+                              'Nao ha buraco para fechar',
+                            );
+                            return;
+                          }
+                          controller.closeTimelineGaps();
+                        },
+                      ),
+                    ],
                   ),
+                ),
                 const SizedBox(height: 12),
                 // A GRADE, MONTADA A PARTIR DO CONTRATO.
                 //
@@ -527,30 +524,32 @@ List<Widget> _fileiras(Set<AmSecao> secoes, _Tile? Function(AmSecao) tile) {
     for (final s in AmSecao.values)
       if (secoes.contains(s)) ?tile(s),
   ];
-  assert(visiveis.length <= kAmMaximoSecoes,
-      'a grade estourou: ${visiveis.length} secoes');
+  assert(
+    visiveis.length <= kAmMaximoSecoes,
+    'a grade estourou: ${visiveis.length} secoes',
+  );
   if (visiveis.isEmpty) return const [];
 
   final primeira = visiveis.take(3).toList();
   final segunda = visiveis.skip(3).toList();
 
   Widget linha(List<_Tile> tiles, int vagas) => Row(
-        children: [
-          for (var i = 0; i < vagas; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            if (i < tiles.length)
-              _MenuTile(
-                icon: tiles[i].icone,
-                label: tiles[i].rotulo,
-                onTap: tiles[i].onTap,
-              )
-            else
-              // O lugar continua reservado para a grade nao se
-              // reorganizar quando o tipo muda.
-              const Spacer(),
-          ],
-        ],
-      );
+    children: [
+      for (var i = 0; i < vagas; i++) ...[
+        if (i > 0) const SizedBox(width: 8),
+        if (i < tiles.length)
+          _MenuTile(
+            icon: tiles[i].icone,
+            label: tiles[i].rotulo,
+            onTap: tiles[i].onTap,
+          )
+        else
+          // O lugar continua reservado para a grade nao se
+          // reorganizar quando o tipo muda.
+          const Spacer(),
+      ],
+    ],
+  );
 
   return [
     linha(primeira, 3),
@@ -579,98 +578,101 @@ _Tile? _tileDaSecao(
 
   return switch (secao) {
     AmSecao.moverTransformar => (
-        icone: CupertinoIcons.move,
-        rotulo: 'Mover e\ntransf.',
-        onTap: () => fecharCom(LayerMenuAction.transform),
-      ),
+      icone: CupertinoIcons.move,
+      rotulo: 'Mover e\ntransf.',
+      onTap: () => fecharCom(LayerMenuAction.transform),
+    ),
     AmSecao.corPreenchimento => (
-        icone: CupertinoIcons.paintbrush,
-        rotulo: 'Cor e\npreench.',
-        onTap: () {
-          // Cena 3D: a cor mora no material de cada objeto. Elemento 3D
-          // edita cor e forma no sheet proprio.
-          if (layer is Scene3DLayer) {
-            depois(() => showScene3DSheet(context, ref, layer.id));
-          } else if (layer is Element3DLayer) {
-            depois(() => showElement3DSheet(context, ref, layer.id));
-          } else {
-            fecharCom(LayerMenuAction.colorFill);
-          }
-        },
-      ),
+      icone: CupertinoIcons.paintbrush,
+      rotulo: 'Cor e\npreench.',
+      onTap: () {
+        // Cena 3D: a cor mora no material de cada objeto. Elemento 3D
+        // edita cor e forma no sheet proprio.
+        if (layer is Scene3DLayer) {
+          depois(() => showScene3DSheet(context, ref, layer.id));
+        } else if (layer is Element3DLayer) {
+          depois(() => showElement3DSheet(context, ref, layer.id));
+        } else {
+          fecharCom(LayerMenuAction.colorFill);
+        }
+      },
+    ),
     AmSecao.bordaSombra => (
-        icone: CupertinoIcons.square_on_square,
-        rotulo: 'Borda e\nsombra',
-        onTap: () {
-          // Forma: o traco vetorial (espessura, cor, tracejado animavel)
-          // mora no painel da forma; a sombra fica nos estilos.
-          if (layer is ShapeLayer) {
-            fecharCom(LayerMenuAction.stroke);
-          } else {
-            depois(() =>
-                showLayerStylesSheet(context, ref, layer.id, playback));
-          }
-        },
-      ),
+      icone: CupertinoIcons.square_on_square,
+      rotulo: 'Borda e\nsombra',
+      onTap: () {
+        // Forma: o traco vetorial (espessura, cor, tracejado animavel)
+        // mora no painel da forma; a sombra fica nos estilos.
+        if (layer is ShapeLayer) {
+          fecharCom(LayerMenuAction.stroke);
+        } else {
+          depois(() => showLayerStylesSheet(context, ref, layer.id, playback));
+        }
+      },
+    ),
     AmSecao.mesclarOpacidade => (
-        icone: CupertinoIcons.circle_lefthalf_fill,
-        rotulo: 'Mesclar e\nopacidade',
-        onTap: () => fecharCom(LayerMenuAction.blending),
-      ),
+      icone: CupertinoIcons.circle_lefthalf_fill,
+      rotulo: 'Mesclar e\nopacidade',
+      onTap: () => fecharCom(LayerMenuAction.blending),
+    ),
     AmSecao.volume => (
-        icone: CupertinoIcons.speaker_2,
-        rotulo: 'Volume',
-        onTap: () => depois(() => showAudioSheet(context, ref, layer.id)),
-      ),
+      icone: CupertinoIcons.speaker_2,
+      rotulo: 'Volume',
+      onTap: () => depois(() => showAudioSheet(context, ref, layer.id)),
+    ),
     AmSecao.fade => (
-        icone: CupertinoIcons.slider_horizontal_below_rectangle,
-        rotulo: 'Fade',
-        onTap: () => depois(() => showAudioSheet(context, ref, layer.id)),
-      ),
+      icone: CupertinoIcons.slider_horizontal_below_rectangle,
+      rotulo: 'Fade',
+      onTap: () => depois(() => showAudioSheet(context, ref, layer.id)),
+    ),
     AmSecao.editarForma => (
-        icone: CupertinoIcons.slider_horizontal_below_rectangle,
-        rotulo: 'Editar\nforma',
-        onTap: () => fecharCom(LayerMenuAction.editShape),
-      ),
+      icone: CupertinoIcons.slider_horizontal_below_rectangle,
+      rotulo: 'Editar\nforma',
+      onTap: () => fecharCom(LayerMenuAction.editShape),
+    ),
     AmSecao.clonar => (
-        icone: CupertinoIcons.circle_grid_3x3,
-        rotulo: 'Clonar',
-        onTap: () => depois(
-            () => showGridSheet(context, ref, layer.id, playback)),
-      ),
+      icone: CupertinoIcons.circle_grid_3x3,
+      rotulo: 'Clonar',
+      onTap: () =>
+          depois(() => showGridSheet(context, ref, layer.id, playback)),
+    ),
     AmSecao.editarTexto => (
-        icone: CupertinoIcons.textformat,
-        rotulo: 'Editar\ntexto',
-        onTap: () => fecharCom(LayerMenuAction.editText),
-      ),
+      icone: CupertinoIcons.textformat,
+      rotulo: 'Editar\ntexto',
+      onTap: () => fecharCom(LayerMenuAction.editText),
+    ),
     AmSecao.editarLegendas => (
-        icone: CupertinoIcons.captions_bubble,
-        rotulo: 'Editar\nlegendas',
-        onTap: () => depois(() => showCaptionCuesSheet(context, ref, layer.id, playback)),
-      ),
+      icone: CupertinoIcons.captions_bubble,
+      rotulo: 'Editar\nlegendas',
+      onTap: () =>
+          depois(() => showCaptionCuesSheet(context, ref, layer.id, playback)),
+    ),
     AmSecao.particulas => (
-        icone: CupertinoIcons.sparkles,
-        rotulo: 'Particulas',
-        onTap: () => depois(() => showParticlesSheet(context, ref, layer.id)),
-      ),
+      icone: CupertinoIcons.sparkles,
+      rotulo: 'Particulas',
+      onTap: () => depois(() => showParticlesSheet(context, ref, layer.id)),
+    ),
     AmSecao.cena3d => (
-        icone: CupertinoIcons.cube_box,
-        rotulo: layer is Scene3DLayer ? 'Cena 3D' : 'Elemento\n3D',
-        onTap: () => depois(() => layer is Scene3DLayer
+      icone: CupertinoIcons.cube_box,
+      rotulo: layer is Scene3DLayer ? 'Cena 3D' : 'Elemento\n3D',
+      onTap: () => depois(
+        () => layer is Scene3DLayer
             ? showScene3DSheet(context, ref, layer.id)
-            : showElement3DSheet(context, ref, layer.id)),
+            : showElement3DSheet(context, ref, layer.id),
       ),
+    ),
     AmSecao.presets => (
-        icone: CupertinoIcons.square_stack_3d_down_right,
-        rotulo: 'Presets',
-        onTap: () => depois(
-            () => showEffectPresetsSheet(context, ref, layer.id, playback)),
+      icone: CupertinoIcons.square_stack_3d_down_right,
+      rotulo: 'Presets',
+      onTap: () => depois(
+        () => showEffectPresetsSheet(context, ref, layer.id, playback),
       ),
+    ),
     AmSecao.efeitos => (
-        icone: CupertinoIcons.wand_stars,
-        rotulo: 'Efeitos',
-        onTap: () => fecharCom(LayerMenuAction.effects),
-      ),
+      icone: CupertinoIcons.wand_stars,
+      rotulo: 'Efeitos',
+      onTap: () => fecharCom(LayerMenuAction.effects),
+    ),
   };
 }
 
@@ -679,7 +681,6 @@ _Tile? _tileDaSecao(
 void showReasonToast(BuildContext context, String msg) {
   AureaSnack.show(context, msg, duration: const Duration(milliseconds: 1500));
 }
-
 
 /// Modulo GRADE do objeto nulo (spec AM2-modulo-grid): o rig posiciona os
 /// assets; a transform de cada camada e um offset por cima (mover uma
@@ -1673,8 +1674,8 @@ Future<void> showMasksSheet(
                               // O mesmo Edit Points com trackpad do nivel 1.
                               CupertinoButton(
                                 padding: const EdgeInsets.all(4),
-                                onPressed: () async {
-                                  await Navigator.of(context).maybePop();
+                                onPressed: () {
+                                  closeParamSheet(sheetContext);
                                   if (context.mounted) onEditMaskPoints(m.id);
                                 },
                                 child: const Icon(
@@ -1947,10 +1948,15 @@ Future<void> showParentSheet(
           Material(
             color: Colors.transparent,
             child: ListTile(
-              leading: const Icon(CupertinoIcons.clear_circled,
-                  size: 20, color: AmColors.muted),
-              title: const Text('Nenhum',
-                  style: TextStyle(color: AmColors.text)),
+              leading: const Icon(
+                CupertinoIcons.clear_circled,
+                size: 20,
+                color: AmColors.muted,
+              ),
+              title: const Text(
+                'Nenhum',
+                style: TextStyle(color: AmColors.text),
+              ),
               subtitle: const Text(
                 'Solta a camada do pai',
                 style: TextStyle(fontSize: 11, color: AmColors.muted),
@@ -1985,16 +1991,14 @@ Future<void> showParentSheet(
                   subtitle: other.id == child.id
                       ? const Text(
                           'E a propria camada',
-                          style:
-                              TextStyle(fontSize: 11, color: AmColors.muted),
+                          style: TextStyle(fontSize: 11, color: AmColors.muted),
                         )
                       : other is NullLayer
-                          ? const Text(
-                              'Objeto nulo',
-                              style: TextStyle(
-                                  fontSize: 11, color: AmColors.muted),
-                            )
-                          : null,
+                      ? const Text(
+                          'Objeto nulo',
+                          style: TextStyle(fontSize: 11, color: AmColors.muted),
+                        )
+                      : null,
                   onTap: other.id == child.id
                       ? null
                       : () {
@@ -3341,6 +3345,11 @@ Future<void> showShapeParamsSheet(
                     fps: ref.read(editorControllerProvider).fps,
                   ),
                   const SizedBox(height: 6),
+                  if (layer.contents.any((item) => item is ShapeGradientFill))
+                    CupertinoButton(
+                      onPressed: () => showGradientFillSheet(context, layerId),
+                      child: const Text('Gradiente: cores, posicoes e alcance'),
+                    ),
                   // EDITAR NOS: a forma vira caminho bezier (se ainda nao
                   // e) e os nos aparecem sobre o preview. E daqui que sai
                   // o retangulo que vira card: dois keyframes do caminho.
@@ -3381,7 +3390,7 @@ Future<void> showShapeParamsSheet(
                           return;
                         }
                         final idGeo = geo.id;
-                        Navigator.of(sheetContext).maybePop();
+                        closeParamSheet(sheetContext);
                         Future.microtask(() {
                           if (context.mounted) {
                             showPathEditSheet(
@@ -3724,7 +3733,7 @@ Future<void> showCaptionCuesSheet(
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () {
-                        Navigator.of(sheetContext).pop();
+                        closeParamSheet(sheetContext);
                         Future.microtask(() {
                           if (context.mounted) {
                             showCaptionStyleSheet(context, ref, layerId);

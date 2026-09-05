@@ -96,7 +96,7 @@ Future<void> showFreezeSheet(
                       );
                       return;
                     }
-                    Navigator.of(sheetContext).maybePop();
+                    closeParamSheet(sheetContext);
                   },
                   child: const Text('Congelar aqui'),
                 ),

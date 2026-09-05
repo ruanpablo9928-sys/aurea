@@ -77,6 +77,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   @override
   void initState() {
     super.initState();
+    RecentSheets.instance.clear();
     _playback = PlaybackController(
       vsync: this,
       durationOf: () => ref.read(editorControllerProvider).duration,
@@ -111,6 +112,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   @override
   void dispose() {
+    RecentSheets.instance.clear();
     _playback.dispose();
     _videos.dispose();
     super.dispose();
@@ -1026,8 +1028,11 @@ class _TopBar extends ConsumerWidget {
                 },
                 // Grade de secoes, nao "mais opcoes": o icone diz o que
                 // abre. Tres pontinhos prometem menu escondido.
-                child: Icon(CupertinoIcons.square_grid_2x2,
-                    size: 22, color: tinta),
+                child: Icon(
+                  CupertinoIcons.square_grid_2x2,
+                  size: 22,
+                  color: tinta,
+                ),
               ),
             ],
             // Agrupar e excluir com os mesmos icones da barra de acoes,

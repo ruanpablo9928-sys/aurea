@@ -14,7 +14,10 @@ import 'am_widgets.dart';
 /// — ninguem faz, e o video fica parado enquanto a musica anda. A conta
 /// de achar a batida ja existe; o que faltava era virar keyframe.
 Future<void> showBeatPulseSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   var forca = 0.12;
   String? fonteId;
 
@@ -36,8 +39,9 @@ Future<void> showBeatPulseSheet(
         fonteId ??= fontes.isEmpty ? null : fontes.first.id;
 
         // A forma de onda pode nao estar pronta ainda.
-        final caminho = switch (
-            fontes.where((l) => l.id == fonteId).firstOrNull) {
+        final caminho = switch (fontes
+            .where((l) => l.id == fonteId)
+            .firstOrNull) {
           AudioLayer a => a.sourcePath,
           VideoLayer v => v.sourcePath,
           _ => null,
@@ -45,8 +49,7 @@ Future<void> showBeatPulseSheet(
         if (caminho != null) {
           MediaPreviewService.instance.ensureWaveform(caminho);
         }
-        final batidas =
-            fonteId == null ? null : controller.beatsOf(fonteId!);
+        final batidas = fonteId == null ? null : controller.beatsOf(fonteId!);
 
         return SafeArea(
           child: SingleChildScrollView(
@@ -55,28 +58,36 @@ Future<void> showBeatPulseSheet(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Pulsar na batida',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Pulsar na batida',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '"${layer.name}" cresce um tiquinho em cada ataque da '
                   'musica.',
                   style: const TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 if (fontes.isEmpty)
-                  const Text('Nao ha faixa de som no projeto.',
-                      style: TextStyle(
-                          fontSize: 12, color: AmColors.muted))
+                  const Text(
+                    'Nao ha faixa de som no projeto.',
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
+                  )
                 else ...[
-                  const Text('Ouvir de',
-                      style: TextStyle(
-                          fontSize: 12, color: AmColors.muted)),
+                  const Text(
+                    'Ouvir de',
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
+                  ),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
@@ -87,19 +98,24 @@ Future<void> showBeatPulseSheet(
                           onTap: () => setSheetState(() => fonteId = f.id),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 11, vertical: 6),
+                              horizontal: 11,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: f.id == fonteId
                                   ? AmColors.accentDim
                                   : AmColors.chip,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(f.name,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: f.id == fonteId
-                                        ? AmColors.accent
-                                        : AmColors.muted)),
+                            child: Text(
+                              f.name,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: f.id == fonteId
+                                    ? AmColors.accent
+                                    : AmColors.muted,
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -110,28 +126,31 @@ Future<void> showBeatPulseSheet(
                     children: [
                       const SizedBox(
                         width: 62,
-                        child: Text('Forca',
-                            style: TextStyle(
-                                fontSize: 12, color: AmColors.muted)),
+                        child: Text(
+                          'Forca',
+                          style: TextStyle(fontSize: 12, color: AmColors.muted),
+                        ),
                       ),
                       Expanded(
                         child: AmTickRuler(
-  value: forca,
-  min: 0.02,
-  max: 0.6,
-  unitsPerPixel: ((0.6) - (0.02)) / 420,
-  height: 40,
-  onChanged: (v) =>
-                              setSheetState(() => forca = v),
-),
+                          value: forca,
+                          min: 0.02,
+                          max: 0.6,
+                          unitsPerPixel: ((0.6) - (0.02)) / 420,
+                          height: 40,
+                          onChanged: (v) => setSheetState(() => forca = v),
+                        ),
                       ),
                       SizedBox(
                         width: 56,
                         child: Text(
-                            '+${(forca * 100).toStringAsFixed(0)}%',
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                                fontSize: 12, color: AmColors.text)),
+                          '+${(forca * 100).toStringAsFixed(0)}%',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AmColors.text,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -140,36 +159,47 @@ Future<void> showBeatPulseSheet(
                     batidas == null
                         ? 'Lendo o som...'
                         : '${batidas.length} batidas encontradas.',
-                    style: const TextStyle(
-                        fontSize: 11, color: AmColors.muted),
+                    style: const TextStyle(fontSize: 11, color: AmColors.muted),
                   ),
                   const SizedBox(height: 12),
 
                   _Botao('Aplicar', () {
                     final n = controller.applyBeatPulse(
-                        layerId, fonteId!, amount: forca);
+                      layerId,
+                      fonteId!,
+                      amount: forca,
+                    );
                     if (n == null) {
                       AureaSnack.show(
-                          sheetContext, 'A forma de onda ainda nao ficou pronta');
+                        sheetContext,
+                        'A forma de onda ainda nao ficou pronta',
+                      );
                       return;
                     }
                     if (n == 0) {
-                      AureaSnack.show(sheetContext,
-                          'Nenhuma batida cai dentro desta camada');
+                      AureaSnack.show(
+                        sheetContext,
+                        'Nenhuma batida cai dentro desta camada',
+                      );
                       return;
                     }
-                    Navigator.of(sheetContext).maybePop();
+                    closeParamSheet(sheetContext);
                     AureaSnack.show(
-                        context, '$n batidas viraram keyframe',
-                        actionLabel: 'Desfazer',
-                        onAction: controller.undo);
+                      context,
+                      '$n batidas viraram keyframe',
+                      actionLabel: 'Desfazer',
+                      onAction: controller.undo,
+                    );
                   }),
                   _Botao('Tirar os keyframes de escala', () {
                     controller.clearScaleKeyframes(layerId);
-                    Navigator.of(sheetContext).maybePop();
-                    AureaSnack.show(context, 'Escala voltou a ser fixa',
-                        actionLabel: 'Desfazer',
-                        onAction: controller.undo);
+                    closeParamSheet(sheetContext);
+                    AureaSnack.show(
+                      context,
+                      'Escala voltou a ser fixa',
+                      actionLabel: 'Desfazer',
+                      onAction: controller.undo,
+                    );
                   }),
                 ],
               ],
@@ -189,20 +219,23 @@ class _Botao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AmColors.panelHigh,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Text(rotulo,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AmColors.text)),
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AmColors.panelHigh,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        rotulo,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AmColors.text,
         ),
-      );
+      ),
+    ),
+  );
 }

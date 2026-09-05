@@ -7,6 +7,9 @@ import '../../application/playback_controller.dart';
 import 'am_colors.dart';
 import 'param_sheet_shell.dart';
 
+export 'param_sheet_shell.dart'
+    show ParamSheetScope, RecentSheets, closeParamSheet;
+
 /// Mini-transporte para dentro dos sheets de parametros: play/pause,
 /// voltar ao inicio e SCRUB — da para criar keyframes em tempos
 /// diferentes sem fechar o painel. O sheet pai ja escuta o clock.
@@ -34,8 +37,11 @@ class SheetTransport extends StatelessWidget {
             playback.pause();
             playback.seek(Duration.zero);
           },
-          child: const Icon(CupertinoIcons.backward_end,
-              size: 18, color: AmColors.text),
+          child: const Icon(
+            CupertinoIcons.backward_end,
+            size: 18,
+            color: AmColors.text,
+          ),
         ),
         CupertinoButton(
           padding: const EdgeInsets.all(6),
@@ -57,9 +63,9 @@ class SheetTransport extends StatelessWidget {
             height: 38,
             onChanged: (v) {
               playback.pause();
-              playback.seek(Duration(
-                  microseconds:
-                      (v.clamp(0, totalSec) * 1e6).round()));
+              playback.seek(
+                Duration(microseconds: (v.clamp(0, totalSec) * 1e6).round()),
+              );
             },
           ),
         ),
@@ -69,9 +75,10 @@ class SheetTransport extends StatelessWidget {
             formatTimecode(t, fps),
             textAlign: TextAlign.center,
             style: const TextStyle(
-                fontSize: 13,
-                color: AmColors.accent,
-                fontFeatures: [FontFeature.tabularFigures()]),
+              fontSize: 13,
+              color: AmColors.accent,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
         ),
       ],
@@ -80,8 +87,7 @@ class SheetTransport extends StatelessWidget {
 }
 
 /// Scaffold do editor que hospeda os sheets persistentes de parametros.
-final GlobalKey<ScaffoldState> paramSheetHostKey =
-    GlobalKey<ScaffoldState>();
+final GlobalKey<ScaffoldState> paramSheetHostKey = GlobalKey<ScaffoldState>();
 
 /// Geracao do sheet de parametros: cresce a cada sheet aberto. Quem
 /// espera um sheet fechar compara a geracao para saber se OUTRO sheet ja
@@ -129,8 +135,17 @@ Future<void> showParamSheet(
   double heightFactor = 0.45,
   String? title,
 }) async {
+  if (!context.mounted) return;
+  final localHost = Scaffold.maybeOf(context);
+  final editorHost = paramSheetHostKey.currentState;
+  final callerRoute = ModalRoute.of(context);
+  // O Estudio 3D tem seu proprio Scaffold: nao hospedar sua ferramenta
+  // no editor que ficou atras da rota atual.
   final host =
-      paramSheetHostKey.currentState ?? Scaffold.maybeOf(context);
+      localHost ??
+      (editorHost != null && ModalRoute.of(editorHost.context) == callerRoute
+          ? editorHost
+          : null);
   // A altura pedida vira a CHEIA; a casca oferece espiada e metade.
   final maxHeight = _sheetMaxHeight(context, heightFactor);
   paramSheetGeneration++;
@@ -140,16 +155,27 @@ Future<void> showParamSheet(
   if (title != null) {
     RecentSheets.instance.push(
       title,
-      () => showParamSheet(context,
-          builder: builder, heightFactor: heightFactor, title: title),
+      () => showParamSheet(
+        context,
+        builder: builder,
+        heightFactor: heightFactor,
+        title: title,
+      ),
     );
   }
 
-  Widget embrulhado(BuildContext ctx) => ParamSheetShell(
-        maxHeight: maxHeight,
-        title: title,
-        child: Builder(builder: builder),
-      );
+  // O FECHAR VIAJA COM A FOLHA. Quem esta dentro dela nao tem como
+  // saber se ela virou rota (o caminho modal) ou folha persistente do
+  // Scaffold — e errar isso fecha o EDITOR inteiro. Por isso o escopo
+  // leva o fechar certo de cada caminho junto com o conteudo.
+  Widget embrulhado(VoidCallback fechar) => ParamSheetScope(
+    close: fechar,
+    child: ParamSheetShell(
+      maxHeight: maxHeight,
+      title: title,
+      child: Builder(builder: builder),
+    ),
+  );
 
   if (host == null) {
     // Sem Scaffold hospedeiro: cai para modal transparente.
@@ -162,19 +188,31 @@ Future<void> showParamSheet(
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: embrulhado,
+      builder: (ctx) => embrulhado(() => closeParamSheet(ctx)),
     );
     return;
   }
-  final controller = host.showBottomSheet(
-    embrulhado,
+  PersistentBottomSheetController? controller;
+  var fechada = false;
+  void fechar() {
+    if (fechada) return;
+    fechada = true;
+    controller?.close();
+  }
+
+  controller = host.showBottomSheet(
+    (ctx) => embrulhado(fechar),
     backgroundColor: AmColors.panel,
     constraints: BoxConstraints(maxHeight: maxHeight),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
   );
-  await controller.closed;
+  try {
+    await controller.closed;
+  } finally {
+    fechada = true;
+  }
 }
 
 /// Chip escuro com valor em verde (ex.: "200,0" / "0,00°").
@@ -214,8 +252,10 @@ class AmValueChip extends StatelessWidget {
         ),
         if (label != null) ...[
           const SizedBox(height: 4),
-          Text(label!,
-              style: const TextStyle(fontSize: 11, color: AmColors.muted)),
+          Text(
+            label!,
+            style: const TextStyle(fontSize: 11, color: AmColors.muted),
+          ),
         ],
       ],
     );
@@ -292,8 +332,10 @@ class _AmTickRulerState extends State<AmTickRuler> {
       },
       onHorizontalDragUpdate: (d) {
         _acumulado += d.delta.dx;
-        final v = (_inicio - _acumulado * widget.unitsPerPixel)
-            .clamp(widget.min, widget.max);
+        final v = (_inicio - _acumulado * widget.unitsPerPixel).clamp(
+          widget.min,
+          widget.max,
+        );
         if (_agendado) {
           _pendente = v;
           return;
@@ -344,14 +386,16 @@ class _TickRulerPainter extends CustomPainter {
     final phase = (value / unitsPerPixel) % spacing;
     final pad = size.height * 0.18;
     for (var x = -phase; x < size.width; x += spacing) {
-      canvas.drawLine(
-          Offset(x, pad), Offset(x, size.height - pad), tick);
+      canvas.drawLine(Offset(x, pad), Offset(x, size.height - pad), tick);
     }
     final indicator = Paint()
       ..color = accentCenter ? AmColors.accent : Colors.white
       ..strokeWidth = 3;
-    canvas.drawLine(Offset(center, pad * 0.4),
-        Offset(center, size.height - pad * 0.4), indicator);
+    canvas.drawLine(
+      Offset(center, pad * 0.4),
+      Offset(center, size.height - pad * 0.4),
+      indicator,
+    );
   }
 
   @override
@@ -404,10 +448,16 @@ class AmDiamondAdd extends StatelessWidget {
     return Stack(
       alignment: Alignment.center,
       children: [
-        Icon(filled ? CupertinoIcons.rhombus_fill : CupertinoIcons.rhombus,
-            size: 26, color: color),
-        Icon(filled ? CupertinoIcons.minus : CupertinoIcons.plus,
-            size: 11, color: filled ? AmColors.bg : color),
+        Icon(
+          filled ? CupertinoIcons.rhombus_fill : CupertinoIcons.rhombus,
+          size: 26,
+          color: color,
+        ),
+        Icon(
+          filled ? CupertinoIcons.minus : CupertinoIcons.plus,
+          size: 11,
+          color: filled ? AmColors.bg : color,
+        ),
       ],
     );
   }
@@ -443,10 +493,16 @@ class _CurveIconPainter extends CustomPainter {
     const c = 5.0;
     canvas.drawLine(Offset.zero, const Offset(c, 0), dash);
     canvas.drawLine(Offset.zero, const Offset(0, c), dash);
-    canvas.drawLine(Offset(size.width, size.height),
-        Offset(size.width - c, size.height), dash);
-    canvas.drawLine(Offset(size.width, size.height),
-        Offset(size.width, size.height - c), dash);
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width - c, size.height),
+      dash,
+    );
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width, size.height - c),
+      dash,
+    );
     final curve = Paint()
       ..color = color
       ..strokeWidth = 2
@@ -454,8 +510,14 @@ class _CurveIconPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     final path = Path()
       ..moveTo(2, size.height - 3)
-      ..cubicTo(size.width * 0.7, size.height - 3, size.width * 0.3, 3,
-          size.width - 2, 3);
+      ..cubicTo(
+        size.width * 0.7,
+        size.height - 3,
+        size.width * 0.3,
+        3,
+        size.width - 2,
+        3,
+      );
     canvas.drawPath(path, curve);
   }
 

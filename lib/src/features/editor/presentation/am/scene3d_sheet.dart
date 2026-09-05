@@ -106,7 +106,7 @@ Future<void> showScene3DSheet(
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       onPressed: () {
-                        Navigator.of(sheetContext).maybePop();
+                        closeParamSheet(sheetContext);
                         Future.microtask(() {
                           if (context.mounted) {
                             openScene3DStudio(context, ref, layerId);

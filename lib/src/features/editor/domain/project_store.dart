@@ -445,6 +445,9 @@ Map<String, dynamic> _shapeItem(ShapeItem s) => switch (s) {
     'radial': g.radial,
     'op': g.opacity,
     if (g.extras.isNotEmpty) 'mid': [for (final c in g.extras) _col(c)],
+    if (g.stops.isNotEmpty) 'stops': g.stops,
+    if (g.center != Offset.zero) 'center': [g.center.dx, g.center.dy],
+    if (g.radiusScale != 1) 'radiusScale': g.radiusScale,
   },
   ShapeSvgPath p => {
     'kind': 'svg',
@@ -586,6 +589,11 @@ ShapeItem _asShapeItem(Map<String, dynamic> m) => switch (m['kind']) {
     extras: [
       for (final c in (m['mid'] as List? ?? const [])) _asCol(c),
     ],
+    stops: [for (final s in (m['stops'] as List? ?? const [])) (s as num).toDouble()],
+    center: m['center'] is List && (m['center'] as List).length == 2
+        ? Offset((m['center'][0] as num).toDouble(), (m['center'][1] as num).toDouble())
+        : Offset.zero,
+    radiusScale: (m['radiusScale'] as num?)?.toDouble() ?? 1,
   ),
   'svg' => ShapeSvgPath(
     id: m['id'] as String,

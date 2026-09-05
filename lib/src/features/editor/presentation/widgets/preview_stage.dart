@@ -2072,7 +2072,10 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               child: out,
             );
             final tingido = ColorFiltered(
-              colorFilter: ColorFilter.mode(effect.color, BlendMode.srcATop),
+              // srcATop substituia o RGB extraido pela cor solida e
+              // ressuscitava pixels abaixo do threshold. Multiplicar
+              // preserva o preto (sem luz) e o ganho da intensidade.
+              colorFilter: ColorFilter.mode(effect.color, BlendMode.modulate),
               child: fonte,
             );
 

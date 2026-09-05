@@ -14,6 +14,7 @@ import '../../editor/domain/template_pack.dart';
 import '../../editor/domain/video_project.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../application/projects_controller.dart';
+import '../application/reference_rebuild_assets.dart';
 import '../application/thumbnail_service.dart';
 import '../domain/alight_xml_import.dart';
 import '../domain/notes_motion_template.dart';
@@ -56,6 +57,19 @@ class ProjectsTab extends ConsumerWidget {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const EditorScreen()),
     );
+  }
+
+  /// Prepara a trilha empacotada antes de abrir a nova recriacao.
+  Future<void> _openReferenceRebuild(BuildContext context, WidgetRef ref) async {
+    try {
+      final model = await prepareReferenceRebuild();
+      if (context.mounted) await _abrirModelo(context, ref, model);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Nao consegui preparar a trilha. Tente abrir o modelo novamente.'),
+      ));
+    }
   }
 
   /// ABRIR TEMPLATE: o arquivo vira um projeto NOVO, com id novo.
@@ -361,6 +375,12 @@ class ProjectsTab extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
                   _CartaoModelo(
+                    imagem: 'assets/templates/reference-rebuild.jpg',
+                    titulo: 'Nova recriacao · Codex',
+                    detalhe: '5 cenas · 280 quadros · camadas editaveis',
+                    onTap: () => _openReferenceRebuild(context, ref),
+                  ),
+                  _CartaoModelo(
                     imagem: 'assets/templates/notes.jpg',
                     titulo: 'Notes',
                     detalhe: 'Icone, botao, listas, whip e glow',
@@ -609,6 +629,8 @@ class _CartaoModelo extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               titulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,

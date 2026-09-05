@@ -21,6 +21,7 @@ enum Element3DKind {
   wedge,
   dome,
   crown,
+  crownFine,
 }
 
 /// AMBIENTE que os objetos refletem — e que colore o reflexo.
@@ -258,6 +259,8 @@ Element3DMesh _build(Element3DKind kind) {
 
     case Element3DKind.crown:
       return crownMesh(vale: 0.32);
+    case Element3DKind.crownFine:
+      return crownMesh(segments: 120, inner: 0.985, vale: 0.4, altura: 0.36);
 
     case Element3DKind.octahedron:
       return Element3DMesh(
@@ -625,6 +628,7 @@ String element3DLabel(Element3DKind kind) => switch (kind) {
   Element3DKind.wedge => 'Rampa',
   Element3DKind.dome => 'Cupula',
   Element3DKind.crown => 'Coroa',
+  Element3DKind.crownFine => 'Coroa fina',
 };
 
 /// CUBO COM CHANFRO nas arestas.

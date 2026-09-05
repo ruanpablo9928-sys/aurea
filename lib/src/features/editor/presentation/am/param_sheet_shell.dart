@@ -3,6 +3,42 @@ import 'package:flutter/material.dart';
 
 import 'am_colors.dart';
 
+/// COMO SE FECHA UM PAINEL DE PARAMETRO.
+///
+/// Um painel de parametro normalmente e uma folha persistente do
+/// Scaffold do editor (showBottomSheet). Usar Navigator.pop pode retirar
+/// o EDITOR quando a entrada de historico da folha ja foi consumida.
+/// Este escopo carrega o fechar certo, e
+/// [closeParamSheet] serve os dois casos: dentro do escopo fecha a
+/// folha; fora dele (um modal de verdade) fecha a rota.
+class ParamSheetScope extends InheritedWidget {
+  const ParamSheetScope({super.key, required this.close, required super.child});
+
+  final VoidCallback close;
+
+  static VoidCallback? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<ParamSheetScope>()?.close;
+
+  @override
+  bool updateShouldNotify(ParamSheetScope old) => close != old.close;
+}
+
+/// Fecha o painel em que [context] esta — folha persistente ou rota.
+void closeParamSheet(BuildContext context) {
+  if (!context.mounted) return;
+  final fechar = ParamSheetScope.maybeOf(context);
+  if (fechar != null) {
+    fechar();
+    return;
+  }
+  // Um contexto externo ao painel nunca deve retirar a pagina do editor.
+  // O fallback serve somente um popup que ainda seja a rota atual.
+  final route = ModalRoute.of(context);
+  if (route is PopupRoute && route.isCurrent) {
+    Navigator.of(context).pop();
+  }
+}
+
 /// OS ULTIMOS PAINEIS QUE A PESSOA ABRIU.
 ///
 /// Em motion se fica alternando entre dois ou tres parametros — raio do
@@ -96,7 +132,7 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
     if (voltar != null) {
       voltar();
     } else {
-      Navigator.of(context).maybePop();
+      closeParamSheet(context);
     }
   }
 
@@ -149,9 +185,7 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
             Container(
               height: 52,
               decoration: const BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: AmColors.hairline),
-                ),
+                border: Border(top: BorderSide(color: AmColors.hairline)),
               ),
               child: Row(
                 children: [
@@ -161,8 +195,11 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
                     child: IconButton(
                       padding: EdgeInsets.zero,
                       onPressed: _fecha,
-                      icon: const Icon(CupertinoIcons.chevron_back,
-                          size: 20, color: AmColors.text),
+                      icon: const Icon(
+                        CupertinoIcons.chevron_back,
+                        size: 20,
+                        color: AmColors.text,
+                      ),
                     ),
                   ),
                   if (widget.title != null)
@@ -173,7 +210,9 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 12, color: AmColors.muted),
+                          fontSize: 12,
+                          color: AmColors.muted,
+                        ),
                       ),
                     ),
                   Expanded(
@@ -186,27 +225,34 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
                           if (r.label != widget.title)
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 3, vertical: 8),
+                                horizontal: 3,
+                                vertical: 8,
+                              ),
                               child: GestureDetector(
                                 onTap: () {
-                                  Navigator.of(context).maybePop();
+                                  closeParamSheet(context);
                                   Future.microtask(r.reopen);
                                 },
                                 child: Container(
                                   constraints: const BoxConstraints(
-                                      minHeight: 36, minWidth: 48),
+                                    minHeight: 36,
+                                    minWidth: 48,
+                                  ),
                                   alignment: Alignment.center,
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 12),
+                                    horizontal: 12,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: AmColors.chip,
-                                    borderRadius:
-                                        BorderRadius.circular(9),
+                                    borderRadius: BorderRadius.circular(9),
                                   ),
-                                  child: Text(r.label,
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AmColors.muted)),
+                                  child: Text(
+                                    r.label,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AmColors.muted,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

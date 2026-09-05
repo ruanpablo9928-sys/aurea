@@ -71,8 +71,11 @@ Future<void> showAddLayerSheet(
                     child: const SizedBox(
                       width: 28,
                       height: 28,
-                      child: Icon(CupertinoIcons.xmark,
-                          size: 20, color: AmColors.accent),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        size: 20,
+                        color: AmColors.accent,
+                      ),
                     ),
                   ),
                 ],
@@ -399,7 +402,7 @@ Future<void> _showIconSheet(
                             ? null
                             : () {
                                 controller.addIconLayer(playhead, d, name);
-                                Navigator.of(sheetContext).pop();
+                                closeParamSheet(sheetContext);
                               },
                         child: Column(
                           children: [
@@ -837,11 +840,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _abas(),
-                  const SizedBox(height: 12),
-                  _conteudo(),
-                ],
+                children: [_abas(), const SizedBox(height: 12), _conteudo()],
               ),
             ),
             const SizedBox(width: 8),
@@ -1112,7 +1111,8 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
       _CardObjeto(
         icone: CupertinoIcons.circle_grid_3x3,
         nome: 'Grid',
-        descricao: 'Multiplica uma camada em grade, circulo, esfera '
+        descricao:
+            'Multiplica uma camada em grade, circulo, esfera '
             'ou caminho.',
         onTap: () {
           // O Grid E um nulo com o modulo Clonar ativo: criar os dois
@@ -1171,7 +1171,8 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
         _CardObjeto(
           icone: CupertinoIcons.videocam,
           nome: 'Camera',
-          descricao: 'Enquadra a cena. Lentes, foco e profundidade '
+          descricao:
+              'Enquadra a cena. Lentes, foco e profundidade '
               'de campo.',
           onTap: () {
             _fecha();
@@ -1217,33 +1218,33 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   }
 
   Widget _cardObjeto(_CardObjeto c) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: c.onTap,
-        // Toque adiciona; toque longo explica. Um gesto para agir, outro
-        // para aprender — e soltar fora do card nao adiciona nada.
-        onLongPress: () => setState(() => _explicando = c.descricao),
-        onLongPressEnd: (_) => setState(() => _explicando = null),
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(14),
+    behavior: HitTestBehavior.opaque,
+    onTap: c.onTap,
+    // Toque adiciona; toque longo explica. Um gesto para agir, outro
+    // para aprender — e soltar fora do card nao adiciona nada.
+    onLongPress: () => setState(() => _explicando = c.descricao),
+    onLongPressEnd: (_) => setState(() => _explicando = null),
+    child: Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(c.icone, size: 22, color: AmColors.accent),
+          const SizedBox(height: 4),
+          Text(
+            c.nome,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: AmColors.text),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(c.icone, size: 22, color: AmColors.accent),
-              const SizedBox(height: 4),
-              Text(
-                c.nome,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: AmColors.text),
-              ),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 
   /// OS SOLIDOS: grade compacta, mesmo tratamento das formas 2D. Sem
   /// card e sem descricao fixa — a silhueta ja diz o que e.
@@ -1260,50 +1261,52 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   ];
 
   Widget _solidos3D() => LayoutBuilder(
-        builder: (context, limites) {
-          final tile = (limites.maxWidth - 6 * 4) / 5;
-          // Uma fileira que rola, nao duas: a segunda fileira empurrava a
-          // folha inteira por cima da linha do tempo, e nove solidos sao
-          // poucos o bastante para o dedo varrer.
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              for (final kind in _solidos)
-                GestureDetector(
-                  onTap: () {
-                    _fecha();
-                    _controller.addElement3DLayer(widget.playhead, kind);
-                  },
-                  onLongPress: () => setState(
-                      () => _explicando = element3DLabel(kind)),
-                  onLongPressEnd: (_) => setState(() => _explicando = null),
-                  child: Container(
-                    width: tile,
-                    height: tile,
-                    margin: const EdgeInsets.only(right: 6),
-                    decoration: BoxDecoration(
-                      color: AmColors.chip,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: CustomPaint(
-                      painter: Element3DPainter(
-                        layer: Element3DLayer(
-                          name: '',
-                          startTime: Duration.zero,
-                          duration: const Duration(seconds: 1),
-                          kind: kind,
-                          size: tile * 0.34,
-                        ),
-                        rotXDeg: -22,
-                        rotYDeg: 34,
+    builder: (context, limites) {
+      final tile = (limites.maxWidth - 6 * 4) / 5;
+      // Uma fileira que rola, nao duas: a segunda fileira empurrava a
+      // folha inteira por cima da linha do tempo, e nove solidos sao
+      // poucos o bastante para o dedo varrer.
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final kind in _solidos)
+              GestureDetector(
+                onTap: () {
+                  _fecha();
+                  _controller.addElement3DLayer(widget.playhead, kind);
+                },
+                onLongPress: () =>
+                    setState(() => _explicando = element3DLabel(kind)),
+                onLongPressEnd: (_) => setState(() => _explicando = null),
+                child: Container(
+                  width: tile,
+                  height: tile,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: BoxDecoration(
+                    color: AmColors.chip,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: CustomPaint(
+                    painter: Element3DPainter(
+                      layer: Element3DLayer(
+                        name: '',
+                        startTime: Duration.zero,
+                        duration: const Duration(seconds: 1),
+                        kind: kind,
+                        size: tile * 0.34,
                       ),
+                      rotXDeg: -22,
+                      rotYDeg: 34,
                     ),
                   ),
                 ),
-            ]),
-          );
-        },
+              ),
+          ],
+        ),
       );
+    },
+  );
 
   // ------------------------------------------------------------ formas
 
@@ -1312,61 +1315,63 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
     final paginas = (total / _porPagina).ceil();
     // A altura sai da largura: cinco tiles quadrados por fileira, tres
     // fileiras. Medir em vez de chutar e o que permite a folha encolher.
-    return LayoutBuilder(builder: (context, limites) {
-      final tile = (limites.maxWidth - 6 * (_porLinha - 1)) / _porLinha;
-      final altura = tile * _linhas + 6 * (_linhas - 1) + 20;
-      return SizedBox(
-        height: altura,
-        child: Column(
-          children: [
-            Expanded(
-              child: PageView.builder(
-                controller: _pager,
-                itemCount: paginas,
-                onPageChanged: (i) => setState(() => _pagina = i),
-                itemBuilder: (context, pagina) {
-                  final ini = pagina * _porPagina;
-                  final fim = (ini + _porPagina).clamp(0, total);
-                  return GridView.count(
-                    crossAxisCount: _porLinha,
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      for (var i = ini; i < fim; i++)
-                        _TileForma(
-                          entrada: shapeLibrary[i],
-                          onTap: () {
-                            final e = shapeLibrary[i];
-                            _criaForma(e.build, e.nome);
-                            _fecha();
-                          },
-                        ),
-                    ],
-                  );
-                },
+    return LayoutBuilder(
+      builder: (context, limites) {
+        final tile = (limites.maxWidth - 6 * (_porLinha - 1)) / _porLinha;
+        final altura = tile * _linhas + 6 * (_linhas - 1) + 20;
+        return SizedBox(
+          height: altura,
+          child: Column(
+            children: [
+              Expanded(
+                child: PageView.builder(
+                  controller: _pager,
+                  itemCount: paginas,
+                  onPageChanged: (i) => setState(() => _pagina = i),
+                  itemBuilder: (context, pagina) {
+                    final ini = pagina * _porPagina;
+                    final fim = (ini + _porPagina).clamp(0, total);
+                    return GridView.count(
+                      crossAxisCount: _porLinha,
+                      mainAxisSpacing: 6,
+                      crossAxisSpacing: 6,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        for (var i = ini; i < fim; i++)
+                          _TileForma(
+                            entrada: shapeLibrary[i],
+                            onTap: () {
+                              final e = shapeLibrary[i];
+                              _criaForma(e.build, e.nome);
+                              _fecha();
+                            },
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var i = 0; i < paginas; i++)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: i == _pagina ? AmColors.accent : AmColors.muted,
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < paginas; i++)
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i == _pagina ? AmColors.accent : AmColors.muted,
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      );
-    });
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -1393,17 +1398,17 @@ class _Rotulo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          texto,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-            color: AmColors.muted,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      texto,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+        color: AmColors.muted,
+      ),
+    ),
+  );
 }
 
 /// Um tile da grade: a forma desenhada, do tamanho do tile.
