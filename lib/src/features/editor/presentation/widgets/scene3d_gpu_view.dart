@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../application/motor3d_modo.dart';
 import '../../application/scene3d_gpu.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/scene3d.dart';
@@ -45,18 +46,32 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
   Scene3DGpu? _gpu;
   var _pronto = Scene3DGpu.pronto;
 
+  /// Esta view ja contou como cena em GPU na tela? (Ver [MarcaGpuViva].)
+  var _marcado = false;
+
   @override
   void initState() {
     super.initState();
-    if (!_pronto && !Scene3DGpu.indisponivel) {
+    if (_pronto) {
+      _marcar();
+    } else if (!Scene3DGpu.indisponivel) {
       Scene3DGpu.preparar().then((_) {
-        if (mounted) setState(() => _pronto = Scene3DGpu.pronto);
+        if (!mounted) return;
+        setState(() => _pronto = Scene3DGpu.pronto);
+        if (_pronto) _marcar();
       });
     }
   }
 
+  void _marcar() {
+    if (_marcado) return;
+    _marcado = true;
+    MarcaGpuViva.entrou();
+  }
+
   @override
   void dispose() {
+    if (_marcado) MarcaGpuViva.saiu();
     _gpu?.descartar();
     super.dispose();
   }
@@ -83,6 +98,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
     gpu.sincronizar(
       widget.scene,
       widget.time,
+      rascunho: widget.rascunho,
       onMudou: () {
         if (mounted) setState(() {});
       },

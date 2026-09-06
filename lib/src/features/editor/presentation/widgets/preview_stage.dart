@@ -4303,29 +4303,45 @@ class _LayerContent extends StatelessWidget {
             );
             // Ajudas NUNCA entram na exportacao — so no preview.
             final ajudas = !exporting && l.showHelpers;
-            // O MOTOR EM GPU desenha a cena quando existe; sem ele (ou
-            // com as ajudas de cena ligadas, que so o pintor sabe
-            // desenhar) fica o pintor em CPU de sempre.
-            if (!Scene3DGpu.indisponivel && !ajudas) {
-              return Scene3DGpuView(
-                scene: l.scene,
-                camera: l.camera,
-                renderCamera: l.view == SceneView.camera
-                    ? (resolvida ?? l.camera.renderAt(localTime))
-                    : orthoViewCamera(l.view),
-                view: l.view,
-                time: localTime,
-              );
-            }
-            return CustomPaint(
-              painter: Scene3DPainter(
-                scene: l.scene,
-                camera: l.camera,
-                resolvedCamera: resolvida,
-                view: l.view,
-                time: localTime,
-                showHelpers: ajudas,
-              ),
+            // RASCUNHO ENQUANTO TOCA. Em 33 ms nao cabe reflexo no
+            // chao, sombra de contato e profundidade de campo de uma
+            // cena inteira; num celular a conta passa de 300 ms por
+            // quadro, e uma thread bloqueada por 300 ms e o que faz o
+            // iOS matar o app. Quem aperta o play quer ver o
+            // MOVIMENTO — a qualidade cheia volta na pausa e na
+            // exportacao, que e onde ela e olhada de perto.
+            return ValueListenableBuilder<bool>(
+              valueListenable: PlaybackController.tocandoAgora,
+              builder: (_, tocando, _) {
+                final rascunho = tocando && !exporting;
+                // O MOTOR EM GPU desenha a cena quando existe; sem ele
+                // (ou com as ajudas de cena ligadas, que so o pintor
+                // sabe desenhar) fica o pintor em CPU de sempre.
+                if (!Scene3DGpu.indisponivel && !ajudas) {
+                  return Scene3DGpuView(
+                    scene: l.scene,
+                    camera: l.camera,
+                    renderCamera: l.view == SceneView.camera
+                        ? (resolvida ?? l.camera.renderAt(localTime))
+                        : orthoViewCamera(l.view),
+                    view: l.view,
+                    time: localTime,
+                    rascunho: rascunho,
+                  );
+                }
+                return CustomPaint(
+                  painter: Scene3DPainter(
+                    scene: rascunho
+                        ? l.scene.copyWith(draftMode: true)
+                        : l.scene,
+                    camera: l.camera,
+                    resolvedCamera: resolvida,
+                    view: l.view,
+                    time: localTime,
+                    showHelpers: ajudas,
+                  ),
+                );
+              },
             );
           },
         ),

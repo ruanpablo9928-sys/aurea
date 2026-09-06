@@ -19,12 +19,15 @@ import 'package:aurea/src/features/projects/domain/monolito_template.dart';
 /// quadro para se decidir com numero, e nao com impressao. Um iPhone
 /// custa umas duas a tres vezes o que este desktop custa.
 void main() {
-  Future<void> medir(String nome, VideoProject p) async {
+  Future<void> medir(String nome, VideoProject p, {bool rascunho = false}) async {
     final layer = p.layers.whereType<Scene3DLayer>().single;
+    final cena = rascunho
+        ? layer.scene.copyWith(draftMode: true)
+        : layer.scene;
     const tamanho = Size(1280, 720);
     var tris = 0;
     // Aquece (a primeira avaliacao de um modelo monta a malha).
-    renderScene(layer.scene, layer.camera.renderAt(Duration.zero), tamanho,
+    renderScene(cena, layer.camera.renderAt(Duration.zero), tamanho,
         Duration.zero);
 
     final relogioCena = Stopwatch()..start();
@@ -33,7 +36,7 @@ void main() {
     for (var i = 0; i < amostras; i++) {
       final t = Duration(milliseconds: 300 * i);
       frame = renderScene(
-        layer.scene,
+        cena,
         layer.camera.renderAt(t),
         tamanho,
         t,
@@ -48,7 +51,7 @@ void main() {
     for (var i = 0; i < amostras; i++) {
       final t = Duration(milliseconds: 300 * i);
       Scene3DPainter(
-        scene: layer.scene,
+        scene: cena,
         camera: layer.camera,
         view: SceneView.camera,
         time: t,
@@ -71,5 +74,16 @@ void main() {
     final modelos = await carregarMonolitoModelosDe('assets/models/monolito');
     await medir('MONOLITO sem modelos', buildMonolitoTemplate());
     await medir('MONOLITO com modelos', buildMonolitoTemplate(modelos: modelos));
+    // O MESMO, EM RASCUNHO — que e como o preview desenha enquanto toca.
+    await medir(
+      'DERIVA tocando   ',
+      buildDerivaTemplate(astronauta: astronauta),
+      rascunho: true,
+    );
+    await medir(
+      'MONOLITO tocando ',
+      buildMonolitoTemplate(modelos: modelos),
+      rascunho: true,
+    );
   }, timeout: const Timeout(Duration(minutes: 5)));
 }

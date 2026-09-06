@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../editor/application/motor3d_modo.dart';
 import '../../editor/application/proxy_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../../../core/ui/snack.dart';
@@ -102,6 +103,9 @@ class SettingsTab extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 26),
+          const _GroupHeader('Cena 3D'),
+          const _Group(children: [_Motor3DRow()]),
           const SizedBox(height: 26),
           const _GroupHeader('Geral'),
           _Group(
@@ -314,6 +318,58 @@ class _TapRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// QUEM DESENHA A CENA 3D.
+///
+/// O motor em GPU e mais rapido e mais bonito, mas vive fora do Dart:
+/// se ele quebra, o app fecha sem aviso. O app ja se protege sozinho —
+/// depois de uma queda ele volta para o pintor em CPU — e esta linha e
+/// onde a pessoa ve que isso aconteceu, por que, e como desfazer.
+class _Motor3DRow extends StatefulWidget {
+  const _Motor3DRow();
+
+  @override
+  State<_Motor3DRow> createState() => _Motor3DRowState();
+}
+
+class _Motor3DRowState extends State<_Motor3DRow> {
+  @override
+  Widget build(BuildContext context) {
+    final pref = Motor3DPreferencia.instancia;
+    if (pref == null) return const SizedBox.shrink();
+    final aviso = pref.motivoDeNaoTentar;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SegmentedRow<Motor3DModo>(
+          label: 'Motor 3D',
+          values: Motor3DModo.values,
+          selected: pref.modo,
+          labelOf: motor3dModoRotulo,
+          onChanged: (m) async {
+            await pref.definirModo(m);
+            if (mounted) setState(() {});
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          child: Text(
+            aviso.isEmpty
+                ? 'Automatico usa a GPU e desiste sozinho se o app fechar '
+                      'desenhando. Reabra o app depois de trocar.'
+                : 'Desenhando em CPU porque $aviso. Toque em Sempre GPU '
+                      'para tentar de novo, e reabra o app.',
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.muted,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

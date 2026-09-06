@@ -9,6 +9,7 @@ import 'package:vector_math/vector_math.dart' as vm;
 import '../domain/camera3d.dart';
 import '../domain/element3d.dart';
 import '../domain/scene3d.dart';
+import 'motor3d_modo.dart';
 import 'texture_cache.dart';
 
 /// O MOTOR 3D EM GPU.
@@ -52,6 +53,14 @@ class Scene3DGpu {
         Platform.environment.containsKey('FLUTTER_TEST') ||
         !(Platform.isIOS || Platform.isAndroid)) {
       _falhou = true;
+      return;
+    }
+    // A MIGALHA: se a sessao anterior nao voltou de um quadro em GPU,
+    // esta desenha em CPU. Ver Motor3DPreferencia.
+    final pref = Motor3DPreferencia.instancia;
+    if (pref != null && !pref.permiteGpu) {
+      _falhou = true;
+      _motivo = pref.motivoDeNaoTentar;
       return;
     }
     try {
@@ -108,12 +117,17 @@ class Scene3DGpu {
   /// Devolve na hora com o que ja esta pronto. Texturas e o ambiente por
   /// imagem chegam depois, em segundo plano, e chamam [onMudou] para o
   /// quadro ser redesenhado.
-  void sincronizar(Scene3D scene, Duration t, {VoidCallback? onMudou}) {
+  void sincronizar(
+    Scene3D scene,
+    Duration t, {
+    VoidCallback? onMudou,
+    bool rascunho = false,
+  }) {
     _sincronizarNos(scene, t, onMudou);
     _sincronizarLuzes(scene, t);
     _sincronizarAmbiente(scene, t, onMudou);
     _sincronizarNevoa(scene);
-    _sincronizarPos(scene);
+    _sincronizarPos(scene, rascunho);
   }
 
   /// Camera do motor a partir da camera resolvida do dominio, para uma
@@ -453,8 +467,10 @@ class Scene3DGpu {
             castsShadow: l.castsShadow,
             shadowSoftness: 3 + l.softness.clamp(0.0, 1.0) * 14,
             shadowMaxDistance: 5000,
-            shadowCascadeCount: 3,
-            shadowMapResolution: 2048,
+            // Duas cascatas de 1024: quatro vezes menos memoria de GPU
+            // que 3 x 2048, e num celular a diferenca nao se ve.
+            shadowCascadeCount: 2,
+            shadowMapResolution: 1024,
             shadowDepthBias: 0.8,
             shadowNormalBias: 0.8,
             shadowFadeRange: 400,
@@ -492,6 +508,7 @@ class Scene3DGpu {
               innerConeAngle: externo * (1 - l.softness.clamp(0.0, 1.0) * .9),
               outerConeAngle: externo,
               castsShadow: l.castsShadow,
+              shadowMapResolution: 512,
               shadowSoftness: 2 + l.softness * 6,
             )),
             posicao: l.position,
@@ -602,7 +619,7 @@ class Scene3DGpu {
 
   // --------------------------------------------------------------- pos
 
-  void _sincronizarPos(Scene3D scene) {
+  void _sincronizarPos(Scene3D scene, bool rascunho) {
     var emissivo = false;
     for (final n in scene.nodes) {
       if (n.material.emissive > 0) {
@@ -618,8 +635,11 @@ class Scene3DGpu {
       }
       if (emissivo) break;
     }
+    // O bloom monta uma cadeia de mips do tamanho da tela a cada
+    // quadro. Enquanto toca, isso e memoria e banda de GPU trocadas por
+    // um brilho que ninguem esta olhando parado.
     cena.postProcess.bloom
-      ..enabled = emissivo
+      ..enabled = emissivo && !rascunho
       ..threshold = 1.0
       ..intensity = .45
       ..scatter = .7;

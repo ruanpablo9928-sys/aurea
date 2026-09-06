@@ -22,6 +22,14 @@ class PlaybackController {
   final ValueNotifier<Duration> time = ValueNotifier(Duration.zero);
   final ValueNotifier<bool> playing = ValueNotifier(false);
 
+  /// TOCANDO, visto de qualquer lugar.
+  ///
+  /// O preview precisa saber disto para desenhar em rascunho enquanto
+  /// roda — uma cena 3D inteira nao cabe em 33 ms num celular — e quem
+  /// desenha esta longe demais do clock para receber isto por
+  /// parametro.
+  static final ValueNotifier<bool> tocandoAgora = ValueNotifier(false);
+
   /// LOOP: ao chegar no fim, volta ao inicio sem parar o relogio.
   final ValueNotifier<bool> loop = ValueNotifier(false);
 
@@ -95,12 +103,14 @@ class PlaybackController {
     _base = time.value;
     _ticker.start();
     playing.value = true;
+    tocandoAgora.value = true;
     FrameLog.reset();
   }
 
   void pause() {
     if (_ticker.isActive) _ticker.stop();
     playing.value = false;
+    tocandoAgora.value = false;
     // Intervalo atravessando a pausa nao e jitter.
     PreviewStats.clockReset();
   }
