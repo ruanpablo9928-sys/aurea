@@ -7,6 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'caption_highlight_painter.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
@@ -35,6 +36,8 @@ import 'blend_mask.dart';
 import 'gradient4_painter.dart';
 import 'custom_blend.dart';
 import 'linear_light.dart';
+import 'pixel_effect_engine.dart';
+import '../../domain/pixel_effect.dart';
 import '../../domain/bloom.dart';
 import '../../domain/color_space.dart';
 import 'mask_node_editor.dart';
@@ -1962,6 +1965,18 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     var out = child;
     for (final effect in effects) {
       if (!effect.enabled) continue;
+      if (PixelEffectEngine.ready && pixelKernels.containsKey(effect.type)) {
+        out = PixelEffectPass(
+          key: ValueKey('pixel-effect-${effect.id}'),
+          frame: PixelEffectFrame.of(
+            effect,
+            local,
+            pixelScale: math.min(fxWidth, fxHeight) / 1080.0,
+          ),
+          child: out,
+        );
+        continue;
+      }
       switch (effect.type) {
         case EffectType.gaussianBlur:
           // NIVEL 3: o raio e pixel (pensado em 1080p), a borda decide o
@@ -2046,7 +2061,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             final e = 1 / (1 - th);
             final g = e * intensidade;
             final o = -th * 255 * e * intensidade;
-            final fonte = ColorFiltered(
+            Widget fonte = ColorFiltered(
               colorFilter: ColorFilter.matrix(<double>[
                 g * multR,
                 0,
@@ -2071,6 +2086,31 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               ]),
               child: out,
             );
+            if (PixelEffectEngine.ready) {
+              fonte = PixelEffectPass(
+                frame: PixelEffectFrame(21, [
+                  th,
+                  .25,
+                  0,
+                  0,
+                  multR,
+                  multG,
+                  multB,
+                  0,
+                  0,
+                  1,
+                ]),
+                child: out,
+              );
+              fonte = PixelEffectPass(
+                frame: PixelEffectFrame(22, [
+                  math.log(intensidade) / math.ln2,
+                  3,
+                  0,
+                ]),
+                child: fonte,
+              );
+            }
             final tingido = ColorFiltered(
               // srcATop substituia o RGB extraido pela cor solida e
               // ressuscitava pixels abaixo do threshold. Multiplicar
@@ -2448,6 +2488,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 .paramAt('noise_reduction', local)
                 .clamp(0.0, 100.0);
             final reducao = effect.paramAt('downsample', local).clamp(1.0, 8.0);
+            final tonemapping = effect
+                .paramAt('tonemapping', local)
+                .round()
+                .clamp(0, 3);
+            final lensDirt = effect
+                .paramAt('lens_dirt_amount', local)
+                .clamp(0.0, 200.0);
 
             // LIMIAR: so o que passa do valor vira glow. A rampa suave
             // evita a linha reta onde o brilho cruza o limiar — com
@@ -2470,7 +2517,46 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               );
             }
 
-            if (limiar > 0.01) {
+            if (PixelEffectEngine.ready) {
+              // Per-pixel luminance/chroma selection preserves alpha. Tone
+              // response is applied to the source before the SDR blur pyramid;
+              // this is deliberately not described as an HDR intermediate.
+              fonte = PixelEffectPass(
+                frame: PixelEffectFrame(
+                  21,
+                  [
+                    limiar,
+                    suavidade,
+                    0,
+                    modoLimiar.toDouble(),
+                    1,
+                    1,
+                    1,
+                    tintMode.toDouble(),
+                    tintAmt,
+                    satur,
+                  ],
+                  color: [
+                    effect.color.r,
+                    effect.color.g,
+                    effect.color.b,
+                    effect.color.a,
+                  ],
+                  extraColors: [
+                    for (final c in effect.extraColors) ...[c.r, c.g, c.b, c.a],
+                  ],
+                ),
+                child: fonte,
+              );
+              fonte = PixelEffectPass(
+                frame: PixelEffectFrame(22, [
+                  exposure.clamp(-8.0, 3.0),
+                  tonemapping.toDouble(),
+                  lensDirt,
+                ]),
+                child: fonte,
+              );
+            } else if (limiar > 0.01) {
               // O limiar REMAPEIA (limiar -> 0, branco -> 1); a conta
               // mora em bloom.dart, onde da para testa-la.
               final (escala, desl) = glowThresholdMatrix(
@@ -2534,13 +2620,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 child: fonte,
               );
             }
-            if ((satur - 1).abs() > 0.01) {
+            if (!PixelEffectEngine.ready && (satur - 1).abs() > 0.01) {
               fonte = ColorFiltered(
                 colorFilter: ColorFilter.matrix(_saturationMatrix(satur)),
                 child: fonte,
               );
             }
-            if (tintMode != 0 && tintAmt > 0.01) {
+            if (!PixelEffectEngine.ready && tintMode != 0 && tintAmt > 0.01) {
               fonte = ColorFiltered(
                 colorFilter: ColorFilter.mode(
                   effect.color.withValues(alpha: tintAmt),

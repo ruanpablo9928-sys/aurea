@@ -20,6 +20,7 @@ import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
 import '../domain/extrude3d.dart';
 import '../domain/glb_import.dart';
+import '../domain/model_asset3d.dart';
 import 'tracking_service.dart';
 import '../domain/tracker2d.dart';
 import '../domain/fx.dart';
@@ -1294,6 +1295,20 @@ class EditorController extends Notifier<VideoProject> {
       cena.withScene(cena.scene.copyWith(nodes: [...cena.scene.nodes, no])),
     );
     return no.id;
+  }
+
+  String addModel3D(String sceneId, ModelAsset3D model) {
+    final layer = _layer(sceneId);
+    if (layer is! Scene3DLayer) return '';
+    final node = SceneNode(name: model.name, size: 120, modelAsset: model,
+      modelSource: ModelSource3D(path: '', triangles: model.triangleCount,
+        meshes: model.primitives.length, animations: model.clips.length,
+        materials: (model.data['materials'] as List).length,
+        nodeNames: [for (final n in model.nodes) n['name'] as String],
+        animationNames: model.clipNames, lodCount: 1,
+        warning: model.warnings.isEmpty ? null : model.warnings.join(' ')));
+    _replace(layer.withScene(layer.scene.copyWith(nodes: [...layer.scene.nodes, node])));
+    return node.id;
   }
 
   /// Muda a ESPESSURA de um no extrudado, reaproveitando o contorno —

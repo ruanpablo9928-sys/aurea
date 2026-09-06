@@ -13,8 +13,14 @@ import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/shape.dart';
 import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/preview_stage.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/pixel_effect_engine.dart';
 
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await PixelEffectEngine.warmUp();
+    expect(PixelEffectEngine.ready, isTrue);
+  });
   testWidgets('glow preserva threshold e responde a intensidade', (
     tester,
   ) async {

@@ -15,6 +15,7 @@ import 'color_picker_sheet.dart';
 import 'am_widgets.dart';
 import 'curve_panel.dart';
 import '../../application/effect_preset_store.dart';
+import '../../../help/presentation/quick_guide_screen.dart';
 
 /// Painel "Efeitos": LISTA VERTICAL de blocos colapsaveis, um por efeito.
 /// Cabecalho = chevron (colapsa) + nome + "..." (menu) + lixeira. Cada
@@ -23,11 +24,7 @@ import '../../application/effect_preset_store.dart';
 /// em tudo"). O trilho esquerdo tem voltar e o diamante do parametro
 /// selecionado.
 class EffectsPanel extends ConsumerStatefulWidget {
-  const EffectsPanel({
-    super.key,
-    required this.playback,
-    required this.onBack,
-  });
+  const EffectsPanel({super.key, required this.playback, required this.onBack});
 
   final PlaybackController playback;
   final VoidCallback onBack;
@@ -57,7 +54,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   /// parametro ficam de fora porque nao existem no EditorController.
   /// Pede o nome e guarda o efeito como preset da pessoa.
   Future<void> _salvarComoPreset(
-      BuildContext context, String layerId, EffectInstance effect) async {
+    BuildContext context,
+    String layerId,
+    EffectInstance effect,
+  ) async {
     final nome = await _pedirNome(context, effect.spec.name);
     if (nome == null || nome.trim().isEmpty || !context.mounted) return;
     final project = ref.read(editorControllerProvider);
@@ -73,7 +73,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
     );
     await EffectPresetStore.instance.add(preset);
     if (!context.mounted) return;
-    AureaSnack.show(context, 'Preset "${preset.name}" salvo para todos os projetos');
+    AureaSnack.show(
+      context,
+      'Preset "${preset.name}" salvo para todos os projetos',
+    );
   }
 
   Future<String?> _pedirNome(BuildContext context, String inicial) {
@@ -115,13 +118,17 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
     final agora = widget.playback.time.value;
     for (final e in effect.spec.params.entries) {
       controller.editEffectParam(
-          layerId, effect.id, e.key, agora, e.value.initial);
+        layerId,
+        effect.id,
+        e.key,
+        agora,
+        e.value.initial,
+      );
     }
     if (effect.spec.hasColor) {
       controller.setEffectColor(layerId, effect.id, const Color(0xFFFF5566));
     }
   }
-
 
   /// CATALOGO (PR-C4): o gargalo de quem tem muitos efeitos nao e ter —
   /// e ACHAR. Busca com sinonimos, chips por categoria com contador,
@@ -138,7 +145,8 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
       backgroundColor: AmColors.panel,
       isScrollControlled: true,
       constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.62),
+        maxHeight: MediaQuery.of(context).size.height * 0.62,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -147,13 +155,17 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
           final results = query.isNotEmpty
               ? searchEffects(query)
               : (category == null
-                  ? effectSpecs.keys.toList()
-                  : effectsInCategory(category!));
+                    ? effectSpecs.keys.toList()
+                    : effectsInCategory(category!));
 
           return SafeArea(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 14, 16,
-                  10 + MediaQuery.of(sheetContext).viewInsets.bottom),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                14,
+                16,
+                10 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,28 +173,36 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                   Row(
                     children: [
                       const Expanded(
-                        child: Text('Efeitos',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: AmColors.text)),
+                        child: Text(
+                          'Efeitos',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AmColors.text,
+                          ),
+                        ),
                       ),
                       GestureDetector(
-                        onTap: () => setSheetState(
-                            () => showPresets = !showPresets),
+                        onTap: () =>
+                            setSheetState(() => showPresets = !showPresets),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 7),
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
                           decoration: BoxDecoration(
                             color: showPresets
                                 ? AmColors.accentDim
                                 : AmColors.chip,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: const Text('Presets',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: AmColors.accent)),
+                          child: const Text(
+                            'Presets',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AmColors.accent,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -192,16 +212,22 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                     controller: search,
                     placeholder: 'buscar (glow, rgb split, pixelate...)',
                     placeholderStyle: const TextStyle(
-                        fontSize: 13, color: AmColors.muted),
-                    style: const TextStyle(
-                        fontSize: 14, color: AmColors.text),
+                      fontSize: 13,
+                      color: AmColors.muted,
+                    ),
+                    style: const TextStyle(fontSize: 14, color: AmColors.text),
                     prefix: const Padding(
                       padding: EdgeInsets.only(left: 10),
-                      child: Icon(CupertinoIcons.search,
-                          size: 16, color: AmColors.muted),
+                      child: Icon(
+                        CupertinoIcons.search,
+                        size: 16,
+                        color: AmColors.muted,
+                      ),
                     ),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 10),
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: AmColors.chip,
                       borderRadius: BorderRadius.circular(10),
@@ -222,25 +248,26 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                             Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: GestureDetector(
-                                onTap: () => setSheetState(
-                                    () => category = c),
+                                onTap: () => setSheetState(() => category = c),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: category == c
                                         ? AmColors.accentDim
                                         : AmColors.chip,
-                                    borderRadius:
-                                        BorderRadius.circular(9),
+                                    borderRadius: BorderRadius.circular(9),
                                   ),
                                   child: Text(
                                     c == null
                                         ? 'Todos ${effectSpecs.length}'
                                         : '$c ${effectsInCategory(c).length}',
                                     style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AmColors.accent),
+                                      fontSize: 12,
+                                      color: AmColors.accent,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -259,27 +286,34 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                             itemBuilder: (context, i) {
                               final p = factoryPresets()[i];
                               return ListTile(
-                                  leading: const Icon(
-                                      CupertinoIcons.square_stack_3d_down_right,
-                                      color: AmColors.accent,
-                                      size: 20),
-                                  title: Text(p.name,
-                                      style: const TextStyle(
-                                          color: AmColors.text,
-                                          fontSize: 14)),
-                                  subtitle: Text(
-                                    '${p.category} · '
-                                    '${p.effects.length} efeito(s)',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AmColors.muted),
+                                leading: const Icon(
+                                  CupertinoIcons.square_stack_3d_down_right,
+                                  color: AmColors.accent,
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  p.name,
+                                  style: const TextStyle(
+                                    color: AmColors.text,
+                                    fontSize: 14,
                                   ),
-                                  onTap: () {
-                                    controller.applyPreset(
-                                        layerId, p,
-                                        at: widget.playback.time.value);
-                                    Navigator.of(sheetContext).pop();
-                                  },
+                                ),
+                                subtitle: Text(
+                                  '${p.category} · '
+                                  '${p.effects.length} efeito(s)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmColors.muted,
+                                  ),
+                                ),
+                                onTap: () {
+                                  controller.applyPreset(
+                                    layerId,
+                                    p,
+                                    at: widget.playback.time.value,
+                                  );
+                                  Navigator.of(sheetContext).pop();
+                                },
                               );
                             },
                           )
@@ -288,59 +322,67 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                         // de uma vez e trabalho jogado fora, porque so
                         // meia duzia cabe na tela.
                         : results.isEmpty
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(24),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(CupertinoIcons.search,
-                                          size: 30,
-                                          color: AmColors.muted),
-                                      SizedBox(height: 10),
-                                      Text(
-                                        'Nada encontrado. '
-                                        'Tente "glow", "rgb", "pixel" '
-                                        'ou "shake".',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            height: 1.4,
-                                            color: AmColors.muted),
-                                      ),
-                                    ],
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.search,
+                                    size: 30,
+                                    color: AmColors.muted,
+                                  ),
+                                  SizedBox(height: 10),
+                                  Text(
+                                    'Nada encontrado. '
+                                    'Tente "glow", "rgb", "pixel" '
+                                    'ou "shake".',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.4,
+                                      color: AmColors.muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: results.length,
+                            itemBuilder: (context, i) {
+                              final type = results[i];
+                              final spec = effectSpecs[type]!;
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(
+                                  CupertinoIcons.wand_stars,
+                                  color: AmColors.accent,
+                                  size: 20,
+                                ),
+                                title: Text(
+                                  spec.name,
+                                  style: const TextStyle(
+                                    color: AmColors.text,
+                                    fontSize: 14,
                                   ),
                                 ),
-                              )
-                            : ListView.builder(
-                                itemCount: results.length,
-                                itemBuilder: (context, i) {
-                                  final type = results[i];
-                                  final spec = effectSpecs[type]!;
-                                  return ListTile(
-                                    dense: true,
-                                    leading: const Icon(
-                                        CupertinoIcons.wand_stars,
-                                        color: AmColors.accent,
-                                        size: 20),
-                                    title: Text(spec.name,
-                                        style: const TextStyle(
-                                            color: AmColors.text,
-                                            fontSize: 14)),
-                                    subtitle: Text(
-                                      '${spec.category}'
-                                      '${spec.cost > 1 ? ' · custo ${spec.cost}' : ''}',
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AmColors.muted),
-                                    ),
-                                    onTap: () {
-                                      controller.addEffect(layerId, type);
-                                      Navigator.of(sheetContext).pop();
-                                    },
-                                  );
+                                subtitle: Text(
+                                  '${spec.category}'
+                                  '${spec.cost > 1 ? ' · custo ${spec.cost}' : ''}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmColors.muted,
+                                  ),
+                                ),
+                                onTap: () {
+                                  controller.addEffect(layerId, type);
+                                  Navigator.of(sheetContext).pop();
                                 },
-                              ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
@@ -392,34 +434,55 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                children: [
-                  AmRailButton(
-                    onTap: widget.onBack,
-                    child: const Icon(CupertinoIcons.chevron_back,
-                        size: 24, color: AmColors.text),
-                  ),
-                  // Diamante do parametro selecionado, como nos outros
-                  // paineis: apagado e inerte quando nada esta selecionado.
-                  // Com o par 'x|y' em estado misto (so um eixo com
-                  // keyframe aqui, cenario da regua arrastada) o toggle
-                  // cego trocaria o keyframe de eixo. Regra: diamante vazio
-                  // COMPLETA (so onde falta), diamante cheio LIMPA os dois.
-                  AmRailButton(
-                    onTap: sel == null
-                        ? null
-                        : () => controller.toggleEffectKeyframe(
-                            id, sel!.id, t),
-                    child: AmDiamondAdd(
-                        active: selAnimado, filled: selKfAqui),
-                  ),
-                  // CURVA DO EFEITO: o mesmo editor de curvas dos outros
-                  // paineis, sobre o keyframe universal — o easing do
-                  // trecho vale para todos os parametros de uma vez.
-                  AmRailButton(
-                    onTap: sel == null || !sel.hasAnimation
-                        ? null
-                        : () => showTrackCurveSheet(
+              SingleChildScrollView(
+                child: Column(
+                  children: [
+                    AmRailButton(
+                      onTap: widget.onBack,
+                      child: const Icon(
+                        CupertinoIcons.chevron_back,
+                        size: 24,
+                        color: AmColors.text,
+                      ),
+                    ),
+                    // Diamante do parametro selecionado, como nos outros
+                    // paineis: apagado e inerte quando nada esta selecionado.
+                    // Com o par 'x|y' em estado misto (so um eixo com
+                    // keyframe aqui, cenario da regua arrastada) o toggle
+                    // cego trocaria o keyframe de eixo. Regra: diamante vazio
+                    // COMPLETA (so onde falta), diamante cheio LIMPA os dois.
+                    AmRailButton(
+                      onTap: sel == null
+                          ? null
+                          : () =>
+                                controller.toggleEffectKeyframe(id, sel!.id, t),
+                      child: AmDiamondAdd(
+                        active: selAnimado,
+                        filled: selKfAqui,
+                      ),
+                    ),
+                    AmRailButton(
+                      tooltip: 'Como usar os efeitos',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => QuickGuideScreen(
+                            initialQuery: sel?.spec.name ?? '',
+                          ),
+                        ),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.question_circle,
+                        size: 23,
+                        color: AmColors.text,
+                      ),
+                    ),
+                    // CURVA DO EFEITO: o mesmo editor de curvas dos outros
+                    // paineis, sobre o keyframe universal — o easing do
+                    // trecho vale para todos os parametros de uma vez.
+                    AmRailButton(
+                      onTap: sel == null || !sel.hasAnimation
+                          ? null
+                          : () => showTrackCurveSheet(
                               context,
                               ref,
                               widget.playback,
@@ -437,16 +500,17 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                               onSetEase: (seg, e) => controller
                                   .setEffectSegmentEase(id, sel!.id, seg, e),
                               onSetEaseAll: (e) => controller
-                                  .applyEaseToAllEffectSegments(
-                                      id, sel!.id, e),
+                                  .applyEaseToAllEffectSegments(id, sel!.id, e),
                             ),
-                    child: Opacity(
-                      opacity: selAnimado ? 1 : 0.32,
-                      child: AmCurveIcon(
-                          color: selAnimado ? AmColors.text : AmColors.muted),
+                      child: Opacity(
+                        opacity: selAnimado ? 1 : 0.32,
+                        child: AmCurveIcon(
+                          color: selAnimado ? AmColors.text : AmColors.muted,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               Expanded(
                 // REORDENAR PELA ALCA. A ordem dos efeitos e a ordem da
@@ -462,7 +526,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                   onReorderItem: (de, para) {
                     if (para == de) return;
                     controller.reorderEffect(
-                        id, layer.effects[de].id, para - de);
+                      id,
+                      layer.effects[de].id,
+                      para - de,
+                    );
                   },
                   footer: Column(
                     children: [
@@ -491,14 +558,20 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(CupertinoIcons.plus,
-                                  size: 17, color: AmColors.accent),
+                              Icon(
+                                CupertinoIcons.plus,
+                                size: 17,
+                                color: AmColors.accent,
+                              ),
                               SizedBox(width: 8),
-                              Text('Adicionar efeito',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: AmColors.accent)),
+                              Text(
+                                'Adicionar efeito',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AmColors.accent,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -519,35 +592,63 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                         onSubir: i == 0
                             ? null
                             : () => controller.reorderEffect(
-                                id, layer.effects[i].id, -1),
+                                id,
+                                layer.effects[i].id,
+                                -1,
+                              ),
                         onDescer: i == layer.effects.length - 1
                             ? null
                             : () => controller.reorderEffect(
-                                id, layer.effects[i].id, 1),
+                                id,
+                                layer.effects[i].id,
+                                1,
+                              ),
                         onDuplicar: () =>
                             controller.duplicateEffect(id, layer.effects[i].id),
-                        onResetar: () =>
-                            _resetarEfeito(id, layer.effects[i]),
-                        onSalvarPreset: () => _salvarComoPreset(
-                            context, id, layer.effects[i]),
+                        onResetar: () => _resetarEfeito(id, layer.effects[i]),
+                        onSalvarPreset: () =>
+                            _salvarComoPreset(context, id, layer.effects[i]),
                         onSelectParam: (p) =>
                             setState(() => _selectedParam = p),
                         onParam: (key, v) => controller.editEffectParam(
-                            id, layer.effects[i].id, key, t, v),
+                          id,
+                          layer.effects[i].id,
+                          key,
+                          t,
+                          v,
+                        ),
                         // Qualquer diamante do cartao e o diamante do
                         // efeito: keyframe universal neste instante.
-                        onParamKeyframe: (_) => controller
-                            .toggleEffectKeyframe(id, layer.effects[i].id, t),
-                        onToggleEnabled: () => controller
-                            .toggleEffectEnabled(id, layer.effects[i].id),
+                        onParamKeyframe: (_) => controller.toggleEffectKeyframe(
+                          id,
+                          layer.effects[i].id,
+                          t,
+                        ),
+                        onToggleEnabled: () => controller.toggleEffectEnabled(
+                          id,
+                          layer.effects[i].id,
+                        ),
                         onDepth: (d) => controller.setEffectDepth(
-                            id, layer.effects[i].id, d),
+                          id,
+                          layer.effects[i].id,
+                          d,
+                        ),
                         onPronto: (pr) => controller.applyEffectPronto(
-                            id, layer.effects[i].id, pr),
+                          id,
+                          layer.effects[i].id,
+                          pr,
+                        ),
                         onColor: (c) => controller.setEffectColor(
-                            id, layer.effects[i].id, c),
+                          id,
+                          layer.effects[i].id,
+                          c,
+                        ),
                         onExtraColor: (k, c) => controller.setEffectExtraColor(
-                            id, layer.effects[i].id, k, c),
+                          id,
+                          layer.effects[i].id,
+                          k,
+                          c,
+                        ),
                         onRemove: () =>
                             controller.removeEffect(id, layer.effects[i].id),
                       ),
@@ -595,6 +696,7 @@ class _EffectCard extends StatelessWidget {
   final bool expanded;
   final String? selectedParam;
   final VoidCallback onToggleExpanded;
+
   /// Nulo quando o efeito ja esta na ponta: o botao fica esmaecido, nao
   /// some — botao que some troca o lugar dos vizinhos.
   final VoidCallback? onSubir;
@@ -622,8 +724,7 @@ class _EffectCard extends StatelessWidget {
     if (spec.temProfundidades && effect.depth == EffectDepth.pronto) {
       return const [];
     }
-    final entradas = spec.temProfundidades &&
-            effect.depth == EffectDepth.montar
+    final entradas = spec.temProfundidades && effect.depth == EffectDepth.montar
         ? [
             for (final k in spec.montar)
               if (spec.params[k] != null) MapEntry(k, spec.params[k]!),
@@ -632,7 +733,8 @@ class _EffectCard extends StatelessWidget {
     final linhas = <Widget>[];
     for (var i = 0; i < entradas.length; i++) {
       final entry = entradas[i];
-      final ehPar = entry.value.kind == ParamKind.point &&
+      final ehPar =
+          entry.value.kind == ParamKind.point &&
           i + 1 < entradas.length &&
           entradas[i + 1].value.kind == ParamKind.point;
       if (ehPar) {
@@ -641,24 +743,26 @@ class _EffectCard extends StatelessWidget {
         final paramKey = '${effect.id}/${x.key}|${y.key}';
         final xt = effect.track(x.key);
         final yt = effect.track(y.key);
-        linhas.add(_PointRow(
-          paramKey: paramKey,
-          label: x.value.label.replaceFirst(RegExp(r' X$'), ''),
-          xTrack: xt,
-          yTrack: yt,
-          local: local,
-          xMin: x.value.min,
-          xMax: x.value.max,
-          yMin: y.value.min,
-          yMax: y.value.max,
-          selected: selectedParam == paramKey,
-          onSelect: onSelectParam,
-          onChangedX: (v) => onParam(x.key, v),
-          onChangedY: (v) => onParam(y.key, v),
-          // Dois toggles separados, coalescidos num undo so pelo
-          // controller (450 ms).
-          onKeyframe: () => onParamKeyframe(x.key),
-        ));
+        linhas.add(
+          _PointRow(
+            paramKey: paramKey,
+            label: x.value.label.replaceFirst(RegExp(r' X$'), ''),
+            xTrack: xt,
+            yTrack: yt,
+            local: local,
+            xMin: x.value.min,
+            xMax: x.value.max,
+            yMin: y.value.min,
+            yMax: y.value.max,
+            selected: selectedParam == paramKey,
+            onSelect: onSelectParam,
+            onChangedX: (v) => onParam(x.key, v),
+            onChangedY: (v) => onParam(y.key, v),
+            // Dois toggles separados, coalescidos num undo so pelo
+            // controller (450 ms).
+            onKeyframe: () => onParamKeyframe(x.key),
+          ),
+        );
         i++;
         continue;
       }
@@ -667,39 +771,39 @@ class _EffectCard extends StatelessWidget {
       // ponto ficava visivel e inerte.
       linhas.add(switch (entry.value.kind) {
         ParamKind.choice => _ChoiceRow(
-            label: entry.value.label,
-            options: entry.value.options,
-            value: effect
-                .paramAt(entry.key, local)
-                .round()
-                .clamp(0, entry.value.options.length - 1),
-            onChanged: (i) => onParam(entry.key, i.toDouble()),
-          ),
+          label: entry.value.label,
+          options: entry.value.options,
+          value: effect
+              .paramAt(entry.key, local)
+              .round()
+              .clamp(0, entry.value.options.length - 1),
+          onChanged: (i) => onParam(entry.key, i.toDouble()),
+        ),
         ParamKind.seed => _SeedRow(
-            label: entry.value.label,
-            value: effect.paramAt(entry.key, local),
-            onChanged: (v) => onParam(entry.key, v),
-          ),
+          label: entry.value.label,
+          value: effect.paramAt(entry.key, local),
+          onChanged: (v) => onParam(entry.key, v),
+        ),
         ParamKind.toggle => _ToggleRow(
-            label: entry.value.label,
-            value: effect.paramAt(entry.key, local) > 0.5,
-            onChanged: (v) => onParam(entry.key, v ? 1.0 : 0.0),
-          ),
+          label: entry.value.label,
+          value: effect.paramAt(entry.key, local) > 0.5,
+          onChanged: (v) => onParam(entry.key, v ? 1.0 : 0.0),
+        ),
         // Numero (e ponto solteiro) usam a regua; o ponto vem em 0..1.
         _ => _ParamRow(
-            paramKey: '${effect.id}/${entry.key}',
-            label: entry.value.label,
-            track: effect.track(entry.key),
-            kfAqui: effect.hasKeyframeAt(local),
-            animado: effect.hasAnimation,
-            local: local,
-            min: entry.value.min,
-            max: entry.value.max,
-            selected: selectedParam == '${effect.id}/${entry.key}',
-            onSelect: onSelectParam,
-            onChanged: (v) => onParam(entry.key, v),
-            onKeyframe: () => onParamKeyframe(entry.key),
-          ),
+          paramKey: '${effect.id}/${entry.key}',
+          label: entry.value.label,
+          track: effect.track(entry.key),
+          kfAqui: effect.hasKeyframeAt(local),
+          animado: effect.hasAnimation,
+          local: local,
+          min: entry.value.min,
+          max: entry.value.max,
+          selected: selectedParam == '${effect.id}/${entry.key}',
+          onSelect: onSelectParam,
+          onChanged: (v) => onParam(entry.key, v),
+          onKeyframe: () => onParamKeyframe(entry.key),
+        ),
       });
     }
     return linhas;
@@ -779,8 +883,11 @@ class _EffectCard extends StatelessWidget {
                   onTap: onSubir,
                   child: Opacity(
                     opacity: onSubir == null ? 0.32 : 1,
-                    child: const Icon(CupertinoIcons.chevron_up,
-                        size: 20, color: AmColors.text),
+                    child: const Icon(
+                      CupertinoIcons.chevron_up,
+                      size: 20,
+                      color: AmColors.text,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -788,21 +895,30 @@ class _EffectCard extends StatelessWidget {
                   onTap: onDescer,
                   child: Opacity(
                     opacity: onDescer == null ? 0.32 : 1,
-                    child: const Icon(CupertinoIcons.chevron_down,
-                        size: 20, color: AmColors.text),
+                    child: const Icon(
+                      CupertinoIcons.chevron_down,
+                      size: 20,
+                      color: AmColors.text,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(
                   onTap: onDuplicar,
-                  child: const Icon(CupertinoIcons.plus_square_on_square,
-                      size: 20, color: AmColors.text),
+                  child: const Icon(
+                    CupertinoIcons.plus_square_on_square,
+                    size: 20,
+                    color: AmColors.text,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(
                   onTap: onRemove,
-                  child: const Icon(CupertinoIcons.trash,
-                      size: 22, color: AmColors.text),
+                  child: const Icon(
+                    CupertinoIcons.trash,
+                    size: 22,
+                    color: AmColors.text,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 // A ALCA: so ela arrasta. O resto da linha continua
@@ -811,8 +927,11 @@ class _EffectCard extends StatelessWidget {
                   index: index,
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Icon(CupertinoIcons.line_horizontal_3,
-                        size: 22, color: AmColors.muted),
+                    child: Icon(
+                      CupertinoIcons.line_horizontal_3,
+                      size: 22,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ),
               ],
@@ -825,14 +944,15 @@ class _EffectCard extends StatelessWidget {
               // Resetar e salvar como preset moravam dentro do tres
               // pontinhos da linha. Ficam no cartao aberto, que e onde os
               // parametros estao — e onde faz sentido zerar ou guardar.
-              Row(
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: [
                   _ComandoDoEfeito(
                     rotulo: 'Resetar',
                     icone: CupertinoIcons.arrow_counterclockwise,
                     onTap: onResetar,
                   ),
-                  const SizedBox(width: 6),
                   _ComandoDoEfeito(
                     rotulo: 'Salvar preset',
                     icone: CupertinoIcons.square_stack_3d_down_right,
@@ -1078,8 +1198,7 @@ class _PointRow extends StatelessWidget {
     // Animado se qualquer eixo anima; "no cabecote" so se os DOIS tem
     // keyframe aqui — senao o diamante cheio mentiria sobre um deles.
     final animated = xTrack.isAnimated || yTrack.isAnimated;
-    final kfHere =
-        xTrack.hasKeyframeAt(local) && yTrack.hasKeyframeAt(local);
+    final kfHere = xTrack.hasKeyframeAt(local) && yTrack.hasKeyframeAt(local);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
@@ -1120,13 +1239,19 @@ class _PointRow extends StatelessWidget {
           ),
           SizedBox(
             width: 44,
-            child: Text(amNumber(x, 2),
-                textAlign: TextAlign.right, style: _estiloValor),
+            child: Text(
+              amNumber(x, 2),
+              textAlign: TextAlign.right,
+              style: _estiloValor,
+            ),
           ),
           SizedBox(
             width: 44,
-            child: Text(amNumber(y, 2),
-                textAlign: TextAlign.right, style: _estiloValor),
+            child: Text(
+              amNumber(y, 2),
+              textAlign: TextAlign.right,
+              style: _estiloValor,
+            ),
           ),
           CupertinoButton(
             padding: const EdgeInsets.only(left: 8),
@@ -1166,10 +1291,12 @@ class _ChoiceRow extends StatelessWidget {
           // Mesma coluna do nome das linhas com regua (ponto + 88).
           const SizedBox(width: 12),
           SizedBox(
-              width: 88,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AmColors.muted))),
+            width: 88,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AmColors.muted),
+            ),
+          ),
           Expanded(
             child: Wrap(
               spacing: 6,
@@ -1180,16 +1307,20 @@ class _ChoiceRow extends StatelessWidget {
                     onTap: () => onChanged(i),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 11, vertical: 6),
+                        horizontal: 11,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: value == i
-                            ? AmColors.accentDim
-                            : AmColors.chip,
+                        color: value == i ? AmColors.accentDim : AmColors.chip,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(options[i],
-                          style: const TextStyle(
-                              fontSize: 12, color: AmColors.accent)),
+                      child: Text(
+                        options[i],
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AmColors.accent,
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -1223,20 +1354,21 @@ class _SeedRow extends StatelessWidget {
           // Mesma coluna do nome das linhas com regua (ponto + 88).
           const SizedBox(width: 12),
           SizedBox(
-              width: 88,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AmColors.muted))),
-          Text('${value.round()}',
-              style: const TextStyle(
-                  fontSize: 13, color: AmColors.accent)),
+            width: 88,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AmColors.muted),
+            ),
+          ),
+          Text(
+            '${value.round()}',
+            style: const TextStyle(fontSize: 13, color: AmColors.accent),
+          ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: () =>
-                onChanged(((value.round() + 1) % 100).toDouble()),
+            onTap: () => onChanged(((value.round() + 1) % 100).toDouble()),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: AmColors.chip,
                 borderRadius: BorderRadius.circular(8),
@@ -1244,12 +1376,16 @@ class _SeedRow extends StatelessWidget {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(CupertinoIcons.shuffle,
-                      size: 14, color: AmColors.accent),
+                  Icon(
+                    CupertinoIcons.shuffle,
+                    size: 14,
+                    color: AmColors.accent,
+                  ),
                   SizedBox(width: 6),
-                  Text('Sortear',
-                      style: TextStyle(
-                          fontSize: 12, color: AmColors.accent)),
+                  Text(
+                    'Sortear',
+                    style: TextStyle(fontSize: 12, color: AmColors.accent),
+                  ),
                 ],
               ),
             ),
@@ -1279,10 +1415,12 @@ class _ToggleRow extends StatelessWidget {
         // Mesma coluna do nome das linhas com regua (ponto + 88).
         const SizedBox(width: 12),
         SizedBox(
-            width: 88,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 13, color: AmColors.muted))),
+          width: 88,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: AmColors.muted),
+          ),
+        ),
         Transform.scale(
           scale: 0.7,
           child: CupertinoSwitch(
@@ -1412,9 +1550,10 @@ class _BotaoAnalisarState extends State<_BotaoAnalisar> {
                     ? null
                     : () async {
                         setState(() => _rodando = true);
-                        final n = await widget.controller
-                            .analyzeBlobsFor(
-                                widget.layerId, widget.effectId);
+                        final n = await widget.controller.analyzeBlobsFor(
+                          widget.layerId,
+                          widget.effectId,
+                        );
                         if (!context.mounted) return;
                         setState(() => _rodando = false);
                         AureaSnack.show(
@@ -1428,22 +1567,19 @@ class _BotaoAnalisarState extends State<_BotaoAnalisar> {
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: temAnalise
-                        ? AmColors.chip
-                        : AmColors.accentDim,
+                    color: temAnalise ? AmColors.chip : AmColors.accentDim,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     _rodando
                         ? 'Analisando o video...'
                         : (temAnalise
-                            ? 'Analisar de novo'
-                            : 'Analisar o video'),
+                              ? 'Analisar de novo'
+                              : 'Analisar o video'),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color:
-                          temAnalise ? AmColors.text : AmColors.accent,
+                      color: temAnalise ? AmColors.text : AmColors.accent,
                     ),
                   ),
                 ),
@@ -1452,11 +1588,14 @@ class _BotaoAnalisarState extends State<_BotaoAnalisar> {
               Text(
                 temAnalise
                     ? '${dados.frames.length} quadros com caixas gravadas. '
-                        'Desenhar virou consulta: o seek e instantaneo.'
+                          'Desenhar virou consulta: o seek e instantaneo.'
                     : 'Ainda nao analisado — o que aparece e um rastreio '
-                        'simulado, para ajustar a aparencia.',
+                          'simulado, para ajustar a aparencia.',
                 style: const TextStyle(
-                    fontSize: 11, height: 1.35, color: AmColors.muted),
+                  fontSize: 11,
+                  height: 1.35,
+                  color: AmColors.muted,
+                ),
               ),
             ],
           ),
@@ -1536,15 +1675,15 @@ class _CaminhoRow extends StatelessWidget {
       return Expanded(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () =>
-              onDepth(aceso ? EffectDepth.pronto : alvo),
+          onTap: () => onDepth(aceso ? EffectDepth.pronto : alvo),
           child: Container(
             height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: aceso ? AmColors.accent : Colors.transparent,
               border: Border.all(
-                  color: aceso ? AmColors.accent : AmColors.hairline),
+                color: aceso ? AmColors.accent : AmColors.hairline,
+              ),
               borderRadius: BorderRadius.circular(9),
             ),
             child: Text(
@@ -1570,7 +1709,6 @@ class _CaminhoRow extends StatelessWidget {
   }
 }
 
-
 /// UM COMANDO VISIVEL do cartao do efeito. Chip preenchido, sem contorno.
 class _ComandoDoEfeito extends StatelessWidget {
   const _ComandoDoEfeito({
@@ -1585,30 +1723,30 @@ class _ComandoDoEfeito extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(9),
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icone, size: 13, color: AmColors.text),
+          const SizedBox(width: 5),
+          Text(
+            rotulo,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AmColors.text,
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icone, size: 13, color: AmColors.text),
-              const SizedBox(width: 5),
-              Text(
-                rotulo,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AmColors.text,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }

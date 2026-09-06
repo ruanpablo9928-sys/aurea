@@ -11,6 +11,7 @@ import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'curve_panel.dart';
+import 'gradient_fill_sheet.dart';
 import 'layer_menu.dart' show showReasonToast;
 import 'oficio_sheets.dart' show showLayerStylesSheet;
 import 'panel_chrome.dart';
@@ -303,6 +304,18 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
 
         return AmPanelChrome(
           onBack: widget.onBack,
+          acoes: [
+            if (layer.contents.whereType<ShapeGradientFill>().isNotEmpty)
+              TextButton.icon(
+                onPressed: () => showGradientFillSheet(
+                  context,
+                  id,
+                  playback: widget.playback,
+                ),
+                icon: const Icon(Icons.gradient, size: 18),
+                label: const Text('Gradiente'),
+              ),
+          ],
           animado: animado,
           temKfAqui: temKf,
           onCravar: () {

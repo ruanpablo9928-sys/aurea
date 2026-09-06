@@ -29,6 +29,7 @@ import 'am/effects_panel.dart';
 import 'am/layer_menu.dart';
 import 'am/text_animators_panel.dart';
 import 'am/transform_panel.dart';
+import 'am/property_keyframe_context.dart';
 import 'widgets/add_layer_sheet.dart';
 import 'widgets/preview_stage.dart';
 
@@ -71,7 +72,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   final GlobalKey<PointsPanelState> _pointsKey = GlobalKey<PointsPanelState>();
   LayerProp _curveProp = LayerProp.position;
   _Mode _curveReturn = _Mode.transform;
-  TransformTool _tool = TransformTool.rotation;
+  TransformTool _tool = TransformTool.position;
   bool _previewExpanded = false;
 
   @override
@@ -120,23 +121,41 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   String get _title => switch (_mode) {
     _Mode.main => ref.read(editorControllerProvider).name,
-    _Mode.transform => 'Movimentacao e transformacao',
+    _Mode.transform => 'Transformar · ${labelOfProp(propOfTool(_tool))}',
     _Mode.blending => 'Mesclagem e opacidade',
     _Mode.colorFill => 'Cor e preenchimento',
     _Mode.effects => 'Efeitos',
-    _Mode.curve => 'Curva de gradacao',
+    _Mode.curve => 'Curva · ${labelOfProp(_curveProp)}',
     _Mode.animators => 'Animacao de texto',
     _Mode.editShape => 'Editar forma',
     _Mode.editPoints => 'Editar pontos',
   };
 
   void _back() {
+    // Folhas persistentes têm uma entrada local de histórico. Consumi-la
+    // primeiro não remove o editor nem muda sua seleção.
+    if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (_previewExpanded) {
+      setState(() => _previewExpanded = false);
+      return;
+    }
     switch (_mode) {
       case _Mode.editPoints:
         _fecharEditPoints();
         setState(() => _mode = _pointsReturn);
         return;
       case _Mode.main:
+        if (ref.read(multiSelectProvider).isNotEmpty) {
+          ref.read(multiSelectProvider.notifier).state = const {};
+          return;
+        }
+        if (ref.read(selectedLayerProvider) != null) {
+          ref.read(selectedLayerProvider.notifier).state = null;
+          return;
+        }
         // A miniatura do projeto para a tela inicial: capturada AGORA,
         // com o palco ainda vivo; a escrita segue em segundo plano.
         ThumbnailService.instance.capture(
@@ -246,6 +265,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _playback.pause();
     final action = await showLayerMenu(context, ref, layer, _playback);
     if (!mounted || action == null) return;
+    _openLayerAction(layer, action);
+  }
+
+  void _openLayerAction(Layer layer, LayerMenuAction action) {
+    if (ref.read(selectedLayerProvider) != layer.id ||
+        ref.read(editorControllerProvider).layerById(layer.id) == null) {
+      return;
+    }
+    _playback.pause();
     switch (action) {
       case LayerMenuAction.transform:
         setState(() => _mode = _Mode.transform);
@@ -373,8 +401,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   @override
   Widget build(BuildContext context) {
     final selectedId = ref.watch(selectedLayerProvider);
+    final multi = ref.watch(multiSelectProvider);
 
-    ref.listen(editorControllerProvider, (_, updated) {
+    ref.listen<String?>(selectedLayerProvider, (previous, next) {
+      if (previous == next) return;
+      // Um painel/atalho capturado para A não pode editar A após selecionar B.
+      RecentSheets.instance.clear();
+      closeActiveParamSheet(context);
+      _fecharEditPoints();
+      setState(() => _mode = _Mode.main);
+    });
+
+    ref.listen(editorControllerProvider, (previous, updated) {
+      if (previous?.id != updated.id) {
+        RecentSheets.instance.clear();
+        closeActiveParamSheet(context);
+      }
       ref.read(projectsControllerProvider.notifier).upsert(updated);
       _syncVideos();
     });
@@ -463,94 +505,120 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   : layer.maskTimesUs,
           };
 
-    return Scaffold(
-      key: paramSheetHostKey,
-      backgroundColor: AmColors.bg,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                if (!_previewExpanded)
-                  _TopBar(
-                    title: _title,
-                    isMain: _mode == _Mode.main,
-                    onBack: _back,
-                    onLayerMenu: _onTapLayer,
-                    playback: _playback,
-                    trailing: _mode == _Mode.editPoints
-                        ? _PointsHeaderActions(
-                            playback: _playback,
-                            onKeyframe: () =>
-                                _pointsKey.currentState?.toggleKeyframe(),
-                            onAdd: () => _pointsKey.currentState?.addPoint(),
-                          )
-                        : null,
-                  ),
-                // RepaintBoundary: palco, timeline e painel pintam em
-                // camadas separadas — repintar um nao repinta os outros.
-                Expanded(
-                  child: RepaintBoundary(
-                    key: previewStageKey,
-                    child: PreviewStage(playback: _playback, videos: _videos),
-                  ),
-                ),
-                _TransportBar(
-                  playback: _playback,
-                  previewExpanded: _previewExpanded,
-                  onTogglePreview: () =>
-                      setState(() => _previewExpanded = !_previewExpanded),
-                ),
-                // Barra de ACOES fixa (spec barra-de-acoes): comandos
-                // estruturais sempre no mesmo lugar; desabilitado fica
-                // esmaecido, nunca some.
-                if (!_previewExpanded) ...[
-                  _ActionBar(playback: _playback),
-                  RepaintBoundary(
-                    child: AmTimeline(
+    final showTools = _mode == _Mode.main && layer != null && multi.isEmpty;
+    final hasContext =
+        _previewExpanded ||
+        _mode != _Mode.main ||
+        selectedId != null ||
+        multi.isNotEmpty;
+    return PopScope(
+      canPop: !hasContext,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: Scaffold(
+        key: paramSheetHostKey,
+        backgroundColor: AmColors.bg,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  if (!_previewExpanded)
+                    _TopBar(
+                      title: _title,
+                      isMain: _mode == _Mode.main,
+                      onBack: _back,
+                      onLayerMenu: _onTapLayer,
                       playback: _playback,
-                      height: _mode == _Mode.main ? 280 : 116,
-                      singleLayerId: _mode == _Mode.main ? null : selectedId,
-                      playheadColor: pinkPlayhead
-                          ? AmColors.pink
-                          : Colors.white,
-                      onTapLayer: _onTapLayer,
-                      onScrub: _videos.scrub,
-                      activeTimesUs: activeTimesUs,
-                      onForeignKeyframe: _mode == _Mode.main
-                          ? null
-                          : _onForeignKeyframe,
+                      trailing: _mode == _Mode.editPoints
+                          ? _PointsHeaderActions(
+                              playback: _playback,
+                              onKeyframe: () =>
+                                  _pointsKey.currentState?.toggleKeyframe(),
+                              onAdd: () => _pointsKey.currentState?.addPoint(),
+                            )
+                          : null,
+                    ),
+                  // RepaintBoundary: palco, timeline e painel pintam em
+                  // camadas separadas — repintar um nao repinta os outros.
+                  Expanded(
+                    child: RepaintBoundary(
+                      key: previewStageKey,
+                      child: PreviewStage(playback: _playback, videos: _videos),
                     ),
                   ),
-                  // ALTURA CONSTANTE, a mesma para todo painel.
-                  //
-                  // Antes cada painel pedia a sua: o de animadores de texto
-                  // era bem mais alto que o de transformacao. Trocar de
-                  // secao redimensionava o preview, e o enquadramento
-                  // pulava debaixo do dedo bem no momento de conferir o
-                  // enquadramento. O teto de 40% da tela continua, para o
-                  // palco nunca sumir em aparelho baixo; todo painel tem
-                  // rolagem interna.
-                  if (panel != null)
-                    SizedBox(
-                      height: math.min(
-                        372.0,
-                        MediaQuery.sizeOf(context).height * 0.40,
+                  _TransportBar(
+                    playback: _playback,
+                    previewExpanded: _previewExpanded,
+                    onTogglePreview: () =>
+                        setState(() => _previewExpanded = !_previewExpanded),
+                  ),
+                  // Barra de ACOES fixa (spec barra-de-acoes): comandos
+                  // estruturais sempre no mesmo lugar; desabilitado fica
+                  // esmaecido, nunca some.
+                  if (!_previewExpanded) ...[
+                    _ActionBar(playback: _playback),
+                    RepaintBoundary(
+                      child: AmTimeline(
+                        playback: _playback,
+                        height: _mode == _Mode.main
+                            ? (showTools ? 160 : 280)
+                            : 116,
+                        singleLayerId: _mode == _Mode.main ? null : selectedId,
+                        playheadColor: pinkPlayhead
+                            ? AmColors.pink
+                            : Colors.white,
+                        onTapLayer: _onTapLayer,
+                        onScrub: _videos.scrub,
+                        activeTimesUs: activeTimesUs,
+                        onForeignKeyframe: _mode == _Mode.main
+                            ? null
+                            : _onForeignKeyframe,
                       ),
-                      child: RepaintBoundary(child: panel),
                     ),
+                    if (showTools)
+                      SizedBox(
+                        height: 202,
+                        child: LayerToolsDock(
+                          layer: layer,
+                          playback: _playback,
+                          onAction: (action) => _openLayerAction(layer, action),
+                          onMore: () => _onTapLayer(layer),
+                        ),
+                      ),
+                    // ALTURA CONSTANTE, a mesma para todo painel.
+                    //
+                    // Antes cada painel pedia a sua: o de animadores de texto
+                    // era bem mais alto que o de transformacao. Trocar de
+                    // secao redimensionava o preview, e o enquadramento
+                    // pulava debaixo do dedo bem no momento de conferir o
+                    // enquadramento. O teto de 40% da tela continua, para o
+                    // palco nunca sumir em aparelho baixo; todo painel tem
+                    // rolagem interna.
+                    if (panel != null)
+                      SizedBox(
+                        height: math.min(
+                          372.0,
+                          MediaQuery.sizeOf(context).height * 0.40,
+                        ),
+                        child: RepaintBoundary(child: panel),
+                      ),
+                  ],
                 ],
-              ],
-            ),
-            // O "+" agora vive na barra de acoes fixa (spec
-            // barra-de-acoes): sem FAB cobrindo a timeline.
-            if (ref.watch(debugOverlayProvider))
-              Positioned(
-                top: 6,
-                left: 8,
-                child: IgnorePointer(child: _DiagOverlay(playback: _playback)),
               ),
-          ],
+              // O "+" agora vive na barra de acoes fixa (spec
+              // barra-de-acoes): sem FAB cobrindo a timeline.
+              if (ref.watch(debugOverlayProvider))
+                Positioned(
+                  top: 6,
+                  left: 8,
+                  child: IgnorePointer(
+                    child: _DiagOverlay(playback: _playback),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -913,13 +981,16 @@ class _TopBar extends ConsumerWidget {
     // uma camada, ele so LIMPA a selecao (nao sai do editor). Na selecao
     // multipla, sair da selecao nao e voltar de nivel — por isso e um X,
     // nao um chevron; a camada primaria fica e o cabecalho cai para ela.
-    final VoidCallback esquerda = switch (kind) {
-      _HeaderKind.projeto || _HeaderKind.painel => onBack,
-      _HeaderKind.camada =>
-        () => ref.read(selectedLayerProvider.notifier).state = null,
-      _HeaderKind.multipla =>
-        () => ref.read(multiSelectProvider.notifier).state = const {},
-    };
+    final project = ref.watch(editorControllerProvider);
+    final activeId = ref.watch(selectedLayerProvider);
+    final activeName = activeId == null
+        ? null
+        : project.layerById(activeId)?.name;
+    final contextLabel = kind == _HeaderKind.painel && activeName != null
+        ? '${project.name} › $activeName'
+        : kind == _HeaderKind.camada
+        ? project.name
+        : null;
 
     return Container(
       height: 52,
@@ -928,26 +999,44 @@ class _TopBar extends ConsumerWidget {
         children: [
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            onPressed: esquerda,
-            child: Icon(
-              multipla ? CupertinoIcons.xmark : CupertinoIcons.chevron_back,
-              size: 24,
-              color: tinta,
+            key: const ValueKey('editor-back'),
+            onPressed: onBack,
+            child: Tooltip(
+              message: 'Voltar um nível',
+              child: Icon(
+                multipla ? CupertinoIcons.xmark : CupertinoIcons.chevron_back,
+                size: 24,
+                color: tinta,
+              ),
             ),
           ),
           Expanded(
-            child: Text(
-              titulo,
-              textAlign: kind == _HeaderKind.projeto || multipla
-                  ? TextAlign.left
-                  : TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: tinta,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (contextLabel != null)
+                  Text(
+                    contextLabel,
+                    key: const ValueKey('editor-context'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10, color: AmColors.muted),
+                  ),
+                Text(
+                  titulo,
+                  textAlign: kind == _HeaderKind.projeto || multipla
+                      ? TextAlign.left
+                      : TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: contextLabel == null ? 18 : 15,
+                    fontWeight: FontWeight.w700,
+                    color: tinta,
+                  ),
+                ),
+              ],
             ),
           ),
           ...switch (kind) {

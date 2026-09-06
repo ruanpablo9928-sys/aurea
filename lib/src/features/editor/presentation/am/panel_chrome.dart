@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Tooltip;
 
 import 'am_colors.dart';
 import 'am_widgets.dart';
@@ -101,11 +102,7 @@ class AmPanelChrome extends StatelessWidget {
           // com fundo solido — trocar de aba pela direita nao move o
           // botao de cravar keyframe, que fica na esquerda.
           if (abas.isNotEmpty)
-            AmRightTabs(
-              abas: abas,
-              ativa: abaAtiva,
-              onAba: onAba ?? (_) {},
-            ),
+            AmRightTabs(abas: abas, ativa: abaAtiva, onAba: onAba ?? (_) {}),
         ],
       ),
     );
@@ -143,21 +140,38 @@ class AmLeftRail extends StatelessWidget {
       width: 56,
       child: Column(
         children: [
-          AmRailButton(
-            onTap: onBack,
-            child: const Icon(CupertinoIcons.chevron_back,
-                size: 24, color: AmColors.text),
+          Tooltip(
+            message: 'Voltar às ferramentas da camada',
+            child: AmRailButton(
+              onTap: onBack,
+              child: const Icon(
+                CupertinoIcons.chevron_back,
+                size: 24,
+                color: AmColors.text,
+              ),
+            ),
           ),
-          AmRailButton(
-            onTap: onCravar,
-            child: AmDiamondAdd(active: animado, filled: temKfAqui),
+          Tooltip(
+            message: temKfAqui
+                ? 'Remover keyframe neste instante'
+                : 'Adicionar keyframe neste instante',
+            child: AmRailButton(
+              onTap: onCravar,
+              child: AmDiamondAdd(active: animado, filled: temKfAqui),
+            ),
           ),
-          AmRailButton(
-            onTap: animado ? onCurva : null,
-            child: Opacity(
-              opacity: animado && onCurva != null ? 1 : 0.32,
-              child: AmCurveIcon(
-                  color: animado ? AmColors.text : AmColors.muted),
+          Tooltip(
+            message: animado
+                ? 'Editar curva da propriedade'
+                : 'Crie keyframes para editar a curva',
+            child: AmRailButton(
+              onTap: animado ? onCurva : null,
+              child: Opacity(
+                opacity: animado && onCurva != null ? 1 : 0.32,
+                child: AmCurveIcon(
+                  color: animado ? AmColors.text : AmColors.muted,
+                ),
+              ),
             ),
           ),
         ],
@@ -255,51 +269,59 @@ class _AmParamTabsState extends State<AmParamTabs> {
     // largura propria numa lista rolavel: a ultima saia cortada na borda
     // e as alturas variavam — a fileira parecia torta, e o dedo errava
     // o alvo. Se nao couberem, ai sim rolam, com as pontas indicando.
-    return LayoutBuilder(builder: (context, c) {
-      final pedido = widget.abas.fold<double>(
-          16, (acc, a) => acc + _larguraDe(a) + 6);
-      final cabem = pedido <= c.maxWidth;
-      return SizedBox(
-        height: 48,
-        child: cabem
-            ? Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(
-                  children: [
-                    for (final aba in widget.abas)
-                      Expanded(
-                        child: _Aba(
-                          aba: aba,
-                          selecionada: aba.id == widget.ativa,
-                          onTap: () => widget.onAba(aba.id),
-                        ),
-                      ),
-                  ],
-                ),
-              )
-            : Stack(
-                children: [
-                  ListView(
-                    controller: _scroll,
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 6),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final pedido = widget.abas.fold<double>(
+          16,
+          (acc, a) => acc + _larguraDe(a) + 6,
+        );
+        final cabem = pedido <= c.maxWidth;
+        return SizedBox(
+          height: 48,
+          child: cabem
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  child: Row(
                     children: [
                       for (final aba in widget.abas)
-                        _Aba(
-                          aba: aba,
-                          selecionada: aba.id == widget.ativa,
-                          onTap: () => widget.onAba(aba.id),
+                        Expanded(
+                          child: _Aba(
+                            aba: aba,
+                            selecionada: aba.id == widget.ativa,
+                            onTap: () => widget.onAba(aba.id),
+                          ),
                         ),
                     ],
                   ),
-                  if (_temEsquerda) const _Ponta(esquerda: true),
-                  if (_temDireita) const _Ponta(esquerda: false),
-                ],
-              ),
-      );
-    });
+                )
+              : Stack(
+                  children: [
+                    ListView(
+                      controller: _scroll,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      children: [
+                        for (final aba in widget.abas)
+                          _Aba(
+                            aba: aba,
+                            selecionada: aba.id == widget.ativa,
+                            onTap: () => widget.onAba(aba.id),
+                          ),
+                      ],
+                    ),
+                    if (_temEsquerda) const _Ponta(esquerda: true),
+                    if (_temDireita) const _Ponta(esquerda: false),
+                  ],
+                ),
+        );
+      },
+    );
   }
 }
 
@@ -385,7 +407,6 @@ class _Aba extends StatelessWidget {
   }
 }
 
-
 /// UM COMANDO VISIVEL do painel, preso no fim da fileira de abas.
 ///
 /// Chip preenchido, sem contorno. Desligado fica esmaecido em vez de
@@ -423,9 +444,11 @@ class AmPanelAcao extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icone,
-                    size: 14,
-                    color: ligado ? AmColors.accent : AmColors.text),
+                Icon(
+                  icone,
+                  size: 14,
+                  color: ligado ? AmColors.accent : AmColors.text,
+                ),
                 const SizedBox(width: 5),
                 Text(
                   rotulo,
@@ -443,7 +466,6 @@ class AmPanelAcao extends StatelessWidget {
     );
   }
 }
-
 
 /// AS SUB-ABAS DO PARAMETRO, na coluna da direita.
 ///
@@ -480,9 +502,7 @@ class AmRightTabs extends StatelessWidget {
                   margin: const EdgeInsets.fromLTRB(4, 0, 6, 6),
                   padding: const EdgeInsets.symmetric(vertical: 7),
                   decoration: BoxDecoration(
-                    color: ativa == aba.id
-                        ? AmColors.accent
-                        : AmColors.chip,
+                    color: ativa == aba.id ? AmColors.accent : AmColors.chip,
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: Column(
@@ -545,12 +565,9 @@ class _Cantos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => CustomPaint(
-        painter: _CantosPainter(),
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: child,
-        ),
-      );
+    painter: _CantosPainter(),
+    child: Padding(padding: const EdgeInsets.all(6), child: child),
+  );
 }
 
 class _CantosPainter extends CustomPainter {

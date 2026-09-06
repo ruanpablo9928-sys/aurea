@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -21,6 +22,7 @@ class PanoramaCache {
   final Set<String> _loading = {};
   final Set<String> _failed = {};
   final Map<String, Future<void>> _pending = {};
+  int _generation = 0;
 
   EnvironmentSampler? samplerFor(Panorama3D panorama) {
     final path = panorama.sourcePath;
@@ -67,12 +69,13 @@ class PanoramaCache {
 
   Future<void> _load(String key, String path, Panorama3D panorama) async {
     _loading.add(key);
+    final generation = _generation;
     try {
       final bytes = await File(path).readAsBytes();
       final codec = await ui.instantiateImageCodec(
         bytes,
-        targetWidth: 512,
-        targetHeight: 256,
+        targetWidth: 1024,
+        targetHeight: 512,
       );
       final frame = await codec.getNextFrame();
       codec.dispose();
@@ -84,8 +87,11 @@ class PanoramaCache {
         image.height,
         data.buffer.asUint8List(),
       );
-      _ready[key] = _PanoramaCube.fromEquirectangular(pixels, panorama);
       image.dispose();
+      final cube = await Isolate.run(() => _PanoramaCube.fromEquirectangular(pixels, panorama));
+      if (generation != _generation) return;
+      if (_ready.length >= 3) _ready.remove(_ready.keys.first);
+      _ready[key] = cube;
       revision.value++;
     } catch (_) {
       _failed.add(key);
@@ -95,6 +101,7 @@ class PanoramaCache {
   }
 
   void clear() {
+    _generation++;
     _ready.clear();
     _failed.clear();
     revision.value++;
@@ -158,10 +165,15 @@ class _PanoramaPixels {
   EnvironmentSample _pixel(double u, double v) {
     u -= u.floorToDouble();
     v = v.clamp(0.0, 1.0).toDouble();
-    final x = (u * (width - 1)).round().clamp(0, width - 1);
-    final y = (v * (height - 1)).round().clamp(0, height - 1);
-    final i = (y * width + x) * 4;
-    return (r: rgba[i] / 255, g: rgba[i + 1] / 255, b: rgba[i + 2] / 255);
+    final x = u * width - .5, y = (v * height - .5).clamp(0.0, height - 1.0);
+    final x0 = x.floor(), y0 = y.floor(), tx = x - x0, ty = y - y0;
+    double channel(int c) {
+      double at(int xx, int yy) => rgba[((yy.clamp(0, height-1)) * width + (xx % width)) * 4 + c] / 255;
+      final a = at(x0, y0)*(1-tx) + at(x0+1, y0)*tx;
+      final b = at(x0, y0+1)*(1-tx) + at(x0+1, y0+1)*tx;
+      return a*(1-ty) + b*ty;
+    }
+    return (r: channel(0), g: channel(1), b: channel(2));
   }
 
   static EnvironmentSample _edgeAverage(
@@ -195,7 +207,7 @@ class _PanoramaCube {
     _PanoramaPixels source,
     Panorama3D panorama,
   ) {
-    const side = 128;
+    const side = 256;
     final base = [
       for (var face = 0; face < 6; face++) Float32List(side * side * 3),
     ];
@@ -219,7 +231,6 @@ class _PanoramaCube {
 
     final levels = <List<Float32List>>[base];
     final sizes = <int>[side];
-    var previous = base;
     var previousSize = side;
     while (previousSize > 1) {
       final size = math.max(1, previousSize ~/ 2);
@@ -229,23 +240,33 @@ class _PanoramaCube {
       for (var face = 0; face < 6; face++) {
         for (var y = 0; y < size; y++) {
           for (var x = 0; x < size; x++) {
-            for (var channel = 0; channel < 3; channel++) {
-              var sum = 0.0;
-              for (var oy = 0; oy < 2; oy++) {
-                for (var ox = 0; ox < 2; ox++) {
-                  final px = math.min(previousSize - 1, x * 2 + ox);
-                  final py = math.min(previousSize - 1, y * 2 + oy);
-                  sum += previous[face][(py * previousSize + px) * 3 + channel];
-                }
-              }
-              next[face][(y * size + x) * 3 + channel] = sum / 4;
+            final normal = _faceDirection(face, (x+.5)/size*2-1, (y+.5)/size*2-1);
+            final up = normal.z.abs() < .999 ? const Vec3(0,0,1) : const Vec3(1,0,0);
+            final tangent = up.cross(normal).normalized, bitangent = normal.cross(tangent);
+            final rough = levels.length / 8.0, alpha = rough * rough;
+            var r = 0.0, g = 0.0, b = 0.0, total = 0.0;
+            // Deterministic Hammersley/GGX importance sampling, across cube
+            // boundaries. Rough faces must not average only their own face.
+            for (var k = 0; k < 32; k++) {
+              var bits = k, inv = 0.0, fraction = .5;
+              for (var bit = 0; bit < 5; bit++) { inv += (bits & 1)*fraction; bits >>= 1; fraction *= .5; }
+              final phi = 2*math.pi*k/32;
+              final cosTheta = math.sqrt((1-inv)/(1+(alpha*alpha-1)*inv));
+              final sinTheta = math.sqrt(math.max(0, 1-cosTheta*cosTheta));
+              final half = tangent*(math.cos(phi)*sinTheta) + bitangent*(math.sin(phi)*sinTheta) + normal*cosTheta;
+              final light = half*(2*normal.dot(half)) - normal;
+              final weight = math.max(0.0, normal.dot(light));
+              if (weight == 0) continue;
+              final sample = source.sampleDirection(light, panorama);
+              r += sample.r*weight; g += sample.g*weight; b += sample.b*weight; total += weight;
             }
+            final at = (y*size+x)*3;
+            next[face][at] = r/total; next[face][at+1] = g/total; next[face][at+2] = b/total;
           }
         }
       }
       levels.add(next);
       sizes.add(size);
-      previous = next;
       previousSize = size;
     }
     return _PanoramaCube(levels, sizes);
@@ -272,11 +293,22 @@ class _PanoramaCube {
   EnvironmentSample _sampleLevel(int level, Vec3 direction) {
     final mapped = _directionToFace(direction.normalized);
     final size = sizes[level];
-    final x = (((mapped.u + 1) * 0.5) * (size - 1)).round().clamp(0, size - 1);
-    final y = (((mapped.v + 1) * 0.5) * (size - 1)).round().clamp(0, size - 1);
-    final index = (y * size + x) * 3;
-    final face = levels[level][mapped.face];
-    return (r: face[index], g: face[index + 1], b: face[index + 2]);
+    final x = (mapped.u+1)*.5*size-.5, y = (mapped.v+1)*.5*size-.5;
+    final ix = x.floor(), iy = y.floor(), tx = x-ix, ty = y-iy;
+    double channel(int c) {
+      double at(int px, int py) {
+        var face = mapped.face;
+        if (px < 0 || px >= size || py < 0 || py >= size) {
+          final remap = _directionToFace(_faceDirection(face, (px+.5)/size*2-1, (py+.5)/size*2-1));
+          face = remap.face;
+          px = ((remap.u+1)*.5*size).floor().clamp(0, size-1);
+          py = ((remap.v+1)*.5*size).floor().clamp(0, size-1);
+        }
+        return levels[level][face][(py*size+px)*3+c];
+      }
+      return (at(ix,iy)*(1-tx)+at(ix+1,iy)*tx)*(1-ty) + (at(ix,iy+1)*(1-tx)+at(ix+1,iy+1)*tx)*ty;
+    }
+    return (r: channel(0), g: channel(1), b: channel(2));
   }
 
   static Vec3 _faceDirection(int face, double u, double v) => switch (face) {

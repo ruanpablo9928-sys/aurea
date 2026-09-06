@@ -386,10 +386,23 @@ class Camera3D {
     final target = kind == CameraKind.twoNode
         ? pointOfInterestAt(t)
         : pos + forwardAt(t) * 1000;
-    return RenderCamera(
+    final base = RenderCamera(
       position: pos,
       target: target,
       focalLength: focalLength.valueAt(t),
+      filmWidth: filmWidth,
+      orthographic: orthographic,
+    );
+    // Roll must rotate the camera's own up vector, including when looking
+    // almost vertically down a shaft. World-Z rotation is not camera roll.
+    final roll = (orientZ.valueAt(t) + rotZ.valueAt(t)) * math.pi / 180;
+    if (roll.abs() < 1e-12) return base;
+    final basis = cameraBasis(base);
+    return RenderCamera(
+      position: pos,
+      target: target,
+      up: basis.up * math.cos(roll) + basis.right * math.sin(roll),
+      focalLength: base.focalLength,
       filmWidth: filmWidth,
       orthographic: orthographic,
     );

@@ -44,6 +44,9 @@ void main() {
   // backend OpenGL ES do Impeller o eixo Y chega invertido — sem isto a
   // camada saia de cabeca para baixo em aparelho Android sem Vulkan.
   vec2 uv = FlutterFragCoord().xy / uSize;
+  #ifdef IMPELLER_TARGET_OPENGLES
+  uv.y = 1.0 - uv.y;
+  #endif
   vec4 p = texture(uTexture, uv);
 
   float a = p.a;

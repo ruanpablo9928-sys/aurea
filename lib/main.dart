@@ -9,6 +9,7 @@ import 'src/core/storage/prefs.dart';
 import 'src/features/editor/application/font_service.dart';
 import 'src/features/editor/presentation/widgets/custom_blend.dart';
 import 'src/features/editor/presentation/widgets/linear_light.dart';
+import 'src/features/editor/presentation/widgets/pixel_effect_engine.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +19,8 @@ Future<void> main() async {
   unawaited(CustomBlendBox.warmUp());
   // A curva do sRGB: sem ela, glow e desfoque somam luz no espaco
   // errado e saem acinzentados.
-  unawaited(LinearLight.warmUp());
+  // Resolve before opening a project: preview and export start on the same backend.
+  await Future.wait([LinearLight.warmUp(), PixelEffectEngine.warmUp()]);
   // As fontes importadas precisam ser registradas de novo a cada
   // abertura: o registro do Flutter vive so enquanto o processo vive.
   await FontService.instance.loadAll();

@@ -193,6 +193,7 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
                     width: 52,
                     height: 52,
                     child: IconButton(
+                      tooltip: 'Fechar painel',
                       padding: EdgeInsets.zero,
                       onPressed: _fecha,
                       icon: const Icon(
@@ -203,15 +204,17 @@ class _ParamSheetShellState extends State<ParamSheetShell> {
                     ),
                   ),
                   if (widget.title != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Text(
-                        widget.title!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AmColors.muted,
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: Text(
+                          widget.title!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AmColors.muted,
+                          ),
                         ),
                       ),
                     ),

@@ -16,7 +16,7 @@ class AureaAutor {
   static const email = 'ruanpablombl@gmail.com';
   static const instagram = 'ofruanzitwo';
   static const tiktok = 'ruanzitwo';
-  static const versao = '1.0.0-beta';
+  static const versao = '1.2.0 (35) · FX V2 beta';
 }
 
 enum _Tipo { bug, ferramenta, efeito, outro }

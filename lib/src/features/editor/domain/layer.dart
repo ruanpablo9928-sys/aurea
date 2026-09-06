@@ -2410,6 +2410,7 @@ class Scene3DLayer extends Layer {
   Set<int> get moduleTimesUs {
     final out = <int>{};
     for (final n in scene.nodes) {
+      out.addAll(n.modelMotion.keys.map((k) => (k.seconds * 1e6).round()));
       out
         ..addAll(_times(n.x.keyframes))
         ..addAll(_times(n.y.keyframes))
@@ -2419,15 +2420,29 @@ class Scene3DLayer extends Layer {
         ..addAll(_times(n.rotZ.keyframes))
         ..addAll(_times(n.scale.keyframes));
     }
-    out
-      ..addAll(_times(camera.posX.keyframes))
-      ..addAll(_times(camera.posY.keyframes))
-      ..addAll(_times(camera.posZ.keyframes))
-      ..addAll(_times(camera.poiX.keyframes))
-      ..addAll(_times(camera.poiY.keyframes))
-      ..addAll(_times(camera.poiZ.keyframes))
-      ..addAll(_times(camera.focalLength.keyframes))
-      ..addAll(_times(camera.rotY.keyframes));
+    for (final c in allCameras) {
+      for (final track in [
+        c.posX,
+        c.posY,
+        c.posZ,
+        c.poiX,
+        c.poiY,
+        c.poiZ,
+        c.orientX,
+        c.orientY,
+        c.orientZ,
+        c.rotX,
+        c.rotY,
+        c.rotZ,
+        c.focalLength,
+      ]) {
+        out.addAll(_times(track.keyframes));
+      }
+    }
+    for (final shot in shots) {
+      out.add(shot.time.inMicroseconds);
+      if (!shot.isCut) out.add((shot.time + shot.transition).inMicroseconds);
+    }
     return out;
   }
 

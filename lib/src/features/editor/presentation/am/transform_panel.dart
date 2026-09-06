@@ -10,17 +10,18 @@ import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'panel_chrome.dart';
+import 'property_keyframe_context.dart';
 
 enum TransformTool { position, rotation, scale, skew, pivot, opacity }
 
 LayerProp propOfTool(TransformTool tool) => switch (tool) {
-      TransformTool.position => LayerProp.position,
-      TransformTool.rotation => LayerProp.rotation,
-      TransformTool.scale => LayerProp.scale,
-      TransformTool.skew => LayerProp.skew,
-      TransformTool.pivot => LayerProp.pivot,
-      TransformTool.opacity => LayerProp.opacity,
-    };
+  TransformTool.position => LayerProp.position,
+  TransformTool.rotation => LayerProp.rotation,
+  TransformTool.scale => LayerProp.scale,
+  TransformTool.skew => LayerProp.skew,
+  TransformTool.pivot => LayerProp.pivot,
+  TransformTool.opacity => LayerProp.opacity,
+};
 
 /// Painel "Movimentacao e transformacao": trilho esquerdo (voltar,
 /// keyframe, curva), controle central com navegacao de keyframes
@@ -47,6 +48,13 @@ class TransformPanel extends ConsumerStatefulWidget {
 
 class _TransformPanelState extends ConsumerState<TransformPanel> {
   bool _scaleLinked = true;
+  final _bodyScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _bodyScroll.dispose();
+    super.dispose();
+  }
 
   LayerProp get _prop => propOfTool(widget.tool);
 
@@ -68,29 +76,22 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
       builder: (context, t, _) {
         final local = layer.localTime(t);
         // Rotacao: keyframe e GLOBAL entre os eixos X/Y/Z.
-        final hasKfHere = switch (widget.tool) {
-          TransformTool.position => layer.position.hasKeyframeAt(local),
-          TransformTool.rotation => layer.rotation.hasKeyframeAt(local) ||
-              layer.rotationX.hasKeyframeAt(local) ||
-              layer.rotationY.hasKeyframeAt(local),
-          TransformTool.scale => layer.scaleX.hasKeyframeAt(local),
-          TransformTool.skew => layer.skewX.hasKeyframeAt(local),
-          TransformTool.pivot => layer.pivot.hasKeyframeAt(local),
-          TransformTool.opacity => layer.opacity.hasKeyframeAt(local),
-        };
-        final animated = switch (widget.tool) {
-          TransformTool.position => layer.position.isAnimated,
-          TransformTool.rotation => layer.rotation.isAnimated ||
-              layer.rotationX.isAnimated ||
-              layer.rotationY.isAnimated,
-          TransformTool.scale => layer.scaleX.isAnimated,
-          TransformTool.skew => layer.skewX.isAnimated,
-          TransformTool.pivot => layer.pivot.isAnimated,
-          TransformTool.opacity => layer.opacity.isAnimated,
-        };
+        final times = keyframeTimesForProp(layer, _prop);
+        // Mesmo epsilon de 8 ms das trilhas (scrub arredonda ao frame).
+        final hasKfHere = times.any(
+          (us) => (us - local.inMicroseconds).abs() < 8000,
+        );
+        final animated = times.isNotEmpty;
 
         return _buildBody(
-            context, controller, id, layer, t, hasKfHere, animated);
+          context,
+          controller,
+          id,
+          layer,
+          t,
+          hasKfHere,
+          animated,
+        );
       },
     );
   }
@@ -104,83 +105,131 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     bool hasKfHere,
     bool animated,
   ) {
-    return AmPanelChrome(
-      onBack: widget.onBack,
-      animado: animated,
-      temKfAqui: hasKfHere,
-      // Le o relogio NO TOQUE: o keyframe cai exatamente onde o cabecote
-      // esta agora, nunca num tempo capturado antes.
-      onCravar: () =>
-          controller.toggleKeyframe(id, widget.playback.time.value, _prop),
-      onCurva: () => widget.onOpenCurve(_prop),
-      // RESETAR era o unico item do `...`; agora e botao, com o nome do
-      // que vai ser resetado escrito nele.
-      acoes: [
-        AmPanelAcao(
-          rotulo: 'Resetar',
-          icone: CupertinoIcons.arrow_counterclockwise,
-          onTap: () => controller.resetProp(id, _prop),
+    return Column(
+      children: [
+        PropertyKeyframeContext(
+          layer: layer,
+          prop: _prop,
+          time: t,
+          onSeek: (time) {
+            widget.playback.pause();
+            widget.playback.seek(time);
+          },
+        ),
+        Expanded(
+          child: AmPanelChrome(
+            onBack: widget.onBack,
+            animado: animated,
+            temKfAqui: hasKfHere,
+            // Le o relogio NO TOQUE: o keyframe cai exatamente onde o cabecote
+            // esta agora, nunca num tempo capturado antes.
+            onCravar: () => controller.toggleKeyframe(
+              id,
+              widget.playback.time.value,
+              _prop,
+            ),
+            onCurva: () => widget.onOpenCurve(_prop),
+            // RESETAR era o unico item do `...`; agora e botao, com o nome do
+            // que vai ser resetado escrito nele.
+            acoes: [
+              AmPanelAcao(
+                rotulo: 'Resetar',
+                icone: CupertinoIcons.arrow_counterclockwise,
+                onTap: () => controller.resetProp(id, _prop),
+              ),
+            ],
+            abas: [
+              ParamTab(
+                id: TransformTool.position.name,
+                label: 'Mover',
+                icone: CupertinoIcons.move,
+                animated: layer.position.isAnimated,
+              ),
+              ParamTab(
+                id: TransformTool.rotation.name,
+                label: 'Girar',
+                icone: CupertinoIcons.rotate_right,
+                animated:
+                    layer.rotation.isAnimated ||
+                    layer.rotationX.isAnimated ||
+                    layer.rotationY.isAnimated,
+              ),
+              ParamTab(
+                id: TransformTool.scale.name,
+                label: 'Escalar',
+                icone: CupertinoIcons.arrow_up_left_arrow_down_right,
+                animated: layer.scaleX.isAnimated || layer.scaleY.isAnimated,
+              ),
+              ParamTab(
+                id: TransformTool.skew.name,
+                label: 'Inclinar',
+                icone: CupertinoIcons.rectangle_expand_vertical,
+                animated: layer.skewX.isAnimated || layer.skewY.isAnimated,
+              ),
+              ParamTab(
+                id: TransformTool.pivot.name,
+                label: 'Pivo',
+                icone: CupertinoIcons.smallcircle_circle,
+                animated: layer.pivot.isAnimated,
+              ),
+              ParamTab(
+                id: TransformTool.opacity.name,
+                label: 'Opacid.',
+                icone: CupertinoIcons.circle_lefthalf_fill,
+                animated: layer.opacity.isAnimated,
+              ),
+            ],
+            abaAtiva: widget.tool.name,
+            onAba: (nome) => widget.onToolChanged(
+              TransformTool.values.firstWhere((e) => e.name == nome),
+            ),
+            corpo: LayoutBuilder(
+              builder: (context, constraints) => Scrollbar(
+                controller: _bodyScroll,
+                thumbVisibility: constraints.maxHeight < 270,
+                child: SingleChildScrollView(
+                  controller: _bodyScroll,
+                  child: SizedBox(
+                    height: math.max(270, constraints.maxHeight),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
+                      child: switch (widget.tool) {
+                        TransformTool.position => _PositionControl(
+                          layer: layer,
+                          playback: widget.playback,
+                        ),
+                        TransformTool.rotation => _RotationControl(
+                          layer: layer,
+                          playback: widget.playback,
+                        ),
+                        TransformTool.scale => _ScaleControl(
+                          layer: layer,
+                          playback: widget.playback,
+                          linked: _scaleLinked,
+                          onToggleLink: () =>
+                              setState(() => _scaleLinked = !_scaleLinked),
+                        ),
+                        TransformTool.skew => _SkewControl(
+                          layer: layer,
+                          playback: widget.playback,
+                        ),
+                        TransformTool.pivot => _PivotControl(
+                          layer: layer,
+                          playback: widget.playback,
+                        ),
+                        TransformTool.opacity => _OpacityControl(
+                          layer: layer,
+                          playback: widget.playback,
+                        ),
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ],
-      abas: [
-        ParamTab(
-            id: TransformTool.position.name,
-            label: 'Mover',
-            icone: CupertinoIcons.move,
-            animated: layer.position.isAnimated),
-        ParamTab(
-            id: TransformTool.rotation.name,
-            label: 'Girar',
-            icone: CupertinoIcons.rotate_right,
-            animated: layer.rotation.isAnimated ||
-                layer.rotationX.isAnimated ||
-                layer.rotationY.isAnimated),
-        ParamTab(
-            id: TransformTool.scale.name,
-            label: 'Escalar',
-            icone: CupertinoIcons.arrow_up_left_arrow_down_right,
-            animated: layer.scaleX.isAnimated || layer.scaleY.isAnimated),
-        ParamTab(
-            id: TransformTool.skew.name,
-            label: 'Inclinar',
-            icone: CupertinoIcons.rectangle_expand_vertical,
-            animated: layer.skewX.isAnimated || layer.skewY.isAnimated),
-        ParamTab(
-            id: TransformTool.pivot.name,
-            label: 'Pivo',
-            icone: CupertinoIcons.smallcircle_circle,
-            animated: layer.pivot.isAnimated),
-        ParamTab(
-            id: TransformTool.opacity.name,
-            label: 'Opacid.',
-            icone: CupertinoIcons.circle_lefthalf_fill,
-            animated: layer.opacity.isAnimated),
-      ],
-      abaAtiva: widget.tool.name,
-      onAba: (nome) => widget.onToolChanged(
-          TransformTool.values.firstWhere((e) => e.name == nome)),
-      corpo: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
-        child: switch (widget.tool) {
-          TransformTool.position =>
-            _PositionControl(layer: layer, playback: widget.playback),
-          TransformTool.rotation =>
-            _RotationControl(layer: layer, playback: widget.playback),
-          TransformTool.scale => _ScaleControl(
-              layer: layer,
-              playback: widget.playback,
-              linked: _scaleLinked,
-              onToggleLink: () =>
-                  setState(() => _scaleLinked = !_scaleLinked),
-            ),
-          TransformTool.skew =>
-            _SkewControl(layer: layer, playback: widget.playback),
-          TransformTool.pivot =>
-            _PivotControl(layer: layer, playback: widget.playback),
-          TransformTool.opacity =>
-            _OpacityControl(layer: layer, playback: widget.playback),
-        },
-      ),
     );
   }
 
@@ -205,7 +254,10 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
   Offset _accum = Offset.zero;
 
   Future<void> _pickLinkSource(
-      BuildContext context, WidgetRef ref, Duration t) async {
+    BuildContext context,
+    WidgetRef ref,
+    Duration t,
+  ) async {
     final project = ref.read(editorControllerProvider);
     final controller = ref.read(editorControllerProvider.notifier);
     await showModalBottomSheet<void>(
@@ -217,20 +269,29 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
           children: [
             const Padding(
               padding: EdgeInsets.all(14),
-              child: Text('Seguir a posicao de...',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text)),
+              child: Text(
+                'Seguir a posicao de...',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text,
+                ),
+              ),
             ),
             for (final other in project.layers)
               if (other.id != layer.id)
                 ListTile(
-                  title: Text(other.name,
-                      style: const TextStyle(color: AmColors.text)),
+                  title: Text(
+                    other.name,
+                    style: const TextStyle(color: AmColors.text),
+                  ),
                   onTap: () {
                     controller.linkProperty(
-                        layer.id, LayerProp.position, other.id, t);
+                      layer.id,
+                      LayerProp.position,
+                      other.id,
+                      t,
+                    );
                     Navigator.of(sheetContext).pop();
                   },
                 ),
@@ -296,8 +357,10 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
         Row(
           children: [
             const SizedBox(width: 4),
-            const Text('3D',
-                style: TextStyle(fontSize: 12, color: AmColors.muted)),
+            const Text(
+              '3D',
+              style: TextStyle(fontSize: 12, color: AmColors.muted),
+            ),
             Transform.scale(
               scale: 0.72,
               child: CupertinoSwitch(
@@ -310,8 +373,8 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
             // Pickwhip: seguir a posicao de outra camada.
             GestureDetector(
               onTap: link != null
-                  ? () => controller.unlinkProperty(
-                      layer.id, LayerProp.position)
+                  ? () =>
+                        controller.unlinkProperty(layer.id, LayerProp.position)
                   : () => _pickLinkSource(context, ref, t),
               child: Row(
                 children: [
@@ -320,17 +383,15 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
                         ? CupertinoIcons.link_circle_fill
                         : CupertinoIcons.link,
                     size: 18,
-                    color:
-                        link != null ? AmColors.accent : AmColors.muted,
+                    color: link != null ? AmColors.accent : AmColors.muted,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     link != null ? 'Vinculado' : 'Vincular',
                     style: TextStyle(
-                        fontSize: 11,
-                        color: link != null
-                            ? AmColors.accent
-                            : AmColors.muted),
+                      fontSize: 11,
+                      color: link != null ? AmColors.accent : AmColors.muted,
+                    ),
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -352,8 +413,9 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanStart: (_) {
-              _dragStart = layer.position
-                  .valueAt(layer.localTime(playback.time.value));
+              _dragStart = layer.position.valueAt(
+                layer.localTime(playback.time.value),
+              );
               _accum = Offset.zero;
             },
             onPanUpdate: (d) => _onPadUpdate(d.delta),
@@ -368,9 +430,10 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
                   children: [
                     Icon(Icons.open_with, size: 30, color: AmColors.muted),
                     SizedBox(height: 4),
-                    Text('Arraste para mover (alinha no eixo)',
-                        style:
-                            TextStyle(fontSize: 12, color: AmColors.muted)),
+                    Text(
+                      'Arraste para mover (alinha no eixo)',
+                      style: TextStyle(fontSize: 12, color: AmColors.muted),
+                    ),
                   ],
                 ),
               ),
@@ -399,9 +462,21 @@ class _PivotControl extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AmValueChip(text: amNumber(pivot.dx), label: 'Pivo X', width: 112),
+            Expanded(
+              child: AmValueChip(
+                text: amNumber(pivot.dx),
+                label: 'Pivo X',
+                width: double.infinity,
+              ),
+            ),
             const SizedBox(width: 18),
-            AmValueChip(text: amNumber(pivot.dy), label: 'Pivo Y', width: 112),
+            Expanded(
+              child: AmValueChip(
+                text: amNumber(pivot.dy),
+                label: 'Pivo Y',
+                width: double.infinity,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -410,8 +485,7 @@ class _PivotControl extends ConsumerWidget {
             behavior: HitTestBehavior.opaque,
             onPanUpdate: (d) =>
                 controller.editPivot(layer.id, t, pivot + d.delta * 2),
-            onDoubleTap: () =>
-                controller.editPivot(layer.id, t, Offset.zero),
+            onDoubleTap: () => controller.editPivot(layer.id, t, Offset.zero),
             child: Container(
               decoration: BoxDecoration(
                 color: AmColors.bg.withValues(alpha: 0.45),
@@ -421,13 +495,17 @@ class _PivotControl extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.filter_center_focus,
-                        size: 32, color: AmColors.muted),
+                    Icon(
+                      Icons.filter_center_focus,
+                      size: 32,
+                      color: AmColors.muted,
+                    ),
                     SizedBox(height: 6),
-                    Text('Arraste o ponto de giro\n(toque duplo = centro)',
-                        textAlign: TextAlign.center,
-                        style:
-                            TextStyle(fontSize: 12, color: AmColors.muted)),
+                    Text(
+                      'Arraste o ponto de giro\n(toque duplo = centro)',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: AmColors.muted),
+                    ),
                   ],
                 ),
               ),
@@ -472,7 +550,10 @@ class _RotationControl extends ConsumerWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              CustomPaint(size: size, painter: _DialPainter(radius: radius)),
+              CustomPaint(
+                size: size,
+                painter: _DialPainter(radius: radius),
+              ),
               Container(
                 width: 190,
                 height: 62,
@@ -524,11 +605,13 @@ class _RotationControl extends ConsumerWidget {
         Row(
           children: [
             const SizedBox(
-                width: 44,
-                child: Text('3D X',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(fontSize: 12, color: AmColors.muted))),
+              width: 44,
+              child: Text(
+                '3D X',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AmColors.muted),
+              ),
+            ),
             Expanded(
               child: AmTickRuler(
                 value: rx,
@@ -536,27 +619,30 @@ class _RotationControl extends ConsumerWidget {
                 max: 1080,
                 unitsPerPixel: 0.8,
                 height: 40,
-                onChanged: (v) =>
-                    controller.editRotationX(layer.id, t, v),
+                onChanged: (v) => controller.editRotationX(layer.id, t, v),
               ),
             ),
             SizedBox(
-                width: 62,
-                child: Text('${amNumber(rx, 0)}°',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 13, color: AmColors.accent))),
+              width: 62,
+              child: Text(
+                '${amNumber(rx, 0)}°',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: AmColors.accent),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
         Row(
           children: [
             const SizedBox(
-                width: 44,
-                child: Text('3D Y',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(fontSize: 12, color: AmColors.muted))),
+              width: 44,
+              child: Text(
+                '3D Y',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AmColors.muted),
+              ),
+            ),
             Expanded(
               child: AmTickRuler(
                 value: ry,
@@ -565,16 +651,17 @@ class _RotationControl extends ConsumerWidget {
                 unitsPerPixel: 0.8,
                 accentCenter: false,
                 height: 40,
-                onChanged: (v) =>
-                    controller.editRotationY(layer.id, t, v),
+                onChanged: (v) => controller.editRotationY(layer.id, t, v),
               ),
             ),
             SizedBox(
-                width: 62,
-                child: Text('${amNumber(ry, 0)}°',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 13, color: AmColors.accent))),
+              width: 62,
+              child: Text(
+                '${amNumber(ry, 0)}°',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: AmColors.accent),
+              ),
+            ),
           ],
         ),
       ],
@@ -630,8 +717,13 @@ class _ScaleControl extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AmValueChip(
-                text: amNumber(sx * 100), label: 'Largura', width: 112),
+            Expanded(
+              child: AmValueChip(
+                text: amNumber(sx * 100),
+                label: 'Largura',
+                width: double.infinity,
+              ),
+            ),
             GestureDetector(
               onTap: onToggleLink,
               child: Container(
@@ -642,14 +734,20 @@ class _ScaleControl extends ConsumerWidget {
                   color: linked ? const Color(0xFFE9EDF2) : AmColors.chip,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(CupertinoIcons.link,
-                    size: 20,
-                    color:
-                        linked ? const Color(0xFF12151A) : AmColors.muted),
+                child: Icon(
+                  CupertinoIcons.link,
+                  size: 20,
+                  color: linked ? const Color(0xFF12151A) : AmColors.muted,
+                ),
               ),
             ),
-            AmValueChip(
-                text: amNumber(sy * 100), label: 'Altura', width: 112),
+            Expanded(
+              child: AmValueChip(
+                text: amNumber(sy * 100),
+                label: 'Altura',
+                width: double.infinity,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -713,9 +811,21 @@ class _SkewControl extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AmValueChip(text: '${amNumber(kx, 2)}°', label: 'X Skew', width: 112),
+            Expanded(
+              child: AmValueChip(
+                text: '${amNumber(kx, 2)}°',
+                label: 'X Skew',
+                width: double.infinity,
+              ),
+            ),
             const SizedBox(width: 18),
-            AmValueChip(text: '${amNumber(ky, 2)}°', label: 'Y Skew', width: 112),
+            Expanded(
+              child: AmValueChip(
+                text: '${amNumber(ky, 2)}°',
+                label: 'Y Skew',
+                width: double.infinity,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -764,7 +874,10 @@ class _OpacityControl extends ConsumerWidget {
     return Column(
       children: [
         AmValueChip(
-            text: '${amNumber(op * 100, 0)}%', label: 'Opacidade', width: 132),
+          text: '${amNumber(op * 100, 0)}%',
+          label: 'Opacidade',
+          width: 132,
+        ),
         const SizedBox(height: 10),
         Expanded(
           child: AmTickRuler(
@@ -775,7 +888,10 @@ class _OpacityControl extends ConsumerWidget {
             accentCenter: false,
             height: double.infinity,
             onChanged: (v) => controller.editOpacity(
-                layer.id, playback.time.value, (v / 100).clamp(0.0, 1.0)),
+              layer.id,
+              playback.time.value,
+              (v / 100).clamp(0.0, 1.0),
+            ),
           ),
         ),
       ],

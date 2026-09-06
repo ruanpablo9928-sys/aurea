@@ -23,8 +23,11 @@ void main() {
       final vistos = <String, EffectType>{};
       for (final e in effectSpecs.entries) {
         final antigo = vistos[e.value.id];
-        expect(antigo, isNull,
-            reason: 'id "${e.value.id}" repetido em ${e.key} e $antigo');
+        expect(
+          antigo,
+          isNull,
+          reason: 'id "${e.value.id}" repetido em ${e.key} e $antigo',
+        );
         vistos[e.value.id] = e.key;
       }
     });
@@ -33,12 +36,21 @@ void main() {
       for (final e in effectSpecs.entries) {
         for (final p in e.value.params.entries) {
           final v = p.value;
-          expect(v.min, lessThan(v.max),
-              reason: '${e.key}.${p.key}: min >= max');
-          expect(v.initial, greaterThanOrEqualTo(v.min),
-              reason: '${e.key}.${p.key}: inicial abaixo do minimo');
-          expect(v.initial, lessThanOrEqualTo(v.max),
-              reason: '${e.key}.${p.key}: inicial acima do maximo');
+          expect(
+            v.min,
+            lessThan(v.max),
+            reason: '${e.key}.${p.key}: min >= max',
+          );
+          expect(
+            v.initial,
+            greaterThanOrEqualTo(v.min),
+            reason: '${e.key}.${p.key}: inicial abaixo do minimo',
+          );
+          expect(
+            v.initial,
+            lessThanOrEqualTo(v.max),
+            reason: '${e.key}.${p.key}: inicial acima do maximo',
+          );
         }
       }
     });
@@ -48,9 +60,13 @@ void main() {
         for (final p in e.value.params.entries) {
           if (p.value.kind != ParamKind.choice) continue;
           final esperado = (p.value.max - p.value.min).round() + 1;
-          expect(p.value.options.length, esperado,
-              reason: '${e.key}.${p.key}: '
-                  '${p.value.options.length} rotulos para $esperado opcoes');
+          expect(
+            p.value.options.length,
+            esperado,
+            reason:
+                '${e.key}.${p.key}: '
+                '${p.value.options.length} rotulos para $esperado opcoes',
+          );
         }
       }
     });
@@ -73,16 +89,21 @@ void main() {
       // continua renderizando, e o controle na tela deixa de fazer
       // qualquer coisa. Foi assim que o limiar do Unmult passou
       // despercebido — estava na tela, nao estava na conta.
-      final f = File('lib/src/features/editor/presentation/widgets/'
-          'preview_stage.dart');
+      final f = File(
+        'lib/src/features/editor/presentation/widgets/'
+        'preview_stage.dart',
+      );
       expect(f.existsSync(), isTrue, reason: 'rode a partir da raiz');
       final fonte = f.readAsStringSync();
 
-      final casos =
-          RegExp(r"\n        case EffectType\.(\w+):").allMatches(fonte)
-              .toList();
-      expect(casos.length, greaterThan(30),
-          reason: 'nao achei os casos de efeito');
+      final casos = RegExp(r"\n        case EffectType\.(\w+):")
+          .allMatches(fonte)
+          .toList();
+      expect(
+        casos.length,
+        greaterThan(30),
+        reason: 'nao achei os casos de efeito',
+      );
 
       final leitura = RegExp(r"paramAt\(\s*'([A-Za-z_0-9]+)'");
       final problemas = <String>[];
@@ -93,11 +114,11 @@ void main() {
             ? casos[i + 1].start
             : casos[i].start + 4000;
         final corpo = fonte.substring(
-            casos[i].end, fim.clamp(casos[i].end, fonte.length));
+          casos[i].end,
+          fim.clamp(casos[i].end, fonte.length),
+        );
 
-        final tipo = EffectType.values
-            .where((t) => t.name == nome)
-            .firstOrNull;
+        final tipo = EffectType.values.where((t) => t.name == nome).firstOrNull;
         if (tipo == null) continue;
         final ficha = effectSpecs[tipo];
         if (ficha == null) continue;
@@ -119,29 +140,25 @@ void main() {
       // estava na tela, com nome e faixa, e a conta nunca o lia. Mexer
       // nele nao mudava um pixel. Nenhum teste de imagem pega isso — a
       // saida esta "certa" para qualquer valor do controle morto.
-      final fonte = File('lib/src/features/editor/presentation/widgets/'
-              'preview_stage.dart')
-          .readAsStringSync();
-      final casos =
-          RegExp(r"\n        case EffectType\.(\w+):").allMatches(fonte)
-              .toList();
+      final fonte = File(
+        'lib/src/features/editor/presentation/widgets/'
+        'preview_stage.dart',
+      ).readAsStringSync();
+      final casos = RegExp(r"\n        case EffectType\.(\w+):")
+          .allMatches(fonte)
+          .toList();
 
       // Efeitos que NAO sao aplicados neste switch: eco e desfoque de
       // movimento re-renderizam a camada inteira em _buildLayers, e o
       // remapeamento de tempo mexe no relogio da camada. A lista e
       // explicita para que mover um efeito de lugar exija mexer aqui.
-      const foraDoSwitch = {
-        'echo',
-        'forceMotionBlur',
-        'timeRemap',
-      };
+      const foraDoSwitch = {'echo', 'forceMotionBlur', 'timeRemap'};
 
       final mortos = <String>[];
       for (var i = 0; i < casos.length; i++) {
         final nome = casos[i].group(1)!;
         if (foraDoSwitch.contains(nome)) continue;
-        final tipo =
-            EffectType.values.where((t) => t.name == nome).firstOrNull;
+        final tipo = EffectType.values.where((t) => t.name == nome).firstOrNull;
         final ficha = tipo == null ? null : effectSpecs[tipo];
         if (tipo == null || ficha == null) continue;
 
@@ -149,21 +166,25 @@ void main() {
             ? casos[i + 1].start
             : casos[i].start + 4000;
         final corpo = fonte.substring(
-            casos[i].end, fim.clamp(casos[i].end, fonte.length));
+          casos[i].end,
+          fim.clamp(casos[i].end, fonte.length),
+        );
         // Alguns efeitos leem parte dos parametros FORA do switch: os do
         // Blob Tracker que descrevem a DETECCAO sao consumidos pela
         // analise, nao pelo desenho. A lista e explicita para nao virar
         // uma busca frouxa que deixa de acusar controle morto.
         var texto = corpo;
         if (nome == 'blobTracker') {
-          texto += File('lib/src/features/editor/application/'
-                  'editor_controller.dart')
-              .readAsStringSync();
+          texto += File(
+            'lib/src/features/editor/application/'
+            'editor_controller.dart',
+          ).readAsStringSync();
         }
 
         final lidos = {
-          for (final m in RegExp(r"(?:paramAt|track)\(\s*'([A-Za-z_0-9]+)'")
-              .allMatches(texto))
+          for (final m in RegExp(
+            r"(?:paramAt|track)\(\s*'([A-Za-z_0-9]+)'",
+          ).allMatches(texto))
             resolveParamKey(tipo, m.group(1)!),
         };
 
@@ -172,15 +193,15 @@ void main() {
         // busca por texto literal nao ve nenhuma dessas chaves e acusaria
         // vinte controles vivos de mortos.
         final sufixos = {
-          for (final m in RegExp(r"(?:paramAt|track)\(\s*'\$\{\w+\}_"
-                  r"([A-Za-z_0-9]+)'")
-              .allMatches(texto))
+          for (final m in RegExp(
+            r"(?:paramAt|track)\(\s*'\$\{\w+\}_"
+            r"([A-Za-z_0-9]+)'",
+          ).allMatches(texto))
             m.group(1)!,
         };
 
         for (final chave in ficha.params.keys) {
-          final porSufixo =
-              sufixos.any((suf) => chave.endsWith('_$suf'));
+          final porSufixo = sufixos.any((suf) => chave.endsWith('_$suf'));
           if (!lidos.contains(chave) && !porSufixo) {
             mortos.add('$nome expoe "$chave" e nunca le');
           }
@@ -193,25 +214,21 @@ void main() {
       // Ficam listados um a um: assim a lista e uma lista de tarefas
       // visivel, e qualquer controle morto NOVO quebra o teste em vez de
       // se juntar a estes sem ninguem notar.
-      const divida = {
-        // Deep Glow: o tonemap precisa de uma curva por pixel, e curva
-        // por pixel aqui so com shader — fica para quando houver um
-        // aparelho na mao para conferir. Brilho sujo de lente depende de
-        // um seletor de imagem que nao existe.
-        'glowVol expoe "tonemapping" e nunca le',
-        'glowVol expoe "lens_dirt_amount" e nunca le',
-      };
+      const divida = <String>{};
 
       final novos = mortos.where((m) => !divida.contains(m)).toList();
       expect(novos, isEmpty, reason: novos.join('\n'));
 
       // A divida tambem nao pode ENVELHECER: item que ja foi resolvido
       // sai da lista, senao ela vira folclore.
-      final resolvidos =
-          divida.where((d) => !mortos.contains(d)).toList();
-      expect(resolvidos, isEmpty,
-          reason: 'ja funciona, tire da divida:\n'
-              '${resolvidos.join('\n')}');
+      final resolvidos = divida.where((d) => !mortos.contains(d)).toList();
+      expect(
+        resolvidos,
+        isEmpty,
+        reason:
+            'ja funciona, tire da divida:\n'
+            '${resolvidos.join('\n')}',
+      );
     });
   });
 }

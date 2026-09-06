@@ -16,6 +16,7 @@ import 'camera_cuts.dart';
 import 'layer.dart';
 import 'layer_meta.dart';
 import 'mask.dart';
+import 'model_asset3d.dart';
 import 'panorama3d.dart';
 import 'scene3d.dart';
 import 'shape.dart';
@@ -1463,6 +1464,8 @@ Map<String, dynamic> _material(Material3D mat) => {
   'cutoff': mat.alphaCutoff,
   'double': mat.doubleSided,
   'packed': mat.packedChannels,
+  'wrapX': mat.textureWrapX.name,
+  'wrapY': mat.textureWrapY.name,
 };
 
 Material3D _asMaterial(Map<String, dynamic> m) => Material3D(
@@ -1476,6 +1479,8 @@ Material3D _asMaterial(Map<String, dynamic> m) => Material3D(
   textureLayerId: m['tex'] as String?,
   reflectivity: (m['refl'] as num?)?.toDouble() ?? 0,
   imagePath: m['img'] as String?,
+  textureWrapX: _enumValue(m['wrapX'], TileMode.values, TileMode.clamp),
+  textureWrapY: _enumValue(m['wrapY'], TileMode.values, TileMode.clamp),
   faceImagePaths: {
     for (final entry
         in ((m['faces'] as Map?)?.cast<String, dynamic>() ?? const {}).entries)
@@ -1556,6 +1561,9 @@ Map<String, dynamic> _scene(Scene3D s) => {
   'probe': _probe(s.reflectionProbe),
   'planar': s.planarFloorReflection,
   'planarRough': s.planarFloorRoughness,
+  'fogDensity': s.fogDensity,
+  'fogStart': s.fogStart,
+  'fogColor': _col(s.fogColor),
   if (s.background != null) 'bg': _col(s.background!),
   'grid': s.showFloorGrid,
   'msaa': s.msaa,
@@ -1589,6 +1597,11 @@ Map<String, dynamic> _scene(Scene3D s) => {
         if (!n.credit.isEmpty) 'credit': _credit(n.credit),
         if (n.modelSource != null) 'modelSource': _modelSource(n.modelSource!),
         if (n.animationClip != null) 'animationClip': n.animationClip,
+        if (n.modelAsset != null) ...{
+          'modelAsset': n.modelAsset!.data,
+          'modelMotion': n.modelMotion.toJson(),
+          'useModelMaterials': n.useModelMaterials,
+        },
         if (n.modelSource != null && n.mesh != null)
           'meshData': _meshBlob(n.mesh!),
         if (n.outline != null) ...{
@@ -1665,6 +1678,11 @@ SceneNode _asSceneNode(Map<String, dynamic> n) {
     credit: _asCredit(n['credit']),
     modelSource: _asModelSource(n['modelSource']),
     animationClip: n['animationClip'] as String?,
+    modelAsset: n['modelAsset'] == null
+        ? null
+        : ModelAsset3D((n['modelAsset'] as Map).cast<String, dynamic>()),
+    modelMotion: ModelMotion3D.fromJson(n['modelMotion']),
+    useModelMaterials: n['useModelMaterials'] as bool? ?? true,
     outline: outline,
     extrudeDepth: (n['depth'] as num?)?.toDouble() ?? 40.0,
     mesh: mesh,
@@ -1691,6 +1709,11 @@ Scene3D _asScene(Map<String, dynamic> m) => Scene3D(
   reflectionProbe: _asProbe(m['probe']),
   planarFloorReflection: m['planar'] as bool? ?? false,
   planarFloorRoughness: (m['planarRough'] as num?)?.toDouble() ?? 0.2,
+  fogDensity: (m['fogDensity'] as num?)?.toDouble() ?? 0,
+  fogStart: (m['fogStart'] as num?)?.toDouble() ?? 0,
+  fogColor: m['fogColor'] == null
+      ? const Color(0xFF101E28)
+      : _asCol(m['fogColor']),
   background: m['bg'] == null ? null : _asCol(m['bg']),
   showFloorGrid: m['grid'] as bool? ?? true,
   msaa: m['msaa'] as bool? ?? true,

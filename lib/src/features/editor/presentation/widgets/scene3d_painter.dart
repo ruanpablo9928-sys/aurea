@@ -27,6 +27,7 @@ class Scene3DPainter extends CustomPainter {
     required this.view,
     required this.time,
     this.showHelpers = false,
+    this.showModelRig = false,
     this.overrideCamera,
     this.selectedNodeId,
     this.onMetrics,
@@ -44,6 +45,7 @@ class Scene3DPainter extends CustomPainter {
 
   /// Ajudas de cena: grade do chao, frustum, eixos. NUNCA na exportacao.
   final bool showHelpers;
+  final bool showModelRig;
 
   /// Vista livre navegada no estudio: quando presente, substitui a
   /// camera derivada de [view].
@@ -69,6 +71,8 @@ class Scene3DPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cam = _renderCamera();
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
 
     if (scene.background != null) {
       canvas.drawRect(Offset.zero & size, Paint()..color = scene.background!);
@@ -102,9 +106,13 @@ class Scene3DPainter extends CustomPainter {
       _paintContactShadows(canvas, frame);
     }
 
-    // Passe OPACO e passe TRANSPARENTE, nessa ordem.
-    _paintTriangles(canvas, frame.opaque);
-    _paintTriangles(canvas, frame.transparent);
+    // Canvas has no depth test: an unconditional transparent second pass
+    // incorrectly paints glass BEHIND an opaque object over its front.
+    // Interleave both sorted lists; this remains a painter approximation,
+    // not a replacement for a GPU depth buffer on intersecting triangles.
+    final visible = [...frame.opaque, ...frame.transparent];
+    depthSort(visible);
+    _paintTriangles(canvas, visible);
 
     // PROFUNDIDADE DE CAMPO. No modo rascunho ela sai do caminho — e a
     // diferenca entre navegar a cena e sofrer num aparelho de entrada.
@@ -120,6 +128,46 @@ class Scene3DPainter extends CustomPainter {
     if (showHelpers && selectedNodeId != null) {
       _paintSelectionBox(canvas, size, cam);
     }
+    if (showModelRig && selectedNodeId != null) {
+      _paintModelRig(canvas, size, cam);
+    }
+    canvas.restore();
+  }
+
+  void _paintModelRig(Canvas canvas, Size size, RenderCamera cam) {
+    final node = scene.nodeById(selectedNodeId!);
+    final asset = node?.modelAsset;
+    if (node == null || asset == null) return;
+    final frame = asset.evaluate(time, node.modelMotion);
+    final xf = resolveNodeTransform(scene, node, time);
+    final m = Matrix4.identity()
+      ..rotateZ(xf.rotZ * math.pi / 180)
+      ..rotateY(xf.rotY * math.pi / 180)
+      ..rotateX(xf.rotX * math.pi / 180);
+    final points = <int, Offset>{};
+    for (final entry in frame.joints.entries) {
+      final rotated = m.transformed3(entry.value * (node.size * xf.scale));
+      final point = _project(
+        xf.position + Vec3(rotated.x, rotated.y, rotated.z),
+        size,
+        cam,
+      );
+      if (point != null) points[entry.key] = point;
+    }
+    final pen = Paint()
+      ..color = const Color(0xFF61FFE0)
+      ..strokeWidth = 2;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    for (final entry in points.entries) {
+      var parent = asset.nodes[entry.key]['parent'] as int?;
+      while (parent != null && !points.containsKey(parent)) {
+        parent = asset.nodes[parent]['parent'] as int?;
+      }
+      if (parent != null) canvas.drawLine(points[parent]!, entry.value, pen);
+      canvas.drawCircle(entry.value, 3.5, pen);
+    }
+    canvas.restore();
   }
 
   void _paintPanorama(Canvas canvas, Size size, RenderCamera cam) {
@@ -417,8 +465,49 @@ class Scene3DPainter extends CustomPainter {
     while (i < tris.length) {
       final start = i;
       if (!lisa(tris[i])) {
+        // Apply fog AFTER texture modulation, before the next surface. A
+        // single fog overlay over a whole batch breaks internal occlusion.
+        if (scene.fogDensity > 0) {
+          canvas.saveLayer(null, Paint());
+          _paintTextured(
+            canvas,
+            tris,
+            i,
+            i + 1,
+            cache.imageFor(tris[i].texture!)!,
+            paint,
+          );
+          final t = tris[i++];
+          final positions = Float32List.fromList([
+            t.a.dx,
+            t.a.dy,
+            t.b.dx,
+            t.b.dy,
+            t.c.dx,
+            t.c.dy,
+          ]);
+          final colors = Int32List.fromList([
+            scene.fogColor.withValues(alpha: t.fogA).toARGB32(),
+            scene.fogColor.withValues(alpha: t.fogB).toARGB32(),
+            scene.fogColor.withValues(alpha: t.fogC).toARGB32(),
+          ]);
+          canvas.drawVertices(
+            ui.Vertices.raw(ui.VertexMode.triangles, positions, colors: colors),
+            BlendMode.modulate,
+            paint
+              ..color = Colors.white
+              ..blendMode = BlendMode.srcATop,
+          );
+          canvas.restore();
+          paint.blendMode = BlendMode.srcOver;
+          continue;
+        }
         final tex = tris[i].texture;
-        while (i < tris.length && tris[i].texture == tex) {
+        final wrapX = tris[i].wrapX, wrapY = tris[i].wrapY;
+        while (i < tris.length &&
+            tris[i].texture == tex &&
+            tris[i].wrapX == wrapX &&
+            tris[i].wrapY == wrapY) {
           i++;
         }
         _paintTextured(canvas, tris, start, i, cache.imageFor(tex!)!, paint);
@@ -430,6 +519,8 @@ class Scene3DPainter extends CustomPainter {
       }
       final count = i - start;
       final positions = Float32List(count * 6);
+      final colors = Int32List(count * 3);
+      var smooth = false;
       for (var k = 0; k < count; k++) {
         final t = tris[start + k];
         positions[k * 6] = t.a.dx;
@@ -438,11 +529,15 @@ class Scene3DPainter extends CustomPainter {
         positions[k * 6 + 3] = t.b.dy;
         positions[k * 6 + 4] = t.c.dx;
         positions[k * 6 + 5] = t.c.dy;
+        colors[k * 3] = (t.colorA ?? t.color).toARGB32();
+        colors[k * 3 + 1] = (t.colorB ?? t.color).toARGB32();
+        colors[k * 3 + 2] = (t.colorC ?? t.color).toARGB32();
+        smooth = smooth || t.colorA != null;
       }
-      paint.color = color;
+      paint.color = const Color(0xFFFFFFFF);
       canvas.drawVertices(
-        ui.Vertices.raw(ui.VertexMode.triangles, positions),
-        BlendMode.srcOver,
+        ui.Vertices.raw(ui.VertexMode.triangles, positions, colors: colors),
+        BlendMode.modulate,
         paint,
       );
 
@@ -451,7 +546,7 @@ class Scene3DPainter extends CustomPainter {
       // denuncia um render. Contornar o mesmo lote com um traco fino da
       // MESMA cor, esse sim suavizado, cobre o degrau — e de quebra
       // fecha as costuras de meio pixel entre triangulos vizinhos.
-      if (scene.msaa) {
+      if (scene.msaa && !smooth) {
         final contorno = Path();
         for (var k = 0; k < count; k++) {
           final t = tris[start + k];
@@ -507,17 +602,17 @@ class Scene3DPainter extends CustomPainter {
       coords[k * 6 + 3] = ub.dy * h;
       coords[k * 6 + 4] = uc.dx * w;
       coords[k * 6 + 5] = uc.dy * h;
-      final c = t.color.toARGB32();
-      colors[k * 3] = c;
-      colors[k * 3 + 1] = c;
-      colors[k * 3 + 2] = c;
+      colors[k * 3] = (t.colorA ?? t.color).toARGB32();
+      colors[k * 3 + 1] = (t.colorB ?? t.color).toARGB32();
+      colors[k * 3 + 2] = (t.colorC ?? t.color).toARGB32();
     }
     paint
+      ..filterQuality = FilterQuality.medium
       ..color = const Color(0xFFFFFFFF)
       ..shader = ui.ImageShader(
         img,
-        TileMode.clamp,
-        TileMode.clamp,
+        tris[start].wrapX,
+        tris[start].wrapY,
         Matrix4.identity().storage,
       );
     canvas.drawVertices(
@@ -688,6 +783,7 @@ class Scene3DPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(Scene3DPainter old) =>
+      old.showModelRig != showModelRig ||
       old.scene != scene ||
       old.camera != camera ||
       old.resolvedCamera != resolvedCamera ||

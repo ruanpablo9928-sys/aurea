@@ -1,12 +1,6 @@
-import 'dart:io';
-import 'dart:convert';
-import 'dart:isolate';
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../domain/glb_import.dart';
 import '../../../../core/ui/snack.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -26,34 +20,8 @@ import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 import 'scene3d_studio.dart';
-
-Future<GlbResult> _readModelFile(String path) =>
-    Isolate.run(() => _readModelFileWorker(path));
-
-Future<GlbResult> _readModelFileWorker(String path) async {
-  final file = File(path);
-  if (path.toLowerCase().endsWith('.glb')) {
-    return parseGlb(await file.readAsBytes());
-  }
-  final source = await file.readAsString();
-  final document = jsonDecode(source);
-  final binaries = <Uint8List?>[];
-  if (document is Map) {
-    final buffers = document['buffers'] as List?;
-    if (buffers != null) {
-      for (final entry in buffers) {
-        final uri = (entry as Map)['uri'] as String?;
-        if (uri == null || uri.startsWith('data:')) {
-          binaries.add(null);
-        } else {
-          final buffer = File.fromUri(file.parent.uri.resolve(uri));
-          binaries.add(await buffer.readAsBytes());
-        }
-      }
-    }
-  }
-  return parseGltf(source, binaries: binaries);
-}
+import 'model_import_button.dart';
+import 'model_animation_screen.dart';
 
 /// SHEET DA CENA 3D: estrutura da cena, materiais, luzes, camera com os
 /// tres jeitos de ver a mesma grandeza (focal, angulo, zoom), a
@@ -440,51 +408,11 @@ class _ObjectsTab extends StatelessWidget {
         ),
         const SizedBox(height: 10),
 
-        // MODELO PRONTO: modelar em celular ninguem vai fazer; baixar um
-        // .glb/.gltf, sim. Acima do orcamento abre com aviso e LOD, nunca
-        // bloqueia o trabalho.
-        _AcaoLarga(
-          rotulo: 'Importar modelo .glb / .gltf',
-          onTap: () async {
-            final r = await FilePicker.platform.pickFiles(
-              type: FileType.custom,
-              allowedExtensions: const ['glb', 'gltf'],
-            );
-            final caminho = r?.files.single.path;
-            if (caminho == null || !context.mounted) return;
-            try {
-              final modelo = await _readModelFile(caminho);
-              final id = controller.addGlbNode(
-                layer.id,
-                modelo,
-                sourcePath: caminho,
-              );
-              if (id.isNotEmpty) {
-                onSelect(id);
-              }
-              onChanged();
-              if (context.mounted) {
-                final report = modelo.report;
-                final summary =
-                    '${report.triangles} triangulos · '
-                    '${report.materials} materiais · '
-                    '${report.textures} texturas · ${report.nodes} nos';
-                AureaSnack.show(
-                  context,
-                  modelo.warning == null
-                      ? summary
-                      : '$summary · ${modelo.warning}',
-                );
-              }
-            } on GlbException catch (e) {
-              if (context.mounted) {
-                AureaSnack.show(context, e.message);
-              }
-            } catch (_) {
-              if (context.mounted) {
-                AureaSnack.show(context, 'Nao consegui ler esse arquivo');
-              }
-            }
+        ModelImportButton(
+          layerId: layer.id,
+          onImported: (id) {
+            onSelect(id);
+            onChanged();
           },
         ),
         const SizedBox(height: 10),
@@ -676,7 +604,35 @@ class _ObjectsTab extends StatelessWidget {
               onChanged();
             },
           ),
-          if (node.modelSource?.animationNames.isNotEmpty ?? false)
+          if (node.modelAsset != null) ...[
+            _AcaoLarga(
+              rotulo: 'Animar modelo / Rig',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      ModelAnimationScreen(layerId: layer.id, nodeId: node.id),
+                ),
+              ),
+            ),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Materiais originais do modelo'),
+              value: node.useModelMaterials,
+              onChanged: (v) {
+                controller.updateSceneNode(
+                  layer.id,
+                  node.id,
+                  (n) => n.copyWith(useModelMaterials: v),
+                );
+                onChanged();
+              },
+            ),
+            const _Hint(
+              'Desligue para aplicar o material abaixo ao modelo inteiro.',
+            ),
+          ],
+          if (node.modelAsset == null &&
+              (node.modelSource?.animationNames.isNotEmpty ?? false))
             _Chips(
               label: 'Clipe',
               options: ['Nenhum', ...node.modelSource!.animationNames],
@@ -1577,6 +1533,62 @@ class _EnvironmentTab extends StatelessWidget {
             onChanged();
           },
         ),
+        const SizedBox(height: 12),
+        _SectionTitle('Atmosfera / nevoa'),
+        _Toggle(
+          label: 'Nevoa por distancia',
+          value: scene.fogDensity > 0,
+          onChanged: (value) {
+            controller.updateScene3D(
+              layer.id,
+              (s) => s.copyWith(fogDensity: value ? .001 : 0),
+            );
+            onChanged();
+          },
+        ),
+        if (scene.fogDensity > 0) ...[
+          _Plain(
+            label: 'Densidade',
+            value: scene.fogDensity * 1000,
+            min: 0.1,
+            max: 10,
+            decimals: 2,
+            onChanged: (v) {
+              controller.updateScene3D(
+                layer.id,
+                (s) => s.copyWith(fogDensity: v / 1000),
+              );
+              onChanged();
+            },
+          ),
+          _Plain(
+            label: 'Inicio da nevoa',
+            value: scene.fogStart,
+            min: 0,
+            max: 5000,
+            onChanged: (v) {
+              controller.updateScene3D(
+                layer.id,
+                (s) => s.copyWith(fogStart: v),
+              );
+              onChanged();
+            },
+          ),
+          _ColorRow(
+            color: scene.fogColor,
+            onColor: (v) {
+              controller.updateScene3D(
+                layer.id,
+                (s) => s.copyWith(fogColor: v),
+              );
+              onChanged();
+            },
+          ),
+          const _Hint(
+            'Perspectiva atmosferica aplicada tambem na exportacao. '
+            'Nao simula luz volumetrica.',
+          ),
+        ],
         const SizedBox(height: 12),
         _SectionTitle('Reflexo em tempo real'),
         _Toggle(

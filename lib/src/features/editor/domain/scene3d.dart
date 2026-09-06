@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import 'element3d.dart';
 import 'keyframe.dart';
+import 'model_asset3d.dart';
 import 'panorama3d.dart';
 
 /// CENA 3D (spec AUREA-cena-3d): um CONTEINER que, por fora, e UMA
@@ -41,6 +42,8 @@ class Material3D {
     this.alphaCutoff = 0.5,
     this.doubleSided = false,
     this.packedChannels = false,
+    this.textureWrapX = TileMode.clamp,
+    this.textureWrapY = TileMode.clamp,
   });
 
   final String name;
@@ -70,6 +73,7 @@ class Material3D {
   final double alphaCutoff;
   final bool doubleSided;
   final bool packedChannels;
+  final TileMode textureWrapX, textureWrapY;
 
   /// TEXTURA VINDA DE CAMADA DA CENA (§6): uma precomp animada vira a
   /// tela de um celular 3D ou o rotulo de uma embalagem. E o recurso
@@ -98,6 +102,8 @@ class Material3D {
     double? alphaCutoff,
     bool? doubleSided,
     bool? packedChannels,
+    TileMode? textureWrapX,
+    TileMode? textureWrapY,
     bool clearImage = false,
     bool clearTextureLayer = false,
   }) => Material3D(
@@ -119,6 +125,8 @@ class Material3D {
     alphaCutoff: alphaCutoff ?? this.alphaCutoff,
     doubleSided: doubleSided ?? this.doubleSided,
     packedChannels: packedChannels ?? this.packedChannels,
+    textureWrapX: textureWrapX ?? this.textureWrapX,
+    textureWrapY: textureWrapY ?? this.textureWrapY,
   );
 }
 
@@ -411,6 +419,9 @@ class SceneNode {
     this.credit = const ModelCredit3D(),
     this.modelSource,
     this.animationClip,
+    this.modelAsset,
+    this.modelMotion = const ModelMotion3D(),
+    this.useModelMaterials = true,
   }) : id = id ?? const Uuid().v4(),
        x = x ?? AnimatedDouble(0),
        y = y ?? AnimatedDouble(0),
@@ -464,6 +475,9 @@ class SceneNode {
   final ModelCredit3D credit;
   final ModelSource3D? modelSource;
   final String? animationClip;
+  final ModelAsset3D? modelAsset;
+  final ModelMotion3D modelMotion;
+  final bool useModelMaterials;
 
   Vec3 positionAt(Duration t) => Vec3(x.valueAt(t), y.valueAt(t), z.valueAt(t));
 
@@ -497,6 +511,9 @@ class SceneNode {
     ModelSource3D? modelSource,
     String? animationClip,
     bool clearAnimationClip = false,
+    ModelAsset3D? modelAsset,
+    ModelMotion3D? modelMotion,
+    bool? useModelMaterials,
   }) => SceneNode(
     id: id,
     name: name ?? this.name,
@@ -528,6 +545,9 @@ class SceneNode {
     animationClip: clearAnimationClip
         ? null
         : (animationClip ?? this.animationClip),
+    modelAsset: modelAsset ?? this.modelAsset,
+    modelMotion: modelMotion ?? this.modelMotion,
+    useModelMaterials: useModelMaterials ?? this.useModelMaterials,
   );
 
   SceneNode duplicate({String? name}) => SceneNode(
@@ -558,6 +578,9 @@ class SceneNode {
     credit: credit,
     modelSource: modelSource,
     animationClip: animationClip,
+    modelAsset: modelAsset,
+    modelMotion: modelMotion,
+    useModelMaterials: useModelMaterials,
   );
 }
 
@@ -606,6 +629,9 @@ class Scene3D {
     this.reflectionProbe = const ReflectionProbe3D(),
     this.planarFloorReflection = false,
     this.planarFloorRoughness = 0.2,
+    this.fogDensity = 0,
+    this.fogStart = 0,
+    this.fogColor = const Color(0xFF101E28),
   });
 
   final List<SceneNode> nodes;
@@ -621,6 +647,17 @@ class Scene3D {
   /// desligado primeiro na degradacao automatica.
   final bool planarFloorReflection;
   final double planarFloorRoughness;
+
+  /// Exponential distance haze, disabled by default for old projects. This
+  /// is atmospheric perspective, not volumetric ray-marched lighting.
+  final double fogDensity, fogStart;
+  final Color fogColor;
+  double fogAt(double depth) => fogDensity <= 0
+      ? 0
+      : (1 - math.exp(-fogDensity * math.max(0, depth - fogStart))).clamp(
+          0.0,
+          1.0,
+        );
 
   /// De qual NO da cena a camera interna e filha. Nulo = solta.
   ///
@@ -686,6 +723,9 @@ class Scene3D {
     ReflectionProbe3D? reflectionProbe,
     bool? planarFloorReflection,
     double? planarFloorRoughness,
+    double? fogDensity,
+    double? fogStart,
+    Color? fogColor,
   }) => Scene3D(
     environment: environment ?? this.environment,
     envReflect: envReflect ?? this.envReflect,
@@ -693,6 +733,9 @@ class Scene3D {
     reflectionProbe: reflectionProbe ?? this.reflectionProbe,
     planarFloorReflection: planarFloorReflection ?? this.planarFloorReflection,
     planarFloorRoughness: planarFloorRoughness ?? this.planarFloorRoughness,
+    fogDensity: fogDensity ?? this.fogDensity,
+    fogStart: fogStart ?? this.fogStart,
+    fogColor: fogColor ?? this.fogColor,
     nodes: nodes ?? this.nodes,
     lights: lights ?? this.lights,
     savedViews: savedViews ?? this.savedViews,
@@ -783,6 +826,14 @@ class RenderTri {
     this.uvB,
     this.uvC,
     this.texture,
+    this.colorA,
+    this.colorB,
+    this.colorC,
+    this.wrapX = TileMode.clamp,
+    this.wrapY = TileMode.clamp,
+    this.fogA = 0,
+    this.fogB = 0,
+    this.fogC = 0,
   });
 
   final Offset a;
@@ -799,6 +850,9 @@ class RenderTri {
   /// Z medio em espaco de camera (maior = mais longe).
   final double depth;
   final Color color;
+  final Color? colorA, colorB, colorC;
+  final TileMode wrapX, wrapY;
+  final double fogA, fogB, fogC;
   final bool transparent;
 
   /// De qual no da cena este triangulo saiu — e o que permite tocar no
@@ -1063,6 +1117,38 @@ RenderCamera applyParentToCamera(RenderCamera cam, NodeTransform pai) {
   );
 }
 
+class _RasterVertex {
+  const _RasterVertex(this.position, this.uv, this.color);
+  final Vec3 position;
+  final Offset? uv;
+  final Color? color;
+  _RasterVertex lerp(_RasterVertex b, double t) => _RasterVertex(
+    position + (b.position - position) * t,
+    uv == null || b.uv == null ? null : Offset.lerp(uv, b.uv, t),
+    color == null || b.color == null ? null : Color.lerp(color, b.color, t),
+  );
+}
+
+// Sutherland-Hodgman in camera space, before the perspective divide. Preserve
+// UVs and vertex lighting on new intersections instead of dropping a wall
+// when just one of its vertices passes behind the lens.
+List<_RasterVertex> _clipDepth(List<_RasterVertex> input, double z, bool near) {
+  double distance(_RasterVertex v) =>
+      near ? v.position.z - z : z - v.position.z;
+  if (input.every((v) => distance(v) >= 0)) return input;
+  final output = <_RasterVertex>[];
+  if (input.isEmpty) return output;
+  var a = input.last, da = distance(input.last);
+  for (final b in input) {
+    final db = distance(b);
+    if ((da >= 0) != (db >= 0)) output.add(a.lerp(b, da / (da - db)));
+    if (db >= 0) output.add(b);
+    a = b;
+    da = db;
+  }
+  return output;
+}
+
 SceneFrame renderScene(
   Scene3D scene,
   RenderCamera cam,
@@ -1086,6 +1172,7 @@ SceneFrame renderScene(
     if (!node.visible) continue;
     // NULO 3D so transforma os filhos; nao desenha nada.
     if (node.isNull) continue;
+    final modelFrame = node.modelAsset?.evaluate(t, node.modelMotion);
     // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
     final selectedMesh =
         switch (node.lod) {
@@ -1095,9 +1182,11 @@ SceneFrame renderScene(
           MeshLod3D.auto => _automaticLod(node, scene.draftMode),
         } ??
         element3DMesh(node.kind);
-    final mesh = node.mesh == null && node.subdivisions > 0
-        ? _subdividedPrimitive(node.kind, node.subdivisions)
-        : selectedMesh;
+    final mesh =
+        modelFrame?.mesh ??
+        (node.mesh == null && node.subdivisions > 0
+            ? _subdividedPrimitive(node.kind, node.subdivisions)
+            : selectedMesh);
     if (mesh.verts.isEmpty) continue;
 
     final xf = resolveNodeTransform(scene, node, t);
@@ -1105,6 +1194,13 @@ SceneFrame renderScene(
     final rx = xf.rotX * math.pi / 180;
     final ry = xf.rotY * math.pi / 180;
     final rz = xf.rotZ * math.pi / 180;
+    final boundRadius = modelFrame == null
+        ? 1.9
+        : mesh.verts.fold<double>(
+            0,
+            (r, v) =>
+                math.max(r, math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])),
+          );
 
     // Uma "chamada de desenho" por NO — as instancias entram na mesma,
     // que e o equivalente possivel de instanciacao aqui.
@@ -1121,7 +1217,7 @@ SceneFrame renderScene(
       // objeto inteiro com um teste so.
       final toCam = origin - cam.position;
       final zCam = toCam.dot(basis.forward);
-      final radius = s * 1.9;
+      final radius = s.abs() * boundRadius;
       if (zCam + radius < cam.near || zCam - radius > cam.far) {
         culled++;
         continue;
@@ -1158,8 +1254,6 @@ SceneFrame renderScene(
         cz[i] = rel.dot(basis.forward);
       }
 
-      final isTransparent = node.material.isTransparent;
-
       // IMAGEM NA SUPERFICIE: a luz vira fator (base branca) e a imagem
       // entra multiplicada no desenho. As coordenadas vem por PROJECAO
       // DE CAIXA nas coordenadas locais da malha: cada face recebe a
@@ -1188,11 +1282,15 @@ SceneFrame renderScene(
 
       for (var faceIndex = 0; faceIndex < mesh.faces.length; faceIndex++) {
         final face = mesh.faces[faceIndex];
+        final material = modelFrame != null && node.useModelMaterials
+            ? modelFrame.materials[faceIndex]
+            : node.material;
+        final isTransparent = material.isTransparent;
         final textura =
-            node.material.faceImagePaths[faceIndex] ?? node.material.imagePath;
-        final matLuz = textura == null
-            ? node.material
-            : node.material.copyWith(baseColor: const Color(0xFFFFFFFF));
+            material.faceImagePaths[faceIndex] ?? material.imagePath;
+        final matLuz = textura == null || modelFrame != null
+            ? material
+            : material.copyWith(baseColor: const Color(0xFFFFFFFF));
         // Normal em espaco de MUNDO (Newell), para a iluminacao — e a
         // normal LOCAL, para escolher o eixo da projecao da imagem.
         var nx = 0.0, ny = 0.0, nz = 0.0;
@@ -1216,6 +1314,7 @@ SceneFrame renderScene(
         }
         Offset? uvDe(int i) {
           if (textura == null) return null;
+          if (modelFrame != null) return modelFrame.uvs[i];
           final v = mesh.verts[i];
           final ax = lnx.abs(), ay = lny.abs(), az = lnz.abs();
           if (ax >= ay && ax >= az) {
@@ -1236,7 +1335,7 @@ SceneFrame renderScene(
         // que e onde mora metade do custo.
         var normal = Vec3(nx, ny, nz).normalized;
         final outward = faceCenter - origin;
-        if (normal.dot(outward) < 0) {
+        if (modelFrame == null && normal.dot(outward) < 0) {
           normal = Vec3(-normal.x, -normal.y, -normal.z);
         }
 
@@ -1246,7 +1345,7 @@ SceneFrame renderScene(
         // ordenacao e do desenho de uma vez.
         //
         // Material transparente NAO entra: ali se ve o fundo por dentro.
-        if (!isTransparent && !node.material.doubleSided) {
+        if (!isTransparent && !material.doubleSided) {
           final toFace = faceCenter - cam.position;
           if (normal.dot(toFace) >= 0) continue;
         }
@@ -1261,70 +1360,110 @@ SceneFrame renderScene(
           nodeId: node.id,
           environmentSampler: environmentSampler,
         );
+        Color? vertexColor(int index) {
+          final n = modelFrame?.normals[index];
+          if (n == null) return null;
+          var direction = _rotate(n, rx, ry, rz).normalized;
+          final point = Vec3(wx[index], wy[index], wz[index]);
+          final view = (cam.position - point).normalized;
+          if (material.doubleSided && direction.dot(view) < 0) {
+            direction = direction * -1;
+          }
+          return shadeFace(
+            scene: scene,
+            material: matLuz,
+            normal: direction,
+            point: point,
+            t: t,
+            viewDir: view,
+            nodeId: node.id,
+            environmentSampler: environmentSampler,
+          );
+        }
 
         // Leque de triangulos: o poligono vira triangulos, e cada um
         // entra na ordenacao com a SUA profundidade.
         for (var i = 1; i < face.length - 1; i++) {
           final ia = face[0], ib = face[i], ic = face[i + 1];
-          // Descarta o que esta atras da camera.
-          if (cz[ia] <= cam.near || cz[ib] <= cam.near || cz[ic] <= cam.near) {
+          final near = math.max(1e-4, cam.near);
+          if ([ia, ib, ic].every((v) => cz[v] < near) ||
+              [ia, ib, ic].every((v) => cz[v] > cam.far)) {
             continue;
           }
-
-          final Offset pa, pb, pc;
-          if (cam.orthographic) {
-            final k = cam.orthoScale;
-            pa = Offset(halfW + cx[ia] * k, halfH - cy[ia] * k);
-            pb = Offset(halfW + cx[ib] * k, halfH - cy[ib] * k);
-            pc = Offset(halfW + cx[ic] * k, halfH - cy[ic] * k);
-          } else {
-            final ka = focalPx / cz[ia];
-            final kb = focalPx / cz[ib];
-            final kc = focalPx / cz[ic];
-            pa = Offset(halfW + cx[ia] * ka, halfH - cy[ia] * ka);
-            pb = Offset(halfW + cx[ib] * kb, halfH - cy[ib] * kb);
-            pc = Offset(halfW + cx[ic] * kc, halfH - cy[ic] * kc);
+          var polygon = [
+            for (final v in [ia, ib, ic])
+              _RasterVertex(Vec3(cx[v], cy[v], cz[v]), uvDe(v), vertexColor(v)),
+          ];
+          polygon = _clipDepth(_clipDepth(polygon, near, true), cam.far, false);
+          Offset project(_RasterVertex v) {
+            final k = cam.orthographic
+                ? cam.orthoScale
+                : focalPx / v.position.z;
+            return Offset(halfW + v.position.x * k, halfH - v.position.y * k);
           }
 
-          // FORA DA TELA: um triangulo inteiramente para la da borda nao
-          // pinta nada, mas pagaria ordenacao e chamada de desenho.
-          final minX = pa.dx < pb.dx
-              ? (pa.dx < pc.dx ? pa.dx : pc.dx)
-              : (pb.dx < pc.dx ? pb.dx : pc.dx);
-          if (minX > viewport.width) continue;
-          final maxX = pa.dx > pb.dx
-              ? (pa.dx > pc.dx ? pa.dx : pc.dx)
-              : (pb.dx > pc.dx ? pb.dx : pc.dx);
-          if (maxX < 0) continue;
-          final minY = pa.dy < pb.dy
-              ? (pa.dy < pc.dy ? pa.dy : pc.dy)
-              : (pb.dy < pc.dy ? pb.dy : pc.dy);
-          if (minY > viewport.height) continue;
-          final maxY = pa.dy > pb.dy
-              ? (pa.dy > pc.dy ? pa.dy : pc.dy)
-              : (pb.dy > pc.dy ? pb.dy : pc.dy);
-          if (maxY < 0) continue;
-
-          final tri = RenderTri(
-            a: pa,
-            b: pb,
-            c: pc,
-            depth: (cz[ia] + cz[ib] + cz[ic]) / 3,
-            color: color,
-            transparent: isTransparent,
-            nodeId: node.id,
-            uvA: uvDe(ia),
-            uvB: uvDe(ib),
-            uvC: uvDe(ic),
-            texture: textura,
-          );
-          if (isTransparent) {
-            transparent.add(tri);
-          } else {
-            opaque.add(tri);
+          Color? fogged(_RasterVertex v) {
+            if (textura != null || scene.fogDensity <= 0) return v.color;
+            final base = v.color ?? color;
+            return Color.lerp(
+              base,
+              scene.fogColor,
+              scene.fogAt(v.position.z),
+            )!.withValues(alpha: base.a);
           }
-          triangles++;
-          nodeEmitted = true;
+
+          for (var p = 1; p < polygon.length - 1; p++) {
+            final va = polygon[0], vb = polygon[p], vc = polygon[p + 1];
+            final pa = project(va), pb = project(vb), pc = project(vc);
+
+            // FORA DA TELA: um triangulo inteiramente para la da borda nao
+            // pinta nada, mas pagaria ordenacao e chamada de desenho.
+            final minX = pa.dx < pb.dx
+                ? (pa.dx < pc.dx ? pa.dx : pc.dx)
+                : (pb.dx < pc.dx ? pb.dx : pc.dx);
+            if (minX > viewport.width) continue;
+            final maxX = pa.dx > pb.dx
+                ? (pa.dx > pc.dx ? pa.dx : pc.dx)
+                : (pb.dx > pc.dx ? pb.dx : pc.dx);
+            if (maxX < 0) continue;
+            final minY = pa.dy < pb.dy
+                ? (pa.dy < pc.dy ? pa.dy : pc.dy)
+                : (pb.dy < pc.dy ? pb.dy : pc.dy);
+            if (minY > viewport.height) continue;
+            final maxY = pa.dy > pb.dy
+                ? (pa.dy > pc.dy ? pa.dy : pc.dy)
+                : (pb.dy > pc.dy ? pb.dy : pc.dy);
+            if (maxY < 0) continue;
+
+            final tri = RenderTri(
+              a: pa,
+              b: pb,
+              c: pc,
+              depth: (va.position.z + vb.position.z + vc.position.z) / 3,
+              color: color,
+              colorA: fogged(va),
+              colorB: fogged(vb),
+              colorC: fogged(vc),
+              fogA: scene.fogAt(va.position.z),
+              fogB: scene.fogAt(vb.position.z),
+              fogC: scene.fogAt(vc.position.z),
+              transparent: isTransparent,
+              nodeId: node.id,
+              uvA: va.uv,
+              uvB: vb.uv,
+              uvC: vc.uv,
+              texture: textura,
+              wrapX: material.textureWrapX,
+              wrapY: material.textureWrapY,
+            );
+            if (isTransparent) {
+              transparent.add(tri);
+            } else {
+              opaque.add(tri);
+            }
+            triangles++;
+            nodeEmitted = true;
+          }
         }
       }
     }
@@ -1355,11 +1494,11 @@ SceneFrame renderScene(
 /// Ordenar por comparacao custa n log n e uma chamada de funcao por
 /// comparacao — em Dart isso pesa. Aqui a profundidade e um numero num
 /// intervalo conhecido, entao da para jogar cada triangulo direto no
-/// balde dele e concatenar: uma passada so.
+/// balde dele em uma passada e ordenar apenas as colisoes dentro de cada um.
 ///
-/// A resolucao dos baldes acompanha a quantidade de triangulos, entao
-/// dois triangulos so caem no mesmo balde quando estao mais perto um do
-/// outro do que o olho distingue naquela cena.
+/// A resolucao acompanha a quantidade de triangulos, mas a extensao de
+/// profundidade tambem importa. Mesmo um balde pequeno pode conter duas
+/// superficies visivelmente diferentes: a ordenacao interna e exata.
 void depthSort(List<RenderTri> tris) {
   final n = tris.length;
   if (n < 64) {
@@ -1380,7 +1519,7 @@ void depthSort(List<RenderTri> tris) {
   final scale = (buckets - 1) / span;
 
   // Contagem por balde, deslocamento, distribuicao — o "counting sort",
-  // que e o que torna isto linear.
+  // que torna a distribuicao linear; colisoes recebem comparacao abaixo.
   final count = Int32List(buckets);
   final slot = Int32List(n);
   for (var i = 0; i < n; i++) {
@@ -1400,6 +1539,17 @@ void depthSort(List<RenderTri> tris) {
   for (var i = 0; i < n; i++) {
     out[count[slot[i]]++] = tris[i];
   }
+  // Bucket width grows with the depth span. A deep environment must not
+  // scramble nearby character surfaces that happen to share a bucket.
+  var start = 0;
+  for (final end in count) {
+    if (end - start > 1) {
+      final group = out.sublist(start, end)
+        ..sort((a, b) => b.depth.compareTo(a.depth));
+      out.setRange(start, end, group);
+    }
+    start = end;
+  }
   tris.setAll(0, out);
 }
 
@@ -1416,7 +1566,11 @@ Color shadeFace({
   String? nodeId,
   EnvironmentSampler? environmentSampler,
 }) {
-  if (material.kind == MaterialKind.unlit) return material.baseColor;
+  if (material.kind == MaterialKind.unlit) {
+    return material.baseColor.withValues(
+      alpha: material.baseColor.a * material.opacity.clamp(0.0, 1.0),
+    );
+  }
 
   var r = 0.0, g = 0.0, b = 0.0;
   final baseR = material.baseColor.r;
@@ -1804,6 +1958,10 @@ double estimateSceneMemoryMb(Scene3D scene) {
   final textures = <String>{};
   for (final node in scene.nodes) {
     final meshes = <Element3DMesh?>[node.mesh, node.mediumMesh, node.lowMesh];
+    bytes += node.modelAsset?.estimatedBytes ?? 0;
+    for (final material in node.modelAsset?.data['materials'] as List? ?? []) {
+      if (material['image'] != null) textures.add(material['image'] as String);
+    }
     for (final mesh in meshes) {
       if (mesh == null) continue;
       bytes += mesh.verts.length * 3 * 8;
@@ -1817,8 +1975,8 @@ double estimateSceneMemoryMb(Scene3D scene) {
   // Texturas sao limitadas a 1024 e guardam mipmaps.
   bytes += textures.length * 1024 * 1024 * 4 * 4 / 3;
   if (scene.panorama.hasImage) {
-    bytes += 512 * 256 * 4;
-    bytes += 128 * 128 * 3 * 4 * 6 * 4 / 3;
+    bytes += 1024 * 512 * 4;
+    bytes += 256 * 256 * 3 * 4 * 6 * 4 / 3;
   }
   if (scene.reflectionProbe.enabled) {
     final side = scene.reflectionProbe.quality.faceResolution;

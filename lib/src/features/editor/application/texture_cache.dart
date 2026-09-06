@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -67,16 +68,32 @@ class TextureCache {
 
   Future<void> _load(String path) async {
     _loading.add(path);
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    ui.Codec? codec;
     try {
-      final bytes = await File(path).readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes, targetWidth: 1024);
+      final bytes = path.startsWith('data:')
+          ? UriData.parse(path).contentAsBytes()
+          : await File(path).readAsBytes();
+      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final scale = math.min(
+        1.0,
+        1024 / math.max(descriptor.width, descriptor.height),
+      );
+      codec = await descriptor.instantiateCodec(
+        targetWidth: math.max(1, (descriptor.width * scale).round()),
+        targetHeight: math.max(1, (descriptor.height * scale).round()),
+      );
       final frame = await codec.getNextFrame();
-      codec.dispose();
       _images[path] = frame.image;
       revision.value++;
     } catch (_) {
       _failed.add(path);
     } finally {
+      codec?.dispose();
+      descriptor?.dispose();
+      buffer?.dispose();
       _loading.remove(path);
     }
   }

@@ -10,6 +10,14 @@ import 'param_sheet_shell.dart';
 export 'param_sheet_shell.dart'
     show ParamSheetScope, RecentSheets, closeParamSheet;
 
+// O dono da folha é o Scaffold, nunca uma rota inferida de um contexto antigo.
+final _activeParamSheets = <ScaffoldState, VoidCallback>{};
+
+void closeActiveParamSheet(BuildContext context) {
+  final host = Scaffold.maybeOf(context) ?? paramSheetHostKey.currentState;
+  _activeParamSheets[host]?.call();
+}
+
 /// Mini-transporte para dentro dos sheets de parametros: play/pause,
 /// voltar ao inicio e SCRUB — da para criar keyframes em tempos
 /// diferentes sem fechar o painel. O sheet pai ja escuta o clock.
@@ -208,10 +216,12 @@ Future<void> showParamSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
   );
+  _activeParamSheets[host] = fechar;
   try {
     await controller.closed;
   } finally {
     fechada = true;
+    if (_activeParamSheets[host] == fechar) _activeParamSheets.remove(host);
   }
 }
 
@@ -410,15 +420,17 @@ class AmRailButton extends StatelessWidget {
     required this.child,
     this.selected = false,
     this.onTap,
+    this.tooltip,
   });
 
   final Widget child;
   final bool selected;
   final VoidCallback? onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final button = GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
@@ -432,6 +444,7 @@ class AmRailButton extends StatelessWidget {
         child: Center(child: child),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 

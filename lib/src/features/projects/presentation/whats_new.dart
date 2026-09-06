@@ -16,6 +16,21 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.wand_stars,
+    'FX V2: processamento por pixel',
+    '30 efeitos ganharam kernels novos: cor, ruido, distorcao, blur e glitch. '
+        'Os dois glows ganharam extracao por brilho e resposta tonal. '
+        'Os outros operadores continuam em seus compositores especializados. '
+        'O processamento e SDR; nao e uma equivalencia certificada ao After Effects.',
+  ),
+  NewsItem(
+    CupertinoIcons.book,
+    'Como usar o AUREA, dentro do app',
+    'Abra Sobre > Como usar o AUREA, ou toque em ? no painel de efeitos. '
+        'Guia rapido para criar, animar, combinar efeitos e exportar, '
+        'com busca e explicacao dos 43 efeitos. Funciona sem internet.',
+  ),
+  NewsItem(
     CupertinoIcons.square_grid_2x2,
     'De volta ao nucleo',
     'O app abre no NUCLEO: projeto, video, imagem e audio, cortes com '

@@ -16,6 +16,7 @@ import '../../editor/domain/cut_ops.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/presentation/am/am_colors.dart';
 import '../../editor/presentation/widgets/dither_layer.dart';
+import '../../editor/presentation/widgets/pixel_effect_engine.dart';
 import '../../editor/presentation/widgets/preview_stage.dart';
 import '../../editor/application/duck_service.dart';
 import '../../editor/application/media_preview_service.dart';
@@ -67,7 +68,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   void initState() {
     super.initState();
     // O shader precisa estar carregado antes do primeiro quadro.
-    DitherLayer.warmUp().then((_) {
+    Future.wait([DitherLayer.warmUp(), PixelEffectEngine.warmUp()]).then((_) {
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _rodar());
       }
@@ -265,6 +266,9 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         if (panorama.showBackground) texturePaths.add(panorama.sourcePath!);
       }
       for (final node in layer.scene.nodes) {
+        for (final m in node.modelAsset?.data['materials'] as List? ?? []) {
+          if (m['image'] != null) texturePaths.add(m['image'] as String);
+        }
         final material = node.material;
         final imagePath = material.imagePath;
         if (imagePath != null && imagePath.isNotEmpty) {
@@ -281,7 +285,10 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
 
     final labels = <String>[
       for (final layer in panoramas) 'panorama de "${layer.name}"',
-      for (final path in texturePaths) 'textura "$path"',
+      for (final path in texturePaths)
+        path.startsWith('data:')
+            ? 'textura embutida do modelo'
+            : 'textura "$path"',
     ];
     final jobs = <Future<bool>>[
       for (final layer in panoramas)

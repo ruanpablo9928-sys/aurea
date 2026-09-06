@@ -6,12 +6,18 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../editor/domain/project_store.dart';
 import '../../editor/domain/video_project.dart';
+import 'bundled_project_installation.dart';
 
 /// Persistencia dos projetos: um JSON por projeto em
 /// `<documentos do app>/projects/<id>.json`, escrito de forma atomica
 /// (.tmp -> rename) para nunca deixar arquivo pela metade.
 class ProjectRepository {
+  ProjectRepository({Directory? directory, this.installBundledExamples = true})
+    : _cached = directory;
+
+  final bool installBundledExamples;
   Directory? _cached;
+  Future<void>? _installing;
 
   Future<Directory> _dir() async {
     if (_cached != null) return _cached!;
@@ -23,6 +29,16 @@ class ProjectRepository {
 
   Future<List<VideoProject>> loadAll() async {
     final dir = await _dir();
+    if (installBundledExamples) {
+      try {
+        await (_installing ??= installBundledAbyss(dir));
+      } catch (e) {
+        // A full disk must not hide projects that are already saved. Retry
+        // installation on the next read; the installer never overwrites edits.
+        _installing = null;
+        debugPrint('Exemplo ABISMO ainda nao instalado: $e');
+      }
+    }
     final out = <VideoProject>[];
     for (final f in dir.listSync()) {
       if (f is! File || !f.path.endsWith('.json')) continue;

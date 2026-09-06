@@ -512,6 +512,69 @@ Future<LayerMenuAction?> showLayerMenu(
   );
 }
 
+/// Selecionar revela ferramentas sem abrir um modal. O contrato e os comandos
+/// são os mesmos do menu completo; as utilidades continuam em Mais ações.
+class LayerToolsDock extends ConsumerWidget {
+  const LayerToolsDock({
+    super.key,
+    required this.layer,
+    required this.playback,
+    required this.onAction,
+    required this.onMore,
+  });
+
+  final Layer layer;
+  final PlaybackController playback;
+  final ValueChanged<LayerMenuAction> onAction;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ColoredBox(
+    color: AmColors.panel,
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Ferramentas da camada',
+                  style: TextStyle(color: AmColors.muted, fontSize: 12),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('layer-more-actions'),
+                onPressed: onMore,
+                child: const Text(
+                  'Mais ações',
+                  style: TextStyle(color: AmColors.accent, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          ..._fileiras(
+            secoesDe(layer),
+            (section) => _tileDaSecao(
+              section,
+              context: context,
+              ref: ref,
+              layer: layer,
+              playback: playback,
+              fecharCom: onAction,
+              abrirDepois: (open) {
+                playback.pause();
+                open();
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// UM TILE DA GRADE: icone, rotulo e o que ele abre.
 typedef _Tile = ({IconData icone, String rotulo, VoidCallback onTap});
 

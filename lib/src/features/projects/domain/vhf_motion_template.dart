@@ -150,14 +150,16 @@ ShapeLayer _draw(
       _map(paths[i], (p) => p - centers[i]),
   ];
   bool samePath(BezierPath x, BezierPath y) {
-    if (x.closed != y.closed || x.vertices.length != y.vertices.length)
+    if (x.closed != y.closed || x.vertices.length != y.vertices.length) {
       return false;
+    }
     for (var j = 0; j < x.vertices.length; j++) {
       final p = x.vertices[j], q = y.vertices[j];
       if ((p.p - q.p).distanceSquared > 1e-12 ||
           (p.inT - q.inT).distanceSquared > 1e-12 ||
-          (p.outT - q.outT).distanceSquared > 1e-12)
+          (p.outT - q.outT).distanceSquared > 1e-12) {
         return false;
+      }
     }
     return true;
   }
