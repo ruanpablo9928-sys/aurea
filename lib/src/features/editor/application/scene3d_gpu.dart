@@ -38,6 +38,7 @@ class Scene3DGpu {
   static Future<void>? _preparo;
   static bool _prontoParaRender = false;
   static bool _falhou = false;
+  static String _motivo = '';
 
   /// Carrega os shaders e recursos estaticos do motor. Falha em silencio
   /// (com log) onde nao ha GPU: [pronto] fica false e o pintor em CPU
@@ -60,13 +61,31 @@ class Scene3DGpu {
       _prontoParaRender = fs.Scene.isReadyToRender;
       _falhou = !_prontoParaRender;
       if (_falhou) {
+        _motivo = 'os recursos do motor nao carregaram';
         debugPrint('Motor 3D em GPU indisponivel; fica o pintor em CPU.');
       }
     } catch (e, st) {
       _falhou = true;
+      _motivo = '$e';
       debugPrint('Motor 3D em GPU indisponivel; pintor em CPU: $e\n$st');
     }
   }
+
+  /// COMO A CENA 3D ESTA SENDO DESENHADA, em duas letras.
+  ///
+  /// Isto aparece no app de proposito. Um motor que cai para o pintor em
+  /// CPU nao pode ser segredo: a diferenca entre os dois e a diferenca
+  /// entre uma cena que roda e uma que engasga, e quem esta com o
+  /// aparelho na mao e a unica pessoa que consegue ver qual dos dois
+  /// esta valendo.
+  static String get comoDesenha => _prontoParaRender
+      ? 'GPU'
+      : _falhou
+      ? 'CPU'
+      : '...';
+
+  /// Por que caiu para o pintor em CPU, quando caiu.
+  static String get motivo => _motivo;
 
   /// O motor esta pronto para desenhar?
   static bool get pronto => _prontoParaRender;

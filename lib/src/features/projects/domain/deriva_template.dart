@@ -43,7 +43,7 @@ const derivaHeight = 720.0;
 
 /// O teto de triangulos por quadro: sem o astronauta importado a cena e
 /// leve; com ele, cabe folgado no que um iPhone 13 renderiza.
-const derivaTriangleBudget = 95000;
+const derivaTriangleBudget = 40000;
 
 /// Os tempos das tres tomadas, em segundos.
 const derivaTomadas = [0.0, 6.0, 11.0];
@@ -336,7 +336,7 @@ List<SceneNode> _destrocos() => [
           rotX: _sample((t) => t * (5 + k * 3.5)),
           rotY: _sample((t) => -t * (4 + k * 2.5)),
           instancias: [
-            for (var i = 0; i < 16; i++)
+            for (var i = 0; i < 9; i++)
               () {
                 final base = astronautaEm(0);
                 return Vec3(

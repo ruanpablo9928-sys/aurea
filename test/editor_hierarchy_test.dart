@@ -13,6 +13,7 @@ import 'package:aurea/src/features/editor/presentation/am/param_sheet_shell.dart
     show ParamSheetShell;
 import 'package:aurea/src/features/editor/presentation/am/property_keyframe_context.dart';
 import 'package:aurea/src/features/editor/presentation/am/transform_panel.dart';
+import 'package:aurea/src/features/editor/presentation/am/scene3d_studio.dart';
 import 'package:aurea/src/features/editor/presentation/editor_screen.dart';
 import 'package:aurea/src/features/projects/application/projects_controller.dart';
 import 'package:flutter/material.dart' hide Easing;
@@ -277,10 +278,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cena 3D'));
       await tester.pumpAndSettle();
-      expect(find.byType(ParamSheetShell), findsOneWidget);
+      // A cena 3D abre o ESTUDIO — e la que ela se edita.
+      expect(find.byType(Scene3DStudio), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.byType(ParamSheetShell), findsNothing);
+      expect(find.byType(Scene3DStudio), findsNothing);
       expect(find.byType(EditorScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

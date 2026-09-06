@@ -43,7 +43,7 @@ const monolitoTriangleBudget = 17000;
 
 /// Com os modelos reais (astronauta, portal, arvores escaneadas) a cena
 /// e para a GPU; este e o teto que ainda cabe num iPhone 13.
-const monolitoTriangleBudgetComModelos = 200000;
+const monolitoTriangleBudgetComModelos = 80000;
 
 Duration _t(num seconds) =>
     Duration(microseconds: (seconds * 1000000).round());
@@ -295,11 +295,13 @@ SceneNode _portal(MonolitoModelos modelos) {
   );
 }
 
-/// AS ARVORES ESCANEADAS nas duas posicoes mais proximas da camera (47
-/// mil faces cada; a terceira ja passaria do teto). O escaneamento e
-/// Z-para-cima: deitar em X poe o tronco de pe.
+/// A ARVORE ESCANEADA na posicao mais proxima da camera. Uma so: no
+/// pintor em CPU cada copia custa a malha inteira de novo, e uma arvore
+/// de verdade em primeiro plano ja faz o trabalho que as procedurais do
+/// fundo nao fazem. O escaneamento e Z-para-cima: deitar em X poe o
+/// tronco de pe.
 List<SceneNode> _arvoresReais(MonolitoModelos modelos) => [
-      for (var k = 0; k < 2; k++)
+      for (var k = 0; k < 1; k++)
         SceneNode(
           id: 'monolito_arvore_real_$k',
           name: 'Arvore escaneada ${k + 1}',
@@ -593,7 +595,7 @@ VideoProject buildMonolitoTemplate({MonolitoModelos? modelos}) {
       _chao(),
       _monolito(),
       if (modelos != null) ..._arvoresReais(modelos),
-      ..._arvoresDaFloresta(desde: modelos == null ? 0 : 2),
+      ..._arvoresDaFloresta(desde: modelos == null ? 0 : 1),
       _arbusto(),
       ..._grama(),
       _astronauta(modelos),

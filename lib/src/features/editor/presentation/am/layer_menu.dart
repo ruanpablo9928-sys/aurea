@@ -41,6 +41,7 @@ import 'panel_chrome.dart';
 import 'path_edit_sheet.dart';
 import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
+import 'scene3d_studio.dart';
 import 'speed_sheet.dart';
 import 'text_path_sheet.dart';
 import '../widgets/add_layer_sheet.dart' show showCaptionCreationSheet;
@@ -716,9 +717,15 @@ _Tile? _tileDaSecao(
     AmSecao.cena3d => (
       icone: CupertinoIcons.cube_box,
       rotulo: layer is Scene3DLayer ? 'Cena 3D' : 'Elemento\n3D',
+      // UMA CENA 3D SE EDITA NO ESTUDIO: e la que se orbita, se escolhe
+      // objeto e se alinha camera. Esta secao abria a ficha de
+      // parametros, e o Estudio ficava atras de um botao de texto no
+      // cabecalho dela — tres niveis ate o lugar onde o trabalho
+      // acontece. Agora e o contrario: o Estudio abre direto, e a ficha
+      // continua a um toque de dentro dele.
       onTap: () => abrirDepois(
         () => layer is Scene3DLayer
-            ? showScene3DSheet(context, ref, layer.id)
+            ? openScene3DStudio(context, ref, layer.id)
             : showElement3DSheet(context, ref, layer.id),
       ),
     ),

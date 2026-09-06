@@ -16,6 +16,17 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.cube,
+    'A cena 3D abre no Estudio, e mais leve',
+    'Tocar em Cena 3D no menu da camada leva DIRETO ao Estudio — antes o '
+        'Estudio ficava atras de um botao de texto dentro da ficha de '
+        'parametros, tres niveis abaixo. E os modelos empacotados foram '
+        'reduzidos (astronauta, portal e arvore): o quadro custava 103 ms '
+        'na Deriva e 288 ms no Monolito, agora custa 40 e 78. O cracha da '
+        'ficha diz GPU ou CPU: se disser CPU, um aviso explica que este '
+        'aparelho nao esta usando o motor 3D — e por isso engasga.',
+  ),
+  NewsItem(
     CupertinoIcons.sparkles,
     'Modelo DERIVA: o astronauta perdido, em tres tomadas',
     'Dezoito segundos de cinema numa cena 3D so: o plano aberto onde ele '

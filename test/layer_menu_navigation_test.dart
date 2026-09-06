@@ -6,6 +6,7 @@ import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:aurea/src/features/editor/presentation/am/am_widgets.dart';
 import 'package:aurea/src/features/editor/presentation/am/layer_menu.dart';
+import 'package:aurea/src/features/editor/presentation/am/scene3d_studio.dart';
 import 'package:aurea/src/features/editor/presentation/am/param_sheet_shell.dart'
     show ParamSheetShell;
 import 'package:aurea/src/features/editor/presentation/widgets/add_layer_sheet.dart';
@@ -74,8 +75,9 @@ void main() {
     const Duration(seconds: 5),
   );
 
+  // A secao da cena 3D nao entra neste laco: ela abre o ESTUDIO (uma
+  // rota), nao uma ficha de parametros. O teste dela vem logo abaixo.
   final cases = <(String, void Function(EditorController), String)>[
-    ('Cena 3D', scene, 'Cena 3D'),
     ('cor da cena 3D', scene, 'Cor e\npreench.'),
     ('cameras', scene, 'Cameras'),
     ('Grid / Clonar', grid, 'Clonar'),
@@ -159,8 +161,36 @@ void main() {
     oldTap();
     await tester.pumpAndSettle();
     expect(observer.pagesPopped, 0);
-    expect(find.byType(ParamSheetShell), findsOneWidget);
+    // Um toque duplo nao pode empilhar dois Estudios — nem retirar o
+    // editor com um segundo pop.
+    expect(find.byType(Scene3DStudio), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Cena 3D abre o Estudio sem retirar o editor', (tester) async {
+    final (observer, container) = await openEditor(tester, scene);
+    final project = container.read(editorControllerProvider);
+    // Duas voltas: abrir, voltar, abrir de novo — e o que pega um
+    // callback que continua fechando o menu antigo.
+    for (var volta = 0; volta < 2; volta++) {
+      await tester.tap(find.text('abrir menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cena 3D'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Scene3DStudio), findsOneWidget);
+      expect(
+        observer.pagesPopped,
+        volta,
+        reason: 'abrir o Estudio nao pode retirar o editor',
+      );
+      expect(tester.takeException(), isNull);
+      // Voltar do Estudio devolve o editor inteiro.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(Scene3DStudio), findsNothing);
+      expect(find.text('editor aberto'), findsOneWidget);
+    }
+    expect(container.read(editorControllerProvider), same(project));
   });
 
   for (final name in ['Grid', 'Cena 3D']) {

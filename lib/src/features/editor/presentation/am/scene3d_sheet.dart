@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
 import '../../application/panorama_cache.dart';
+import '../../application/scene3d_gpu.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/element3d.dart';
 import '../../domain/keyframe.dart';
@@ -103,6 +104,7 @@ Future<void> showScene3DSheet(
                   ],
                 ),
               ),
+              const _AvisoDoMotor(),
               _Tabs(
                 labels: const [
                   'Objetos',
@@ -2983,6 +2985,40 @@ class _ColorRow extends StatelessWidget {
 }
 
 /// SELO DISCRETO do orcamento (§10) — nunca um dialogo.
+/// O AVISO DE QUE A CENA ESTA NO PINTOR EM CPU.
+///
+/// Sem motor em GPU nao ha profundidade real, sombra nem brilho — e o
+/// desenho custa dezenas de vezes mais, o que aparece como engasgo na
+/// reproducao. Isso precisa estar escrito onde a pessoa mexe na cena, e
+/// nao so num log que ninguem le.
+class _AvisoDoMotor extends StatelessWidget {
+  const _AvisoDoMotor();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Scene3DGpu.indisponivel) return const SizedBox.shrink();
+    final motivo = Scene3DGpu.motivo;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0x33FFB020),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        'Este aparelho esta desenhando a cena no pintor em CPU: sem sombra '
+        'nem brilho, e bem mais lento.'
+        '${motivo.isEmpty ? '' : ' Motivo: $motivo'}',
+        style: const TextStyle(
+          fontSize: 11,
+          height: 1.3,
+          color: Color(0xFFFFC868),
+        ),
+      ),
+    );
+  }
+}
+
 class _BudgetBadge extends StatelessWidget {
   const _BudgetBadge({required this.layer});
 
@@ -3007,7 +3043,8 @@ class _BudgetBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(7),
       ),
       child: Text(
-        '${frame.drawCalls} chamadas · ${frame.triangles} tri · '
+        '${Scene3DGpu.comoDesenha} · ${frame.drawCalls} chamadas · '
+        '${frame.triangles} tri · '
         '${estimateSceneMemoryMb(layer.scene).toStringAsFixed(1)} MB',
         style: TextStyle(
           fontSize: 10,
