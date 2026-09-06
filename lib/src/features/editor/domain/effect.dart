@@ -236,6 +236,7 @@ class EffectSpec {
     required this.name,
     required this.params,
     this.hasColor = false,
+    this.defaultColor = const Color(0xFFFF5566),
     this.extraColors = 0,
     this.category = 'Estilizar',
     this.synonyms = const [],
@@ -261,6 +262,15 @@ class EffectSpec {
 
   /// Cor principal do efeito (alem dos parametros de cor).
   final bool hasColor;
+
+  /// A COR COM QUE O EFEITO NASCE.
+  ///
+  /// Um efeito que NAO tem seletor de cor ([hasColor] falso) usa esta e
+  /// so esta — e por isso ela precisa ser NEUTRA para o que o efeito
+  /// faz: preto para a vinheta (escurecer), branco para brilho, raios e
+  /// ruido (multiplicar sem tingir). O padrao rosa existe para os
+  /// efeitos que abrem o seletor e querem uma cor visivel de saida.
+  final Color defaultColor;
 
   /// Quantas cores ALEM da principal o efeito pede (gradiente de
   /// quatro cores pede tres).
@@ -325,6 +335,7 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
   EffectType.lightGlow: EffectSpec(
     id: 'glow',
+    defaultColor: Color(0xFFFFFFFF),
     name: 'Glow',
     category: 'Light',
     synonyms: ['brilho', 'luz', 'glow', 'bloom', 'brilho'],
@@ -383,6 +394,7 @@ const effectSpecs = <EffectType, EffectSpec>{
   // (aproximacao do Glow Volumetrico; conservacao plena exige linear).
   EffectType.glowVol: EffectSpec(
     id: 'deep_glow',
+    defaultColor: Color(0xFFFFFFFF),
     name: 'Deep Glow',
     category: 'Light',
     synonyms: [
@@ -849,6 +861,7 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
   EffectType.vignette: EffectSpec(
     id: 'vignette',
+    defaultColor: Color(0xFF000000),
     name: 'Vignette',
     category: 'Lens',
     synonyms: ['vinheta', 'vignette', 'borda escura'],
@@ -927,6 +940,7 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
   EffectType.lightRays: EffectSpec(
     id: 'light_rays',
+    defaultColor: Color(0xFFFFFFFF),
     name: 'Light Rays',
     category: 'Light',
     synonyms: [
@@ -982,6 +996,7 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
   EffectType.fractalNoise: EffectSpec(
     id: 'fractal_noise',
+    defaultColor: Color(0xFFFFFFFF),
     name: 'Fractal Noise',
     category: 'Generate',
     synonyms: [
@@ -1811,11 +1826,12 @@ class EffectInstance {
     String? id,
     required this.type,
     Map<String, AnimatedDouble>? params,
-    this.color = const Color(0xFFFF5566),
+    Color? color,
     this.enabled = true,
     this.depth = EffectDepth.pronto,
     List<Color>? extraColors,
   }) : id = id ?? const Uuid().v4(),
+       color = color ?? effectSpecs[type]!.defaultColor,
        extraColors = List.unmodifiable(
          extraColors ??
              List<Color>.generate(

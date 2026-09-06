@@ -47,7 +47,12 @@ Future<MonolitoModelos> carregarMonolitoModelos() =>
       throw e;
     });
 
-Future<MonolitoModelos> _carregar() async {
+Future<MonolitoModelos> _carregar() async =>
+    carregarMonolitoModelosDe(await _pastaPreparada());
+
+/// Os assets viram arquivos de verdade uma vez: o importador le do disco
+/// (em isolate), como faria com o que o usuario escolhe.
+Future<String> _pastaPreparada() async {
   final docs = await getApplicationDocumentsDirectory();
   final dir = Directory('${docs.path}/modelos/monolito');
   await dir.create(recursive: true);
@@ -57,18 +62,25 @@ Future<MonolitoModelos> _carregar() async {
     final dados = await rootBundle.load('$_pasta/$nome');
     await f.writeAsBytes(dados.buffer.asUint8List(), flush: true);
   }
-  return carregarMonolitoModelosDe(dir.path);
+  return dir.path;
 }
+
+/// SO O ASTRONAUTA: as cenas que nao precisam do portal nem da arvore
+/// (a Deriva) pagam so por ele.
+Future<ModelAsset3D> carregarAstronauta() async =>
+    carregarAstronautaDe(await _pastaPreparada());
+
+Future<ModelAsset3D> carregarAstronautaDe(String pasta) => readModel3DFiles([
+      '$pasta/astronauta.obj',
+      '$pasta/astronauta.mtl',
+      '$pasta/Astronaut_BaseColornew.jpeg',
+    ]);
 
 /// Importa os tres modelos de uma pasta com os arquivos ja no lugar
 /// (a bancada de render usa a pasta de assets do projeto direto).
 Future<MonolitoModelos> carregarMonolitoModelosDe(String pasta) async {
   String p(String nome) => '$pasta/$nome';
-  final astronauta = await readModel3DFiles([
-    p('astronauta.obj'),
-    p('astronauta.mtl'),
-    p('Astronaut_BaseColornew.jpeg'),
-  ]);
+  final astronauta = await carregarAstronautaDe(pasta);
   final portal = acenderPortal(
     await readModel3DFiles([
       p('portal.obj'),

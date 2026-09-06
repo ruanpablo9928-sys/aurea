@@ -8,7 +8,7 @@ import 'package:aurea/src/features/editor/domain/model_asset3d.dart';
 /// FERRAMENTA DE MESA (nao e teste): decodifica um FBX pesado pelo
 /// importador do app, sem o teto de triangulos, e escreve a malha como
 /// OBJ com UV em build/ — para ser decimada fora e voltar como asset
-/// leve. So roda com AUREA_FBX=<caminho>.
+/// leve. So roda com a variavel AUREA_FBX apontando para o arquivo.
 ///
 ///   AUREA_FBX=assets/models/monolito/astronauta.fbx flutter test test/ferramenta_exportar_fbx_obj_test.dart
 void main() {

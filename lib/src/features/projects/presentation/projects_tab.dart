@@ -21,7 +21,8 @@ import '../application/thumbnail_service.dart';
 import '../domain/alight_xml_import.dart';
 import '../domain/abyss_cinematic_template.dart';
 import '../domain/colina_tv_template.dart';
-import '../application/monolito_assets.dart';
+import '../domain/deriva_template.dart';
+import '../application/modelos_empacotados.dart';
 import '../domain/monolito_template.dart';
 import '../domain/notes_motion_template.dart';
 import '../domain/pindown_motion_template.dart';
@@ -74,6 +75,25 @@ class ProjectsTab extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Nao consegui preparar o motion VHF. Tente novamente.'),
+      ));
+    }
+  }
+
+  /// A Deriva usa so o astronauta: prepara o modelo e abre.
+  Future<void> _openDeriva(BuildContext context, WidgetRef ref) async {
+    try {
+      final astronauta = await carregarAstronauta();
+      if (context.mounted) {
+        await _abrirModelo(
+          context,
+          ref,
+          buildDerivaTemplate(astronauta: astronauta),
+        );
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Nao consegui preparar o astronauta: $e'),
       ));
     }
   }
@@ -422,6 +442,12 @@ class ProjectsTab extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
+                  _CartaoModelo(
+                    imagem: 'assets/templates/deriva.jpg',
+                    titulo: 'DERIVA · O astronauta perdido',
+                    detalhe: '18 s · tres tomadas · luz de vacuo',
+                    onTap: () => _openDeriva(context, ref),
+                  ),
                   _CartaoModelo(
                     imagem: 'assets/templates/monolito.jpg',
                     titulo: 'MONOLITO · O astronauta e a porta',

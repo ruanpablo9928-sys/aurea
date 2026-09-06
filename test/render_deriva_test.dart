@@ -12,22 +12,22 @@ import 'package:aurea/src/features/editor/application/video_layer_manager.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/preview_stage.dart';
 import 'package:aurea/src/features/projects/application/modelos_empacotados.dart';
-import 'package:aurea/src/features/projects/domain/monolito_template.dart';
+import 'package:aurea/src/features/projects/domain/deriva_template.dart';
 
-/// RENDER DE MESA do MONOLITO: os quadros do modelo, pintados pelo mesmo
+/// RENDER DE MESA da DERIVA: os quadros do modelo, pintados pelo mesmo
 /// motor de composicao do app, salvos em PNG — a bancada para comparar
 /// com a referencia sem passar pelo aparelho. So roda com
 /// AUREA_RENDER=1; AUREA_RENDER_STEP pula quadros.
 ///
 ///   AUREA_RENDER=1 AUREA_RENDER_STEP=15 flutter test test/render_colina_test.dart
 void main() {
-  testWidgets('renderiza o Monolito em quadros', (tester) async {
+  testWidgets('renderiza a Deriva em quadros', (tester) async {
     if (Platform.environment['AUREA_RENDER'] != '1') return;
 
-    final modelos = await tester.runAsync(
-      () => carregarMonolitoModelosDe('assets/models/monolito'),
+    final astronauta = await tester.runAsync(
+      () => carregarAstronautaDe('assets/models/monolito'),
     );
-    final project = buildMonolitoTemplate(modelos: modelos);
+    final project = buildDerivaTemplate(astronauta: astronauta);
     // As texturas sao data URIs: precisam estar decodificadas antes do
     // primeiro quadro, senao as faces saem lisas.
     await tester.runAsync(() async {
@@ -84,7 +84,7 @@ void main() {
       ),
     ));
 
-    final outDir = Directory('build/render/monolito');
+    final outDir = Directory('build/render/deriva');
     if (outDir.existsSync()) outDir.deleteSync(recursive: true);
     outDir.createSync(recursive: true);
 

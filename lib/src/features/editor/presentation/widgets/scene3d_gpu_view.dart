@@ -93,17 +93,23 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
       rascunho: widget.rascunho || widget.view != SceneView.camera,
     );
     return CustomPaint(
-      painter: _PintorGpu(gpu, widget.renderCamera),
+      painter: _PintorGpu(gpu, widget.renderCamera, widget.scene.background),
       size: Size.infinite,
     );
   }
 }
 
 class _PintorGpu extends CustomPainter {
-  _PintorGpu(this.gpu, this.camera);
+  _PintorGpu(this.gpu, this.camera, this.fundo);
 
   final Scene3DGpu gpu;
   final RenderCamera camera;
+
+  /// O FUNDO da cena. O motor em GPU limpa para transparente e desenha o
+  /// ceu so quando ha panorama; uma cena com cor de fundo (o preto do
+  /// espaco) precisa dela pintada aqui, senao o que aparece atras e a
+  /// composicao.
+  final Color? fundo;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -111,6 +117,7 @@ class _PintorGpu extends CustomPainter {
     final area = Offset.zero & size;
     canvas.save();
     canvas.clipRect(area);
+    if (fundo != null) canvas.drawRect(area, Paint()..color = fundo!);
     gpu.desenhar(canvas, area, gpu.camera(camera, size));
     canvas.restore();
   }

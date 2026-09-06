@@ -10,7 +10,7 @@ import '../../editor/domain/panorama3d.dart';
 import '../../editor/domain/scene3d.dart';
 import '../../editor/domain/shape.dart';
 import '../../editor/domain/video_project.dart';
-import '../application/monolito_assets.dart';
+import '../application/modelos_empacotados.dart';
 import 'abyss_cinematic_template.dart' show buildAbyssExplorer;
 import 'malha_codigo.dart';
 import 'textura_procedural.dart';

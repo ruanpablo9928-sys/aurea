@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/project_store.dart';
 import 'package:aurea/src/features/editor/domain/scene3d.dart';
-import 'package:aurea/src/features/projects/application/monolito_assets.dart';
+import 'package:aurea/src/features/projects/application/modelos_empacotados.dart';
 import 'package:aurea/src/features/projects/domain/monolito_template.dart';
 
 /// O MONOLITO tem de caber num iPhone e sobreviver ao JSON: orcamento

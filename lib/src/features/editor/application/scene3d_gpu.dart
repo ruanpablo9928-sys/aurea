@@ -45,6 +45,14 @@ class Scene3DGpu {
   static Future<void> preparar() => _preparo ??= _prepararDeVerdade();
 
   static Future<void> _prepararDeVerdade() async {
+    // Nos testes (Skia) e fora de iOS/Android o Flutter GPU nao existe:
+    // nem tentar, para nao vazar a excecao do motor no laco de teste.
+    if (kIsWeb ||
+        Platform.environment.containsKey('FLUTTER_TEST') ||
+        !(Platform.isIOS || Platform.isAndroid)) {
+      _falhou = true;
+      return;
+    }
     try {
       // initializeStaticResources engole a falha (sem GPU) e devolve
       // normalmente; a verdade esta em isReadyToRender.
@@ -103,7 +111,9 @@ class Scene3DGpu {
       up: _v(basis.up),
       fovRadiansY: fovY.clamp(0.05, 3.0),
       fovNear: math.max(1.0, cam.near),
-      fovFar: 40000,
+      // Uma cena espacial poe estrelas a dezenas de milhares de
+      // unidades; o plano distante do dominio e 100 mil.
+      fovFar: math.min(cam.far, 120000),
     );
   }
 

@@ -16,6 +16,25 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.sparkles,
+    'Modelo DERIVA: o astronauta perdido, em tres tomadas',
+    'Dezoito segundos de cinema numa cena 3D so: o plano aberto onde ele '
+        'e pequeno, o retrato de perto com as estrelas fora de foco, e o '
+        'plano em que a camera para de segui-lo e ele vira um ponto. O '
+        'corte e de CAMERA, nao de projeto — por isso o corpo continua o '
+        'mesmo giro quando a tomada troca. Luz de vacuo: uma fonte dura e '
+        'a sombra sem preenchimento.',
+  ),
+  NewsItem(
+    CupertinoIcons.circle_lefthalf_fill,
+    'A vinheta nascia vermelha',
+    'Efeitos que modulam a imagem com uma cor — vinheta, os dois brilhos, '
+        'raios e ruido fractal — saiam todos no mesmo rosa de saida. Uma '
+        'vinheta recem-adicionada pintava a borda do quadro de vermelho '
+        'ate alguem achar o seletor. Agora cada um nasce na cor neutra da '
+        'operacao: preto para escurecer, branco para multiplicar.',
+  ),
+  NewsItem(
     CupertinoIcons.moon_stars,
     'Modelo MONOLITO: o astronauta e a porta',
     'Floresta noturna na neblina, um bloco de concreto com um portal '
