@@ -136,6 +136,7 @@ void main() {
         expect(find.byType(LayerToolsDock), findsOneWidget);
         expect(find.byType(BottomSheet), findsNothing);
         await capture(tester, 'selected-${size.width.toInt()}');
+        expect(tester.takeException(), isNull, reason: 'selected layer');
         await tester.tap(find.text('Mover e\ntransf.'));
         await tester.pumpAndSettle();
         final transform = tester.widget<TransformPanel>(
@@ -159,9 +160,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         await capture(tester, 'property-${size.width.toInt()}');
+        expect(tester.takeException(), isNull, reason: 'transform property');
         await tester.tap(find.byTooltip('Editar curva da propriedade'));
         await tester.pumpAndSettle();
         expect(find.byType(CurvePanel), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: 'curve panel');
         final project = c.read(editorControllerProvider);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();

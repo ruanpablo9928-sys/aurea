@@ -49,3 +49,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Published source archives used to vendor the renderer adapter.
+/tmp/thermion-source/
+/tmp/thermion-dart/
+/tmp/thermion-*.tar.gz

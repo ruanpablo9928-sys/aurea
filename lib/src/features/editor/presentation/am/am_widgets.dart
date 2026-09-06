@@ -241,11 +241,13 @@ class AmValueChip extends StatelessWidget {
     required this.text,
     this.label,
     this.width = 120,
+    this.compact = false,
   });
 
   final String text;
   final String? label;
   final double width;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -254,7 +256,7 @@ class AmValueChip extends StatelessWidget {
       children: [
         Container(
           width: width,
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: EdgeInsets.symmetric(vertical: compact ? 6 : 10),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AmColors.chip,
@@ -262,8 +264,9 @@ class AmValueChip extends StatelessWidget {
           ),
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 19,
+              height: compact ? 1.1 : null,
               fontWeight: FontWeight.w600,
               color: AmColors.accent,
             ),
@@ -273,7 +276,11 @@ class AmValueChip extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label!,
-            style: const TextStyle(fontSize: 11, color: AmColors.muted),
+            style: TextStyle(
+              fontSize: 11,
+              height: compact ? 1.1 : null,
+              color: AmColors.muted,
+            ),
           ),
         ],
       ],

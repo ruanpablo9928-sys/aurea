@@ -14,6 +14,8 @@ import 'package:video_player/video_player.dart';
 import '../../application/texture_cache.dart';
 import '../../application/blob_track_service.dart';
 import '../../application/editor_controller.dart';
+import '../../application/freehand_session.dart' show onionSkinProvider;
+export '../../application/freehand_session.dart' show onionSkinProvider;
 import '../../application/playback_controller.dart';
 import '../../application/preview_stats.dart';
 import '../../application/video_layer_manager.dart';
@@ -53,6 +55,7 @@ import 'preview_raster.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import '../../application/scene3d_gpu.dart';
+import '../../application/renderer3d/filament_renderer.dart' show filamentPreviewEnabled;
 import 'scene3d_painter.dart';
 import 'scene3d_gpu_view.dart';
 
@@ -69,6 +72,31 @@ class PreviewStage extends ConsumerStatefulWidget {
 }
 
 class _PreviewStageState extends ConsumerState<PreviewStage> {
+  @override
+  void initState() {
+    super.initState();
+    widget.playback.playing.addListener(_playbackChanged);
+  }
+
+  @override
+  void didUpdateWidget(PreviewStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playback != widget.playback) {
+      oldWidget.playback.playing.removeListener(_playbackChanged);
+      widget.playback.playing.addListener(_playbackChanged);
+    }
+  }
+
+  void _playbackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.playback.playing.removeListener(_playbackChanged);
+    super.dispose();
+  }
+
   double _startScale = 1;
   double _startRotation = 0;
   double _stageScale = 1;
@@ -190,164 +218,213 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     final project = ref.watch(editorControllerProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final onion = ref.watch(onionSkinProvider);
+    final drawing = ref.watch(freehandRequestProvider);
     final compW = project.outputWidth.toDouble();
     final compH = project.outputHeight.toDouble();
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onScaleStart: _onScaleStart,
-      onScaleUpdate: _onScaleUpdate,
-      child: ColoredBox(
-        color: Colors.black,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = math.min(
-              constraints.maxWidth / compW,
-              constraints.maxHeight / compH,
-            );
-            _stageScale = scale;
-            return Center(
-              child: SizedBox(
-                width: compW * scale,
-                height: compH * scale,
-                child: ClipRect(
-                  child: Transform.scale(
-                    scale: scale,
-                    alignment: Alignment.topLeft,
-                    child: MediaQuery(
-                      // FOTOS NA RESOLUCAO DA TELA. Tudo que fotografa a
-                      // composicao (efeitos, mescla, dithering) le a razao
-                      // de pixels daqui: com a do aparelho, cada foto saia
-                      // em 1080x1920 x DPR — 75 MB por efeito por quadro no
-                      // iPhone, e o iOS fechava o app na primeira animacao.
-                      data: MediaQuery.of(context).copyWith(
-                        devicePixelRatio: previewRasterRatio(
-                          compWidth: compW,
-                          compHeight: compH,
-                          stageScale: scale,
-                          devicePixelRatio: MediaQuery.devicePixelRatioOf(
-                            context,
-                          ),
-                        ),
-                      ),
-                      child: OverflowBox(
+      onScaleStart: drawing ? null : _onScaleStart,
+      onScaleUpdate: drawing ? null : _onScaleUpdate,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(
+            color: Colors.black,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final scale = math.min(
+                  constraints.maxWidth / compW,
+                  constraints.maxHeight / compH,
+                );
+                _stageScale = scale;
+                return Center(
+                  child: SizedBox(
+                    width: compW * scale,
+                    height: compH * scale,
+                    child: ClipRect(
+                      // O filho precisa ter também a área de toque da
+                      // composição. Transform + OverflowBox só escalava a
+                      // pintura e descartava gestos fora do canto superior.
+                      child: FittedBox(
+                        fit: BoxFit.contain,
                         alignment: Alignment.topLeft,
-                        minWidth: compW,
-                        maxWidth: compW,
-                        minHeight: compH,
-                        maxHeight: compH,
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            // DITHERING NO PREVIEW, so sem video na cena.
-                            //
-                            // Sombra ampla sobre fundo escuro BANDEIA em 8
-                            // bits, e gradiente suave e metade do visual
-                            // "Apple". O dithering resolve — mas ele
-                            // fotografa a composicao para rodar o shader,
-                            // e a textura de video nao entra nessa foto
-                            // (vira buraco preto). Entao: cena so de
-                            // grafismo ganha dithering; cena com video
-                            // fica sem, e o dithering dela acontece na
-                            // exportacao, onde o video chega como imagem.
-                            //
-                            // A foto e refeita a cada reconstrucao (a
-                            // invalidacao do FxSnapshot); sem isso o preview
-                            // congelava no primeiro quadro.
-                            ValueListenableBuilder<Duration>(
-                              valueListenable: widget.playback.time,
-                              builder: (context, t, child) =>
-                                  project.layers.any((l) => l is VideoLayer)
-                                  ? child!
-                                  : DitherLayer(
-                                      time: t,
-                                      // Escala do palco x DPR de verdade: e o
-                                      // tamanho da textura do filtro.
-                                      pixelRatio:
-                                          scale *
-                                          MediaQuery.devicePixelRatioOf(
-                                            context,
-                                          ),
-                                      child: child!,
-                                    ),
-                              child: CompositionView(
-                                time: widget.playback.time,
-                                videos: widget.videos,
-                                selectedId: selectedId,
+                        child: MediaQuery(
+                          // FOTOS NA RESOLUCAO DA TELA. Tudo que fotografa a
+                          // composicao (efeitos, mescla, dithering) le a razao
+                          // de pixels daqui: com a do aparelho, cada foto saia
+                          // em 1080x1920 x DPR — 75 MB por efeito por quadro no
+                          // iPhone, e o iOS fechava o app na primeira animacao.
+                          data: MediaQuery.of(context).copyWith(
+                            devicePixelRatio: previewRasterRatio(
+                              maxSidePx: widget.playback.playing.value
+                                  ? 1080
+                                  : 2160,
+                              compWidth: compW,
+                              compHeight: compH,
+                              stageScale: scale,
+                              devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                                context,
                               ),
                             ),
-                            // CASCA DE CEBOLA: os quadros vizinhos,
-                            // fantasmas, ATRAS do quadro atual. Passado
-                            // puxado para o vermelho, futuro para o
-                            // verde — e como se sabe de que lado esta.
-                            if (onion > 0)
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: ValueListenableBuilder<Duration>(
-                                    valueListenable: widget.playback.time,
-                                    builder: (context, t, _) {
-                                      final passo = Duration(
-                                        microseconds:
-                                            1000000 ~/
-                                            (project.fps < 1
-                                                ? 30
-                                                : project.fps),
-                                      );
-                                      return Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          for (var k = onion; k >= 1; k--)
-                                            for (final lado in const [-1, 1])
-                                              _Fantasma(
-                                                time: t + passo * (k * lado),
-                                                videos: widget.videos,
-                                                opacity: 0.34 / k,
-                                                futuro: lado > 0,
+                          ),
+                          child: SizedBox(
+                            width: compW,
+                            height: compH,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                // DITHERING NO PREVIEW, so sem video na cena.
+                                //
+                                // Sombra ampla sobre fundo escuro BANDEIA em 8
+                                // bits, e gradiente suave e metade do visual
+                                // "Apple". O dithering resolve — mas ele
+                                // fotografa a composicao para rodar o shader,
+                                // e a textura de video nao entra nessa foto
+                                // (vira buraco preto). Entao: cena so de
+                                // grafismo ganha dithering; cena com video
+                                // fica sem, e o dithering dela acontece na
+                                // exportacao, onde o video chega como imagem.
+                                //
+                                // A foto e refeita a cada reconstrucao (a
+                                // invalidacao do FxSnapshot); sem isso o preview
+                                // congelava no primeiro quadro.
+                                ValueListenableBuilder<Duration>(
+                                  valueListenable: widget.playback.time,
+                                  builder: (context, t, child) =>
+                                      project.layers.any((l) => l is VideoLayer)
+                                      ? child!
+                                      : DitherLayer(
+                                          time: t,
+                                          // Escala do palco x DPR de verdade: e o
+                                          // tamanho da textura do filtro.
+                                          pixelRatio:
+                                              scale *
+                                              MediaQuery.devicePixelRatioOf(
+                                                context,
                                               ),
-                                        ],
-                                      );
-                                    },
+                                          child: child!,
+                                        ),
+                                  child: CompositionView(
+                                    time: widget.playback.time,
+                                    videos: widget.videos,
+                                    selectedId: selectedId,
                                   ),
                                 ),
-                              ),
-                            // GUIAS, GRADE, AREAS SEGURAS e mascara de
-                            // enquadramento (PR-X3): vivem ACIMA da
-                            // composicao e nunca entram no render final.
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: CustomPaint(
-                                  painter: _GuidesPainter(
-                                    guides: project.guides,
-                                    compSize: Size(compW, compH),
+                                // CASCA DE CEBOLA: os quadros vizinhos,
+                                // fantasmas, ATRAS do quadro atual. Passado
+                                // puxado para o vermelho, futuro para o
+                                // verde — e como se sabe de que lado esta.
+                                if (onion > 0)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: ValueListenableBuilder<Duration>(
+                                        valueListenable: widget.playback.time,
+                                        builder: (context, t, _) {
+                                          final passo = Duration(
+                                            microseconds:
+                                                1000000 ~/
+                                                (project.fps < 1
+                                                    ? 30
+                                                    : project.fps),
+                                          );
+                                          return Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              for (var k = onion; k >= 1; k--)
+                                                for (final lado in const [
+                                                  -1,
+                                                  1,
+                                                ])
+                                                  _Fantasma(
+                                                    time:
+                                                        t + passo * (k * lado),
+                                                    videos: widget.videos,
+                                                    opacity: 0.34 / k,
+                                                    futuro: lado > 0,
+                                                  ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                // GUIAS, GRADE, AREAS SEGURAS e mascara de
+                                // enquadramento (PR-X3): vivem ACIMA da
+                                // composicao e nunca entram no render final.
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: CustomPaint(
+                                      painter: _GuidesPainter(
+                                        guides: project.guides,
+                                        compSize: Size(compW, compH),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                // NOS DA MASCARA: quando alguem esta editando
+                                // o caminho, o dedo passa a mexer nos nos em
+                                // vez de mover a camada. Fora disso o widget
+                                // nao existe e nao intercepta nada.
+                                Positioned.fill(
+                                  child: MaskNodeEditor(
+                                    time: widget.playback.time,
+                                    stageScale: () => _stageScale,
+                                  ),
+                                ),
+                                // DESENHO LIVRE: por cima de tudo enquanto o
+                                // pedido do menu estiver ligado.
+                                Positioned.fill(
+                                  child: FreehandOverlay(
+                                    key: ValueKey(project.id),
+                                    playback: widget.playback,
+                                  ),
+                                ),
+                              ],
                             ),
-                            // NOS DA MASCARA: quando alguem esta editando
-                            // o caminho, o dedo passa a mexer nos nos em
-                            // vez de mover a camada. Fora disso o widget
-                            // nao existe e nao intercepta nada.
-                            Positioned.fill(
-                              child: MaskNodeEditor(
-                                time: widget.playback.time,
-                                stageScale: () => _stageScale,
-                              ),
-                            ),
-                            // DESENHO LIVRE: por cima de tudo enquanto o
-                            // pedido do menu estiver ligado.
-                            Positioned.fill(
-                              child: FreehandOverlay(playback: widget.playback),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
+                );
+              },
+            ),
+          ),
+          if (drawing)
+            Positioned(
+              top: 4,
+              left: 8,
+              right: 8,
+              child: Material(
+                color: const Color(0xE620242B),
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Desenho livre · arraste na prévia',
+                        maxLines: 2,
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Cancelar desenho livre',
+                      onPressed: () =>
+                          ref.read(freehandRequestProvider.notifier).state =
+                              false,
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -594,8 +671,6 @@ class _CompositionGate {
 /// Animar a mao sem ver o quadro anterior e desenhar no escuro: o
 /// espacamento entre poses e o que da o ritmo, e ele so se enxerga
 /// vendo os quadros vizinhos ao mesmo tempo.
-final onionSkinProvider = StateProvider<int>((ref) => 0);
-
 /// Um quadro vizinho, esmaecido e tingido.
 class _Fantasma extends StatefulWidget {
   const _Fantasma({
@@ -2728,10 +2803,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               // pedia noventa mil pixels de margem de cada lado. Nada do
               // que passa da composicao inteira aparece — o resto e so
               // textura que o aparelho nao tem.
-              return math.min(
-                bruto,
-                math.max(fxWidth, fxHeight) * 1.0,
-              );
+              return math.min(bruto, math.max(fxWidth, fxHeight) * 1.0);
             }
 
             Widget nivel(double sigma, double peso) {
@@ -4344,8 +4416,9 @@ class _LayerContent extends StatelessWidget {
                 // O MOTOR EM GPU desenha a cena quando existe; sem ele
                 // (ou com as ajudas de cena ligadas, que so o pintor
                 // sabe desenhar) fica o pintor em CPU de sempre.
-                if (!Scene3DGpu.indisponivel && !ajudas) {
+                if ((filamentPreviewEnabled || !Scene3DGpu.indisponivel) && !ajudas) {
                   return Scene3DGpuView(
+                    exporting: exporting,
                     scene: l.scene,
                     camera: l.camera,
                     renderCamera: l.view == SceneView.camera

@@ -27,6 +27,7 @@ class Scene3DPainter extends CustomPainter {
     required this.view,
     required this.time,
     this.showHelpers = false,
+    this.helpersOnly = false,
     this.showModelRig = false,
     this.overrideCamera,
     this.selectedNodeId,
@@ -45,6 +46,9 @@ class Scene3DPainter extends CustomPainter {
 
   /// Ajudas de cena: grade do chao, frustum, eixos. NUNCA na exportacao.
   final bool showHelpers;
+
+  /// Editor overlay above a native texture; never evaluates scene triangles.
+  final bool helpersOnly;
   final bool showModelRig;
 
   /// Vista livre navegada no estudio: quando presente, substitui a
@@ -73,6 +77,15 @@ class Scene3DPainter extends CustomPainter {
     final cam = _renderCamera();
     canvas.save();
     canvas.clipRect(Offset.zero & size);
+
+    if (helpersOnly) {
+      if (showHelpers && scene.showFloorGrid) {
+        _paintFloorGrid(canvas, size, cam);
+      }
+      _paintEditorHelpers(canvas, size, cam);
+      canvas.restore();
+      return;
+    }
 
     if (scene.background != null) {
       canvas.drawRect(Offset.zero & size, Paint()..color = scene.background!);
@@ -120,6 +133,11 @@ class Scene3DPainter extends CustomPainter {
       _paintBokeh(canvas, frame);
     }
 
+    _paintEditorHelpers(canvas, size, cam);
+    canvas.restore();
+  }
+
+  void _paintEditorHelpers(Canvas canvas, Size size, RenderCamera cam) {
     if (showHelpers && (view != SceneView.camera || overrideCamera != null)) {
       // Fora da vista da camera ativa: frustum e plano de foco.
       _paintFrustum(canvas, size, cam);
@@ -131,7 +149,6 @@ class Scene3DPainter extends CustomPainter {
     if (showModelRig && selectedNodeId != null) {
       _paintModelRig(canvas, size, cam);
     }
-    canvas.restore();
   }
 
   void _paintModelRig(Canvas canvas, Size size, RenderCamera cam) {
@@ -872,6 +889,7 @@ class Scene3DPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(Scene3DPainter old) =>
+      helpersOnly != old.helpersOnly ||
       old.showModelRig != showModelRig ||
       old.scene != scene ||
       old.camera != camera ||

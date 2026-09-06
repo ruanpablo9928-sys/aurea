@@ -5,6 +5,8 @@ import '../../application/scene3d_gpu.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/scene3d.dart';
 import 'scene3d_painter.dart';
+import '../../application/renderer3d/filament_renderer.dart';
+import 'filament_viewport.dart';
 
 /// A CENA 3D DESENHADA PELA GPU — e, ate a GPU estar pronta, pelo pintor
 /// de sempre, para nunca haver quadro vazio.
@@ -24,6 +26,7 @@ class Scene3DGpuView extends StatefulWidget {
     this.rascunho = false,
     this.showHelpers = false,
     this.selectedNodeId,
+    this.exporting = false,
   });
 
   final Scene3D scene;
@@ -37,6 +40,7 @@ class Scene3DGpuView extends StatefulWidget {
   final bool rascunho;
   final bool showHelpers;
   final String? selectedNodeId;
+  final bool exporting;
 
   @override
   State<Scene3DGpuView> createState() => _Scene3DGpuViewState();
@@ -48,18 +52,47 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
 
   /// Esta view ja contou como cena em GPU na tela? (Ver [MarcaGpuViva].)
   var _marcado = false;
+  bool get _wantsFilament =>
+      filamentPreviewEnabled &&
+      (Motor3DPreferencia.instancia?.permiteGpu ?? true) &&
+      !widget.exporting &&
+      !widget.camera.dof.enabled &&
+      !widget.renderCamera.orthographic &&
+      FilamentRenderer.supports(widget.scene);
+  bool _preparingLegacy = false;
 
   @override
   void initState() {
     super.initState();
+    if (!_wantsFilament) _prepareLegacy();
+  }
+
+  void _prepareLegacy() {
     if (_pronto) {
       _marcar();
-    } else if (!Scene3DGpu.indisponivel) {
+    } else if (!Scene3DGpu.indisponivel && !_preparingLegacy) {
+      _preparingLegacy = true;
       Scene3DGpu.preparar().then((_) {
-        if (!mounted) return;
+        _preparingLegacy = false;
+        if (!mounted || _wantsFilament) return;
         setState(() => _pronto = Scene3DGpu.pronto);
         if (_pronto) _marcar();
       });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant Scene3DGpuView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_wantsFilament) {
+      _gpu?.descartar();
+      _gpu = null;
+      if (_marcado) {
+        MarcaGpuViva.saiu();
+        _marcado = false;
+      }
+    } else {
+      _prepareLegacy();
     }
   }
 
@@ -78,7 +111,47 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_pronto) {
+    if (_wantsFilament) {
+      final nativePreview = FilamentViewport(
+        scene: widget.rascunho
+            ? widget.scene.copyWith(draftMode: true)
+            : widget.scene,
+        camera: widget.renderCamera,
+        time: widget.time,
+        fallback: CustomPaint(
+          painter: Scene3DPainter(
+            scene: widget.scene,
+            camera: widget.camera,
+            view: widget.view,
+            time: widget.time,
+            overrideCamera: widget.renderCamera,
+          ),
+          size: Size.infinite,
+        ),
+      );
+      if (!widget.showHelpers) return nativePreview;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          nativePreview,
+          IgnorePointer(
+            child: CustomPaint(
+              painter: Scene3DPainter(
+                scene: widget.scene,
+                camera: widget.camera,
+                view: widget.view,
+                time: widget.time,
+                overrideCamera: widget.renderCamera,
+                showHelpers: true,
+                helpersOnly: true,
+                selectedNodeId: widget.selectedNodeId,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    if (!_pronto || widget.renderCamera.orthographic) {
       return CustomPaint(
         painter: Scene3DPainter(
           scene: widget.rascunho
@@ -109,14 +182,21 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
       rascunho: widget.rascunho || widget.view != SceneView.camera,
     );
     return CustomPaint(
-      painter: _PintorGpu(gpu, widget.renderCamera, widget.scene.background),
+      painter: _PintorGpu(
+        gpu,
+        widget.renderCamera,
+        widget.scene.background,
+        widget.rascunho,
+        widget.exporting,
+      ),
       size: Size.infinite,
     );
   }
 }
 
 class _PintorGpu extends CustomPainter {
-  _PintorGpu(this.gpu, this.camera, this.fundo);
+  _PintorGpu(this.gpu, this.camera, this.fundo, this.rascunho, this.exporting);
+  final bool rascunho, exporting;
 
   final Scene3DGpu gpu;
   final RenderCamera camera;
@@ -134,7 +214,13 @@ class _PintorGpu extends CustomPainter {
     canvas.save();
     canvas.clipRect(area);
     if (fundo != null) canvas.drawRect(area, Paint()..color = fundo!);
-    gpu.desenhar(canvas, area, gpu.camera(camera, size));
+    gpu.desenhar(
+      canvas,
+      area,
+      gpu.camera(camera, size),
+      rascunho: rascunho,
+      exporting: exporting,
+    );
     canvas.restore();
   }
 

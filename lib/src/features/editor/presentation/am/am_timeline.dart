@@ -78,6 +78,20 @@ class AmTimeline extends ConsumerStatefulWidget {
 
 class _AmTimelineState extends ConsumerState<AmTimeline> {
   final ScrollController _scroll = ScrollController();
+  final ScrollController _rowsScroll = ScrollController();
+  final ScrollController _pillsScroll = ScrollController();
+  bool _syncingRows = false;
+  String? _revealedSelection;
+  String? _revealedSingleLayer;
+  int _revealedKeyCount = -1;
+
+  void _syncRows(ScrollController source, ScrollController target) {
+    if (_syncingRows || !source.hasClients || !target.hasClients) return;
+    _syncingRows = true;
+    target.jumpTo(source.offset.clamp(0.0, target.position.maxScrollExtent));
+    _syncingRows = false;
+  }
+
   double _pps = 80;
   double _ppsAtGestureStart = 80;
   double _scrollAtGestureStart = 0;
@@ -99,6 +113,8 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   @override
   void initState() {
     super.initState();
+    _rowsScroll.addListener(() => _syncRows(_rowsScroll, _pillsScroll));
+    _pillsScroll.addListener(() => _syncRows(_pillsScroll, _rowsScroll));
     widget.playback.time.addListener(_onClock);
     // Sem isso, uma timeline recem-criada (ex.: ao abrir um painel) fica
     // com scroll 0 enquanto o tempo real esta em outro ponto — e o
@@ -110,6 +126,8 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   void dispose() {
     widget.playback.time.removeListener(_onClock);
     _scroll.dispose();
+    _rowsScroll.dispose();
+    _pillsScroll.dispose();
     super.dispose();
   }
 
@@ -209,6 +227,35 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
           layer.matteSourceId!,
     };
     final totalWidth = _timeToPx(project.duration);
+    final selected = selectedId == null ? null : project.layerById(selectedId);
+    final keyCount = selected?.keyframeTimes.length ?? 0;
+    if (_revealedSelection != selectedId ||
+        _revealedKeyCount != keyCount ||
+        _revealedSingleLayer != widget.singleLayerId) {
+      _revealedSelection = selectedId;
+      _revealedKeyCount = keyCount;
+      _revealedSingleLayer = widget.singleLayerId;
+      final index = layers.indexWhere((l) => l.id == selectedId);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !_rowsScroll.hasClients ||
+            index < 0 ||
+            _revealedSelection != selectedId) {
+          return;
+        }
+        final top = index * kAmRowHeight;
+        final position = _rowsScroll.position;
+        final bottom = top + kAmRowHeight;
+        final target = top < position.pixels
+            ? top
+            : bottom > position.pixels + position.viewportDimension
+            ? bottom - position.viewportDimension
+            : position.pixels;
+        if (target != position.pixels) {
+          _rowsScroll.jumpTo(target.clamp(0.0, position.maxScrollExtent));
+        }
+      });
+    }
 
     return SizedBox(
       height: widget.height,
@@ -336,30 +383,31 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                             ),
                             const SizedBox(height: 30),
                             Expanded(
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  children: [
-                                    for (final layer in layers)
-                                      _AmLayerRow(
-                                        key: ValueKey(layer.id),
-                                        layer: layer,
-                                        pps: _pps,
-                                        totalWidth: totalWidth,
-                                        selected:
-                                            layer.id == selectedId ||
-                                            multi.contains(layer.id) ||
-                                            widget.singleLayerId != null,
-                                        compact: widget.singleLayerId != null,
-                                        playback: widget.playback,
-                                        onTapLayer: widget.onTapLayer,
-                                        activeTimesUs: widget.activeTimesUs,
-                                        onForeignKeyframe:
-                                            widget.onForeignKeyframe,
-                                        onEditStart: () => _editingBar = true,
-                                        onEditEnd: () => _editingBar = false,
-                                      ),
-                                  ],
-                                ),
+                              child: ListView.builder(
+                                controller: _rowsScroll,
+                                padding: EdgeInsets.zero,
+                                itemExtent: kAmRowHeight,
+                                itemCount: layers.length,
+                                itemBuilder: (context, index) {
+                                  final layer = layers[index];
+                                  return _AmLayerRow(
+                                    key: ValueKey(layer.id),
+                                    layer: layer,
+                                    pps: _pps,
+                                    totalWidth: totalWidth,
+                                    selected:
+                                        layer.id == selectedId ||
+                                        multi.contains(layer.id) ||
+                                        widget.singleLayerId != null,
+                                    compact: widget.singleLayerId != null,
+                                    playback: widget.playback,
+                                    onTapLayer: widget.onTapLayer,
+                                    activeTimesUs: widget.activeTimesUs,
+                                    onForeignKeyframe: widget.onForeignKeyframe,
+                                    onEditStart: () => _editingBar = true,
+                                    onEditEnd: () => _editingBar = false,
+                                  );
+                                },
                               ),
                             ),
                           ],
@@ -487,14 +535,23 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                 Positioned(
                   left: 0,
                   top: 50,
-                  child: Column(
-                    children: [
-                      for (final layer in layers)
-                        _AmLayerPill(
+                  bottom: 0,
+                  width: 92,
+                  child: ListView.builder(
+                    controller: _pillsScroll,
+                    padding: EdgeInsets.zero,
+                    itemExtent: kAmRowHeight,
+                    itemCount: layers.length,
+                    itemBuilder: (context, index) {
+                      final layer = layers[index];
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: _AmLayerPill(
                           layer: layer,
                           isMatteSource: matteSourceIds.contains(layer.id),
                         ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -1296,88 +1353,6 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                   ),
                 ),
               ),
-          // Diamantes de keyframe sobre a barra: acesos = propriedade
-          // ativa; apagados e sem borda = de outra propriedade.
-          // FAIXA DE KEYFRAMES COM DENSIDADE.
-          //
-          // Vinte keyframes a 2 px de distancia desenhados um a um viram
-          // uma mancha de losangos sobrepostos — que informa menos que
-          // uma barra lisa, e custa vinte widgets. Aqui o que esta junto
-          // demais para se distinguir vira barra, e o que da para
-          // distinguir continua losango.
-          for (final grupo in _agrupaKeyframes(layer.keyframeTimes, pps))
-            Builder(
-              builder: (context) {
-                final active =
-                    activeTimesUs == null ||
-                    grupo.times.any(
-                      (t) => activeTimesUs!.contains(t.inMicroseconds),
-                    );
-                final cor = active
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.30);
-                final x0 = grupo.times.first.inMicroseconds / 1e6 * pps;
-                final x1 = grupo.times.last.inMicroseconds / 1e6 * pps;
-
-                final Widget marca = grupo.times.length == 1
-                    ? Transform.rotate(
-                        angle: 0.785398,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: cor,
-                            borderRadius: BorderRadius.circular(2),
-                            border: active
-                                ? Border.all(color: Colors.black38)
-                                : null,
-                          ),
-                        ),
-                      )
-                    : Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: cor,
-                          borderRadius: BorderRadius.circular(4),
-                          border: active
-                              ? Border.all(color: Colors.black38)
-                              : null,
-                        ),
-                      );
-
-                final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
-                return Positioned(
-                  left: left + x0 - 11,
-                  top: kAmBarHeight / 2 - 11,
-                  width: largura,
-                  height: 22,
-                  // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
-                  // consegue tocar vira enigma: de quem e essa? So `onTap`
-                  // — arrastar continua movendo o clipe, porque um
-                  // reconhecedor de toque perde a arena para um de arrasto.
-                  // O diamante ACESO leva o cabecote ate ele: e como se
-                  // navega de keyframe em keyframe no Alight Motion, tocando
-                  // na barra. Sem botao de anterior/proximo, sem menu.
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (active) {
-                        playback.pause();
-                        playback.seek(layer.startTime + grupo.times.first);
-                      } else {
-                        onForeignKeyframe?.call(grupo.times.first);
-                      }
-                    },
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 11),
-                        child: marca,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
           // Setas de navegacao entre camadas (paginas de ferramenta).
           if (compact) ...[
             Positioned(
@@ -1434,6 +1409,95 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
               },
             ),
           ],
+          // Diamantes de keyframe sobre a barra: acesos = propriedade
+          // ativa; translúcidos = de outra propriedade, ainda visíveis.
+          // FAIXA DE KEYFRAMES COM DENSIDADE.
+          //
+          // Vinte keyframes a 2 px de distancia desenhados um a um viram
+          // uma mancha de losangos sobrepostos — que informa menos que
+          // uma barra lisa, e custa vinte widgets. Aqui o que esta junto
+          // demais para se distinguir vira barra, e o que da para
+          // distinguir continua losango.
+          for (final grupo in _agrupaKeyframes(layer.keyframeTimes, pps))
+            Builder(
+              builder: (context) {
+                final active =
+                    activeTimesUs == null ||
+                    grupo.times.any(
+                      (t) => activeTimesUs!.contains(t.inMicroseconds),
+                    );
+                final cor = active
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.65);
+                final x0 = grupo.times.first.inMicroseconds / 1e6 * pps;
+                final x1 = grupo.times.last.inMicroseconds / 1e6 * pps;
+
+                final Widget marca = grupo.times.length == 1
+                    ? Transform.rotate(
+                        angle: 0.785398,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: cor,
+                            borderRadius: BorderRadius.circular(2),
+                            border: Border.all(color: Colors.black87),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: cor,
+                          borderRadius: BorderRadius.circular(4),
+                          border: active
+                              ? Border.all(color: Colors.black38)
+                              : null,
+                        ),
+                      );
+
+                final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
+                return Positioned(
+                  left: left + x0 - 11,
+                  top: kAmBarHeight / 2 - 11,
+                  width: largura,
+                  height: 22,
+                  // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
+                  // consegue tocar vira enigma: de quem e essa? So `onTap`
+                  // — arrastar continua movendo o clipe, porque um
+                  // reconhecedor de toque perde a arena para um de arrasto.
+                  // O diamante ACESO leva o cabecote ate ele: e como se
+                  // navega de keyframe em keyframe no Alight Motion, tocando
+                  // na barra. Sem botao de anterior/proximo, sem menu.
+                  child: GestureDetector(
+                    key: ValueKey(
+                      'layer-keyframe-${layer.id}-${grupo.times.first.inMicroseconds}',
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (active) {
+                        playback.pause();
+                        playback.seek(layer.startTime + grupo.times.first);
+                      } else {
+                        onForeignKeyframe?.call(grupo.times.first);
+                      }
+                    },
+                    child: Center(
+                      child: SizedBox(
+                        key: ValueKey(
+                          'keyframe-glyph-${layer.id}-${grupo.times.first.inMicroseconds}',
+                        ),
+                        width: grupo.times.length == 1
+                            ? 10
+                            : (x1 - x0).clamp(10.0, double.infinity),
+                        height: 10,
+                        child: marca,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );

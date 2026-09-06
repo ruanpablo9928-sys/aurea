@@ -1,6 +1,7 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/presentation/am/am_timeline.dart';
+import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,49 @@ import 'package:flutter_test/flutter_test.dart';
 /// cabecote. Foi o primeiro bug que os testadores acharam: "olha onde eu
 /// coloquei keyframe e olha onde ele aparece".
 void main() {
+  testWidgets('3000 layers build only nearby rows and pills scroll together', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final editor = container.read(editorControllerProvider.notifier);
+    editor.openProject(
+      container
+          .read(editorControllerProvider)
+          .copyWith(
+            layers: [
+              for (var i = 0; i < 3000; i++)
+                ShapeLayer(
+                  id: 'stress-$i',
+                  name: 'Stress $i',
+                  startTime: Duration.zero,
+                  duration: const Duration(seconds: 5),
+                ),
+            ],
+          ),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: _Host(builder: (p) => AmTimeline(playback: p, height: 280)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final rows = find.byWidgetPredicate(
+      (w) => w.runtimeType.toString() == '_AmLayerRow',
+    );
+    expect(rows.evaluate().length, inInclusiveRange(1, 30));
+    expect(find.byKey(const ValueKey('stress-2999')), findsNothing);
+    final lists = tester.widgetList<ListView>(find.byType(ListView)).toList();
+    lists.first.controller!.jumpTo(38000);
+    await tester.pumpAndSettle();
+    expect(lists.last.controller!.offset, lists.first.controller!.offset);
+    expect(rows.evaluate().length, lessThan(35));
+    expect(find.byKey(const ValueKey('stress-1000')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   Future<(ProviderContainer, PlaybackController)> montar(
     WidgetTester tester,
   ) async {
@@ -140,5 +184,5 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) =>
-      Scaffold(body: Column(children: [widget.builder(playback)])); 
+      Scaffold(body: Column(children: [widget.builder(playback)]));
 }

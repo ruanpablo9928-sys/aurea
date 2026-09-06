@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -60,6 +61,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(autoKeyframeProvider);
     final project = ref.watch(editorControllerProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
@@ -108,6 +110,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     return Column(
       children: [
         PropertyKeyframeContext(
+          compact: true,
           layer: layer,
           prop: _prop,
           time: t,
@@ -118,6 +121,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
         ),
         Expanded(
           child: AmPanelChrome(
+            compact: true,
             onBack: widget.onBack,
             animado: animated,
             temKfAqui: hasKfHere,
@@ -132,6 +136,45 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
             // RESETAR era o unico item do `...`; agora e botao, com o nome do
             // que vai ser resetado escrito nele.
             acoes: [
+              Tooltip(
+                message: 'Auto-key: gravar movimento ao ajustar',
+                child: Semantics(
+                  label: 'Auto-key',
+                  toggled: ref.read(autoKeyframeProvider),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      final setting = ref.read(autoKeyframeProvider.notifier);
+                      setting.state = !setting.state;
+                    },
+                    child: SizedBox(
+                      width: 60,
+                      height: 28,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.circle_fill,
+                            size: 12,
+                            color: ref.read(autoKeyframeProvider)
+                                ? AmColors.accent
+                                : AmColors.muted,
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Auto',
+                            style: TextStyle(
+                              fontSize: 10,
+                              height: 1.2,
+                              color: AmColors.text,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               AmPanelAcao(
                 rotulo: 'Resetar',
                 icone: CupertinoIcons.arrow_counterclockwise,
@@ -186,11 +229,15 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
             corpo: LayoutBuilder(
               builder: (context, constraints) => Scrollbar(
                 controller: _bodyScroll,
-                thumbVisibility: constraints.maxHeight < 270,
+                thumbVisibility:
+                    constraints.maxHeight < (layer.is3D ? 260 : 160),
                 child: SingleChildScrollView(
                   controller: _bodyScroll,
                   child: SizedBox(
-                    height: math.max(270, constraints.maxHeight),
+                    height: math.max(
+                      layer.is3D ? 260 : 160,
+                      constraints.maxHeight,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
                       child: switch (widget.tool) {
@@ -344,14 +391,67 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AmValueChip(text: amNumber(pos.dx), label: 'X', width: 96),
+            Expanded(
+              child: AmValueChip(
+                compact: true,
+                text: amNumber(pos.dx),
+                label: 'X',
+                width: double.infinity,
+              ),
+            ),
             const SizedBox(width: 10),
-            AmValueChip(text: amNumber(pos.dy), label: 'Y', width: 96),
+            Expanded(
+              child: AmValueChip(
+                compact: true,
+                text: amNumber(pos.dy),
+                label: 'Y',
+                width: double.infinity,
+              ),
+            ),
             if (layer.is3D) ...[
               const SizedBox(width: 10),
-              AmValueChip(text: amNumber(z), label: 'Z', width: 96),
+              Expanded(
+                child: AmValueChip(
+                  compact: true,
+                  text: amNumber(z),
+                  label: 'Z',
+                  width: double.infinity,
+                ),
+              ),
             ],
           ],
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: GestureDetector(
+            key: const ValueKey('position-drag-pad'),
+            behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onPanStart: (_) {
+              _dragStart = layer.position.valueAt(
+                layer.localTime(playback.time.value),
+              );
+              _accum = Offset.zero;
+            },
+            onPanUpdate: (d) => _onPadUpdate(d.delta),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AmColors.bg.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Center(
+                child: Text(
+                  'Deslize aqui para mover a camada',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.2,
+                    color: AmColors.muted,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: 6),
         Row(
@@ -409,37 +509,6 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
             onChanged: (v) => controller.editPositionZ(layer.id, t, v),
           ),
         const SizedBox(height: 4),
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (_) {
-              _dragStart = layer.position.valueAt(
-                layer.localTime(playback.time.value),
-              );
-              _accum = Offset.zero;
-            },
-            onPanUpdate: (d) => _onPadUpdate(d.delta),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AmColors.bg.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.open_with, size: 30, color: AmColors.muted),
-                    SizedBox(height: 4),
-                    Text(
-                      'Arraste para mover (alinha no eixo)',
-                      style: TextStyle(fontSize: 12, color: AmColors.muted),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -464,6 +533,7 @@ class _PivotControl extends ConsumerWidget {
           children: [
             Expanded(
               child: AmValueChip(
+                compact: true,
                 text: amNumber(pivot.dx),
                 label: 'Pivo X',
                 width: double.infinity,
@@ -472,6 +542,7 @@ class _PivotControl extends ConsumerWidget {
             const SizedBox(width: 18),
             Expanded(
               child: AmValueChip(
+                compact: true,
                 text: amNumber(pivot.dy),
                 label: 'Pivo Y',
                 width: double.infinity,
@@ -497,14 +568,18 @@ class _PivotControl extends ConsumerWidget {
                   children: [
                     Icon(
                       Icons.filter_center_focus,
-                      size: 32,
+                      size: 24,
                       color: AmColors.muted,
                     ),
                     SizedBox(height: 6),
                     Text(
                       'Arraste o ponto de giro\n(toque duplo = centro)',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: AmColors.muted),
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.2,
+                        color: AmColors.muted,
+                      ),
                     ),
                   ],
                 ),
@@ -719,6 +794,7 @@ class _ScaleControl extends ConsumerWidget {
           children: [
             Expanded(
               child: AmValueChip(
+                compact: true,
                 text: amNumber(sx * 100),
                 label: 'Largura',
                 width: double.infinity,
@@ -743,6 +819,7 @@ class _ScaleControl extends ConsumerWidget {
             ),
             Expanded(
               child: AmValueChip(
+                compact: true,
                 text: amNumber(sy * 100),
                 label: 'Altura',
                 width: double.infinity,
@@ -813,6 +890,7 @@ class _SkewControl extends ConsumerWidget {
           children: [
             Expanded(
               child: AmValueChip(
+                compact: true,
                 text: '${amNumber(kx, 2)}°',
                 label: 'X Skew',
                 width: double.infinity,
@@ -821,6 +899,7 @@ class _SkewControl extends ConsumerWidget {
             const SizedBox(width: 18),
             Expanded(
               child: AmValueChip(
+                compact: true,
                 text: '${amNumber(ky, 2)}°',
                 label: 'Y Skew',
                 width: double.infinity,
@@ -874,6 +953,7 @@ class _OpacityControl extends ConsumerWidget {
     return Column(
       children: [
         AmValueChip(
+          compact: true,
           text: '${amNumber(op * 100, 0)}%',
           label: 'Opacidade',
           width: 132,

@@ -46,7 +46,9 @@ um keyframe. Gradientes antigos sem esse campo continuam estaticos.
   a referencia e grava o erro absoluto medio na escala 0–255. Nao e um indice
   percentual de semelhanca.
 
-O IPA 34 tambem inclui o conserto da navegacao: abertura de Cena 3D, Grid e
+O IPA 35 tambem inclui o conserto da navegacao: abertura de Cena 3D, Grid e
 outras ferramentas nao executa mais dois fechamentos consecutivos do menu.
+O controle Gradiente esta ligado ao ShapePanel utilizado pelo editor atual,
+com teste de abertura, animacao de cores no playhead e fechamento do painel.
 Testes de widget usam dimensoes de iPhone; nao substituem um teste em aparelho
 fisico. O IPA gerado pelo workflow e sem assinatura, para assinar ao instalar.

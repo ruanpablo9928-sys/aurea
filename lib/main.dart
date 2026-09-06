@@ -8,12 +8,14 @@ import 'src/app.dart';
 import 'src/core/storage/prefs.dart';
 import 'src/features/editor/application/font_service.dart';
 import 'src/features/editor/application/motor3d_modo.dart';
+import 'src/features/editor/application/texture_cache.dart';
 import 'src/features/editor/presentation/widgets/custom_blend.dart';
 import 'src/features/editor/presentation/widgets/linear_light.dart';
 import 'src/features/editor/presentation/widgets/pixel_effect_engine.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  TextureCache.instance.observeMemoryPressure(WidgetsBinding.instance);
   final prefs = await SharedPreferences.getInstance();
   // Resolve a migalha do motor 3D antes de qualquer cena desenhar:
   // uma sessao que nao voltou de um quadro em GPU desliga a GPU

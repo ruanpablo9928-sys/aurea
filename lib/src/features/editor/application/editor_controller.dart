@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import '../../media/application/media_import_service.dart';
 import '../domain/blend_extra.dart';
 import 'blob_track_service.dart';
+import 'freehand_session.dart';
 import '../domain/blob_track.dart';
 import '../domain/caption.dart';
 import '../domain/caption_highlight.dart';
@@ -26,6 +27,7 @@ import '../domain/tracker2d.dart';
 import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
+import '../domain/scene_motion.dart';
 import '../domain/loudness.dart';
 import '../domain/layer.dart';
 import '../domain/layer_meta.dart';
@@ -49,6 +51,7 @@ export '../domain/video_project.dart' show LayerProp, PropertyLink;
 
 /// Camada selecionada no editor (null = nada).
 final selectedLayerProvider = StateProvider<String?>((ref) => null);
+final autoKeyframeProvider = StateProvider<bool>((ref) => false);
 
 /// Selecao MULTIPLA (toque longo nas barras): a barra de acoes opera no
 /// conjunto — agrupar, duplicar e excluir em lote.
@@ -125,6 +128,13 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void openProject(VideoProject project) {
+    // Exportação e miniaturas também abrem projetos, sem sessão de desenho.
+    if (ref.exists(freehandRequestProvider)) {
+      ref.read(freehandRequestProvider.notifier).state = false;
+    }
+    if (ref.exists(onionSkinProvider)) {
+      ref.read(onionSkinProvider.notifier).state = 0;
+    }
     state = project;
     _undoStack.clear();
     _redoStack.clear();
@@ -1017,6 +1027,23 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.withCamera(fn(layer.camera)));
   }
 
+  void updateSceneCameraById(String id, Camera3D camera) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    if (layer.camera.id != camera.id &&
+        !layer.extraCameras.any((c) => c.id == camera.id)) {
+      return;
+    }
+    _replace(
+      layer.copyScene(
+        camera: layer.camera.id == camera.id ? camera : layer.camera,
+        extraCameras: [
+          for (final c in layer.extraCameras) c.id == camera.id ? camera : c,
+        ],
+      ),
+    );
+  }
+
   /// Acrescenta uma camera com o enquadramento ATUAL. Nascer olhando
   /// para outro lugar obrigaria a reenquadrar do zero toda vez.
   String addScene3DCamera(String id) {
@@ -1300,14 +1327,27 @@ class EditorController extends Notifier<VideoProject> {
   String addModel3D(String sceneId, ModelAsset3D model) {
     final layer = _layer(sceneId);
     if (layer is! Scene3DLayer) return '';
-    final node = SceneNode(name: model.name, size: 120, modelAsset: model,
-      modelSource: ModelSource3D(path: '', triangles: model.triangleCount,
-        meshes: model.primitives.length, animations: model.clips.length,
+    final node = SceneNode(
+      name: model.name,
+      size: 120,
+      modelAsset: model,
+      modelSource: ModelSource3D(
+        path: '',
+        triangles: model.triangleCount,
+        meshes: model.primitives.length,
+        animations: model.clips.length,
         materials: (model.data['materials'] as List).length,
         nodeNames: [for (final n in model.nodes) n['name'] as String],
-        animationNames: model.clipNames, lodCount: 1,
-        warning: model.warnings.isEmpty ? null : model.warnings.join(' ')));
-    _replace(layer.withScene(layer.scene.copyWith(nodes: [...layer.scene.nodes, node])));
+        animationNames: model.clipNames,
+        lodCount: 1,
+        warning: model.warnings.isEmpty ? null : model.warnings.join(' '),
+      ),
+    );
+    _replace(
+      layer.withScene(
+        layer.scene.copyWith(nodes: [...layer.scene.nodes, node]),
+      ),
+    );
     return node.id;
   }
 
@@ -1726,10 +1766,11 @@ class EditorController extends Notifier<VideoProject> {
     if (path == null) return null;
     final lufs = MediaPreviewService.instance.loudnessOf(path);
     if (lufs != null && lufs.isFinite) {
-      final g =
-          normalizeGainForLufs(lufs, target: alvoLufs);
-      updateAudioSpec(id, (a) =>
-          a.copyWith(gain: g, normalizeTargetLufs: alvoLufs));
+      final g = normalizeGainForLufs(lufs, target: alvoLufs);
+      updateAudioSpec(
+        id,
+        (a) => a.copyWith(gain: g, normalizeTargetLufs: alvoLufs),
+      );
       return g;
     }
     final peaks = MediaPreviewService.instance.peaksOf(path);
@@ -3234,9 +3275,36 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        position: layer.position.edited(layer.localTime(globalTime), value),
+        position: _editOffset(
+          layer.position,
+          layer.localTime(globalTime),
+          value,
+        ),
       ),
     );
+  }
+
+  AnimatedDouble _editDouble(
+    AnimatedDouble track,
+    Duration time,
+    double value,
+  ) => editMotionValue(
+    track,
+    time,
+    value,
+    autoKey: ref.read(autoKeyframeProvider),
+  );
+
+  AnimatedOffset _editOffset(
+    AnimatedOffset track,
+    Duration time,
+    Offset value,
+  ) {
+    if (!ref.read(autoKeyframeProvider)) return track.edited(time, value);
+    final anchored = !track.isAnimated && time > Duration.zero
+        ? track.withKeyframe(Duration.zero, track.base)
+        : track;
+    return anchored.withKeyframe(time, value, track.easeAt(time));
   }
 
   /// CRAVA UMA TRILHA DE ESCALA INTEIRA de uma vez.
@@ -3249,12 +3317,13 @@ class EditorController extends Notifier<VideoProject> {
   void setScaleKeyframes(String id, List<Keyframe<double>> keyframes) {
     final layer = _layer(id);
     if (layer == null) return;
-    final ordenados = [...keyframes]
-      ..sort((a, b) => a.time.compareTo(b.time));
-    _replace(layer.copyLayer(
-      scaleX: AnimatedDouble(layer.scaleX.base, ordenados),
-      scaleY: AnimatedDouble(layer.scaleY.base, ordenados),
-    ));
+    final ordenados = [...keyframes]..sort((a, b) => a.time.compareTo(b.time));
+    _replace(
+      layer.copyLayer(
+        scaleX: AnimatedDouble(layer.scaleX.base, ordenados),
+        scaleY: AnimatedDouble(layer.scaleY.base, ordenados),
+      ),
+    );
     _push(layer);
   }
 
@@ -3264,8 +3333,8 @@ class EditorController extends Notifier<VideoProject> {
     final t = layer.localTime(globalTime);
     _replace(
       layer.copyLayer(
-        scaleX: layer.scaleX.edited(t, value),
-        scaleY: layer.scaleY.edited(t, value),
+        scaleX: _editDouble(layer.scaleX, t, value),
+        scaleY: _editDouble(layer.scaleY, t, value),
       ),
     );
   }
@@ -3275,7 +3344,7 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        scaleX: layer.scaleX.edited(layer.localTime(globalTime), value),
+        scaleX: _editDouble(layer.scaleX, layer.localTime(globalTime), value),
       ),
     );
   }
@@ -3285,7 +3354,7 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        scaleY: layer.scaleY.edited(layer.localTime(globalTime), value),
+        scaleY: _editDouble(layer.scaleY, layer.localTime(globalTime), value),
       ),
     );
   }
@@ -3307,7 +3376,7 @@ class EditorController extends Notifier<VideoProject> {
         layer.rotation.isAnimated ||
         layer.rotationX.isAnimated ||
         layer.rotationY.isAnimated;
-    if (!anyAnimated) {
+    if (!anyAnimated && !ref.read(autoKeyframeProvider)) {
       _replace(
         layer.copyLayer(
           rotation: z == null ? null : layer.rotation.withBase(z),
@@ -3318,7 +3387,9 @@ class EditorController extends Notifier<VideoProject> {
       return;
     }
     AnimatedDouble key(AnimatedDouble track, double? v) =>
-        track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t));
+        ref.read(autoKeyframeProvider)
+        ? _editDouble(track, t, v ?? track.valueAt(t))
+        : track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t));
     _replace(
       layer.copyLayer(
         rotation: key(layer.rotation, z),
@@ -3342,7 +3413,8 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        opacity: layer.opacity.edited(
+        opacity: _editDouble(
+          layer.opacity,
           layer.localTime(globalTime),
           value.clamp(0, 1),
         ),
@@ -3355,7 +3427,7 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        skewX: layer.skewX.edited(layer.localTime(globalTime), value),
+        skewX: _editDouble(layer.skewX, layer.localTime(globalTime), value),
       ),
     );
   }
@@ -3365,7 +3437,7 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        skewY: layer.skewY.edited(layer.localTime(globalTime), value),
+        skewY: _editDouble(layer.skewY, layer.localTime(globalTime), value),
       ),
     );
   }
@@ -3375,7 +3447,7 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        pivot: layer.pivot.edited(layer.localTime(globalTime), value),
+        pivot: _editOffset(layer.pivot, layer.localTime(globalTime), value),
       ),
     );
   }
@@ -4712,12 +4784,21 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// Edita somente o preenchimento escolhido, preservando a geometria.
-  void updateShapeGradient(String id, String itemId,
-      ShapeGradientFill Function(ShapeGradientFill) update) {
-    _updateShape(id, (items) => [
-      for (final item in items)
-        if (item is ShapeGradientFill && item.id == itemId) update(item) else item,
-    ]);
+  void updateShapeGradient(
+    String id,
+    String itemId,
+    ShapeGradientFill Function(ShapeGradientFill) update,
+  ) {
+    _updateShape(
+      id,
+      (items) => [
+        for (final item in items)
+          if (item is ShapeGradientFill && item.id == itemId)
+            update(item)
+          else
+            item,
+      ],
+    );
   }
 
   /// Primeira geometria PARAMETRICA da forma (painel de parametros).

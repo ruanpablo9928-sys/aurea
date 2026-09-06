@@ -213,7 +213,7 @@ class VideoProject {
 
   /// SOLO (PR-X26): havendo qualquer camada em solo, so as em solo
   /// renderizam.
-  bool get hasSolo => meta.values.any((m) => m.solo);
+  late final bool hasSolo = meta.values.any((m) => m.solo);
 
   bool rendersInPreview(String layerId) => !hasSolo || metaOf(layerId).solo;
 
@@ -240,7 +240,9 @@ class VideoProject {
       ? resolutionHeight
       : (resolutionHeight / aspectRatio).round();
 
-  Duration get duration {
+  late final Duration duration = _duration();
+
+  Duration _duration() {
     var end = Duration.zero;
     for (final l in layers) {
       if (l.endTime > end) end = l.endTime;
@@ -250,12 +252,11 @@ class VideoProject {
 
   Duration get frameDuration => Duration(microseconds: 1000000 ~/ fps);
 
-  Layer? layerById(String id) {
-    for (final l in layers) {
-      if (l.id == id) return l;
-    }
-    return null;
-  }
+  late final Map<String, Layer> _layersById = {
+    for (final l in layers.reversed) l.id: l,
+  };
+
+  Layer? layerById(String id) => _layersById[id];
 
   VideoLayer? get firstVideoLayer {
     for (final l in layers) {
@@ -264,14 +265,13 @@ class VideoProject {
     return null;
   }
 
-  PropertyLink? linkFor(String layerId, LayerProp prop) {
-    for (final link in links) {
-      if (link.targetLayerId == layerId && link.targetProp == prop) {
-        return link;
-      }
-    }
-    return null;
-  }
+  late final Map<(String, LayerProp), PropertyLink> _linksByTarget = {
+    for (final link in links.reversed)
+      (link.targetLayerId, link.targetProp): link,
+  };
+
+  PropertyLink? linkFor(String layerId, LayerProp prop) =>
+      _linksByTarget[(layerId, prop)];
 
   /// Uma copia com IDENTIDADE nova.
   ///

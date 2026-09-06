@@ -1068,6 +1068,24 @@ NodeTransform resolveNodeTransform(
 }
 
 /// Pai depois filho: a posicao do filho gira e escala com o pai.
+Vec3 sceneLocalDelta(
+  Scene3D scene,
+  SceneNode node,
+  Duration time,
+  Vec3 worldDelta,
+) {
+  final parent = node.parentId == null ? null : scene.nodeById(node.parentId!);
+  if (parent == null) return worldDelta;
+  final xf = resolveNodeTransform(scene, parent, time);
+  if (xf.scale.abs() < 1e-9) return Vec3.zero;
+  final rad = math.pi / 180;
+  var delta = _rotate(worldDelta, 0, 0, -xf.rotZ * rad);
+  delta = _rotate(delta, 0, -xf.rotY * rad, 0);
+  delta = _rotate(delta, -xf.rotX * rad, 0, 0);
+  return delta * (1 / xf.scale);
+}
+
+/// Pai depois filho: a posicao do filho gira e escala com o pai.
 NodeTransform composeTransforms(NodeTransform pai, NodeTransform filho) {
   final escalada = filho.position * pai.scale;
   final girada = _rotate(

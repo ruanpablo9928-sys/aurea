@@ -16,8 +16,8 @@ import 'package:aurea/src/features/projects/domain/monolito_template.dart';
 /// CPU — o que roda quando o Flutter GPU nao esta disponivel.
 ///
 /// Nao afirma nada (nao e teste): imprime triangulos e milissegundos por
-/// quadro para se decidir com numero, e nao com impressao. Um iPhone
-/// custa umas duas a tres vezes o que este desktop custa.
+/// quadro para se decidir com numero, e nao com impressao. Resultados de
+/// desktop nao permitem extrapolar custos de um iPhone sem medir o aparelho.
 void main() {
   Future<void> medir(String nome, VideoProject p, {bool rascunho = false}) async {
     final layer = p.layers.whereType<Scene3DLayer>().single;

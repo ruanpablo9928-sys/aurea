@@ -103,7 +103,7 @@ void main() {
             reason: 'a aba $aba precisa rolar no $nome',
           );
         }
-        expect(tester.takeException(), isNull);
+        expect(tester.takeException(), isNull, reason: 'aba $aba no $nome');
       }
     });
   }

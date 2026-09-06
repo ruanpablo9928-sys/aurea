@@ -2435,9 +2435,22 @@ class Scene3DLayer extends Layer {
         c.rotY,
         c.rotZ,
         c.focalLength,
+        c.dof.focusDistance,
+        c.dof.aperture,
+        c.dof.blurLevel,
+        c.dof.irisRotation,
+        c.dof.irisRoundness,
+        c.dof.irisAspect,
+        c.dof.diffractionFringe,
+        c.dof.highlightGain,
+        c.dof.highlightThreshold,
+        c.dof.highlightSaturation,
       ]) {
         out.addAll(_times(track.keyframes));
       }
+    }
+    for (final light in scene.lights) {
+      out.addAll(_times(light.intensity.keyframes));
     }
     for (final shot in shots) {
       out.add(shot.time.inMicroseconds);

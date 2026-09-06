@@ -1,10 +1,10 @@
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../projects/application/projects_controller.dart';
 import '../application/editor_controller.dart';
+import '../application/freehand_session.dart';
 import '../application/playback_controller.dart';
 import '../application/preview_stats.dart';
 import '../application/video_layer_manager.dart';
@@ -131,6 +131,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   };
 
   void _back() {
+    if (ref.read(freehandRequestProvider)) {
+      ref.read(freehandRequestProvider.notifier).state = false;
+      return;
+    }
     // Folhas persistentes têm uma entrada local de histórico. Consumi-la
     // primeiro não remove o editor nem muda sua seleção.
     if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
@@ -506,6 +510,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
     final showTools = _mode == _Mode.main && layer != null && multi.isEmpty;
     final hasContext =
+        ref.watch(freehandRequestProvider) ||
         _previewExpanded ||
         _mode != _Mode.main ||
         selectedId != null ||
@@ -521,127 +526,126 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // ALTURA DO PAINEL DE FERRAMENTA, medida no espaco que
-              // existe de verdade.
-              //
-              // O corpo de um painel pede 270 px e a casca (contexto de
-              // keyframe, fileira de acoes, margens) come outros 102:
-              // abaixo de 372 o painel ROLA. Ele tinha 40% da tela com
-              // teto de 372 — e em todo iPhone 40% da menos que 372,
-              // entao rolava sempre. Um testador descreveu isso como
-              // "nao da pra mexer nas abas porque ta descendo".
-              //
-              // A conta agora sai do que sobra: cabecalho, transporte e
-              // timeline sao fixos, e o palco fica com 120 px no minimo
-              // — abaixo disso nao se enquadra nada. Num aparelho baixo
-              // o painel volta a rolar, e ai rolar e a escolha certa:
-              // a alternativa seria nao ver o video.
-              final alturaDoPainel = (constraints.maxHeight - 340).clamp(
-                240.0,
-                430.0,
+              // The preview owns the same space in overview, selection and
+              // property editing. Tools share the lower half of the workspace.
+              final workspaceHeight = (constraints.maxHeight - 100).clamp(
+                0.0,
+                double.infinity,
               );
+              final lowerHeight = workspaceHeight / 2;
+              final dockHeight = (lowerHeight - 44 - 88).clamp(0.0, 202.0);
+              final alturaDoPainel = (lowerHeight - 88).clamp(
+                0.0,
+                double.infinity,
+              );
+              final timelineHeight = _mode == _Mode.main
+                  ? (lowerHeight - 44 - (showTools ? dockHeight : 0)).clamp(
+                      88.0,
+                      double.infinity,
+                    )
+                  : 88.0;
               return Stack(
-            children: [
-              Column(
                 children: [
-                  if (!_previewExpanded)
-                    _TopBar(
-                      title: _title,
-                      isMain: _mode == _Mode.main,
-                      onBack: _back,
-                      onLayerMenu: _onTapLayer,
-                      playback: _playback,
-                      trailing: _mode == _Mode.editPoints
-                          ? _PointsHeaderActions(
-                              playback: _playback,
-                              onKeyframe: () =>
-                                  _pointsKey.currentState?.toggleKeyframe(),
-                              onAdd: () => _pointsKey.currentState?.addPoint(),
-                            )
-                          : null,
-                    ),
-                  // RepaintBoundary: palco, timeline e painel pintam em
-                  // camadas separadas — repintar um nao repinta os outros.
-                  Expanded(
-                    child: RepaintBoundary(
-                      key: previewStageKey,
-                      child: PreviewStage(playback: _playback, videos: _videos),
-                    ),
-                  ),
-                  _TransportBar(
-                    playback: _playback,
-                    previewExpanded: _previewExpanded,
-                    onTogglePreview: () =>
-                        setState(() => _previewExpanded = !_previewExpanded),
-                  ),
-                  // Barra de ACOES fixa (spec barra-de-acoes): comandos
-                  // estruturais sempre no mesmo lugar; desabilitado fica
-                  // esmaecido, nunca some.
-                  if (!_previewExpanded) ...[
-                    // A BARRA DE ACOES SO NO MODO PRINCIPAL. Ela guarda
-                    // comandos de estrutura — somar camada, cortar,
-                    // duplicar, precompor, vincular — e nenhum deles se
-                    // usa no meio de um ajuste de parametro. Escondida
-                    // durante um painel, os 44 px dela vao para o
-                    // painel, que era o que faltava para as abas de
-                    // transformacao caberem sem rolagem.
-                    if (_mode == _Mode.main) _ActionBar(playback: _playback),
-                    RepaintBoundary(
-                      child: AmTimeline(
-                        playback: _playback,
-                        height: _mode == _Mode.main
-                            ? (showTools ? 160 : 280)
-                            : 116,
-                        singleLayerId: _mode == _Mode.main ? null : selectedId,
-                        playheadColor: pinkPlayhead
-                            ? AmColors.pink
-                            : Colors.white,
-                        onTapLayer: _onTapLayer,
-                        onScrub: _videos.scrub,
-                        activeTimesUs: activeTimesUs,
-                        onForeignKeyframe: _mode == _Mode.main
-                            ? null
-                            : _onForeignKeyframe,
-                      ),
-                    ),
-                    if (showTools)
-                      SizedBox(
-                        height: 202,
-                        child: LayerToolsDock(
-                          layer: layer,
+                  Column(
+                    children: [
+                      if (!_previewExpanded)
+                        _TopBar(
+                          title: _title,
+                          isMain: _mode == _Mode.main,
+                          onBack: _back,
+                          onLayerMenu: _onTapLayer,
                           playback: _playback,
-                          onAction: (action) => _openLayerAction(layer, action),
-                          onMore: () => _onTapLayer(layer),
+                          trailing: _mode == _Mode.editPoints
+                              ? _PointsHeaderActions(
+                                  playback: _playback,
+                                  onKeyframe: () =>
+                                      _pointsKey.currentState?.toggleKeyframe(),
+                                  onAdd: () =>
+                                      _pointsKey.currentState?.addPoint(),
+                                )
+                              : null,
+                        ),
+                      // RepaintBoundary: palco, timeline e painel pintam em
+                      // camadas separadas — repintar um nao repinta os outros.
+                      Expanded(
+                        child: RepaintBoundary(
+                          key: previewStageKey,
+                          child: PreviewStage(
+                            playback: _playback,
+                            videos: _videos,
+                          ),
                         ),
                       ),
-                    // ALTURA CONSTANTE, a mesma para todo painel.
-                    //
-                    // Antes cada painel pedia a sua: o de animadores de texto
-                    // era bem mais alto que o de transformacao. Trocar de
-                    // secao redimensionava o preview, e o enquadramento
-                    // pulava debaixo do dedo bem no momento de conferir o
-                    // enquadramento. O teto de 40% da tela continua, para o
-                    // palco nunca sumir em aparelho baixo; todo painel tem
-                    // rolagem interna.
-                    if (panel != null)
-                      SizedBox(
-                        height: alturaDoPainel,
-                        child: RepaintBoundary(child: panel),
+                      _TransportBar(
+                        playback: _playback,
+                        previewExpanded: _previewExpanded,
+                        onTogglePreview: () => setState(
+                          () => _previewExpanded = !_previewExpanded,
+                        ),
                       ),
-                  ],
-                ],
-              ),
-              // O "+" agora vive na barra de acoes fixa (spec
-              // barra-de-acoes): sem FAB cobrindo a timeline.
-              if (ref.watch(debugOverlayProvider))
-                Positioned(
-                  top: 6,
-                  left: 8,
-                  child: IgnorePointer(
-                    child: _DiagOverlay(playback: _playback),
+                      // Barra de ACOES fixa (spec barra-de-acoes): comandos
+                      // estruturais sempre no mesmo lugar; desabilitado fica
+                      // esmaecido, nunca some.
+                      if (!_previewExpanded) ...[
+                        // A BARRA DE ACOES SO NO MODO PRINCIPAL. Ela guarda
+                        // comandos de estrutura — somar camada, cortar,
+                        // duplicar, precompor, vincular — e nenhum deles se
+                        // usa no meio de um ajuste de parametro. Escondida
+                        // durante um painel, os 44 px dela vao para o
+                        // painel, que era o que faltava para as abas de
+                        // transformacao caberem sem rolagem.
+                        if (_mode == _Mode.main)
+                          _ActionBar(playback: _playback),
+                        RepaintBoundary(
+                          child: AmTimeline(
+                            playback: _playback,
+                            height: timelineHeight,
+                            singleLayerId: _mode == _Mode.main
+                                ? null
+                                : selectedId,
+                            playheadColor: pinkPlayhead
+                                ? AmColors.pink
+                                : Colors.white,
+                            onTapLayer: _onTapLayer,
+                            onScrub: _videos.scrub,
+                            activeTimesUs: activeTimesUs,
+                            onForeignKeyframe: _mode == _Mode.main
+                                ? null
+                                : _onForeignKeyframe,
+                          ),
+                        ),
+                        if (showTools)
+                          SizedBox(
+                            height: dockHeight,
+                            child: LayerToolsDock(
+                              layer: layer,
+                              playback: _playback,
+                              onAction: (action) =>
+                                  _openLayerAction(layer, action),
+                              onMore: () => _onTapLayer(layer),
+                            ),
+                          ),
+                        // Todos os painéis usam a mesma área inferior;
+                        // trocar de ferramenta preserva o enquadramento.
+                        if (panel != null)
+                          SizedBox(
+                            height: alturaDoPainel,
+                            child: RepaintBoundary(child: panel),
+                          ),
+                      ],
+                    ],
                   ),
-                ),
-            ],
+                  // O "+" agora vive na barra de acoes fixa (spec
+                  // barra-de-acoes): sem FAB cobrindo a timeline.
+                  if (ref.watch(debugOverlayProvider))
+                    Positioned(
+                      top: 6,
+                      left: 8,
+                      child: IgnorePointer(
+                        child: _DiagOverlay(playback: _playback),
+                      ),
+                    ),
+                ],
               );
             },
           ),

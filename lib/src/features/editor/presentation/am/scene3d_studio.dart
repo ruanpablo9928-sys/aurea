@@ -1,18 +1,24 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/texture_cache.dart';
+import '../../application/playback_controller.dart';
 import '../../application/editor_controller.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/layer.dart';
 import '../../domain/scene3d.dart';
+import '../../domain/scene_motion.dart';
+import '../../domain/keyframe.dart';
+import '../../domain/camera_cuts.dart';
 import '../../application/scene3d_gpu.dart';
+import '../../application/renderer3d/filament_renderer.dart' show filamentPreviewEnabled;
 import '../widgets/scene3d_painter.dart';
 import '../widgets/scene3d_gpu_view.dart';
 import 'am_colors.dart';
+import 'am_widgets.dart';
 import 'scene3d_sheet.dart';
 
 /// ESTUDIO DA CENA 3D: onde a navegacao por toque acontece sem brigar
@@ -49,7 +55,58 @@ class Scene3DStudio extends ConsumerStatefulWidget {
   ConsumerState<Scene3DStudio> createState() => _Scene3DStudioState();
 }
 
-class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
+class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
+    with SingleTickerProviderStateMixin {
+  late final PlaybackController _playback;
+  Duration get _time => _playback.time.value;
+  bool _autoKey = true;
+  int _transformTool = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _playback = PlaybackController(
+      vsync: this,
+      durationOf: () => _layer?.duration ?? Duration.zero,
+    );
+    _playback.compositionFps = ref.read(editorControllerProvider).fps;
+    _playback.loop.value = true;
+    _playback.time.addListener(_clockChanged);
+    _playback.playing.addListener(_clockChanged);
+  }
+
+  void _clockChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _playback.time.removeListener(_clockChanged);
+    _playback.playing.removeListener(_clockChanged);
+    _playback.pause();
+    _playback.dispose();
+    super.dispose();
+  }
+
+  Camera3D _activeCamera(Scene3DLayer layer) {
+    final shots = sortedShots(layer.shots);
+    final shot = shotAt(shots, _time) ?? shots.firstOrNull;
+    return layer.allCameras.where((c) => c.id == shot?.cameraId).firstOrNull ??
+        layer.camera;
+  }
+
+  void _setCamera(Camera3D camera) {
+    _controller.updateSceneCameraById(widget.layerId, camera);
+  }
+
+  void _editCamera(Camera3D Function(Camera3D) edit) {
+    final layer = _layer;
+    if (layer == null) return;
+    _setCamera(
+      editCameraMotion(_activeCamera(layer), _time, edit, autoKey: _autoKey),
+    );
+  }
+
   SceneView _view = SceneView.camera;
   String? _selected;
   bool _navigationMode = false;
@@ -89,13 +146,13 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
       _view == SceneView.custom1 || _view == SceneView.custom2;
 
   RenderCamera _renderCamera(Scene3DLayer layer) {
-    if (_view == SceneView.camera) return layer.camera.renderAt(Duration.zero);
+    if (_view == SceneView.camera) return layer.cameraAt(_time);
     if (_freeView) {
       return RenderCamera(
         position: _freePos,
         target: _freeTarget,
-        focalLength: layer.camera.focalLength.base,
-        filmWidth: layer.camera.filmWidth,
+        focalLength: _activeCamera(layer).focalLength.base,
+        filmWidth: _activeCamera(layer).filmWidth,
       );
     }
     return orthoViewCamera(_view, scale: _orthoScale, center: _orthoCenter);
@@ -107,6 +164,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   /// resultado bom volta ao soltar.
   void _beginGesture() {
     if (_gestureActive) return;
+    _playback.pause();
     setState(() => _gestureActive = true);
   }
 
@@ -125,17 +183,14 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     if (_pivot != null) return _pivot!;
     final sel = layer.scene.nodes.where((n) => n.id == _selected).firstOrNull;
     if (sel != null) {
-      return _pivot = resolveNodeTransform(
-        layer.scene,
-        sel,
-        Duration.zero,
-      ).position;
+      return _pivot = resolveNodeTransform(layer.scene, sel, _time).position;
     }
-    if (_view == SceneView.camera && layer.camera.kind == CameraKind.twoNode) {
-      return _pivot = layer.camera.pointOfInterestAt(Duration.zero);
+    if (_view == SceneView.camera &&
+        _activeCamera(layer).kind == CameraKind.twoNode) {
+      return _pivot = _activeCamera(layer).pointOfInterestAt(_time);
     }
     if (_freeView) return _pivot = _freeTarget;
-    return _pivot = sceneBounds(layer.scene, Duration.zero).center;
+    return _pivot = sceneBounds(layer.scene, _time).center;
   }
 
   void _orbit(Scene3DLayer layer, Offset delta) {
@@ -143,10 +198,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     final yaw = -delta.dx * 0.35;
     final pitch = delta.dy * 0.28;
     if (_view == SceneView.camera) {
-      _controller.updateScene3DCamera(
-        widget.layerId,
-        (c) => orbitCamera(c, pivot, yaw, pitch, Duration.zero),
-      );
+      _editCamera((c) => orbitCamera(c, pivot, yaw, pitch, _time));
       return;
     }
     if (_freeView) {
@@ -174,10 +226,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
 
   void _pan(Scene3DLayer layer, Offset delta) {
     if (_view == SceneView.camera) {
-      _controller.updateScene3DCamera(
-        widget.layerId,
-        (c) => panCamera(c, delta, Duration.zero),
-      );
+      _editCamera((c) => panCamera(c, delta, _time));
       return;
     }
     if (_freeView) {
@@ -207,10 +256,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   void _dolly(Scene3DLayer layer, double factor) {
     if (factor <= 0) return;
     if (_view == SceneView.camera) {
-      _controller.updateScene3DCamera(
-        widget.layerId,
-        (c) => dollyCamera(c, factor, Duration.zero),
-      );
+      _editCamera((c) => dollyCamera(c, factor, _time));
       return;
     }
     if (_freeView) {
@@ -224,24 +270,14 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   }
 
   void _handleTap(Scene3DLayer layer, Offset local, Size size) {
-    final frame = renderScene(
-      layer.scene,
-      _renderCamera(layer),
-      size,
-      Duration.zero,
-    );
+    final frame = renderScene(layer.scene, _renderCamera(layer), size, _time);
     final hit = pickNodeAt(frame, local);
     if (_navigationMode) return;
     setState(() => _selected = hit);
   }
 
   void _handleDoubleTap(Scene3DLayer layer, Offset local, Size size) {
-    final frame = renderScene(
-      layer.scene,
-      _renderCamera(layer),
-      size,
-      Duration.zero,
-    );
+    final frame = renderScene(layer.scene, _renderCamera(layer), size, _time);
     final hit = pickNodeAt(frame, local);
     if (hit == null) {
       // Toque duplo em area vazia: volta ao enquadramento geral.
@@ -251,17 +287,10 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     }
     setState(() => _selected = hit);
     final node = layer.scene.nodes.firstWhere((n) => n.id == hit);
-    final center = resolveNodeTransform(
-      layer.scene,
-      node,
-      Duration.zero,
-    ).position;
-    final r = node.size * node.scale.valueAt(Duration.zero) * 1.8;
+    final center = resolveNodeTransform(layer.scene, node, _time).position;
+    final r = node.size * node.scale.valueAt(_time) * 1.8;
     if (_view == SceneView.camera) {
-      _controller.updateScene3DCamera(
-        widget.layerId,
-        (c) => frameBounds(c, Bounds3D(center, r), Duration.zero),
-      );
+      _editCamera((c) => frameBounds(c, Bounds3D(center, r), _time));
     } else if (_freeView) {
       setState(() {
         final dir = (_freePos - center).normalized;
@@ -276,9 +305,9 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
   }
 
   void _frameAll(Scene3DLayer layer) {
-    final b = sceneBounds(layer.scene, Duration.zero);
+    final b = sceneBounds(layer.scene, _time);
     if (_view == SceneView.camera) {
-      _controller.frameSceneAll(widget.layerId);
+      _editCamera((c) => frameBounds(c, b, _time));
     } else if (_freeView) {
       setState(() {
         _freeTarget = b.center;
@@ -342,8 +371,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                         left: 12,
                         top: 12,
                         child: AxisGizmo(
-                          camera: layer.camera,
-                          time: Duration.zero,
+                          camera: _activeCamera(layer),
+                          time: _time,
                           onView: (v) => setState(() {
                             _view = v;
                             _pivot = null;
@@ -356,6 +385,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                 },
               ),
             ),
+            _motionControls(layer),
             _viewSelector(layer),
             _commandBar(layer),
           ],
@@ -415,7 +445,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
       onDoubleTapDown: (d) => _handleDoubleTap(layer, d.localPosition, size),
       onDoubleTap: () {},
       onScaleStart: (d) {
-        final frame = renderScene(layer.scene, cam, size, Duration.zero);
+        final frame = renderScene(layer.scene, cam, size, _time);
         final hit = pickNodeAt(frame, d.localFocalPoint);
         final startIntent = resolveTouch(
           onSelectedLayer: hit != null && hit == _selected,
@@ -476,17 +506,17 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
             // O MOTOR EM GPU desenha a cena; sem ele, o pintor em CPU
             // (que tambem e quem desenha as ajudas: grade, frustum,
             // caixa do selecionado).
-            if (!Scene3DGpu.indisponivel)
+            if (filamentPreviewEnabled || !Scene3DGpu.indisponivel)
               SizedBox(
                 width: size.width,
                 height: size.height,
                 child: Scene3DGpuView(
                   scene: layer.scene,
-                  camera: layer.camera,
+                  camera: _activeCamera(layer),
                   renderCamera: cam,
                   view: _view,
-                  time: Duration.zero,
-                  rascunho: _gestureActive,
+                  time: _time,
+                  rascunho: _gestureActive || _playback.playing.value,
                   showHelpers: true,
                   selectedNodeId: _selected,
                 ),
@@ -495,15 +525,15 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               CustomPaint(
                 size: size,
                 painter: Scene3DPainter(
-                  scene: _gestureActive
+                  scene: (_gestureActive || _playback.playing.value)
                       ? layer.scene.copyWith(draftMode: true)
                       : layer.scene,
-                  camera: layer.camera,
+                  camera: _activeCamera(layer),
                   view: _view,
-                  time: Duration.zero,
+                  time: _time,
                   showHelpers: true,
                   selectedNodeId: _selected,
-                  overrideCamera: _view == SceneView.camera ? null : cam,
+                  overrideCamera: cam,
                 ),
               ),
           ],
@@ -519,17 +549,70 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
     final basis = cameraBasis(cam);
     final node = layer.scene.nodes.firstWhere((n) => n.id == id);
     if (node.locked) return;
-    final p = resolveNodeTransform(layer.scene, node, Duration.zero).position;
+    if (_transformTool == 1) {
+      _controller.updateSceneNode(
+        widget.layerId,
+        id,
+        (n) => n.copyWith(
+          rotX: editMotionValue(
+            n.rotX,
+            _time,
+            n.rotX.valueAt(_time) + delta.dy * .5,
+            autoKey: _autoKey,
+          ),
+          rotY: editMotionValue(
+            n.rotY,
+            _time,
+            n.rotY.valueAt(_time) + delta.dx * .5,
+            autoKey: _autoKey,
+          ),
+        ),
+      );
+      return;
+    }
+    if (_transformTool == 2) {
+      _controller.updateSceneNode(
+        widget.layerId,
+        id,
+        (n) => n.copyWith(
+          scale: editMotionValue(
+            n.scale,
+            _time,
+            (n.scale.valueAt(_time) * math.exp((delta.dx - delta.dy) * .008))
+                .clamp(.001, 1000),
+            autoKey: _autoKey,
+          ),
+        ),
+      );
+      return;
+    }
+    final p = resolveNodeTransform(layer.scene, node, _time).position;
     final dist = (p - cam.position).dot(basis.forward).abs();
     final k = cam.orthographic ? 1 / cam.orthoScale : dist / math.max(1, 600);
-    final shift = basis.right * (delta.dx * k) - basis.up * (delta.dy * k);
+    final worldShift = basis.right * (delta.dx * k) - basis.up * (delta.dy * k);
+    final shift = sceneLocalDelta(layer.scene, node, _time, worldShift);
     _controller.updateSceneNode(
       widget.layerId,
       id,
       (n) => n.copyWith(
-        x: n.x.withBase(n.x.base + shift.x),
-        y: n.y.withBase(n.y.base + shift.y),
-        z: n.z.withBase(n.z.base + shift.z),
+        x: editMotionValue(
+          n.x,
+          _time,
+          n.x.valueAt(_time) + shift.x,
+          autoKey: _autoKey,
+        ),
+        y: editMotionValue(
+          n.y,
+          _time,
+          n.y.valueAt(_time) + shift.y,
+          autoKey: _autoKey,
+        ),
+        z: editMotionValue(
+          n.z,
+          _time,
+          n.z.valueAt(_time) + shift.z,
+          autoKey: _autoKey,
+        ),
       ),
     );
   }
@@ -588,8 +671,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
                 size: Size(_miniSize, _miniSize),
                 painter: MiniViewPainter(
                   scene: layer.scene,
-                  camera: layer.camera,
-                  time: Duration.zero,
+                  camera: _activeCamera(layer),
+                  time: _time,
                   view: _miniView,
                 ),
               ),
@@ -669,15 +752,215 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               if (v == SceneView.custom1 || v == SceneView.custom2) {
                 // A vista livre nasce onde a camera esta — assim nada
                 // pula quando se troca para ela.
-                _freePos = layer.camera.positionAt(Duration.zero);
-                _freeTarget = layer.camera.kind == CameraKind.twoNode
-                    ? layer.camera.pointOfInterestAt(Duration.zero)
-                    : _freePos + layer.camera.forwardAt(Duration.zero) * 800;
+                _freePos = _activeCamera(layer).positionAt(_time);
+                _freeTarget = _activeCamera(layer).kind == CameraKind.twoNode
+                    ? _activeCamera(layer).pointOfInterestAt(_time)
+                    : _freePos + _activeCamera(layer).forwardAt(_time) * 800;
               }
             });
           });
         },
       ),
+    );
+  }
+
+  List<AnimatedDouble> _tracks(Scene3DLayer layer) {
+    final node = layer.scene.nodeById(_selected ?? '');
+    return node == null
+        ? cameraMotionTracks(_activeCamera(layer))
+        : nodeMotionTracks(node);
+  }
+
+  void _mapTracks(AnimatedDouble Function(AnimatedDouble) edit) {
+    _playback.pause();
+    final layer = _layer;
+    if (layer == null) return;
+    final node = layer.scene.nodeById(_selected ?? '');
+    if (node == null) {
+      _setCamera(mapCameraMotion(_activeCamera(layer), edit));
+    } else {
+      _controller.updateSceneNode(
+        widget.layerId,
+        node.id,
+        (n) => mapNodeMotion(n, edit),
+      );
+    }
+  }
+
+  Future<void> _chooseTarget(Scene3DLayer layer) async {
+    _playback.pause();
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AmColors.panel,
+      builder: (context) => SafeArea(
+        child: ListView.builder(
+          itemCount: layer.scene.nodes.length + 1,
+          itemBuilder: (context, i) {
+            final node = i == 0 ? null : layer.scene.nodes[i - 1];
+            return ListTile(
+              title: Text(
+                node?.name ?? 'Camera',
+                style: const TextStyle(color: AmColors.text),
+              ),
+              leading: Icon(
+                node == null
+                    ? Icons.videocam
+                    : node.locked
+                    ? Icons.lock
+                    : Icons.view_in_ar,
+                color: AmColors.accent,
+              ),
+              onTap: () => Navigator.pop(context, node?.id ?? ''),
+            );
+          },
+        ),
+      ),
+    );
+    if (mounted && result != null) {
+      setState(() => _selected = result.isEmpty ? null : result);
+    }
+  }
+
+  Widget _motionControls(Scene3DLayer layer) {
+    final node = layer.scene.nodeById(_selected ?? '');
+    final tracks = _tracks(layer);
+    final keys = {
+      for (final track in tracks)
+        for (final key in track.keyframes) key.time.inMicroseconds,
+    }.toList()..sort();
+    final here = tracks.any((track) => track.hasKeyframeAt(_time));
+    final previous = keys
+        .where((t) => t < _time.inMicroseconds - 8000)
+        .lastOrNull;
+    final next = keys.where((t) => t > _time.inMicroseconds + 8000).firstOrNull;
+    final duration = math.max(1, layer.duration.inMicroseconds).toDouble();
+    void seek(int value) {
+      _playback.pause();
+      _playback.seek(Duration(microseconds: value));
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: _playback.playing.value ? 'Pausar' : 'Reproduzir cena',
+              onPressed: _playback.toggle,
+              icon: Icon(
+                _playback.playing.value ? Icons.pause : Icons.play_arrow,
+                color: AmColors.accent,
+              ),
+            ),
+            Expanded(
+              child: AmTickRuler(
+                key: const ValueKey('scene-motion-time'),
+                height: 48,
+                unitsPerPixel: duration / 1e6 / 300,
+                min: 0,
+                max: duration / 1e6,
+                value: _time.inMicroseconds.toDouble().clamp(0, duration) / 1e6,
+                onChanged: (v) => seek((v * 1e6).round()),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Text(
+                '${(_time.inMicroseconds / 1e6).toStringAsFixed(2)} s',
+                style: const TextStyle(color: AmColors.text),
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () => _chooseTarget(layer),
+                child: Text(
+                  node?.name ?? _activeCamera(layer).name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Keyframe anterior',
+              onPressed: previous == null ? null : () => seek(previous),
+              icon: const Icon(Icons.skip_previous, color: AmColors.text),
+            ),
+            IconButton(
+              tooltip: here ? 'Remover keyframe' : 'Adicionar keyframe',
+              onPressed: node?.locked == true
+                  ? null
+                  : () => _mapTracks(
+                      (track) => here
+                          ? track.withoutKeyframe(_time)
+                          : editMotionValue(track, _time, track.valueAt(_time)),
+                    ),
+              icon: Icon(
+                here ? Icons.diamond : Icons.diamond_outlined,
+                color: AmColors.accent,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Proximo keyframe',
+              onPressed: next == null ? null : () => seek(next),
+              icon: const Icon(Icons.skip_next, color: AmColors.text),
+            ),
+            PopupMenuButton<Easing>(
+              tooltip: 'Curva do movimento',
+              icon: const Icon(Icons.show_chart, color: AmColors.accent),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: Easing.linear,
+                  child: Text('Linear'),
+                ),
+                const PopupMenuItem(
+                  value: Easing.easeInOut,
+                  child: Text('Suave'),
+                ),
+                const PopupMenuItem(
+                  value: Easing.easeOut,
+                  child: Text('Desacelerar'),
+                ),
+                const PopupMenuItem(
+                  value: Easing.overshoot,
+                  child: Text('Antecipacao e retorno'),
+                ),
+              ],
+              onSelected: (ease) => _mapTracks((track) {
+                final start = track.keyframes
+                    .where((k) => k.time <= _time)
+                    .lastOrNull;
+                return start == null ? track : track.withEase(start.time, ease);
+              }),
+            ),
+          ],
+        ),
+        SizedBox(
+          height: 36,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            children: [
+              for (var i = 0; i < 3; i++) ...[
+                _chip(
+                  ['Mover', 'Girar', 'Escalar'][i],
+                  _transformTool == i,
+                  () => setState(() => _transformTool = i),
+                ),
+                const SizedBox(width: 6),
+              ],
+              _chip(
+                _autoKey ? 'Auto-key ligado' : 'Auto-key desligado',
+                _autoKey,
+                () => setState(() => _autoKey = !_autoKey),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -721,8 +1004,21 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               'Enquadrar selecionado',
               _selected == null
                   ? null
-                  : () =>
-                        _controller.frameSceneNode(widget.layerId, _selected!),
+                  : () {
+                      final node = layer.scene.nodeById(_selected!);
+                      if (node == null) return;
+                      final xf = resolveNodeTransform(layer.scene, node, _time);
+                      _editCamera(
+                        (c) => frameBounds(
+                          c,
+                          Bounds3D(
+                            xf.position,
+                            node.size * xf.scale.abs() * 1.8,
+                          ),
+                          _time,
+                        ),
+                      );
+                    },
             ),
             const SizedBox(width: 8),
             // O COMANDO MAIS USADO: navegar livre ate achar o
@@ -733,10 +1029,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               _view == SceneView.camera
                   ? null
                   : () {
-                      _controller.alignCameraToRender(
-                        widget.layerId,
-                        _renderCamera(layer),
-                      );
+                      _editCamera((c) => alignToView(c, _renderCamera(layer)));
                       setState(() => _view = SceneView.camera);
                     },
             ),
@@ -756,10 +1049,31 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
               'Focar no selecionado',
               _selected == null
                   ? null
-                  : () => _controller.focusCameraOnNode(
-                      widget.layerId,
-                      _selected!,
-                    ),
+                  : () {
+                      final node = layer.scene.nodeById(_selected!);
+                      if (node == null) return;
+                      final camera = _activeCamera(layer);
+                      final position = resolveNodeTransform(
+                        layer.scene,
+                        node,
+                        _time,
+                      ).position;
+                      final distance =
+                          (position - layer.cameraAt(_time).position).length;
+                      _setCamera(
+                        camera.copyWith(
+                          dof: camera.dof.copyWith(
+                            enabled: true,
+                            focusDistance: editMotionValue(
+                              camera.dof.focusDistance,
+                              _time,
+                              distance,
+                              autoKey: _autoKey,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
             ),
           ],
         ),

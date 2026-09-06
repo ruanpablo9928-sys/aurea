@@ -218,45 +218,51 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                 // Trilho esquerdo: voltar / inverter / menu.
                 Column(
                   children: [
-                    AmRailButton(
-                      onTap: widget.onBack,
-                      child: const Icon(
-                        CupertinoIcons.chevron_back,
-                        size: 24,
-                        color: AmColors.text,
+                    Flexible(
+                      child: AmRailButton(
+                        onTap: widget.onBack,
+                        child: const Icon(
+                          CupertinoIcons.chevron_back,
+                          size: 24,
+                          color: AmColors.text,
+                        ),
                       ),
                     ),
                     const Spacer(),
-                    AmRailButton(
-                      onTap: () {
-                        // Inverte a curva (espelha as alcas).
-                        controller.setSegmentEase(
-                          id,
-                          widget.prop,
-                          segment!.$1,
-                          ease.copyWith(
-                            x1: (1 - ease.x2).clamp(0.0, 1.0),
-                            y1: 1 - ease.y2,
-                            x2: (1 - ease.x1).clamp(0.0, 1.0),
-                            y2: 1 - ease.y1,
-                          ),
-                        );
-                      },
-                      child: const Icon(
-                        CupertinoIcons.arrow_2_squarepath,
-                        size: 22,
-                        color: AmColors.text,
+                    Flexible(
+                      child: AmRailButton(
+                        onTap: () {
+                          // Inverte a curva (espelha as alcas).
+                          controller.setSegmentEase(
+                            id,
+                            widget.prop,
+                            segment!.$1,
+                            ease.copyWith(
+                              x1: (1 - ease.x2).clamp(0.0, 1.0),
+                              y1: 1 - ease.y2,
+                              x2: (1 - ease.x1).clamp(0.0, 1.0),
+                              y2: 1 - ease.y1,
+                            ),
+                          );
+                        },
+                        child: const Icon(
+                          CupertinoIcons.arrow_2_squarepath,
+                          size: 22,
+                          color: AmColors.text,
+                        ),
                       ),
                     ),
                     // VALOR / VELOCIDADE: o mesmo segmento, visto pela
                     // derivada. E onde a curva em S se ajusta de verdade.
-                    AmRailButton(
-                      selected: _velocidade,
-                      onTap: () => setState(() => _velocidade = !_velocidade),
-                      child: Icon(
-                        CupertinoIcons.speedometer,
-                        size: 20,
-                        color: _velocidade ? AmColors.accent : AmColors.text,
+                    Flexible(
+                      child: AmRailButton(
+                        selected: _velocidade,
+                        onTap: () => setState(() => _velocidade = !_velocidade),
+                        child: Icon(
+                          CupertinoIcons.speedometer,
+                          size: 20,
+                          color: _velocidade ? AmColors.accent : AmColors.text,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -352,8 +358,8 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                             _ComandoChip(
                               rotulo: 'Copiar',
                               icone: CupertinoIcons.doc_on_doc,
-                              onTap: () => setState(
-                                  () => EasingClipboard.valor = ease),
+                              onTap: () =>
+                                  setState(() => EasingClipboard.valor = ease),
                             ),
                             const SizedBox(width: 6),
                             _ComandoChip(
@@ -362,18 +368,21 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                               onTap: EasingClipboard.valor == null
                                   ? null
                                   : () => controller.setSegmentEase(
-                                        id,
-                                        widget.prop,
-                                        segment!.$1,
-                                        EasingClipboard.valor!,
-                                      ),
+                                      id,
+                                      widget.prop,
+                                      segment!.$1,
+                                      EasingClipboard.valor!,
+                                    ),
                             ),
                             const SizedBox(width: 6),
                             _ComandoChip(
                               rotulo: 'Em todos',
                               icone: CupertinoIcons.square_stack_3d_down_right,
                               onTap: () => controller.applyEaseToAllSegments(
-                                  id, widget.prop, ease),
+                                id,
+                                widget.prop,
+                                ease,
+                              ),
                             ),
                             const SizedBox(width: 6),
                             _ComandoChip(
@@ -456,7 +465,6 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
         (a.x2 - b.x2).abs() < 0.01 &&
         (a.y2 - b.y2).abs() < 0.01;
   }
-
 }
 
 /// Curve editor de uma trilha do MODULO GRADE (inclui 'transition', o
@@ -1260,7 +1268,6 @@ class _PresetThumbPainter extends CustomPainter {
       old.ease != ease || old.selected != selected;
 }
 
-
 /// UM COMANDO VISIVEL do rodape. Chip preenchido, sem borda — a
 /// identidade da Aurea nao tem caixa com contorno.
 ///
@@ -1298,9 +1305,11 @@ class _ComandoChip extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icone,
-                    size: 15,
-                    color: ligado ? AmColors.accent : AmColors.text),
+                Icon(
+                  icone,
+                  size: 15,
+                  color: ligado ? AmColors.accent : AmColors.text,
+                ),
                 const SizedBox(height: 2),
                 Text(
                   rotulo,

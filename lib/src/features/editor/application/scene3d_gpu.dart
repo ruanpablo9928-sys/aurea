@@ -9,6 +9,7 @@ import 'package:vector_math/vector_math.dart' as vm;
 import '../domain/camera3d.dart';
 import '../domain/element3d.dart';
 import '../domain/scene3d.dart';
+import '../domain/preview_quality.dart';
 import 'motor3d_modo.dart';
 import 'texture_cache.dart';
 
@@ -40,6 +41,9 @@ class Scene3DGpu {
   static bool _prontoParaRender = false;
   static bool _falhou = false;
   static String _motivo = '';
+  // Uploads include an RGBA readback and mip generation. Serializing them
+  // across views prevents a textured import from allocating all copies at once.
+  static Future<void> _uploads = Future<void>.value();
 
   /// Carrega os shaders e recursos estaticos do motor. Falha em silencio
   /// (com log) onde nao ha GPU: [pronto] fica false e o pintor em CPU
@@ -111,6 +115,9 @@ class Scene3DGpu {
   final List<fs.Node> _luzes = [];
   String? _chaveAmbiente;
   int _epocaAmbiente = 0;
+  bool _descartado = false;
+  List<Light3D>? _ultimasLuzes;
+  List<double> _ultimasIntensidades = const [];
 
   /// Sincroniza a cena da GPU com [scene] no instante [t].
   ///
@@ -123,6 +130,7 @@ class Scene3DGpu {
     VoidCallback? onMudou,
     bool rascunho = false,
   }) {
+    if (_descartado) return;
     _sincronizarNos(scene, t, onMudou);
     _sincronizarLuzes(scene, t);
     _sincronizarAmbiente(scene, t, onMudou);
@@ -135,7 +143,9 @@ class Scene3DGpu {
   /// o do motor, vertical.
   fs.PerspectiveCamera camera(RenderCamera cam, ui.Size tamanho) {
     final basis = cameraBasis(cam);
-    final aspecto = tamanho.height <= 0 ? 16 / 9 : tamanho.width / tamanho.height;
+    final aspecto = tamanho.height <= 0
+        ? 16 / 9
+        : tamanho.width / tamanho.height;
     final fovX = cam.orthographic ? 0.6 : cam.fovRadians;
     final fovY = 2 * math.atan(math.tan(fovX / 2) / aspecto);
     return fs.PerspectiveCamera(
@@ -170,12 +180,26 @@ class Scene3DGpu {
   }
 
   /// Desenha a cena em [canvas], dentro de [area].
-  void desenhar(ui.Canvas canvas, ui.Rect area, fs.Camera camera) {
+  void desenhar(
+    ui.Canvas canvas,
+    ui.Rect area,
+    fs.Camera camera, {
+    bool rascunho = false,
+    bool exporting = false,
+  }) {
     if (!pronto) return;
+    cena.renderScale = scenePreviewScale(
+      area.width,
+      area.height,
+      interacting: rascunho,
+      exporting: exporting,
+    );
     cena.render(camera, canvas, viewport: area, pixelRatio: 1.0);
   }
 
   void descartar() {
+    _descartado = true;
+    _epocaAmbiente++;
     for (final n in _nos.values) {
       n.remover(cena);
     }
@@ -184,6 +208,13 @@ class Scene3DGpu {
       cena.remove(l);
     }
     _luzes.clear();
+    _texturas.clear();
+    _esperandoTextura.clear();
+    _texturasACaminho.clear();
+    cena.environment = null;
+    cena.skyEnvironment = null;
+    cena.skybox = null;
+    cena.directionalLight = null;
   }
 
   // ------------------------------------------------------------- nos
@@ -201,6 +232,8 @@ class Scene3DGpu {
         g?.remover(cena);
         g = _construir(node, malha, onMudou);
         _nos[node.id] = g;
+      } else if (malha.dinamica && !identical(g.ultimaMalha, malha.malha)) {
+        _construir(node, malha, onMudou, existente: g);
       }
       g.transformar(xf, node);
     }
@@ -209,6 +242,9 @@ class Scene3DGpu {
         _nos.remove(id)!.remover(cena);
       }
     }
+    final usadas = {for (final n in _nos.values) ...n.texturas};
+    _texturas.removeWhere((path, _) => !usadas.contains(path));
+    _esperandoTextura.removeWhere((path, _) => !usadas.contains(path));
   }
 
   /// A malha do no neste instante: vertices, faces, normais e UVs por
@@ -217,7 +253,8 @@ class Scene3DGpu {
     final asset = node.modelAsset;
     if (asset != null) {
       final motion = node.modelMotion;
-      final animado = motion.keys.isNotEmpty ||
+      final animado =
+          motion.keys.isNotEmpty ||
           (motion.clip >= 0 && motion.clip < asset.clips.length);
       final frame = asset.evaluate(t, motion);
       final materiais = node.useModelMaterials
@@ -228,9 +265,10 @@ class Scene3DGpu {
         normais: frame.normals,
         uvs: frame.uvs,
         materiais: materiais,
+        dinamica: animado,
         assinatura:
-            'm${identityHashCode(asset)}:${node.useModelMaterials ? 'a' : _assinaturaMaterial(node.material)}'
-            '${animado ? ':t${t.inMicroseconds}' : ''}',
+            'm${identityHashCode(asset)}:${identityHashCode(motion)}:${node.instances.isNotEmpty}:'
+            '${node.useModelMaterials ? 'a' : _assinaturaMaterial(node.material)}',
       );
     }
     final mesh = node.mesh ?? element3DMesh(node.kind);
@@ -240,7 +278,7 @@ class Scene3DGpu {
       uvs: null,
       materiais: List<Material3D>.filled(mesh.faces.length, node.material),
       assinatura:
-          'p${node.kind.index}:${identityHashCode(mesh)}:${_assinaturaMaterial(node.material)}',
+          'p${node.kind.index}:${identityHashCode(mesh)}:${node.instances.isNotEmpty}:${_assinaturaMaterial(node.material)}',
     );
   }
 
@@ -249,12 +287,18 @@ class Scene3DGpu {
       '${m.opacity}:${m.kind.index}:${m.imagePath}:${m.doubleSided}:'
       '${m.alphaCutoff}';
 
-  _NoGpu _construir(SceneNode node, _MalhaFonte fonte, VoidCallback? onMudou) {
+  _NoGpu _construir(
+    SceneNode node,
+    _MalhaFonte fonte,
+    VoidCallback? onMudou, {
+    _NoGpu? existente,
+  }) {
     // Faces agrupadas por material: uma primitiva (uma chamada) por grupo.
-    final grupos = <int, _Grupo>{};
-    final materiaisDoGrupo = <int, Material3D>{};
+    final grupos = <Material3D, _Grupo>{};
+    final materiaisDoGrupo = <Material3D, Material3D>{};
     final malha = fonte.malha;
-    final lisa = fonte.normais != null &&
+    final lisa =
+        fonte.normais != null &&
         fonte.normais!.length == malha.verts.length &&
         fonte.normais!.every((n) => n != null);
     final caixa = _Caixa.de(malha);
@@ -263,14 +307,15 @@ class Scene3DGpu {
       final face = malha.faces[f];
       if (face.length < 3) continue;
       final material = fonte.materiais[f];
-      final chave = identityHashCode(material);
+      final chave = material;
       final grupo = grupos[chave] ??= _Grupo();
       materiaisDoGrupo[chave] = material;
 
       // Normal da face (Newell): decide o lado e serve as faces planas.
       var nx = 0.0, ny = 0.0, nz = 0.0;
       for (var i = 0; i < face.length; i++) {
-        final a = malha.verts[face[i]], b = malha.verts[face[(i + 1) % face.length]];
+        final a = malha.verts[face[i]],
+            b = malha.verts[face[(i + 1) % face.length]];
         nx += (a[1] - b[1]) * (a[2] + b[2]);
         ny += (a[2] - b[2]) * (a[0] + b[0]);
         nz += (a[0] - b[0]) * (a[1] + b[1]);
@@ -288,7 +333,9 @@ class Scene3DGpu {
         final a = malha.verts[ia], b = malha.verts[ib], c = malha.verts[ic];
         final ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
         final vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-        final wx = uy * vz - uz * vy, wy = uz * vx - ux * vz, wz = ux * vy - uy * vx;
+        final wx = uy * vz - uz * vy,
+            wy = uz * vx - ux * vz,
+            wz = ux * vy - uy * vx;
         if (wx * nx + wy * ny + wz * nz < 0) {
           final tmp = ib;
           ib = ic;
@@ -304,44 +351,79 @@ class Scene3DGpu {
             );
             grupo.indices.add(idx);
           } else {
-            grupo.indices.add(grupo.adicionar(
-              p,
-              [nx, ny, nz],
-              _uvDe(fonte, v, p, nx, ny, nz, caixa),
-            ));
+            grupo.indices.add(
+              grupo.adicionar(p, [
+                nx,
+                ny,
+                nz,
+              ], _uvDe(fonte, v, p, nx, ny, nz, caixa)),
+            );
           }
         }
       }
     }
 
-    final no = _NoGpu(fonte.assinatura, fs.Node(name: node.name));
+    final no = existente ?? _NoGpu(fonte.assinatura, fs.Node(name: node.name));
+    no.ultimaMalha = fonte.malha;
     final instanciado = node.instances.isNotEmpty;
-    final primitivas = <fs.MeshPrimitive>[];
     for (final e in grupos.entries) {
       final g = e.value;
-      if (g.indices.isEmpty) continue;
+      final antiga = no.geometrias[e.key];
+      if (g.indices.isEmpty && antiga == null) continue;
+      if (antiga != null) {
+        final positions = Float32List.fromList(g.positions);
+        final normals = Float32List.fromList(g.normals);
+        final uvs = Float32List.fromList(g.uvs);
+        if (listEquals(no.indices[e.key], g.indices) &&
+            no.tamanhos[e.key] == positions.length) {
+          antiga.updatePositions(positions);
+          antiga.updateNormals(normals);
+          antiga.updateTexCoords(uvs);
+        } else {
+          antiga.rebuild(
+            positions: positions,
+            normals: normals,
+            texCoords: uvs,
+            indices: g.indices,
+          );
+          no.indices[e.key] = g.indices;
+          no.tamanhos[e.key] = positions.length;
+        }
+        continue;
+      }
       final material = _materialGpu(materiaisDoGrupo[e.key]!, onMudou);
+      final path = materiaisDoGrupo[e.key]!.imagePath;
+      if (path != null && path.isNotEmpty) no.texturas.add(path);
       final geometria = fs.MeshGeometry.fromArrays(
+        storage: fonte.dinamica
+            ? fs.GeometryStorage.updatable
+            : fs.GeometryStorage.fixed,
         positions: Float32List.fromList(g.positions),
         normals: Float32List.fromList(g.normals),
         texCoords: Float32List.fromList(g.uvs),
         indices: g.indices,
       );
+      no.geometrias[e.key] = geometria;
+      no.indices[e.key] = g.indices;
+      no.tamanhos[e.key] = g.positions.length;
       if (instanciado) {
         final im = fs.InstancedMesh(geometry: geometria, material: material);
         no.instancias.add(im);
         final filho = fs.Node()..addComponent(fs.InstancedMeshComponent(im));
         no.no.add(filho);
       } else {
-        primitivas.add(fs.MeshPrimitive(geometria, material));
+        no.no.add(
+          fs.Node()..addComponent(
+            fs.MeshComponent(
+              fs.Mesh.primitives(
+                primitives: [fs.MeshPrimitive(geometria, material)],
+              ),
+            ),
+          ),
+        );
       }
     }
-    if (!instanciado && primitivas.isNotEmpty) {
-      no.no.addComponent(
-        fs.MeshComponent(fs.Mesh.primitives(primitives: primitivas)),
-      );
-    }
-    cena.add(no.no);
+    if (existente == null) cena.add(no.no);
     return no;
   }
 
@@ -422,15 +504,25 @@ class Scene3DGpu {
       return;
     }
     (_esperandoTextura[path] ??= []).add(aplicar);
-    _texturasACaminho[path] ??= () async {
+    if (_texturasACaminho.containsKey(path)) return;
+    final upload = _uploads.then((_) async {
       try {
+        if (_descartado || !_esperandoTextura.containsKey(path)) return;
         var imagem = TextureCache.instance.imageFor(path);
         if (imagem == null) {
           await TextureCache.instance.prepare(path);
           imagem = TextureCache.instance.imageFor(path);
         }
-        if (imagem == null) return;
-        final tex = await fs.Texture2D.fromImage(imagem);
+        if (imagem == null || _descartado) return;
+        // A decode eviction must not invalidate an upload that is in flight.
+        final owned = imagem.clone();
+        late final fs.Texture2D tex;
+        try {
+          tex = await fs.Texture2D.fromImage(owned);
+        } finally {
+          owned.dispose();
+        }
+        if (_descartado || !_esperandoTextura.containsKey(path)) return;
         _texturas[path] = tex;
         final fila = _esperandoTextura.remove(path) ?? const [];
         for (final f in fila) {
@@ -440,14 +532,24 @@ class Scene3DGpu {
       } catch (e) {
         debugPrint('Textura 3D nao subiu para a GPU ($path): $e');
       } finally {
+        _esperandoTextura.remove(path);
         _texturasACaminho.remove(path);
       }
-    }();
+    });
+    _uploads = upload;
+    _texturasACaminho[path] = upload;
   }
 
   // ------------------------------------------------------------ luzes
 
   void _sincronizarLuzes(Scene3D scene, Duration t) {
+    final intensidades = [for (final l in scene.lights) l.intensity.valueAt(t)];
+    if (listEquals(_ultimasLuzes, scene.lights) &&
+        listEquals(_ultimasIntensidades, intensidades)) {
+      return;
+    }
+    _ultimasLuzes = scene.lights;
+    _ultimasIntensidades = intensidades;
     for (final l in _luzes) {
       cena.remove(l);
     }
@@ -478,7 +580,9 @@ class Scene3DGpu {
           // Uma luz direcional e a principal (a que faz sombra); as
           // outras entram como componentes.
           if (principal == null || (l.castsShadow && i > principalForca)) {
-            if (principal != null) _luzes.add(_noDeLuz(fs.DirectionalLightComponent(principal)));
+            if (principal != null) {
+              _luzes.add(_noDeLuz(fs.DirectionalLightComponent(principal)));
+            }
             principal = d;
             principalForca = i;
           } else {
@@ -486,33 +590,42 @@ class Scene3DGpu {
           }
         case Light3DKind.point:
           final alcance = l.range <= 0 ? 1200.0 : l.range;
-          _luzes.add(_noDeLuz(
-            fs.PointLightComponent(fs.PointLight(
-              color: cor,
-              // O dominio atenua (1 - d/alcance)^2; o motor, 1/d^2. Igualar
-              // no meio do alcance: I = i * alcance^2 / 16.
-              intensity: i * alcance * alcance / 16,
-              range: alcance,
-            )),
-            posicao: l.position,
-          ));
+          _luzes.add(
+            _noDeLuz(
+              fs.PointLightComponent(
+                fs.PointLight(
+                  color: cor,
+                  // O dominio atenua (1 - d/alcance)^2; o motor, 1/d^2. Igualar
+                  // no meio do alcance: I = i * alcance^2 / 16.
+                  intensity: i * alcance * alcance / 16,
+                  range: alcance,
+                ),
+              ),
+              posicao: l.position,
+            ),
+          );
         case Light3DKind.spot:
           final alcance = l.range <= 0 ? 1200.0 : l.range;
           final externo = l.coneDegrees.clamp(1.0, 179.0) * math.pi / 360;
-          _luzes.add(_noDeLuz(
-            fs.SpotLightComponent(fs.SpotLight(
-              color: cor,
-              intensity: i * alcance * alcance / 16,
-              range: alcance,
-              direction: _v(l.direction).normalized(),
-              innerConeAngle: externo * (1 - l.softness.clamp(0.0, 1.0) * .9),
-              outerConeAngle: externo,
-              castsShadow: l.castsShadow,
-              shadowMapResolution: 512,
-              shadowSoftness: 2 + l.softness * 6,
-            )),
-            posicao: l.position,
-          ));
+          _luzes.add(
+            _noDeLuz(
+              fs.SpotLightComponent(
+                fs.SpotLight(
+                  color: cor,
+                  intensity: i * alcance * alcance / 16,
+                  range: alcance,
+                  direction: _v(l.direction).normalized(),
+                  innerConeAngle:
+                      externo * (1 - l.softness.clamp(0.0, 1.0) * .9),
+                  outerConeAngle: externo,
+                  castsShadow: l.castsShadow,
+                  shadowMapResolution: 512,
+                  shadowSoftness: 2 + l.softness * 6,
+                ),
+              ),
+              posicao: l.position,
+            ),
+          );
         case Light3DKind.ambient:
           // Entra no ambiente (ver _sincronizarAmbiente).
           break;
@@ -548,7 +661,7 @@ class Scene3DGpu {
     final chave = caminho != null
         ? 'img:$caminho:${pano.showBackground}:${pano.backgroundBlur}'
         : 'ceu:${scene.environment.index}:${scene.skyColor.toARGB32()}:'
-            '${scene.groundColor.toARGB32()}:${pano.showBackground}';
+              '${scene.groundColor.toARGB32()}:${pano.showBackground}';
     if (chave == _chaveAmbiente) return;
     _chaveAmbiente = chave;
     final epoca = ++_epocaAmbiente;
@@ -561,13 +674,15 @@ class Scene3DGpu {
             bytes: bytes,
             maxWidth: 2048,
           );
-          if (epoca != _epocaAmbiente) return;
+          if (_descartado || epoca != _epocaAmbiente) return;
           cena.skyEnvironment = null;
           cena.environment = mapa;
           cena.skybox = pano.showBackground
-              ? fs.Skybox(fs.EnvironmentSkySource(
-                  blurriness: (pano.backgroundBlur / 30).clamp(0.0, 1.0),
-                ))
+              ? fs.Skybox(
+                  fs.EnvironmentSkySource(
+                    blurriness: (pano.backgroundBlur / 30).clamp(0.0, 1.0),
+                  ),
+                )
               : null;
           onMudou?.call();
         } catch (e) {
@@ -667,6 +782,13 @@ class _NoGpu {
   final String assinatura;
   final fs.Node no;
   final List<fs.InstancedMesh> instancias = [];
+  final Map<Material3D, fs.MeshGeometry> geometrias = {};
+  final Map<Material3D, List<int>> indices = {};
+  final Map<Material3D, int> tamanhos = {};
+  final Set<String> texturas = {};
+  Element3DMesh? ultimaMalha;
+  List<Vec3>? _ultimasInstancias;
+  double? _ultimoTamanho;
 
   void transformar(NodeTransform xf, SceneNode node) {
     final rad = math.pi / 180;
@@ -686,15 +808,17 @@ class _NoGpu {
     // leva o deslocamento e o tamanho da malha unitaria.
     m.multiply(vm.Matrix4.diagonal3Values(xf.scale, xf.scale, xf.scale));
     no.localTransform = m;
-    if (instancias.first.instanceCount != node.instances.length) {
+    if (!identical(_ultimasInstancias, node.instances) ||
+        _ultimoTamanho != node.size) {
+      _ultimasInstancias = node.instances;
+      _ultimoTamanho = node.size;
       for (final im in instancias) {
         im.clearInstances();
         for (final p in node.instances) {
           im.addInstance(
-            vm.Matrix4.translation(vm.Vector3(p.x, p.y, p.z))
-              ..multiply(
-                vm.Matrix4.diagonal3Values(node.size, node.size, node.size),
-              ),
+            vm.Matrix4.translation(vm.Vector3(p.x, p.y, p.z))..multiply(
+              vm.Matrix4.diagonal3Values(node.size, node.size, node.size),
+            ),
           );
         }
       }
@@ -711,6 +835,7 @@ class _MalhaFonte {
     required this.uvs,
     required this.materiais,
     required this.assinatura,
+    this.dinamica = false,
   });
 
   final Element3DMesh malha;
@@ -718,6 +843,7 @@ class _MalhaFonte {
   final List<ui.Offset?>? uvs;
   final List<Material3D> materiais;
   final String assinatura;
+  final bool dinamica;
 }
 
 class _Grupo {

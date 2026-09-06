@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
+import '../../application/freehand_session.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/mask.dart';
 import '../../domain/shape.dart';
 import '../../domain/shape_library.dart';
-import '../am/am_colors.dart';
-
-/// Ligado pelo "Desenho livre" do menu de adicionar: o proximo rabisco
-/// no preview vira uma camada de forma (caminho aberto, so traco).
-final freehandRequestProvider = StateProvider<bool>((ref) => false);
+export '../../application/freehand_session.dart' show freehandRequestProvider;
 
 /// DESENHO LIVRE: cobre a composicao enquanto o pedido esta ligado,
 /// acompanha o dedo com uma linha, e ao soltar simplifica o rabisco em
@@ -27,10 +25,27 @@ class FreehandOverlay extends ConsumerStatefulWidget {
 
 class _FreehandOverlayState extends ConsumerState<FreehandOverlay> {
   final List<Offset> _pontos = [];
+  String? _projectId;
+  Duration _startTime = Duration.zero;
+
+  void _cancelar() {
+    _pontos.clear();
+    _projectId = null;
+    if (mounted) setState(() {});
+    ref.read(freehandRequestProvider.notifier).state = false;
+  }
 
   void _fim() {
+    // Um gesto interrompido pela troca de projeto não pode gravar no próximo.
+    if (!ref.read(freehandRequestProvider) ||
+        _projectId != ref.read(editorControllerProvider).id) {
+      _pontos.clear();
+      _projectId = null;
+      return;
+    }
     final pts = List<Offset>.of(_pontos);
     _pontos.clear();
+    _projectId = null;
     ref.read(freehandRequestProvider.notifier).state = false;
     if (pts.length < 2) {
       setState(() {});
@@ -54,10 +69,10 @@ class _FreehandOverlayState extends ConsumerState<FreehandOverlay> {
     }
     final controller = ref.read(editorControllerProvider.notifier);
     final antes = {
-      for (final l in ref.read(editorControllerProvider).layers) l.id
+      for (final l in ref.read(editorControllerProvider).layers) l.id,
     };
     controller.addShapeLayer(
-      widget.playback.time.value,
+      _startTime,
       contents: [
         ShapeBezier(path: AnimatedPath(caminho)),
         ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(12)),
@@ -66,7 +81,7 @@ class _FreehandOverlayState extends ConsumerState<FreehandOverlay> {
     );
     for (final l in ref.read(editorControllerProvider).layers) {
       if (!antes.contains(l.id)) {
-        controller.editPosition(l.id, widget.playback.time.value, centro);
+        controller.editPosition(l.id, _startTime, centro);
         break;
       }
     }
@@ -75,19 +90,37 @@ class _FreehandOverlayState extends ConsumerState<FreehandOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(freehandRequestProvider, (_, active) {
+      if (!active) {
+        _pontos.clear();
+        _projectId = null;
+      }
+    });
     final ligado = ref.watch(freehandRequestProvider);
     if (!ligado) return const SizedBox.shrink();
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onPanStart: (d) => setState(() => _pontos
-        ..clear()
-        ..add(d.localPosition)),
-      onPanUpdate: (d) => setState(() => _pontos.add(d.localPosition)),
-      onPanEnd: (_) => _fim(),
-      onPanCancel: _fim,
-      child: CustomPaint(
-        painter: _RabiscoPainter(_pontos),
-        child: const SizedBox.expand(),
+    return Listener(
+      onPointerCancel: (_) => _cancelar(),
+      child: GestureDetector(
+        key: const ValueKey('freehand-canvas'),
+        behavior: HitTestBehavior.opaque,
+        dragStartBehavior: DragStartBehavior.down,
+        onPanStart: (d) {
+          widget.playback.pause();
+          _projectId = ref.read(editorControllerProvider).id;
+          _startTime = widget.playback.time.value;
+          setState(
+            () => _pontos
+              ..clear()
+              ..add(d.localPosition),
+          );
+        },
+        onPanUpdate: (d) => setState(() => _pontos.add(d.localPosition)),
+        onPanEnd: (_) => _fim(),
+        onPanCancel: _cancelar,
+        child: CustomPaint(
+          painter: _RabiscoPainter(_pontos),
+          child: const SizedBox.expand(),
+        ),
       ),
     );
   }
@@ -100,22 +133,20 @@ class _RabiscoPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Um veu leve avisa que o preview esta em modo de desenho.
-    canvas.drawRect(Offset.zero & size,
-        Paint()..color = AmColors.accent.withValues(alpha: 0.06));
     if (pontos.length < 2) return;
     final path = Path()..moveTo(pontos.first.dx, pontos.first.dy);
     for (final p in pontos.skip(1)) {
       path.lineTo(p.dx, p.dy);
     }
     canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 12
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round);
+      path,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
   }
 
   @override

@@ -14,6 +14,7 @@ import '../../editor/domain/template_pack.dart';
 import '../../editor/domain/video_project.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../application/projects_controller.dart';
+import '../application/campo_assets.dart';
 import '../application/reference_rebuild_assets.dart';
 import '../application/dnyx_remix_assets.dart';
 import '../application/vhf_motion_assets.dart';
@@ -43,39 +44,62 @@ class ProjectsTab extends ConsumerWidget {
     WidgetRef ref, {
     String? presetAspectKey,
   }) async {
-    final project =
-        await showNewProjectSheet(context, presetAspectKey: presetAspectKey);
+    final project = await showNewProjectSheet(
+      context,
+      presetAspectKey: presetAspectKey,
+    );
     if (project == null || !context.mounted) return;
 
     ref.read(projectsControllerProvider.notifier).add(project);
     ref.read(editorControllerProvider.notifier).openProject(project);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
   /// MODELO PRONTO: um projeto montado por codigo, com id novo a cada
   /// abertura — o mesmo cuidado do template em arquivo.
   Future<void> _abrirModelo(
-      BuildContext context, WidgetRef ref, VideoProject modelo) async {
+    BuildContext context,
+    WidgetRef ref,
+    VideoProject modelo,
+  ) async {
     final project = modelo.comIdNovo();
     ref.read(projectsControllerProvider.notifier).add(project);
     ref.read(editorControllerProvider.notifier).openProject(project);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
-  /// Prepara a trilha empacotada antes de abrir a nova recriacao.
+  /// Prepara o campo com suas texturas embutidas antes de abrir.
+  Future<void> _openCampo(BuildContext context, WidgetRef ref) async {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Preparando o campo 3D…')));
+    try {
+      final model = await prepareCampoArvore();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      await _abrirModelo(context, ref, model);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não consegui preparar o campo. Tente novamente.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _openVhfMotion(BuildContext context, WidgetRef ref) async {
     try {
       final model = await prepareVhfMotion();
       if (context.mounted) await _abrirModelo(context, ref, model);
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nao consegui preparar o motion VHF. Tente novamente.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nao consegui preparar o motion VHF. Tente novamente.'),
+        ),
+      );
     }
   }
 
@@ -92,9 +116,9 @@ class ProjectsTab extends ConsumerWidget {
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Nao consegui preparar o astronauta: $e'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nao consegui preparar o astronauta: $e')),
+      );
     }
   }
 
@@ -104,13 +128,19 @@ class ProjectsTab extends ConsumerWidget {
     try {
       final modelos = await carregarMonolitoModelos();
       if (context.mounted) {
-        await _abrirModelo(context, ref, buildMonolitoTemplate(modelos: modelos));
+        await _abrirModelo(
+          context,
+          ref,
+          buildMonolitoTemplate(modelos: modelos),
+        );
       }
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Nao consegui preparar os modelos do Monolito: $e'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nao consegui preparar os modelos do Monolito: $e'),
+        ),
+      );
     }
   }
 
@@ -121,22 +151,33 @@ class ProjectsTab extends ConsumerWidget {
       if (context.mounted) await _abrirModelo(context, ref, model);
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nao consegui preparar o motion. Tente abrir novamente.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nao consegui preparar o motion. Tente abrir novamente.',
+          ),
+        ),
+      );
     }
   }
 
   /// Prepara a trilha empacotada antes de abrir a nova recriacao.
-  Future<void> _openReferenceRebuild(BuildContext context, WidgetRef ref) async {
+  Future<void> _openReferenceRebuild(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     try {
       final model = await prepareReferenceRebuild();
       if (context.mounted) await _abrirModelo(context, ref, model);
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Nao consegui preparar a trilha. Tente abrir o modelo novamente.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nao consegui preparar a trilha. Tente abrir o modelo novamente.',
+          ),
+        ),
+      );
     }
   }
 
@@ -148,7 +189,7 @@ class ProjectsTab extends ConsumerWidget {
   Future<void> _openTemplate(BuildContext context, WidgetRef ref) async {
     final r = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['json'],
+      allowedExtensions: const ['json', 'aurea'],
     );
     final caminho = r?.files.single.path;
     if (caminho == null || !context.mounted) return;
@@ -161,17 +202,17 @@ class ProjectsTab extends ConsumerWidget {
     }
     if (!context.mounted) return;
     if (pack == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Nao consegui ler esse template')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nao consegui ler esse template')),
+      );
       return;
     }
 
     final novo = pack.project.copyWith(name: pack.name).comIdNovo();
     ref.read(projectsControllerProvider.notifier).add(novo);
     ref.read(editorControllerProvider.notifier).openProject(novo);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
   /// PRESET DO ALIGHT MOTION (XML): le o que reconhece, mostra o balanco
@@ -184,9 +225,13 @@ class ProjectsTab extends ConsumerWidget {
     AlightImportResult resultado;
     try {
       final texto = await File(caminho).readAsString();
-      resultado = importAlightXml(texto,
-          nome: nomeArquivo.replaceAll(
-              RegExp(r'\.xml$', caseSensitive: false), ''));
+      resultado = importAlightXml(
+        texto,
+        nome: nomeArquivo.replaceAll(
+          RegExp(r'\.xml$', caseSensitive: false),
+          '',
+        ),
+      );
     } on AlightImportException catch (e) {
       if (!context.mounted) return;
       await _aviso(context, 'Nao deu para importar', e.message);
@@ -210,12 +255,14 @@ class ProjectsTab extends ConsumerWidget {
         ),
         actions: [
           CupertinoDialogAction(
-              onPressed: () => Navigator.of(c).pop(false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Cancelar'),
+          ),
           CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () => Navigator.of(c).pop(true),
-              child: const Text('Abrir')),
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Abrir'),
+          ),
         ],
       ),
     );
@@ -223,9 +270,8 @@ class ProjectsTab extends ConsumerWidget {
     final novo = resultado.project;
     ref.read(projectsControllerProvider.notifier).add(novo);
     ref.read(editorControllerProvider.notifier).openProject(novo);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
   static String _resumoDaImportacao(AlightImportResult r) {
@@ -250,25 +296,30 @@ class ProjectsTab extends ConsumerWidget {
         builder: (c) => CupertinoAlertDialog(
           title: Text(titulo),
           content: Padding(
-              padding: const EdgeInsets.only(top: 8), child: Text(texto)),
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(texto),
+          ),
           actions: [
             CupertinoDialogAction(
-                isDefaultAction: true,
-                onPressed: () => Navigator.of(c).pop(),
-                child: const Text('OK')),
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(c).pop(),
+              child: const Text('OK'),
+            ),
           ],
         ),
       );
 
   void _openProject(BuildContext context, WidgetRef ref, VideoProject project) {
     ref.read(editorControllerProvider.notifier).openProject(project);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const EditorScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
   Future<void> _confirmarExclusao(
-      BuildContext context, WidgetRef ref, VideoProject project) async {
+    BuildContext context,
+    WidgetRef ref,
+    VideoProject project,
+  ) async {
     final apaga = await showCupertinoModalPopup<bool>(
       context: context,
       builder: (c) => CupertinoActionSheet(
@@ -431,8 +482,11 @@ class ProjectsTab extends ConsumerWidget {
                     child: _Pilula(
                       icon: aspect.icon,
                       label: '${aspect.label}  ${aspect.hint}',
-                      onTap: () => _createProject(context, ref,
-                          presetAspectKey: aspect.key),
+                      onTap: () => _createProject(
+                        context,
+                        ref,
+                        presetAspectKey: aspect.key,
+                      ),
                     ),
                   ),
               ],
@@ -493,6 +547,12 @@ class ProjectsTab extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
                   _CartaoModelo(
+                    imagem: 'assets/templates/campo.jpg',
+                    titulo: 'CAMPO · A árvore da manhã',
+                    detalhe: '25 s · cinco tomadas · cenário 3D editável',
+                    onTap: () => _openCampo(context, ref),
+                  ),
+                  _CartaoModelo(
                     imagem: 'assets/templates/deriva.jpg',
                     titulo: 'DERIVA · O astronauta perdido',
                     detalhe: '18 s · tres tomadas · luz de vacuo',
@@ -516,7 +576,10 @@ class ProjectsTab extends ConsumerWidget {
                     titulo: 'ABISMO · Cinema 3D',
                     detalhe: '14 s · 4 cameras · personagem com rig',
                     onTap: () => _abrirModelo(
-                        context, ref, buildAbyssCinematicTemplate()),
+                      context,
+                      ref,
+                      buildAbyssCinematicTemplate(),
+                    ),
                   ),
                   _CartaoModelo(
                     imagem: 'assets/templates/vhf/thumbnail.jpg',
@@ -540,15 +603,18 @@ class ProjectsTab extends ConsumerWidget {
                     imagem: 'assets/templates/notes.jpg',
                     titulo: 'Notes',
                     detalhe: 'Icone, botao, listas, whip e glow',
-                    onTap: () => _abrirModelo(
-                        context, ref, buildNotesMotionTemplate()),
+                    onTap: () =>
+                        _abrirModelo(context, ref, buildNotesMotionTemplate()),
                   ),
                   _CartaoModelo(
                     imagem: 'assets/templates/notes.jpg',
                     titulo: 'Pindown',
                     detalhe: 'Casa, faisca medida e coroas 3D',
                     onTap: () => _abrirModelo(
-                        context, ref, buildPindownMotionTemplate()),
+                      context,
+                      ref,
+                      buildPindownMotionTemplate(),
+                    ),
                   ),
                 ],
               ),
@@ -588,8 +654,10 @@ class _TituloSecao extends StatelessWidget {
             child: Text(titulo, style: Theme.of(context).textTheme.titleMedium),
           ),
           if (detalhe != null)
-            Text(detalhe!,
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+            Text(
+              detalhe!,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+            ),
         ],
       ),
     );
@@ -597,8 +665,11 @@ class _TituloSecao extends StatelessWidget {
 }
 
 class _IconeQuadrado extends StatelessWidget {
-  const _IconeQuadrado(
-      {required this.icon, required this.tooltip, required this.onTap});
+  const _IconeQuadrado({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String tooltip;
@@ -712,8 +783,11 @@ class _CartaoProjeto extends StatelessWidget {
                     ? const ColoredBox(
                         color: AppColors.surfaceHigh,
                         child: Center(
-                          child: Icon(CupertinoIcons.film,
-                              color: AppColors.muted, size: 24),
+                          child: Icon(
+                            CupertinoIcons.film,
+                            color: AppColors.muted,
+                            size: 24,
+                          ),
                         ),
                       )
                     : Image.file(
@@ -833,8 +907,11 @@ class _Linha extends StatelessWidget {
                 style: const TextStyle(fontSize: 14, color: AppColors.onDark),
               ),
             ),
-            const Icon(CupertinoIcons.chevron_right,
-                size: 15, color: AppColors.muted),
+            const Icon(
+              CupertinoIcons.chevron_right,
+              size: 15,
+              color: AppColors.muted,
+            ),
           ],
         ),
       ),

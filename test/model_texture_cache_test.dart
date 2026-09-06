@@ -6,6 +6,35 @@ import 'package:aurea/src/features/editor/application/texture_cache.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('clear cancels queued decodes without resurrecting images', () async {
+    final cache = TextureCache.instance;
+    cache.clear();
+    final pending = cache.prepare('missing-texture.png');
+    cache.clear();
+    expect(await pending, isFalse);
+    expect(cache.entryCount, 0);
+    expect(cache.decodedBytes, 0);
+  });
+  test('decoded cache is bounded and releases on memory pressure', () async {
+    final recorder = PictureRecorder();
+    Canvas(recorder).drawColor(const Color(0xffabcdef), BlendMode.src);
+    final picture = recorder.endRecording();
+    final source = await picture.toImage(1024, 1024);
+    final cache = TextureCache.instance;
+    cache.clear();
+    addTearDown(cache.clear);
+    for (var i = 0; i < 20; i++) {
+      cache.put('texture-$i', source.clone());
+    }
+    expect(cache.entryCount, 16);
+    expect(cache.decodedBytes, TextureCache.maxBytes);
+    expect(await cache.imageFor('texture-19')!.toByteData(), isNotNull);
+    cache.didHaveMemoryPressure();
+    expect(cache.entryCount, 0);
+    expect(cache.decodedBytes, 0);
+    source.dispose();
+    picture.dispose();
+  });
   test(
     'textura embutida decodifica antes de liberar descriptor e buffer',
     () async {

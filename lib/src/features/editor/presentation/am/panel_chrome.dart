@@ -37,6 +37,7 @@ class AmPanelChrome extends StatelessWidget {
     this.abaAtiva,
     this.onAba,
     this.acoes = const [],
+    this.compact = false,
   });
 
   final VoidCallback onBack;
@@ -58,6 +59,7 @@ class AmPanelChrome extends StatelessWidget {
   /// caminho. Fica preso a direita e nao rola junto com as abas, para
   /// estar sempre no mesmo pixel.
   final List<Widget> acoes;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +82,7 @@ class AmPanelChrome extends StatelessWidget {
               children: [
                 if (acoes.isNotEmpty)
                   SizedBox(
-                    height: 38,
+                    height: compact ? 28 : 38,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: acoes,
@@ -91,7 +93,9 @@ class AmPanelChrome extends StatelessWidget {
                 // pessoa arrasta fora e nada acontece.
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 6, 6, 10),
+                    padding: compact
+                        ? const EdgeInsets.fromLTRB(6, 2, 4, 2)
+                        : const EdgeInsets.fromLTRB(10, 6, 6, 10),
                     child: _Cantos(child: corpo),
                   ),
                 ),
@@ -140,40 +144,43 @@ class AmLeftRail extends StatelessWidget {
       width: 56,
       child: Column(
         children: [
-          Tooltip(
-            message: 'Voltar às ferramentas da camada',
-            child: AmRailButton(
-              onTap: onBack,
-              child: const Icon(
-                CupertinoIcons.chevron_back,
-                size: 24,
-                color: AmColors.text,
-              ),
-            ),
-          ),
-          Tooltip(
-            message: temKfAqui
-                ? 'Remover keyframe neste instante'
-                : 'Adicionar keyframe neste instante',
-            child: AmRailButton(
-              onTap: onCravar,
-              child: AmDiamondAdd(active: animado, filled: temKfAqui),
-            ),
-          ),
-          Tooltip(
-            message: animado
-                ? 'Editar curva da propriedade'
-                : 'Crie keyframes para editar a curva',
-            child: AmRailButton(
-              onTap: animado ? onCurva : null,
-              child: Opacity(
-                opacity: animado && onCurva != null ? 1 : 0.32,
-                child: AmCurveIcon(
-                  color: animado ? AmColors.text : AmColors.muted,
+          for (final button in <Widget>[
+            Tooltip(
+              message: 'Voltar às ferramentas da camada',
+              child: AmRailButton(
+                onTap: onBack,
+                child: const Icon(
+                  CupertinoIcons.chevron_back,
+                  size: 24,
+                  color: AmColors.text,
                 ),
               ),
             ),
-          ),
+            Tooltip(
+              message: temKfAqui
+                  ? 'Remover keyframe neste instante'
+                  : 'Adicionar keyframe neste instante',
+              child: AmRailButton(
+                onTap: onCravar,
+                child: AmDiamondAdd(active: animado, filled: temKfAqui),
+              ),
+            ),
+            Tooltip(
+              message: animado
+                  ? 'Editar curva da propriedade'
+                  : 'Crie keyframes para editar a curva',
+              child: AmRailButton(
+                onTap: animado ? onCurva : null,
+                child: Opacity(
+                  opacity: animado && onCurva != null ? 1 : 0.32,
+                  child: AmCurveIcon(
+                    color: animado ? AmColors.text : AmColors.muted,
+                  ),
+                ),
+              ),
+            ),
+          ])
+            Flexible(child: button),
         ],
       ),
     );
@@ -472,8 +479,7 @@ class AmPanelAcao extends StatelessWidget {
 /// A ativa tem fundo solido, nao so texto colorido: numa tela de celular,
 /// no sol, cor de texto sozinha nao diz qual esta ligada.
 ///
-/// Rola quando ha muitas (a forma tem oito), mas as quatro primeiras
-/// cabem sem rolar — que sao as que se usa o tempo todo.
+/// Divide a altura disponível entre as abas, mantendo todas visíveis.
 class AmRightTabs extends StatelessWidget {
   const AmRightTabs({
     super.key,
@@ -481,104 +487,93 @@ class AmRightTabs extends StatelessWidget {
     required this.ativa,
     required this.onAba,
   });
-
   final List<ParamTab> abas;
   final String? ativa;
   final ValueChanged<String> onAba;
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 58,
-      child: LayoutBuilder(
-        builder: (context, limites) {
-          // O TRILHO CABE INTEIRO, SEMPRE.
-          //
-          // Ele era so um scroll: com seis abas num iPhone, Pivo e
-          // Opacidade ficavam abaixo da borda e so apareciam rolando. E
-          // rolar um trilho de seis itens para trocar de aba foi
-          // exatamente a queixa do testador — "essas opcao de subir e
-          // descer atrapalha". Agora, quando falta espaco, as abas
-          // encolhem ate caberem: menos respiro entre elas e melhor que
-          // uma aba escondida.
-          //
-          // O piso de 0,7 evita o outro extremo — abas ilegiveis. Abaixo
-          // dele o scroll continua ali, de reserva.
-          final naturalPorAba = 62.0;
-          final natural = abas.length * naturalPorAba + 12;
-          final k = limites.maxHeight <= 0 || natural <= limites.maxHeight
-              ? 1.0
-              : (limites.maxHeight / natural).clamp(0.7, 1.0);
-          return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(vertical: 6 * k),
-            child: Column(
-              children: [
-                for (final aba in abas)
-                  GestureDetector(
+  Widget build(BuildContext context) => SizedBox(
+    width: 58,
+    child: LayoutBuilder(
+      builder: (context, limits) {
+        final slot = abas.isEmpty ? 0.0 : limits.maxHeight / abas.length;
+        final iconSize = (slot - 16).clamp(8.0, 19.0);
+        return Column(
+          children: [
+            for (final aba in abas)
+              Expanded(
+                child: Tooltip(
+                  message: aba.label,
+                  child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => onAba(aba.id),
                     child: Container(
-                      margin: EdgeInsets.fromLTRB(4, 0, 6, 6 * k),
-                      padding: EdgeInsets.symmetric(vertical: 7 * k),
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(4, 1, 6, 1),
                       decoration: BoxDecoration(
                         color: ativa == aba.id
                             ? AmColors.accent
                             : AmColors.chip,
-                        borderRadius: BorderRadius.circular(11),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      child: Stack(
+                        alignment: Alignment.center,
                         children: [
-                          if (aba.icone != null)
-                            Icon(
-                              aba.icone,
-                              size: 19 * k,
-                              color: ativa == aba.id
-                                  ? AmColors.panel
-                                  : AmColors.text,
-                            ),
-                          if (aba.icone != null) SizedBox(height: 3 * k),
-                          Text(
-                            aba.label,
-                            maxLines: 2,
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 9,
-                              height: 1.1,
-                              fontWeight: FontWeight.w600,
-                              color: ativa == aba.id
-                                  ? AmColors.panel
-                                  : AmColors.text,
-                            ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (aba.icone != null) ...[
+                                Icon(
+                                  aba.icone,
+                                  size: iconSize,
+                                  color: ativa == aba.id
+                                      ? AmColors.panel
+                                      : AmColors.text,
+                                ),
+                                const SizedBox(height: 1),
+                              ],
+                              Text(
+                                aba.label,
+                                maxLines: 1,
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w600,
+                                  color: ativa == aba.id
+                                      ? AmColors.panel
+                                      : AmColors.text,
+                                ),
+                              ),
+                            ],
                           ),
-                          // O PONTO diz que aquela aba ja tem keyframe,
-                          // sem precisar entrar em cada uma para
-                          // descobrir.
-                          if (aba.animated) ...[
-                            SizedBox(height: 3 * k),
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: ativa == aba.id
-                                    ? AmColors.panel
-                                    : AmColors.accent,
+                          if (aba.animated)
+                            Positioned(
+                              right: 3,
+                              top: 3,
+                              child: Container(
+                                width: 4,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: ativa == aba.id
+                                      ? AmColors.panel
+                                      : AmColors.accent,
+                                ),
                               ),
                             ),
-                          ],
                         ],
                       ),
                     ),
                   ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
+                ),
+              ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 /// Os quatro cantos em L em volta do corpo do painel.

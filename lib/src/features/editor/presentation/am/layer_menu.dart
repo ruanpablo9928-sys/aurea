@@ -532,46 +532,57 @@ class LayerToolsDock extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => ColoredBox(
     color: AmColors.panel,
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final tileHeight = ((constraints.maxHeight - 48) / 2).clamp(48.0, 68.0);
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Expanded(
-                child: Text(
-                  'Ferramentas da camada',
-                  style: TextStyle(color: AmColors.muted, fontSize: 12),
-                ),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Ferramentas da camada',
+                      style: TextStyle(color: AmColors.muted, fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    key: const ValueKey('layer-more-actions'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: onMore,
+                    child: const Text(
+                      'Mais ações',
+                      style: TextStyle(color: AmColors.accent, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
-              TextButton(
-                key: const ValueKey('layer-more-actions'),
-                onPressed: onMore,
-                child: const Text(
-                  'Mais ações',
-                  style: TextStyle(color: AmColors.accent, fontSize: 12),
+              ..._fileiras(
+                secoesDe(layer),
+                (section) => _tileDaSecao(
+                  section,
+                  context: context,
+                  ref: ref,
+                  layer: layer,
+                  playback: playback,
+                  fecharCom: onAction,
+                  abrirDepois: (open) {
+                    playback.pause();
+                    open();
+                  },
                 ),
+                tileHeight: tileHeight,
               ),
             ],
           ),
-          ..._fileiras(
-            secoesDe(layer),
-            (section) => _tileDaSecao(
-              section,
-              context: context,
-              ref: ref,
-              layer: layer,
-              playback: playback,
-              fecharCom: onAction,
-              abrirDepois: (open) {
-                playback.pause();
-                open();
-              },
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
 }
@@ -583,7 +594,11 @@ typedef _Tile = ({IconData icone, String rotulo, VoidCallback onTap});
 ///
 /// A grade nunca reorganiza porque a ordem vem do enum, e o enum nao
 /// muda. O que muda e QUAIS secoes o tipo tem.
-List<Widget> _fileiras(Set<AmSecao> secoes, _Tile? Function(AmSecao) tile) {
+List<Widget> _fileiras(
+  Set<AmSecao> secoes,
+  _Tile? Function(AmSecao) tile, {
+  double tileHeight = 68,
+}) {
   final visiveis = [
     for (final s in AmSecao.values)
       if (secoes.contains(s)) ?tile(s),
@@ -603,6 +618,7 @@ List<Widget> _fileiras(Set<AmSecao> secoes, _Tile? Function(AmSecao) tile) {
         if (i > 0) const SizedBox(width: 8),
         if (i < tiles.length)
           _MenuTile(
+            height: tileHeight,
             icon: tiles[i].icone,
             label: tiles[i].rotulo,
             onTap: tiles[i].onTap,
@@ -4127,11 +4143,13 @@ class _MenuTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.height = 68,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -4140,7 +4158,7 @@ class _MenuTile extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-          height: 68,
+          height: height,
           padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
             color: AmColors.chip,
@@ -4149,8 +4167,8 @@ class _MenuTile extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 22, color: AmColors.accent),
-              const SizedBox(height: 6),
+              Icon(icon, size: height < 60 ? 18 : 22, color: AmColors.accent),
+              SizedBox(height: height < 60 ? 2 : 6),
               Text(
                 label,
                 textAlign: TextAlign.center,

@@ -35,12 +35,14 @@ class PropertyKeyframeContext extends StatelessWidget {
     required this.prop,
     required this.time,
     required this.onSeek,
+    this.compact = false,
   });
 
   final Layer layer;
   final LayerProp prop;
   final Duration time;
   final ValueChanged<Duration> onSeek;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +71,11 @@ class PropertyKeyframeContext extends StatelessWidget {
         IconButton(
           key: ValueKey(key),
           tooltip: label,
-          constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+          constraints: BoxConstraints.tightFor(
+            width: 48,
+            height: compact ? 32 : 48,
+          ),
+          padding: EdgeInsets.zero,
           onPressed: target == null
               ? null
               : () => onSeek(layer.startTime + Duration(microseconds: target)),
@@ -96,9 +102,10 @@ class PropertyKeyframeContext extends StatelessWidget {
                   Text(
                     labelOfProp(prop),
                     maxLines: 1,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AmColors.text,
                       fontSize: 12,
+                      height: compact ? 1.1 : null,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -107,7 +114,11 @@ class PropertyKeyframeContext extends StatelessWidget {
                     key: const ValueKey('property-keyframe-status'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AmColors.muted, fontSize: 10),
+                    style: TextStyle(
+                      color: AmColors.muted,
+                      fontSize: 10,
+                      height: compact ? 1.1 : null,
+                    ),
                   ),
                 ],
               ),

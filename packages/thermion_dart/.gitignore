@@ -1,0 +1,5 @@
+.dart_tool/
+build/
+native/lib/
+native/include/filament/
+*.log

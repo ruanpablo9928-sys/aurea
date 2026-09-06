@@ -253,7 +253,12 @@ class ModelAsset3D {
     );
   }
 
-  Material3D _surface(int index) {
+  final Map<int, Material3D> _surfaces = {};
+
+  Material3D _surface(int index) =>
+      _surfaces.putIfAbsent(index, () => _readSurface(index));
+
+  Material3D _readSurface(int index) {
     final list = data['materials'] as List? ?? [];
     if (index < 0 || index >= list.length) return const Material3D();
     final m = list[index];

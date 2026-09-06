@@ -39,7 +39,13 @@ class _ModelImportButtonState extends ConsumerState<ModelImportButton> {
           [];
       if (paths.isEmpty || !mounted) return;
       final model = await readModel3DFiles(paths);
+      if (!mounted || ref.read(editorControllerProvider).id != projectId) {
+        return;
+      }
       for (final m in model.data['materials'] as List) {
+        if (!mounted || ref.read(editorControllerProvider).id != projectId) {
+          return;
+        }
         if (m['image'] != null &&
             !await TextureCache.instance.prepare(m['image'] as String)) {
           modelFail(

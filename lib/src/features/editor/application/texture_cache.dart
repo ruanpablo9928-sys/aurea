@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart'
+    show WidgetsBinding, WidgetsBindingObserver;
 
 /// IMAGENS QUE VESTEM OBJETOS 3D, decodificadas uma vez e guardadas.
 ///
@@ -15,23 +17,38 @@ import 'package:flutter/foundation.dart';
 /// Decodifica no maximo a 1024 px de largura: e textura de face, nao
 /// foto de galeria, e cada face em tela raramente passa de algumas
 /// centenas de pixels.
-class TextureCache {
+class TextureCache with WidgetsBindingObserver {
   TextureCache._();
+  bool _observing = false;
+
+  void observeMemoryPressure(WidgetsBinding binding) {
+    if (_observing) return;
+    _observing = true;
+    binding.addObserver(this);
+  }
 
   static final TextureCache instance = TextureCache._();
 
   /// Sobe a cada imagem que termina de carregar.
   final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
-  final Map<String, ui.Image> _images = {};
-  final Set<String> _loading = {};
+  final _images = <String, ui.Image>{};
+  static const int maxBytes = 64 * 1024 * 1024;
+  int _bytes = 0;
+  int _generation = 0;
+  Future<void> _queue = Future<void>.value();
+  int get decodedBytes => _bytes;
+  int get entryCount => _images.length;
   final Set<String> _failed = {};
   final Map<String, Future<void>> _pending = {};
 
   /// A imagem de [path], ou null se ainda nao chegou (ou falhou).
   ui.Image? imageFor(String path) {
-    final img = _images[path];
-    if (img != null) return img;
+    final img = _images.remove(path);
+    if (img != null) {
+      _images[path] = img;
+      return img;
+    }
     if (!_failed.contains(path)) {
       unawaited(_loadOnce(path));
     }
@@ -50,8 +67,18 @@ class TextureCache {
 
   /// Para testes e para trocar a imagem de um caminho reaproveitado.
   void put(String path, ui.Image image) {
-    _images[path]?.dispose();
+    final previous = _images.remove(path);
+    if (previous != null) {
+      _bytes -= previous.width * previous.height * 4;
+      if (!identical(previous, image)) previous.dispose();
+    }
     _images[path] = image;
+    _bytes += image.width * image.height * 4;
+    while (_bytes > maxBytes && _images.isNotEmpty) {
+      final oldest = _images.remove(_images.keys.first)!;
+      _bytes -= oldest.width * oldest.height * 4;
+      oldest.dispose();
+    }
     _failed.remove(path);
     revision.value++;
   }
@@ -59,15 +86,18 @@ class TextureCache {
   Future<void> _loadOnce(String path) {
     final running = _pending[path];
     if (running != null) return running;
-    final future = _load(path);
+    final generation = _generation;
+    // One decode at a time bounds transient compressed + RGBA allocations.
+    final future = _queue.then((_) => _load(path, generation));
+    _queue = future;
     _pending[path] = future;
     return future.whenComplete(() {
-      _pending.remove(path);
+      if (identical(_pending[path], future)) _pending.remove(path);
     });
   }
 
-  Future<void> _load(String path) async {
-    _loading.add(path);
+  Future<void> _load(String path, int generation) async {
+    if (generation != _generation || _images.containsKey(path)) return;
     ui.ImmutableBuffer? buffer;
     ui.ImageDescriptor? descriptor;
     ui.Codec? codec;
@@ -86,23 +116,34 @@ class TextureCache {
         targetHeight: math.max(1, (descriptor.height * scale).round()),
       );
       final frame = await codec.getNextFrame();
-      _images[path] = frame.image;
-      revision.value++;
+      if (generation != _generation) {
+        frame.image.dispose();
+      } else {
+        put(path, frame.image);
+      }
     } catch (_) {
-      _failed.add(path);
+      if (generation == _generation) {
+        if (_failed.length >= 128) _failed.remove(_failed.first);
+        _failed.add(path);
+      }
     } finally {
       codec?.dispose();
       descriptor?.dispose();
       buffer?.dispose();
-      _loading.remove(path);
     }
   }
 
   void clear() {
+    _generation++;
+    _pending.clear();
     for (final img in _images.values) {
       img.dispose();
     }
     _images.clear();
+    _bytes = 0;
     _failed.clear();
   }
+
+  @override
+  void didHaveMemoryPressure() => clear();
 }
