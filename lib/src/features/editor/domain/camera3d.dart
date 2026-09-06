@@ -250,6 +250,11 @@ List<BokehSprite> bokehSprites(
 
   final out = <BokehSprite>[];
   for (final tri in [...frame.opaque, ...frame.transparent]) {
+    // FACE COM IMAGEM nao vira bokeh: a cor dela e o branco que a
+    // textura multiplica depois, e a bola sairia branca — e o pintor de
+    // bokeh nao sabe de oclusao, entao um chao claro ESCONDIDO atras de
+    // um morro virava uma fila de hexagonos atravessando o quadro.
+    if (tri.texture != null) continue;
     final coc = dof.circleOfConfusion(tri.depth, t);
     if (coc < minRadius) continue;
 
@@ -258,6 +263,19 @@ List<BokehSprite> bokehSprites(
     // Abaixo do limiar nada vira bokeh: e o que evita borrar a cena
     // inteira e deixa SO as luzes virarem bolas.
     if (lum <= threshold) continue;
+
+    // UM PONTO DE LUZ vira bola; uma SUPERFICIE grande fora de foco so
+    // ficaria borrada. Se o triangulo ja e maior que a bola que ele
+    // geraria, ele nao e ponto de luz — e chao, parede, tela — e nao
+    // entra. Sem isto, a borda distante de um terreno claro (a cor da
+    // face com imagem e branca; a imagem entra depois) virava uma fila
+    // de quatrocentos hexagonos atravessando o quadro.
+    final area =
+        ((tri.b.dx - tri.a.dx) * (tri.c.dy - tri.a.dy) -
+                (tri.c.dx - tri.a.dx) * (tri.b.dy - tri.a.dy))
+            .abs() /
+        2;
+    if (area > math.pi * coc * coc) continue;
 
     final boost = highlightBoost(lum, gain: gain, threshold: threshold);
     // Saturacao de realce: quanto de cor a bola preserva (0 = cinza).

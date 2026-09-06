@@ -16,6 +16,16 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.tv,
+    'Modelo COLINA: a TV no morro, em 3D de verdade',
+    'Uma colina de grama com flores, a TV de tubo acesa no topo, rochas '
+        'no primeiro plano, serra na neblina e a camera orbitando por '
+        'baixo — tudo camada 3D editavel: terreno com textura, grama '
+        'instanciada acesa em contraluz, profundidade de campo com bokeh '
+        'na poeira, bloom na tela. O bokeh aprendeu duas regras: face com '
+        'imagem e superficie grande nao viram bola.',
+  ),
+  NewsItem(
     CupertinoIcons.cube_box,
     'O 3D nao derruba mais o iPhone',
     'Neblina sobre faces com imagem, reflexo do chao e sombra de contato '

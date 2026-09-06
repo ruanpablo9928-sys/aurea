@@ -20,6 +20,7 @@ import '../application/vhf_motion_assets.dart';
 import '../application/thumbnail_service.dart';
 import '../domain/alight_xml_import.dart';
 import '../domain/abyss_cinematic_template.dart';
+import '../domain/colina_tv_template.dart';
 import '../domain/notes_motion_template.dart';
 import '../domain/pindown_motion_template.dart';
 import '../domain/project_presets.dart';
@@ -403,6 +404,13 @@ class ProjectsTab extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
+                  _CartaoModelo(
+                    imagem: 'assets/templates/colina.jpg',
+                    titulo: 'COLINA · A TV no morro',
+                    detalhe: '6 s · cena 3D realista · orbita rasteira',
+                    onTap: () =>
+                        _abrirModelo(context, ref, buildColinaTvTemplate()),
+                  ),
                   _CartaoModelo(
                     imagem: 'assets/templates/abyss.jpg',
                     titulo: 'ABISMO · Cinema 3D',
