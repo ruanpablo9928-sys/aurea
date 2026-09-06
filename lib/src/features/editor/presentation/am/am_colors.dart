@@ -1,21 +1,21 @@
 import 'dart:ui';
 
-/// Paleta do editor: o tema da LOGO do Aurea (grafite + lima + violeta),
-/// mantendo o layout do editor de motion.
+/// Flat, low-contrast editing surfaces and teal selection, matching the
+/// reference workflow. Branding on project/home screens is independent.
 abstract final class AmColors {
-  static const Color bg = Color(0xFF12151A);
-  static const Color topBar = Color(0xFF171C23);
-  static const Color panel = Color(0xFF171C23);
-  static const Color panelHigh = Color(0xFF1E242E);
-  static const Color chip = Color(0xFF232A36);
+  static const Color bg = Color(0xFF191A1C);
+  static const Color topBar = Color(0xFF202123);
+  static const Color panel = Color(0xFF17181A);
+  static const Color panelHigh = Color(0xFF25262B);
+  static const Color chip = Color(0xFF292B33);
 
-  /// Acento principal: o verde-lima da logo.
-  static const Color accent = Color(0xFFB8FF3D);
-  static const Color accentDim = Color(0xFF3A4A17);
+  /// Seleção e ações do editor.
+  static const Color accent = Color(0xFF1ED6B1);
+  static const Color accentDim = Color(0xFF183F3C);
 
-  /// Barras de camada: o violeta da logo.
-  static const Color teal = Color(0xFF7C62FF);
-  static const Color tealBright = Color(0xFF9F8CFF);
+  /// Barras de camada com contraste para texto e keyframes.
+  static const Color teal = Color(0xFF43B7C6);
+  static const Color tealBright = Color(0xFF81D8E0);
 
   /// Playhead em contexto de keyframe/efeito.
   static const Color pink = Color(0xFFFF6B6B);

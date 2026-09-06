@@ -28,8 +28,9 @@ float lum(vec3 c) { return dot(c,LUMA); }
 vec3 straight(vec4 c) { return c.a > .00001 ? c.rgb / c.a : vec3(0.0); }
 vec4 premul(vec3 c, float a) { return vec4(clamp(c,0.0,1.0)*a,a); }
 vec4 src(vec2 uv) {
-  // Canvas samplers are upright; Impeller GLES filter inputs are inverted.
-  #ifdef IMPELLER_TARGET_OPENGLES
+  // Flutter 3.47 stores GLES render targets top-down too. Only older
+  // engines need the filter-input correction; Canvas images never do.
+  #if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   if (uFilter > .5) uv.y = 1.0-uv.y;
   #endif
   return texture(uImage,clamp(uv,vec2(.5)/uSize,1.0-vec2(.5)/uSize));

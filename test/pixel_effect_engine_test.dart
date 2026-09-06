@@ -91,6 +91,29 @@ void main() {
       );
     }
   });
+  test('neutral color passes preserve top, bottom and alpha across a stack', () async {
+    final input = await fixture();
+    final first = await render(input, PixelEffectFrame(1, [0, 1, 1, 0, 1, 0]));
+    final second = await render(first, PixelEffectFrame(9, [0]));
+    final before = await rgba(input);
+    final after = await rgba(second);
+    // Asymmetric rows catch a vertical flip which a solid-color fixture misses.
+    for (final y in [2, 20, 40, 60]) {
+      for (final x in [8, 64, 120]) {
+        final start = (y * 128 + x) * 4;
+        for (var c = 0; c < 4; c++) {
+          expect(
+            after[start + c],
+            closeTo(before[start + c], 2),
+            reason: 'pixel ($x,$y), channel $c',
+          );
+        }
+      }
+    }
+    second.dispose();
+    first.dispose();
+    input.dispose();
+  });
   test(
     'glow threshold removes dark alpha; tone mapping and dirt are live',
     () async {

@@ -55,9 +55,20 @@ import 'preview_raster.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import '../../application/scene3d_gpu.dart';
-import '../../application/renderer3d/filament_renderer.dart' show filamentPreviewEnabled;
+import '../../application/renderer3d/filament_renderer.dart'
+    show filamentPreviewEnabled;
 import 'scene3d_painter.dart';
 import 'scene3d_gpu_view.dart';
+
+// Photos decode asynchronously and videos update their external textures.
+// An automatic snapshot of either can retain a placeholder/previous frame.
+// Keep imported media on the live compositor, including inside precomps.
+bool _containsRasterMedia(List<Layer> layers) => layers.any(
+  (layer) =>
+      layer is ImageLayer ||
+      layer is VideoLayer ||
+      (layer is GroupLayer && _containsRasterMedia(layer.children)),
+);
 
 /// Palco: composicao renderizada em coordenadas logicas, escalada para
 /// caber. Gestos editam a camada selecionada.
@@ -221,6 +232,8 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     final drawing = ref.watch(freehandRequestProvider);
     final compW = project.outputWidth.toDouble();
     final compH = project.outputHeight.toDouble();
+    final useDither =
+        DitherLayer.comoFiltro && !_containsRasterMedia(project.layers);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -274,25 +287,14 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                             child: Stack(
                               clipBehavior: Clip.none,
                               children: [
-                                // DITHERING NO PREVIEW, so sem video na cena.
-                                //
-                                // Sombra ampla sobre fundo escuro BANDEIA em 8
-                                // bits, e gradiente suave e metade do visual
-                                // "Apple". O dithering resolve — mas ele
-                                // fotografa a composicao para rodar o shader,
-                                // e a textura de video nao entra nessa foto
-                                // (vira buraco preto). Entao: cena so de
-                                // grafismo ganha dithering; cena com video
-                                // fica sem, e o dithering dela acontece na
-                                // exportacao, onde o video chega como imagem.
-                                //
-                                // A foto e refeita a cada reconstrucao (a
-                                // invalidacao do FxSnapshot); sem isso o preview
-                                // congelava no primeiro quadro.
+                                // Automatic dithering is only a live GPU pass
+                                // for graphics. Never snapshot the preview:
+                                // asynchronous image decoding and nested video
+                                // textures must repaint without a clock change.
+                                // Export still dithers fully decoded frames.
                                 ValueListenableBuilder<Duration>(
                                   valueListenable: widget.playback.time,
-                                  builder: (context, t, child) =>
-                                      project.layers.any((l) => l is VideoLayer)
+                                  builder: (context, t, child) => !useDither
                                       ? child!
                                       : DitherLayer(
                                           time: t,
@@ -4416,7 +4418,8 @@ class _LayerContent extends StatelessWidget {
                 // O MOTOR EM GPU desenha a cena quando existe; sem ele
                 // (ou com as ajudas de cena ligadas, que so o pintor
                 // sabe desenhar) fica o pintor em CPU de sempre.
-                if ((filamentPreviewEnabled || !Scene3DGpu.indisponivel) && !ajudas) {
+                if ((filamentPreviewEnabled || !Scene3DGpu.indisponivel) &&
+                    !ajudas) {
                   return Scene3DGpuView(
                     exporting: exporting,
                     scene: l.scene,

@@ -265,6 +265,59 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                         ),
                       ),
                     ),
+                    Flexible(
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Opções da curva',
+                        icon: const Icon(
+                          CupertinoIcons.ellipsis,
+                          color: AmColors.text,
+                        ),
+                        color: AmColors.panelHigh,
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                            value: 'copy',
+                            child: Text('Copiar curva'),
+                          ),
+                          PopupMenuItem(
+                            value: 'paste',
+                            enabled: EasingClipboard.valor != null,
+                            child: const Text('Colar curva'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'all',
+                            child: Text('Aplicar em todos os segmentos'),
+                          ),
+                          CheckedPopupMenuItem(
+                            value: 'overshoot',
+                            checked: _overshoot,
+                            child: const Text('Overshoot'),
+                          ),
+                        ],
+                        onSelected: (action) {
+                          switch (action) {
+                            case 'copy':
+                              setState(() => EasingClipboard.valor = ease);
+                            case 'paste':
+                              if (EasingClipboard.valor != null) {
+                                controller.setSegmentEase(
+                                  id,
+                                  widget.prop,
+                                  segment!.$1,
+                                  EasingClipboard.valor!,
+                                );
+                              }
+                            case 'all':
+                              controller.applyEaseToAllSegments(
+                                id,
+                                widget.prop,
+                                ease,
+                              );
+                            case 'overshoot':
+                              setState(() => _overshoot = !_overshoot);
+                          }
+                        },
+                      ),
+                    ),
                     const SizedBox(height: 4),
                   ],
                 ),
@@ -272,7 +325,7 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                 Expanded(
                   child: Column(
                     children: [
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
                       Expanded(
                         child: Opacity(
                           // Esmaecido diz "isto nao e o que esta sob o
@@ -291,6 +344,7 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                                       ),
                                 )
                               : _CurveGraph(
+                                  key: const ValueKey('curve-edit-area'),
                                   ease: ease,
                                   overshootEnabled: _overshoot,
                                   percorrido: percorrido,
@@ -305,7 +359,7 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                         ),
                       ),
                       SizedBox(
-                        height: 46,
+                        height: 32,
                         child: Row(
                           children: [
                             CupertinoButton(
@@ -345,64 +399,14 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                           ],
                         ),
                       ),
-                      // OS QUATRO COMANDOS, VISIVEIS.
-                      //
-                      // No Alight Motion eles moram num menu de tres
-                      // pontinhos. Copiar a estrutura nao e copiar o
-                      // defeito: aqui ficam no rodape, e o overshoot diz
-                      // se esta ligado sem ninguem precisar abrir nada.
-                      SizedBox(
-                        height: 38,
-                        child: Row(
-                          children: [
-                            _ComandoChip(
-                              rotulo: 'Copiar',
-                              icone: CupertinoIcons.doc_on_doc,
-                              onTap: () =>
-                                  setState(() => EasingClipboard.valor = ease),
-                            ),
-                            const SizedBox(width: 6),
-                            _ComandoChip(
-                              rotulo: 'Colar',
-                              icone: CupertinoIcons.doc_on_clipboard,
-                              onTap: EasingClipboard.valor == null
-                                  ? null
-                                  : () => controller.setSegmentEase(
-                                      id,
-                                      widget.prop,
-                                      segment!.$1,
-                                      EasingClipboard.valor!,
-                                    ),
-                            ),
-                            const SizedBox(width: 6),
-                            _ComandoChip(
-                              rotulo: 'Em todos',
-                              icone: CupertinoIcons.square_stack_3d_down_right,
-                              onTap: () => controller.applyEaseToAllSegments(
-                                id,
-                                widget.prop,
-                                ease,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            _ComandoChip(
-                              rotulo: 'Overshoot',
-                              icone: CupertinoIcons.arrow_up_right,
-                              ligado: _overshoot,
-                              onTap: () =>
-                                  setState(() => _overshoot = !_overshoot),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
                 // Thumbnails de preset a direita.
                 SizedBox(
-                  width: 78,
+                  width: 64,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(6, 10, 10, 10),
+                    padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
                     children: [
                       _ScopeToggle(
                         todos: _aplicarEmTodos,
@@ -749,6 +753,7 @@ Future<void> showTrackCurveSheet(
 
 class _CurveGraph extends StatelessWidget {
   const _CurveGraph({
+    super.key,
     required this.ease,
     required this.overshootEnabled,
     required this.onBezierChanged,
@@ -1266,66 +1271,4 @@ class _PresetThumbPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PresetThumbPainter old) =>
       old.ease != ease || old.selected != selected;
-}
-
-/// UM COMANDO VISIVEL do rodape. Chip preenchido, sem borda — a
-/// identidade da Aurea nao tem caixa com contorno.
-///
-/// Desligado nao some: some troca o lugar dos vizinhos, e a memoria
-/// muscular vira chute. Fica esmaecido dizendo por que nao da.
-class _ComandoChip extends StatelessWidget {
-  const _ComandoChip({
-    required this.rotulo,
-    required this.icone,
-    required this.onTap,
-    this.ligado = false,
-  });
-
-  final String rotulo;
-  final IconData icone;
-  final VoidCallback? onTap;
-
-  /// Interruptor: o chip mostra o estado sem ninguem abrir nada.
-  final bool ligado;
-
-  @override
-  Widget build(BuildContext context) {
-    final ativo = onTap != null;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Opacity(
-          opacity: ativo ? 1 : 0.35,
-          child: Container(
-            decoration: BoxDecoration(
-              color: ligado ? AmColors.accentDim : AmColors.chip,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icone,
-                  size: 15,
-                  color: ligado ? AmColors.accent : AmColors.text,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  rotulo,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: ligado ? AmColors.accent : AmColors.text,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -30,8 +30,8 @@ float hash(vec2 p) {
 
 void main() {
   vec2 pos = FlutterFragCoord().xy;
-  // Como filtro de imagem, uSize vem do motor (tamanho da textura). No
-  // backend OpenGL ES do Impeller o eixo Y chega invertido.
+  // uSize is the input texture size. Flutter 3.47 stores render targets
+  // top-down on GLES, Metal and Vulkan; Canvas snapshots are upright too.
   vec2 uv = pos / uSize;
   vec4 c = texture(uTexture, uv);
 

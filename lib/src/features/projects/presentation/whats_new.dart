@@ -16,6 +16,27 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.photo,
+    'Mídia importada com prévia ao vivo',
+    'Fotos e vídeos, inclusive dentro de grupos, não passam mais pela '
+        'captura automática que podia manter uma imagem antiga na prévia. '
+        'A galeria ganhou álbuns, carregamento gradual e acesso às fotos '
+        'selecionadas. Os arquivos importados ficam guardados no app.',
+  ),
+  NewsItem(
+    CupertinoIcons.move,
+    'Mais espaço para transformar e animar',
+    'Prévia grande ao selecionar camadas, controles compactos nas laterais, '
+        'área maior de movimento e pivô, duas réguas de escala e gráfico '
+        'de curvas ampliado. Auto-key, navegação e reset ficam no menu •••.',
+  ),
+  NewsItem(
+    CupertinoIcons.wand_stars,
+    'Orientação da imagem nos efeitos',
+    'Amostragem corrigida nos shaders de efeitos e de luz linear para a '
+        'orientação das texturas do Flutter atual, evitando inversão vertical.',
+  ),
+  NewsItem(
     CupertinoIcons.cube,
     'A cena 3D abre no Estudio, e mais leve',
     'Tocar em Cena 3D no menu da camada leva DIRETO ao Estudio — antes o '
@@ -485,31 +506,39 @@ class WhatsNewCard extends StatelessWidget {
                 color: AmColors.accent.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(CupertinoIcons.sparkles,
-                  color: AmColors.accent, size: 22),
+              child: const Icon(
+                CupertinoIcons.sparkles,
+                color: AmColors.accent,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('O que ha de novo',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
+                  Text(
+                    'O que ha de novo',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
                   SizedBox(height: 2),
                   Text(
                     'Exportar MP4, animacao de texto refeita, Cena 3D, 12 '
                     'efeitos novos e seletor de qualquer cor.',
-                    style:
-                        TextStyle(fontSize: 12, color: AmColors.muted),
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
                   ),
                 ],
               ),
             ),
-            const Icon(CupertinoIcons.chevron_right,
-                size: 18, color: AmColors.muted),
+            const Icon(
+              CupertinoIcons.chevron_right,
+              size: 18,
+              color: AmColors.muted,
+            ),
           ],
         ),
       ),
@@ -523,7 +552,8 @@ Future<void> showWhatsNewSheet(BuildContext context) {
     backgroundColor: AmColors.panel,
     isScrollControlled: true,
     constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.85),
+      maxHeight: MediaQuery.of(context).size.height * 0.85,
+    ),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -542,15 +572,19 @@ Future<void> showWhatsNewSheet(BuildContext context) {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('O que ha de novo',
-              style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: AmColors.text)),
+          const Text(
+            'O que ha de novo',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              color: AmColors.text,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('${aureaNews.length} novidades nesta versao',
-              style: const TextStyle(
-                  fontSize: 13, color: AmColors.muted)),
+          Text(
+            '${aureaNews.length} novidades nesta versao',
+            style: const TextStyle(fontSize: 13, color: AmColors.muted),
+          ),
           const SizedBox(height: 18),
           for (final item in aureaNews)
             Padding(
@@ -564,17 +598,23 @@ Future<void> showWhatsNewSheet(BuildContext context) {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.title,
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AmColors.text)),
+                        Text(
+                          item.title,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AmColors.text,
+                          ),
+                        ),
                         const SizedBox(height: 3),
-                        Text(item.body,
-                            style: const TextStyle(
-                                fontSize: 12.5,
-                                height: 1.45,
-                                color: AmColors.muted)),
+                        Text(
+                          item.body,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.45,
+                            color: AmColors.muted,
+                          ),
+                        ),
                       ],
                     ),
                   ),

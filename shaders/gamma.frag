@@ -41,10 +41,10 @@ float linearParaSrgb(float c) {
 void main() {
   // uSize e gravado pelo MOTOR com o tamanho da textura de entrada (e o
   // contrato do ImageFilter.shader: o primeiro vec2 e o tamanho). No
-  // backend OpenGL ES do Impeller o eixo Y chega invertido — sem isto a
-  // camada saia de cabeca para baixo em aparelho Android sem Vulkan.
+  // GLES anterior ao Flutter 3.47 precisa da correcao; no motor atual
+  // os render targets ja tem a mesma orientacao de Metal e Vulkan.
   vec2 uv = FlutterFragCoord().xy / uSize;
-  #ifdef IMPELLER_TARGET_OPENGLES
+  #if defined(IMPELLER_TARGET_OPENGLES) && !defined(IMPELLER_OPENGLES_UNFLIPPED_DEPRECATED)
   uv.y = 1.0 - uv.y;
   #endif
   vec4 p = texture(uTexture, uv);

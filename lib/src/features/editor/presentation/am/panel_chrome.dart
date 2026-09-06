@@ -38,6 +38,8 @@ class AmPanelChrome extends StatelessWidget {
     this.onAba,
     this.acoes = const [],
     this.compact = false,
+    this.spacious = false,
+    this.more,
   });
 
   final VoidCallback onBack;
@@ -60,6 +62,8 @@ class AmPanelChrome extends StatelessWidget {
   /// estar sempre no mesmo pixel.
   final List<Widget> acoes;
   final bool compact;
+  final bool spacious;
+  final Widget? more;
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +75,8 @@ class AmPanelChrome extends StatelessWidget {
           // TRILHO ESQUERDO FIXO. Troca-se de aba pela fileira e o
           // diamante nao sai do lugar — e o que faz memoria muscular.
           AmLeftRail(
+            width: spacious ? 44 : 56,
+            more: more,
             onBack: onBack,
             animado: animado,
             temKfAqui: temKfAqui,
@@ -106,7 +112,12 @@ class AmPanelChrome extends StatelessWidget {
           // com fundo solido — trocar de aba pela direita nao move o
           // botao de cravar keyframe, que fica na esquerda.
           if (abas.isNotEmpty)
-            AmRightTabs(abas: abas, ativa: abaAtiva, onAba: onAba ?? (_) {}),
+            AmRightTabs(
+              abas: abas,
+              ativa: abaAtiva,
+              onAba: onAba ?? (_) {},
+              width: spacious ? 46 : 58,
+            ),
         ],
       ),
     );
@@ -130,6 +141,8 @@ class AmLeftRail extends StatelessWidget {
     required this.temKfAqui,
     required this.onCravar,
     this.onCurva,
+    this.width = 56,
+    this.more,
   });
 
   final VoidCallback onBack;
@@ -137,11 +150,13 @@ class AmLeftRail extends StatelessWidget {
   final bool temKfAqui;
   final VoidCallback onCravar;
   final VoidCallback? onCurva;
+  final double width;
+  final Widget? more;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 56,
+      width: width,
       child: Column(
         children: [
           for (final button in <Widget>[
@@ -181,6 +196,7 @@ class AmLeftRail extends StatelessWidget {
             ),
           ])
             Flexible(child: button),
+          if (more != null) Flexible(child: more!),
         ],
       ),
     );
@@ -486,14 +502,16 @@ class AmRightTabs extends StatelessWidget {
     required this.abas,
     required this.ativa,
     required this.onAba,
+    this.width = 58,
   });
   final List<ParamTab> abas;
   final String? ativa;
   final ValueChanged<String> onAba;
+  final double width;
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 58,
+    width: width,
     child: LayoutBuilder(
       builder: (context, limits) {
         final slot = abas.isEmpty ? 0.0 : limits.maxHeight / abas.length;
@@ -511,10 +529,8 @@ class AmRightTabs extends StatelessWidget {
                       width: double.infinity,
                       margin: const EdgeInsets.fromLTRB(4, 1, 6, 1),
                       decoration: BoxDecoration(
-                        color: ativa == aba.id
-                            ? AmColors.accent
-                            : AmColors.chip,
-                        borderRadius: BorderRadius.circular(8),
+                        color: ativa == aba.id ? AmColors.chip : AmColors.panel,
+                        borderRadius: BorderRadius.circular(3),
                       ),
                       child: Stack(
                         alignment: Alignment.center,
@@ -527,7 +543,7 @@ class AmRightTabs extends StatelessWidget {
                                   aba.icone,
                                   size: iconSize,
                                   color: ativa == aba.id
-                                      ? AmColors.panel
+                                      ? AmColors.accent
                                       : AmColors.text,
                                 ),
                                 const SizedBox(height: 1),
@@ -542,7 +558,7 @@ class AmRightTabs extends StatelessWidget {
                                   height: 1.1,
                                   fontWeight: FontWeight.w600,
                                   color: ativa == aba.id
-                                      ? AmColors.panel
+                                      ? AmColors.accent
                                       : AmColors.text,
                                 ),
                               ),
@@ -558,7 +574,7 @@ class AmRightTabs extends StatelessWidget {
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: ativa == aba.id
-                                      ? AmColors.panel
+                                      ? AmColors.accent
                                       : AmColors.accent,
                                 ),
                               ),

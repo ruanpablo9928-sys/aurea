@@ -20,6 +20,7 @@ import '../../domain/svg_path.dart';
 import '../am/am_colors.dart';
 import '../am/am_widgets.dart';
 import 'element3d_painter.dart';
+import 'gallery_panel.dart';
 
 /// Sheet "+" do editor: escolher o tipo de camada.
 Future<void> showAddLayerSheet(
@@ -81,10 +82,12 @@ Future<void> showAddLayerSheet(
                 ],
               ),
               const SizedBox(height: 10),
-              _AddMenuAm(
-                sheetContext: sheetContext,
-                ref: ref,
-                playhead: playhead,
+              SizedBox(
+                height: 270,
+                child: AddLayerPanel(
+                  onClose: () => Navigator.of(sheetContext).pop(),
+                  playhead: playhead,
+                ),
               ),
             ],
           ),
@@ -749,22 +752,21 @@ enum _AbaAdd { forma, midia, audio, objeto, modelo }
 /// Audio · Objeto · Modelo) e um trilho vertical a direita com os MODOS
 /// de criar (Desenho livre · Desenho vetorial · Texto) — desenho e texto
 /// nao sao itens de escolher, sao jeitos de comecar.
-class _AddMenuAm extends ConsumerStatefulWidget {
-  const _AddMenuAm({
-    required this.sheetContext,
-    required this.ref,
+class AddLayerPanel extends ConsumerStatefulWidget {
+  const AddLayerPanel({
+    super.key,
+    required this.onClose,
     required this.playhead,
   });
 
-  final BuildContext sheetContext;
-  final WidgetRef ref;
+  final VoidCallback onClose;
   final Duration playhead;
 
   @override
-  ConsumerState<_AddMenuAm> createState() => _AddMenuAmState();
+  ConsumerState<AddLayerPanel> createState() => _AddMenuAmState();
 }
 
-class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
+class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
   _AbaAdd _aba = _AbaAdd.forma;
   int _pagina = 0;
   final _pager = PageController();
@@ -777,10 +779,8 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   /// sob o dedo. Nulo quando ninguem esta segurando nada.
   String? _explicando;
 
-  /// Cinco por fileira, tres fileiras. Eram sete por fileira: numa tela
-  /// de celular isso dava tiles de 40 px, pequenos demais para reconhecer
-  /// a forma e pequenos demais para acertar o toque.
-  static const int _porLinha = 5;
+  /// Six silhouettes per row, as in the supplied reference.
+  static const int _porLinha = 6;
   static const int _linhas = 3;
   static const int _porPagina = _porLinha * _linhas;
 
@@ -791,7 +791,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
   /// interruptor nenhum.
   List<_AbaAdd> get _abasVisiveis => _AbaAdd.values;
 
-  void _fecha() => Navigator.of(widget.sheetContext).pop();
+  void _fecha() => widget.onClose();
 
   /// Cria a camada e devolve o id dela (a nova e a que nao existia).
   String? _criaForma(List<ShapeItem> Function() build, String nome) {
@@ -822,37 +822,44 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
 
   @override
   Widget build(BuildContext context) {
-    // A FOLHA TEM A ALTURA DO QUE HA DENTRO DELA.
-    //
-    // Antes era uma fracao fixa da tela (40%, no minimo 300 px): a aba de
-    // Objeto tem duas fileiras e sobrava meia tela vazia embaixo, e a
-    // folha cobria a linha do tempo — que a regra 4 diz que nunca pode
-    // ser coberta. Sem altura fixa, cada aba ocupa o que precisa, e o que
-    // era espaco morto virou tamanho de item.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [_abas(), const SizedBox(height: 12), _conteudo()],
-              ),
+    // Every category shares the space below the ruler. Only the contents
+    // scroll: changing tabs never moves transport, preview or close control.
+    return ColoredBox(
+      color: AmColors.panel,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _abas(),
+                      Expanded(
+                        child: _abaVisivel == _AbaAdd.midia
+                            ? _conteudo()
+                            : SingleChildScrollView(
+                                padding: const EdgeInsets.all(6),
+                                child: _conteudo(),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+                _trilho(),
+              ],
             ),
-            const SizedBox(width: 8),
-            _trilho(),
-          ],
-        ),
-        // A faixa so existe onde ha o que explicar. "Objeto conceitual
-        // precisa de explicacao; forma nao precisa" — o icone da forma ja
-        // diz tudo, e uma faixa vazia ali so empurraria a folha por cima
-        // da linha do tempo.
-        if (_abaVisivel == _AbaAdd.objeto) _faixaDeDescricao(),
-      ],
+          ),
+          // A faixa so existe onde ha o que explicar. "Objeto conceitual
+          // precisa de explicacao; forma nao precisa" — o icone da forma ja
+          // diz tudo, e uma faixa vazia ali so empurraria a folha por cima
+          // da linha do tempo.
+          if (_abaVisivel == _AbaAdd.objeto) _faixaDeDescricao(),
+        ],
+      ),
     );
   }
 
@@ -924,13 +931,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
                   _explicando = null;
                 }),
                 child: Container(
-                  margin: const EdgeInsets.only(right: 5),
-                  decoration: BoxDecoration(
-                    color: _abaVisivel == a
-                        ? AmColors.accentDim
-                        : AmColors.chip,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  decoration: const BoxDecoration(color: AmColors.panel),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -974,13 +975,13 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 24, color: AmColors.accent),
+                Icon(icon, size: 22, color: AmColors.text),
                 const SizedBox(height: 3),
                 Text(
                   label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 9,
                     height: 1.15,
                     color: AmColors.muted,
                   ),
@@ -990,34 +991,44 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
           ),
         );
     return SizedBox(
-      width: 66,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
-            _fecha();
-            ref.read(freehandRequestProvider.notifier).state = true;
-          }),
-          item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
-            final id = _criaForma(
-              () => [
-                ShapeStroke(
-                  color: const Color(0xFFFFFFFF),
-                  width: AnimatedDouble(10),
-                ),
-              ],
-              'Desenho',
-            );
-            _fecha();
-            if (id != null) {
-              ref.read(editPointsRequestProvider.notifier).state = id;
-            }
-          }),
-          item(CupertinoIcons.textformat, 'Texto', () {
-            _fecha();
-            _controller.addTextLayer(widget.playhead);
-          }),
-        ],
+      width: 52,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
+              _fecha();
+              ref.read(freehandRequestProvider.notifier).state = true;
+            }),
+            item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
+              final id = _criaForma(
+                () => [
+                  ShapeStroke(
+                    color: const Color(0xFFFFFFFF),
+                    width: AnimatedDouble(10),
+                  ),
+                ],
+                'Desenho',
+              );
+              _fecha();
+              if (id != null) {
+                ref.read(editPointsRequestProvider.notifier).state = id;
+              }
+            }),
+            item(CupertinoIcons.textformat, 'Texto', () {
+              _fecha();
+              _controller.addTextLayer(widget.playhead);
+            }),
+            item(CupertinoIcons.captions_bubble, 'Legendas', () {
+              final host = context;
+              showCaptionCreationSheet(host, ref);
+            }),
+            Tooltip(
+              message: 'Fechar adicionar',
+              child: item(CupertinoIcons.xmark, 'Fechar', _fecha),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1027,36 +1038,28 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
       case _AbaAdd.forma:
         return _formas();
       case _AbaAdd.midia:
-        // _AddOption e um Expanded: so vive dentro de Row.
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _AddOption(
-              icon: CupertinoIcons.videocam_fill,
-              label: 'Video',
-              onTap: () {
-                _fecha();
-                _controller.importVideoFromGallery(widget.playhead);
-              },
-            ),
-            _AddOption(
-              icon: CupertinoIcons.photo_fill,
-              label: 'Imagem',
-              onTap: () {
-                _fecha();
-                _controller.importImageFromGallery(widget.playhead);
-              },
-            ),
-            _AddOption(
-              icon: CupertinoIcons.captions_bubble,
-              label: 'Legendas',
-              onTap: () {
-                _fecha();
-                showCaptionCreationSheet(context, widget.ref);
-              },
-            ),
-            const Spacer(flex: 3),
-          ],
+        return GalleryPanel(
+          onImport: (file, video, duration) async {
+            if (video) {
+              if (duration > Duration.zero) {
+                _controller.addVideoLayer(
+                  widget.playhead,
+                  file.path,
+                  file.name,
+                  duration,
+                );
+              } else {
+                await _controller.importVideoAwaitingDuration(
+                  widget.playhead,
+                  file.path,
+                  file.name,
+                );
+              }
+            } else {
+              _controller.addImageLayer(widget.playhead, file.path, file.name);
+            }
+            if (mounted) _fecha();
+          },
         );
       case _AbaAdd.audio:
         return Row(
@@ -1164,7 +1167,7 @@ class _AddMenuAmState extends ConsumerState<_AddMenuAm> {
         descricao: 'Biblioteca de icones vetoriais para animar.',
         onTap: () {
           _fecha();
-          _showIconSheet(context, widget.ref, widget.playhead);
+          _showIconSheet(context, ref, widget.playhead);
         },
       ),
       // CAMERA E LUZ so aparecem quando ha cena — fora dela nao teriam
@@ -1429,10 +1432,7 @@ class _TileForma extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(10),
-          ),
+          decoration: const BoxDecoration(color: AmColors.panel),
           child: Padding(
             padding: const EdgeInsets.all(7),
             child: CustomPaint(
@@ -1466,7 +1466,7 @@ class _FormaPainter extends CustomPainter {
     canvas.translate(-b.center.dx, -b.center.dy);
     // Anel, padrao de pontos: o furo e um subcaminho — par-impar.
     path.fillType = PathFillType.evenOdd;
-    final paint = Paint()..color = AmColors.accent;
+    final paint = Paint()..color = const Color(0xFFCCCCCC);
     if (stroke) {
       paint
         ..style = PaintingStyle.stroke

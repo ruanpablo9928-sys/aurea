@@ -73,6 +73,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   _Mode _curveReturn = _Mode.transform;
   TransformTool _tool = TransformTool.position;
   bool _previewExpanded = false;
+  bool _adding = false;
+
+  void _openAdd() {
+    _playback.pause();
+    setState(() => _adding = true);
+  }
 
   @override
   void initState() {
@@ -131,6 +137,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   };
 
   void _back() {
+    if (_adding) {
+      setState(() => _adding = false);
+      return;
+    }
     if (ref.read(freehandRequestProvider)) {
       ref.read(freehandRequestProvider.notifier).state = false;
       return;
@@ -508,8 +518,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   : layer.maskTimesUs,
           };
 
-    final showTools = _mode == _Mode.main && layer != null && multi.isEmpty;
+    final showTools =
+        !_adding && _mode == _Mode.main && layer != null && multi.isEmpty;
     final hasContext =
+        _adding ||
         ref.watch(freehandRequestProvider) ||
         _previewExpanded ||
         _mode != _Mode.main ||
@@ -539,10 +551,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 double.infinity,
               );
               final timelineHeight = _mode == _Mode.main
-                  ? (lowerHeight - 44 - (showTools ? dockHeight : 0)).clamp(
-                      88.0,
-                      double.infinity,
-                    )
+                  ? (lowerHeight -
+                            (!_adding && (layer != null || multi.isNotEmpty)
+                                ? 44
+                                : 0) -
+                            (showTools ? dockHeight : 0))
+                        .clamp(88.0, double.infinity)
                   : 88.0;
               return Stack(
                 children: [
@@ -594,8 +608,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         // durante um painel, os 44 px dela vao para o
                         // painel, que era o que faltava para as abas de
                         // transformacao caberem sem rolagem.
-                        if (_mode == _Mode.main)
-                          _ActionBar(playback: _playback),
+                        if (!_adding &&
+                            _mode == _Mode.main &&
+                            (layer != null || multi.isNotEmpty))
+                          _ActionBar(playback: _playback, onAdd: _openAdd),
                         RepaintBoundary(
                           child: AmTimeline(
                             playback: _playback,
@@ -635,8 +651,51 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       ],
                     ],
                   ),
-                  // O "+" agora vive na barra de acoes fixa (spec
-                  // barra-de-acoes): sem FAB cobrindo a timeline.
+                  if (_mode == _Mode.main &&
+                      !_previewExpanded &&
+                      !_adding &&
+                      layer == null &&
+                      multi.isEmpty)
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: Tooltip(
+                        message: 'Adicionar camada',
+                        child: Material(
+                          color: AmColors.bg,
+                          shape: const CircleBorder(
+                            side: BorderSide(
+                              color: AmColors.accent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _openAdd,
+                            child: const SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Icon(
+                                CupertinoIcons.plus,
+                                color: AmColors.accent,
+                                size: 26,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_adding && !_previewExpanded)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: (lowerHeight - 38).clamp(0.0, double.infinity),
+                      child: AddLayerPanel(
+                        playhead: _playback.time.value,
+                        onClose: () => setState(() => _adding = false),
+                      ),
+                    ),
                   if (ref.watch(debugOverlayProvider))
                     Positioned(
                       top: 6,
@@ -1061,8 +1120,8 @@ class _TopBar extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: contextLabel == null ? 18 : 15,
-                    fontWeight: FontWeight.w700,
+                    fontSize: contextLabel == null ? 14 : 13,
+                    fontWeight: FontWeight.w500,
                     color: tinta,
                   ),
                 ),
@@ -1096,14 +1155,11 @@ class _TopBar extends ConsumerWidget {
                   child: Container(
                     width: 42,
                     height: 38,
-                    decoration: BoxDecoration(
-                      color: AmColors.accent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                    decoration: const BoxDecoration(color: AmColors.topBar),
                     child: const Icon(
                       CupertinoIcons.square_arrow_up,
                       size: 20,
-                      color: Color(0xFF0B0E12),
+                      color: AmColors.text,
                     ),
                   ),
                 ),
@@ -1284,9 +1340,10 @@ class _DiagOverlay extends ConsumerWidget {
 /// a direita. Posicoes IMUTAVEIS: sem alvo, o botao esmaece e o toque
 /// explica a razao. Excluir nao pede confirmacao — snackbar "Desfazer".
 class _ActionBar extends ConsumerWidget {
-  const _ActionBar({required this.playback});
+  const _ActionBar({required this.playback, required this.onAdd});
 
   final PlaybackController playback;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1353,7 +1410,7 @@ class _ActionBar extends ConsumerWidget {
                   color: AmColors.accent,
                   onTap: () {
                     playback.pause();
-                    showAddLayerSheet(context, ref, playback.time.value);
+                    onAdd();
                   },
                 ),
                 divider(),

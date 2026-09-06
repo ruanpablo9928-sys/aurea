@@ -4162,12 +4162,12 @@ class _MenuTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
             color: AmColors.chip,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(3),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: height < 60 ? 18 : 22, color: AmColors.accent),
+              Icon(icon, size: height < 60 ? 18 : 22, color: AmColors.text),
               SizedBox(height: height < 60 ? 2 : 6),
               Text(
                 label,

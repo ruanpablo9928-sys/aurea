@@ -59,6 +59,48 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
 
   LayerProp get _prop => propOfTool(widget.tool);
 
+  Widget _options(
+    EditorController controller,
+    String id,
+    Layer layer,
+  ) => PopupMenuButton<String>(
+    tooltip: 'Opções de transformação',
+    icon: const Icon(CupertinoIcons.ellipsis, color: AmColors.text),
+    color: AmColors.panelHigh,
+    itemBuilder: (_) => [
+      CheckedPopupMenuItem(
+        value: 'auto',
+        checked: ref.read(autoKeyframeProvider),
+        child: const Text('Auto-key'),
+      ),
+      const PopupMenuItem(value: 'previous', child: Text('Keyframe anterior')),
+      const PopupMenuItem(value: 'next', child: Text('Próximo keyframe')),
+      const PopupMenuItem(value: 'reset', child: Text('Resetar propriedade')),
+    ],
+    onSelected: (value) {
+      if (value == 'auto') {
+        final setting = ref.read(autoKeyframeProvider.notifier);
+        setting.state = !setting.state;
+      } else if (value == 'reset') {
+        controller.resetProp(id, _prop);
+      } else {
+        final times = keyframeTimesForProp(layer, _prop).toList()..sort();
+        final local = layer
+            .localTime(widget.playback.time.value)
+            .inMicroseconds;
+        final target = value == 'previous'
+            ? times.where((us) => us < local - 8000).lastOrNull
+            : times.where((us) => us > local + 8000).firstOrNull;
+        if (target != null) {
+          widget.playback.pause();
+          widget.playback.seek(
+            layer.startTime + Duration(microseconds: target),
+          );
+        }
+      }
+    },
+  );
+
   @override
   Widget build(BuildContext context) {
     ref.watch(autoKeyframeProvider);
@@ -109,19 +151,11 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
   ) {
     return Column(
       children: [
-        PropertyKeyframeContext(
-          compact: true,
-          layer: layer,
-          prop: _prop,
-          time: t,
-          onSeek: (time) {
-            widget.playback.pause();
-            widget.playback.seek(time);
-          },
-        ),
         Expanded(
           child: AmPanelChrome(
             compact: true,
+            spacious: true,
+            more: _options(controller, id, layer),
             onBack: widget.onBack,
             animado: animated,
             temKfAqui: hasKfHere,
@@ -133,54 +167,6 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
               _prop,
             ),
             onCurva: () => widget.onOpenCurve(_prop),
-            // RESETAR era o unico item do `...`; agora e botao, com o nome do
-            // que vai ser resetado escrito nele.
-            acoes: [
-              Tooltip(
-                message: 'Auto-key: gravar movimento ao ajustar',
-                child: Semantics(
-                  label: 'Auto-key',
-                  toggled: ref.read(autoKeyframeProvider),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      final setting = ref.read(autoKeyframeProvider.notifier);
-                      setting.state = !setting.state;
-                    },
-                    child: SizedBox(
-                      width: 60,
-                      height: 28,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            CupertinoIcons.circle_fill,
-                            size: 12,
-                            color: ref.read(autoKeyframeProvider)
-                                ? AmColors.accent
-                                : AmColors.muted,
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Auto',
-                            style: TextStyle(
-                              fontSize: 10,
-                              height: 1.2,
-                              color: AmColors.text,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              AmPanelAcao(
-                rotulo: 'Resetar',
-                icone: CupertinoIcons.arrow_counterclockwise,
-                onTap: () => controller.resetProp(id, _prop),
-              ),
-            ],
             abas: [
               ParamTab(
                 id: TransformTool.position.name,
@@ -557,6 +543,7 @@ class _PivotControl extends ConsumerWidget {
             onPanUpdate: (d) =>
                 controller.editPivot(layer.id, t, pivot + d.delta * 2),
             onDoubleTap: () => controller.editPivot(layer.id, t, Offset.zero),
+            key: const ValueKey('pivot-drag-pad'),
             child: Container(
               decoration: BoxDecoration(
                 color: AmColors.bg.withValues(alpha: 0.45),
@@ -803,9 +790,9 @@ class _ScaleControl extends ConsumerWidget {
             GestureDetector(
               onTap: onToggleLink,
               child: Container(
-                width: 46,
-                height: 46,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
+                width: 32,
+                height: 32,
+                margin: const EdgeInsets.symmetric(horizontal: 5),
                 decoration: BoxDecoration(
                   color: linked ? const Color(0xFFE9EDF2) : AmColors.chip,
                   borderRadius: BorderRadius.circular(10),
@@ -828,7 +815,7 @@ class _ScaleControl extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 10),
-        if (linked)
+        ...[
           Expanded(
             child: AmTickRuler(
               value: sx * 100,
@@ -836,19 +823,10 @@ class _ScaleControl extends ConsumerWidget {
               max: 2000,
               unitsPerPixel: 0.6,
               height: double.infinity,
-              onChanged: (v) =>
-                  controller.editScaleUniform(layer.id, t, v / 100),
-            ),
-          )
-        else ...[
-          Expanded(
-            child: AmTickRuler(
-              value: sx * 100,
-              min: 1,
-              max: 2000,
-              unitsPerPixel: 0.6,
-              height: double.infinity,
-              onChanged: (v) => controller.editScaleX(layer.id, t, v / 100),
+              key: const ValueKey('scale-width-ruler'),
+              onChanged: (v) => linked
+                  ? controller.editScaleUniform(layer.id, t, v / 100)
+                  : controller.editScaleX(layer.id, t, v / 100),
             ),
           ),
           const SizedBox(height: 6),
@@ -860,7 +838,10 @@ class _ScaleControl extends ConsumerWidget {
               unitsPerPixel: 0.6,
               accentCenter: false,
               height: double.infinity,
-              onChanged: (v) => controller.editScaleY(layer.id, t, v / 100),
+              key: const ValueKey('scale-height-ruler'),
+              onChanged: (v) => linked
+                  ? controller.editScaleUniform(layer.id, t, v / 100)
+                  : controller.editScaleY(layer.id, t, v / 100),
             ),
           ),
         ],
