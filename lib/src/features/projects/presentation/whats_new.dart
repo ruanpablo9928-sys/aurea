@@ -16,6 +16,16 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.cube_box_fill,
+    'Motor 3D em GPU: luz de verdade',
+    'A cena 3D passou a ser desenhada pela GPU (Metal no iPhone): '
+        'profundidade real, materiais fisicos, luz por imagem, sombras '
+        'suaves do sol, neblina e profundidade de campo — o mesmo motor '
+        'na timeline (onde o 3D vira um quadro 2D) e no Estudio. Onde nao '
+        'ha GPU, o pintor antigo continua. Primeira versao: as ajudas de '
+        'cena (grade, frustum) ainda so aparecem no pintor antigo.',
+  ),
+  NewsItem(
     CupertinoIcons.tv,
     'Modelo COLINA: a TV no morro, em 3D de verdade',
     'Uma colina de grama com flores, a TV de tubo acesa no topo, rochas '

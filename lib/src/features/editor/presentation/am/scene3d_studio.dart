@@ -9,7 +9,9 @@ import '../../application/editor_controller.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/layer.dart';
 import '../../domain/scene3d.dart';
+import '../../application/scene3d_gpu.dart';
 import '../widgets/scene3d_painter.dart';
+import '../widgets/scene3d_gpu_view.dart';
 import 'am_colors.dart';
 import 'scene3d_sheet.dart';
 
@@ -468,19 +470,43 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio> {
       },
       child: ValueListenableBuilder<int>(
         valueListenable: TextureCache.instance.revision,
-        builder: (_, _, _) => CustomPaint(
-          size: size,
-          painter: Scene3DPainter(
-            scene: _gestureActive
-                ? layer.scene.copyWith(draftMode: true)
-                : layer.scene,
-            camera: layer.camera,
-            view: _view,
-            time: Duration.zero,
-            showHelpers: true,
-            selectedNodeId: _selected,
-            overrideCamera: _view == SceneView.camera ? null : cam,
-          ),
+        builder: (_, _, _) => Stack(
+          fit: StackFit.expand,
+          children: [
+            // O MOTOR EM GPU desenha a cena; sem ele, o pintor em CPU
+            // (que tambem e quem desenha as ajudas: grade, frustum,
+            // caixa do selecionado).
+            if (!Scene3DGpu.indisponivel)
+              SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Scene3DGpuView(
+                  scene: layer.scene,
+                  camera: layer.camera,
+                  renderCamera: cam,
+                  view: _view,
+                  time: Duration.zero,
+                  rascunho: _gestureActive,
+                  showHelpers: true,
+                  selectedNodeId: _selected,
+                ),
+              )
+            else
+              CustomPaint(
+                size: size,
+                painter: Scene3DPainter(
+                  scene: _gestureActive
+                      ? layer.scene.copyWith(draftMode: true)
+                      : layer.scene,
+                  camera: layer.camera,
+                  view: _view,
+                  time: Duration.zero,
+                  showHelpers: true,
+                  selectedNodeId: _selected,
+                  overrideCamera: _view == SceneView.camera ? null : cam,
+                ),
+              ),
+          ],
         ),
       ),
     );

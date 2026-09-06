@@ -28,6 +28,7 @@ import '../../domain/grid_rig.dart';
 import '../../domain/layer.dart';
 import '../../domain/layer_meta.dart';
 import '../../domain/mask.dart';
+import '../../domain/camera3d.dart';
 import '../../domain/scene3d.dart';
 import '../../domain/shape.dart';
 import '../../domain/video_project.dart';
@@ -51,7 +52,9 @@ import 'dither_layer.dart';
 import 'preview_raster.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
+import '../../application/scene3d_gpu.dart';
 import 'scene3d_painter.dart';
+import 'scene3d_gpu_view.dart';
 
 /// Palco: composicao renderizada em coordenadas logicas, escalada para
 /// caber. Gestos editam a camada selecionada.
@@ -4287,26 +4290,44 @@ class _LayerContent extends StatelessWidget {
         height: project.outputHeight.toDouble(),
         child: ValueListenableBuilder<int>(
           valueListenable: TextureCache.instance.revision,
-          builder: (_, _, _) => CustomPaint(
-            painter: Scene3DPainter(
-              scene: l.scene,
-              camera: l.camera,
-              // A PONTE ENTRE AS DUAS HIERARQUIAS: o nulo da composicao
-              // vira pai externo da camera da cena. Quem conhece a
-              // cadeia de parenting de fora e o compositor, entao o
-              // transform chega pronto aqui.
-              resolvedCamera: cameraDaCena(
-                project,
-                l,
-                localTime,
-                layer.startTime + localTime,
+          builder: (_, _, _) {
+            // A PONTE ENTRE AS DUAS HIERARQUIAS: o nulo da composicao
+            // vira pai externo da camera da cena. Quem conhece a
+            // cadeia de parenting de fora e o compositor, entao o
+            // transform chega pronto aqui.
+            final resolvida = cameraDaCena(
+              project,
+              l,
+              localTime,
+              layer.startTime + localTime,
+            );
+            // Ajudas NUNCA entram na exportacao — so no preview.
+            final ajudas = !exporting && l.showHelpers;
+            // O MOTOR EM GPU desenha a cena quando existe; sem ele (ou
+            // com as ajudas de cena ligadas, que so o pintor sabe
+            // desenhar) fica o pintor em CPU de sempre.
+            if (!Scene3DGpu.indisponivel && !ajudas) {
+              return Scene3DGpuView(
+                scene: l.scene,
+                camera: l.camera,
+                renderCamera: l.view == SceneView.camera
+                    ? (resolvida ?? l.camera.renderAt(localTime))
+                    : orthoViewCamera(l.view),
+                view: l.view,
+                time: localTime,
+              );
+            }
+            return CustomPaint(
+              painter: Scene3DPainter(
+                scene: l.scene,
+                camera: l.camera,
+                resolvedCamera: resolvida,
+                view: l.view,
+                time: localTime,
+                showHelpers: ajudas,
               ),
-              view: l.view,
-              time: localTime,
-              // Ajudas NUNCA entram na exportacao — so no preview.
-              showHelpers: !exporting && l.showHelpers,
-            ),
-          ),
+            );
+          },
         ),
       ),
       // Precomp: filhos compostos no tempo local do grupo.
