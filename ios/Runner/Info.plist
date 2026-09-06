@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Sem criptografia propria (so a do sistema): dispensa a pergunta de
+	     export compliance a cada build no TestFlight. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Aurea precisa acessar sua galeria para importar videos e fotos aos projetos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
