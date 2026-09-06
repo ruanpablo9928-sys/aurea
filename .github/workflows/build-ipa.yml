@@ -39,7 +39,20 @@ jobs:
         run: flutter pub get
 
       - name: Build iOS (sem assinatura)
-        run: flutter build ios --release --no-codesign --dart-define=AUREA_FILAMENT=true
+        run: |
+          set -o pipefail
+          flutter build ios --release --no-codesign --dart-define=AUREA_FILAMENT=true -v 2>&1 | tee build-ios.log
+
+      - name: Guardar diagnostico da compilacao
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-diagnostics
+          path: |
+            build-ios.log
+            packages/thermion_dart/build.log
+            packages/thermion_flutter/build.log
+          if-no-files-found: ignore
 
       - name: Empacotar IPA
         run: |
