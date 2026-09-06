@@ -86,7 +86,20 @@ Future<ModelAsset3D> _read(List<String> paths) async {
 
   final lower = file.path.toLowerCase();
   if (lower.endsWith('.fbx')) {
-    return importFbx3D(bytes, name: file.uri.pathSegments.last);
+    // As imagens selecionadas junto entram pelo nome: e assim que o FBX
+    // acha a textura base.
+    for (final p in paths) {
+      if (!RegExp(r'.(png|jpe?g|webp|bmp)$', caseSensitive: false).hasMatch(p)) {
+        continue;
+      }
+      final f = File(p);
+      resources[f.uri.pathSegments.last] = await read(f);
+    }
+    return importFbx3D(
+      bytes,
+      name: file.uri.pathSegments.last,
+      resources: resources,
+    );
   }
   if (lower.endsWith('.obj')) {
     final source = utf8.decode(bytes);

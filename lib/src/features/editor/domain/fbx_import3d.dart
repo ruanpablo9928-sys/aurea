@@ -12,7 +12,24 @@ import 'obj_import3d.dart';
 /// Explicit subset: FBX 7.x static mesh, hierarchy, UV/normals, diffuse
 /// materials and linear cluster skinning. Source FBX animation stacks are NOT
 /// silently presented as playable clips. Export GLB for baked source clips.
-ModelAsset3D importFbx3D(Uint8List bytes, {String name = 'Modelo FBX'}) {
+/// O arquivo de uma textura FBX (RelativeFilename ou FileName), so o nome.
+String? _fbxTextureFile(dynamic textura) {
+  for (final campo in ['RelativeFilename', 'FileName', 'Filename']) {
+    final n = textura.child(campo);
+    if (n == null || n.values.isEmpty) continue;
+    final v = n.values.first;
+    if (v is! String || v.isEmpty) continue;
+    return v.replaceAll(String.fromCharCode(92), '/').split('/').last;
+  }
+  return null;
+}
+
+ModelAsset3D importFbx3D(
+  Uint8List bytes, {
+  String name = 'Modelo FBX',
+  Map<String, Uint8List> resources = const {},
+  int maxTriangles = 150000,
+}) {
   try {
     if (bytes.length > 64 * 1024 * 1024) modelFail('FBX acima de 64 MB.');
     final binary =
@@ -121,11 +138,48 @@ ModelAsset3D importFbx3D(Uint8List bytes, {String name = 'Modelo FBX'}) {
         'Este FBX tem animacoes que nao foram importadas. E possivel criar poses e keyframes novos no rig.',
       );
     }
-    if (objects.any((o) => o.name == 'Texture' || o.name == 'Video')) {
-      modelFail(
-        'Este FBX contem texturas. Converta para GLB para preservar imagens e materiais.',
+    // TEXTURAS: a imagem base entra pelo nome do arquivo selecionado junto
+    // com o FBX (as conexoes OP ligam textura -> material). Recusar o
+    // arquivo inteiro por ter textura era jogar fora a malha.
+    final texturaDoMaterial = <int, String>{};
+    for (final c in connections) {
+      if (c.values.length < 4 || c.values[0] != 'OP') continue;
+      final child = (c.values[1] as num).toInt();
+      final pai = (c.values[2] as num).toInt();
+      if (byId[child]?.name != 'Texture' || byId[pai]?.name != 'Material') {
+        continue;
+      }
+      final arquivo = _fbxTextureFile(byId[child]!);
+      if (arquivo == null) continue;
+      final prop = c.values[3].toString();
+      if (prop.contains('Diffuse') || !texturaDoMaterial.containsKey(pai)) {
+        texturaDoMaterial[pai] = arquivo;
+      }
+    }
+    final temTextura = objects.any((o) => o.name == 'Texture');
+    if (temTextura) {
+      warnings.add(
+        'FBX com texturas: so a imagem base e aplicada, pelo arquivo selecionado junto; outros mapas nao entram.',
       );
     }
+    String? imagemDe(String? arquivo) {
+      if (arquivo == null) return null;
+      final base = arquivo.toLowerCase();
+      for (final entry in resources.entries) {
+        final nome = entry.key.replaceAll(String.fromCharCode(92), '/').split('/').last.toLowerCase();
+        if (nome == base) {
+          return 'data:application/octet-stream;base64,${base64Encode(entry.value)}';
+        }
+      }
+      warnings.add(
+        'Textura $arquivo nao encontrada: selecione o arquivo junto com o FBX.',
+      );
+      return null;
+    }
+    // Sem conexoes legiveis mas com UMA imagem selecionada: vale para todos.
+    final unicaImagem = texturaDoMaterial.isEmpty && temTextura && resources.length == 1
+        ? 'data:application/octet-stream;base64,${base64Encode(resources.values.single)}'
+        : null;
     final materials = <Map<String, dynamic>>[];
     final materialIndex = <int, int>{};
     for (final e in byId.entries.where((e) => e.value.name == 'Material')) {
@@ -133,11 +187,16 @@ ModelAsset3D importFbx3D(Uint8List bytes, {String name = 'Modelo FBX'}) {
       final color = _fbxVec(p, 'DiffuseColor', [.8, .8, .8]);
       final factor = (p['DiffuseFactor']?.first as num? ?? 1).toDouble();
       materialIndex[e.key] = materials.length;
+      final imagem = imagemDe(texturaDoMaterial[e.key]) ?? unicaImagem;
       materials.add({
         'name': _fbxName(e.value),
-        'color': [for (final c in color) (c * factor).clamp(0.0, 1.0), 1.0],
+        // Com imagem a cor vira branco: a textura carrega a cor.
+        'color': imagem != null
+            ? [1.0, 1.0, 1.0, 1.0]
+            : [for (final c in color) (c * factor).clamp(0.0, 1.0), 1.0],
         'metallic': 0.0,
         'roughness': .6,
+        'image': ?imagem,
       });
     }
     final primitives = <Map<String, dynamic>>[],
@@ -362,8 +421,8 @@ ModelAsset3D importFbx3D(Uint8List bytes, {String name = 'Modelo FBX'}) {
           final triangles = triangulateModelPolygon(vertices, face);
           (bucket['indices'] as List<int>).addAll(triangles);
           triangleCount += triangles.length ~/ 3;
-          if (triangleCount > 150000) {
-            modelFail('FBX acima de 150 mil triangulos.');
+          if (triangleCount > maxTriangles) {
+            modelFail('FBX acima de ${maxTriangles ~/ 1000} mil triangulos.');
           }
           cornerIndex += corners.length;
           polygon++;

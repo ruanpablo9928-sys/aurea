@@ -16,6 +16,18 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.moon_stars,
+    'Modelo MONOLITO: o astronauta e a porta',
+    'Floresta noturna na neblina, um bloco de concreto com um portal '
+        'aceso em magenta, um astronauta flutuando em contraluz e a camera '
+        'balancando por dezesseis segundos. Tres modelos importados de '
+        'verdade (astronauta, portal voxel e arvore escaneada, ~110 mil '
+        'faces ao todo) passam pelo MESMO importador que voce usa — que '
+        'agora aceita FBX com textura em vez de recusar o arquivo. A porta '
+        'e material emissivo E uma luz spot com sombra; as camadas de luz '
+        'no cone dela sao o volume atravessando a neblina.',
+  ),
+  NewsItem(
     CupertinoIcons.cube_box_fill,
     'Motor 3D em GPU: luz de verdade',
     'A cena 3D passou a ser desenhada pela GPU (Metal no iPhone): '

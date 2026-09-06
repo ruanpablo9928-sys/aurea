@@ -94,14 +94,30 @@ void main() {
       throwsA(isA<ModelImportException>()),
     );
   });
-  test('FBX com imagem nao perde textura silenciosamente', () {
+  test('FBX com imagem importa e AVISA que a textura precisa vir junto', () {
+    // Antes o arquivo inteiro era recusado por ter textura — jogava fora
+    // a malha. Agora a malha entra, com UV, e o aviso diz o que faltou;
+    // uma imagem selecionada junto vale para os materiais.
     final source = asciiFbx.replaceFirst(
       'Objects: {',
-      'Objects: {\n Texture: 30, "Texture::Map", "" {\n }\n',
+      'Objects: {\n Texture: 30, "Texture::Map", "" {\n }\n'
+          ' Material: 40, "Material::Traje", "" {\n }\n',
+    );
+    final bytes = Uint8List.fromList(utf8.encode(source));
+    final semImagem = importFbx3D(bytes);
+    expect(semImagem.data['materials'], isNotEmpty);
+    expect(semImagem.warnings.any((w) => w.contains('textura')), isTrue);
+    expect(
+      (semImagem.data['materials'] as List).every((m) => m['image'] == null),
+      isTrue,
+    );
+    final comImagem = importFbx3D(
+      bytes,
+      resources: {'mapa.png': Uint8List.fromList([1, 2, 3])},
     );
     expect(
-      () => importFbx3D(Uint8List.fromList(utf8.encode(source))),
-      throwsA(isA<ModelImportException>()),
+      (comImagem.data['materials'] as List).any((m) => m['image'] != null),
+      isTrue,
     );
   });
   test('FBX binario publico Assimp (checagem local opcional)', () {

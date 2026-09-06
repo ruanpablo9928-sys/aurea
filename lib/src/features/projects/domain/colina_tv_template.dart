@@ -1,7 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 
 import '../../editor/domain/camera3d.dart';
@@ -9,11 +6,12 @@ import '../../editor/domain/effect.dart';
 import '../../editor/domain/element3d.dart';
 import '../../editor/domain/keyframe.dart';
 import '../../editor/domain/layer.dart';
-import '../../editor/domain/model_asset3d.dart';
 import '../../editor/domain/panorama3d.dart';
 import '../../editor/domain/scene3d.dart';
 import '../../editor/domain/shape.dart';
 import '../../editor/domain/video_project.dart';
+import 'malha_codigo.dart';
+import 'textura_procedural.dart';
 
 /// COLINA · A TV NO MORRO.
 ///
@@ -60,36 +58,6 @@ AnimatedDouble _sample(double Function(double) f) => AnimatedDouble(f(0), [
     Keyframe(time: _t(i / 6), value: f(i / 6)),
 ]);
 
-/// Hash inteiro em [0, 1): geometria reprodutivel sem estado.
-double _noise(int i) {
-  var x = (i * 374761393 + 668265263) & 0x7fffffff;
-  x = ((x ^ (x >> 13)) * 1274126177) & 0x7fffffff;
-  return (x ^ (x >> 16)) / 0x7fffffff;
-}
-
-double _suave(double t) => t * t * (3 - 2 * t);
-
-/// Ruido de valor 2D em trelica, tres oitavas — o relevo das ondulacoes
-/// e o mosqueado das texturas saem daqui.
-double _fbm(double x, double z, {int oitavas = 3, int semente = 0}) {
-  var soma = 0.0, peso = 1.0, total = 0.0;
-  var fx = x, fz = z;
-  for (var o = 0; o < oitavas; o++) {
-    final ix = fx.floor(), iz = fz.floor();
-    final tx = _suave(fx - ix), tz = _suave(fz - iz);
-    double canto(int a, int b) =>
-        _noise(a * 73856093 ^ b * 19349663 ^ (semente + o) * 83492791);
-    final v = (canto(ix, iz) * (1 - tx) + canto(ix + 1, iz) * tx) * (1 - tz) +
-        (canto(ix, iz + 1) * (1 - tx) + canto(ix + 1, iz + 1) * tx) * tz;
-    soma += v * peso;
-    total += peso;
-    peso *= .5;
-    fx *= 2.03;
-    fz *= 2.03;
-  }
-  return soma / total;
-}
-
 /// O SOL: atras e a direita, baixo. A direcao em que a luz VIAJA; o
 /// oposto e para onde uma superficie precisa olhar para acender.
 const _luzDoSol = Vec3(-.42, -.30, .86);
@@ -103,8 +71,8 @@ double colinaAltura(double x, double z) {
   final dx = x / 1.18, dz = z - 30;
   final r2 = dx * dx + dz * dz;
   final morro = 238 * math.exp(-r2 / (440 * 440));
-  final ondas = 42 * (_fbm(x / 720 + 3.1, z / 720 + 7.7) - .5) +
-      11 * (_fbm(x / 170 + 9.3, z / 170 + 1.2, semente: 4) - .5);
+  final ondas = 42 * (fbm(x / 720 + 3.1, z / 720 + 7.7) - .5) +
+      11 * (fbm(x / 170 + 9.3, z / 170 + 1.2, semente: 4) - .5);
   final fundo = .045 * math.max(0.0, -z - 520);
   return morro + ondas + fundo;
 }
@@ -116,231 +84,7 @@ Vec3 _normalDoTerreno(double x, double z) {
   return Vec3(-hx, 2 * e, -hz).normalized;
 }
 
-// ============================================================== MALHAS
-
-/// Construtor de MODELO em codigo: vertices compartilhados por material
-/// (uma primitiva por material), normais por vertice quando o material
-/// e liso, e o no com a caixa envolvente calculada — as coordenadas de
-/// mundo sobrevivem a normalizacao do ModelAsset3D.
-class _Malha {
-  _Malha(this.materiais);
-
-  final List<Map<String, dynamic>> materiais;
-  final Map<int, _Primitiva> _por = {};
-
-  _Primitiva _p(int material) => _por[material] ??= _Primitiva();
-
-  /// Vertice com normal (liso). Devolve o indice.
-  int vertice(int material, Vec3 p, Vec3 n, {Offset? uv}) =>
-      _p(material).add(p, n, uv);
-
-  void tri(int material, int a, int b, int c) =>
-      _p(material).indices.addAll([a, b, c]);
-
-  /// Triangulo PLANO: tres vertices proprios com a normal da face. Com
-  /// [virado], a face e invertida se estiver de costas para essa
-  /// direcao — o motor descarta o que esta de costas, e um bisel
-  /// emitido ao contrario simplesmente some.
-  void triPlano(
-    int material,
-    Vec3 a,
-    Vec3 b,
-    Vec3 c, {
-    Offset? ua,
-    Offset? ub,
-    Offset? uc,
-    Vec3? virado,
-  }) {
-    var n = (b - a).cross(c - a).normalized;
-    if (virado != null && n.dot(virado) < 0) {
-      final tb = b;
-      b = c;
-      c = tb;
-      final tu = ub;
-      ub = uc;
-      uc = tu;
-      n = n * -1;
-    }
-    final p = _p(material);
-    final ia = p.add(a, n, ua), ib = p.add(b, n, ub), ic = p.add(c, n, uc);
-    p.indices.addAll([ia, ib, ic]);
-  }
-
-  void quadPlano(int material, Vec3 a, Vec3 b, Vec3 c, Vec3 d, {Vec3? virado}) {
-    triPlano(material, a, b, c, virado: virado);
-    triPlano(material, a, c, d, virado: virado);
-  }
-
-  int get triangulos =>
-      _por.values.fold(0, (s, p) => s + p.indices.length ~/ 3);
-
-  ModelAsset3D asset(String nome) => ModelAsset3D({
-        'version': 1,
-        'name': nome,
-        'nodes': [
-          {'name': nome},
-        ],
-        'primitives': [
-          for (final e in _por.entries)
-            {
-              'node': 0,
-              'positions': e.value.positions,
-              'normals': e.value.normals,
-              if (e.value.uvs.isNotEmpty) 'uv': e.value.uvs,
-              'indices': e.value.indices,
-              'material': e.key,
-            },
-        ],
-        'materials': materiais,
-        'skins': const [],
-        'clips': const [],
-      });
-
-  /// A caixa envolvente, para o no ficar onde a malha foi desenhada.
-  ({Vec3 centro, double meio}) caixa() {
-    var lo = const Vec3(1e9, 1e9, 1e9), hi = const Vec3(-1e9, -1e9, -1e9);
-    for (final p in _por.values) {
-      for (final v in p.positions) {
-        lo = Vec3(math.min(lo.x, v[0]), math.min(lo.y, v[1]), math.min(lo.z, v[2]));
-        hi = Vec3(math.max(hi.x, v[0]), math.max(hi.y, v[1]), math.max(hi.z, v[2]));
-      }
-    }
-    final d = hi - lo;
-    return (
-      centro: (lo + hi) * .5,
-      meio: math.max(d.x, math.max(d.y, d.z)) / 2,
-    );
-  }
-
-  SceneNode no(
-    String id,
-    String nome, {
-    List<Vec3> instancias = const [],
-    AnimatedDouble? rotX,
-    AnimatedDouble? rotY,
-    AnimatedDouble? rotZ,
-    AnimatedDouble? y,
-    Vec3? posicao,
-  }) {
-    final c = caixa();
-    final base = posicao ?? c.centro;
-    return SceneNode(
-      id: id,
-      name: nome,
-      size: c.meio,
-      x: _ad(base.x),
-      y: y ?? _ad(base.y),
-      z: _ad(base.z),
-      rotX: rotX,
-      rotY: rotY,
-      rotZ: rotZ,
-      instances: instancias,
-      modelAsset: asset(nome),
-    );
-  }
-}
-
-class _Primitiva {
-  final positions = <List<double>>[];
-  final normals = <List<double>>[];
-  final uvs = <List<double>>[];
-  final indices = <int>[];
-
-  int add(Vec3 p, Vec3 n, Offset? uv) {
-    positions.add([p.x, p.y, p.z]);
-    normals.add([n.x, n.y, n.z]);
-    if (uv != null) uvs.add([uv.dx, uv.dy]);
-    return positions.length - 1;
-  }
-}
-
-Map<String, dynamic> _material(
-  String nome,
-  int cor, {
-  double rugosidade = .8,
-  double metal = 0,
-  double brilho = 0,
-  bool semLuz = false,
-  bool doisLados = false,
-  String? imagem,
-}) {
-  final c = Color(cor);
-  return {
-    'name': nome,
-    'color': [c.r, c.g, c.b, 1.0],
-    'metallic': metal,
-    'roughness': rugosidade,
-    'emissive': brilho,
-    if (semLuz) 'unlit': true,
-    if (doisLados) 'doubleSided': true,
-    'image': ?imagem,
-  };
-}
-
 // ============================================================== TEXTURAS
-
-/// PNG minimo em Dart puro (RGB, zlib do dart:io), como data URI: o
-/// cache de texturas le `data:` direto, e o projeto salvo carrega a
-/// textura junto — sem depender de arquivo no aparelho.
-String _png(int w, int h, void Function(int x, int y, Uint8List rgb) pixel) {
-  final raw = Uint8List(h * (1 + w * 3));
-  final rgb = Uint8List(3);
-  var k = 0;
-  for (var y = 0; y < h; y++) {
-    raw[k++] = 0; // filtro: nenhum
-    for (var x = 0; x < w; x++) {
-      pixel(x, y, rgb);
-      raw[k++] = rgb[0];
-      raw[k++] = rgb[1];
-      raw[k++] = rgb[2];
-    }
-  }
-  final idat = ZLibEncoder(level: 6).convert(raw);
-  final out = BytesBuilder();
-  out.add(const [137, 80, 78, 71, 13, 10, 26, 10]);
-  void chunk(String tipo, List<int> dados) {
-    final t = ascii.encode(tipo);
-    final len = ByteData(4)..setUint32(0, dados.length);
-    out.add(len.buffer.asUint8List());
-    final corpo = Uint8List(t.length + dados.length)
-      ..setAll(0, t)
-      ..setAll(t.length, dados);
-    out.add(corpo);
-    final crc = ByteData(4)..setUint32(0, _crc32(corpo));
-    out.add(crc.buffer.asUint8List());
-  }
-
-  final ihdr = ByteData(13)
-    ..setUint32(0, w)
-    ..setUint32(4, h)
-    ..setUint8(8, 8)
-    ..setUint8(9, 2)
-    ..setUint8(10, 0)
-    ..setUint8(11, 0)
-    ..setUint8(12, 0);
-  chunk('IHDR', ihdr.buffer.asUint8List());
-  chunk('IDAT', idat);
-  chunk('IEND', const []);
-  return 'data:image/png;base64,${base64Encode(out.toBytes())}';
-}
-
-final List<int> _crcTabela = List.generate(256, (n) {
-  var c = n;
-  for (var k = 0; k < 8; k++) {
-    c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
-  }
-  return c;
-});
-
-int _crc32(List<int> dados) {
-  var c = 0xFFFFFFFF;
-  for (final b in dados) {
-    c = _crcTabela[(c ^ b) & 0xFF] ^ (c >> 8);
-  }
-  return (c ^ 0xFFFFFFFF) & 0xFFFFFFFF;
-}
-
-int _canal(double v) => (v * 255).round().clamp(0, 255);
 
 /// O MAPA DO CHAO: uma textura so cobrindo o terreno inteiro, em
 /// coordenadas de mundo. E ela que pinta as manchas de terra com borda
@@ -350,14 +94,14 @@ int _canal(double v) => (v * 255).round().clamp(0, 255);
 const _mapaLado = 768;
 const _mapaMeio = 1500.0;
 
-String _texturaChao() => _png(_mapaLado, _mapaLado, (px, py, rgb) {
+String _texturaChao() => pngDataUri(_mapaLado, _mapaLado, (px, py, rgb) {
       final x = -_mapaMeio + px * 2 * _mapaMeio / _mapaLado;
       final z = -_mapaMeio + py * 2 * _mapaMeio / _mapaLado;
-      final grande = _fbm(x / 520 + 3, z / 520 + 9, semente: 11);
-      final fino = _fbm(x / 62 + 1, z / 62 + 5, oitavas: 2, semente: 12);
-      final grao = _noise(px * 7 + py * 131) - .5;
+      final grande = fbm(x / 520 + 3, z / 520 + 9, semente: 11);
+      final fino = fbm(x / 62 + 1, z / 62 + 5, oitavas: 2, semente: 12);
+      final grao = ruido(px * 7 + py * 131) - .5;
       final seco =
-          math.max(0.0, _fbm(x / 640 + 5, z / 640 + 2, semente: 13) - .58) *
+          math.max(0.0, fbm(x / 640 + 5, z / 640 + 2, semente: 13) - .58) *
               2.4;
       var r = .21 + .09 * (grande - .5) + .06 * (fino - .5) + .035 * grao;
       var g = .48 + .16 * (grande - .5) + .12 * (fino - .5) + .06 * grao;
@@ -368,11 +112,11 @@ String _texturaChao() => _png(_mapaLado, _mapaLado, (px, py, rgb) {
       // TERRA na encosta: mascara de ruido com borda suave, so no anel
       // do morro, nunca no topo (a TV pousa na grama).
       final dist = math.sqrt(x * x + (z - 30) * (z - 30));
-      final anel = _suave(((dist - 130) / 90).clamp(0.0, 1.0)) *
-          (1 - _suave(((dist - 520) / 120).clamp(0.0, 1.0)));
-      final mancha = _fbm(x / 230 + 2, z / 230 + 8, semente: 41);
-      final terra = _suave(((mancha - .60) / .10).clamp(0.0, 1.0)) * anel;
-      final tn = _fbm(x / 40, z / 40, oitavas: 2, semente: 21);
+      final anel = suave(((dist - 130) / 90).clamp(0.0, 1.0)) *
+          (1 - suave(((dist - 520) / 120).clamp(0.0, 1.0)));
+      final mancha = fbm(x / 230 + 2, z / 230 + 8, semente: 41);
+      final terra = suave(((mancha - .60) / .10).clamp(0.0, 1.0)) * anel;
+      final tn = fbm(x / 40, z / 40, oitavas: 2, semente: 21);
       final tr = .40 + .16 * (tn - .5) + .05 * grao;
       final tg = .21 + .09 * (tn - .5) + .04 * grao;
       final tb = .12 + .05 * (tn - .5) + .03 * grao;
@@ -380,33 +124,33 @@ String _texturaChao() => _png(_mapaLado, _mapaLado, (px, py, rgb) {
       g += (tg - g) * terra;
       b += (tb - b) * terra;
       // CAMPO DISTANTE: mais escuro e azulado.
-      final longe = _suave(((dist - 800) / 700).clamp(0.0, 1.0)) * .55;
+      final longe = suave(((dist - 800) / 700).clamp(0.0, 1.0)) * .55;
       r += (.10 - r) * longe;
       g += (.24 - g) * longe;
       b += (.18 - b) * longe;
-      rgb[0] = _canal(r);
-      rgb[1] = _canal(g);
-      rgb[2] = _canal(b);
+      rgb[0] = canal8(r);
+      rgb[1] = canal8(g);
+      rgb[2] = canal8(b);
     });
 
 /// ROCHA: cinza-castanho com veios.
-String _texturaRocha() => _png(128, 128, (x, y, rgb) {
+String _texturaRocha() => pngDataUri(128, 128, (x, y, rgb) {
       final u = x / 128, v = y / 128;
-      final n = _fbm(u * 5, v * 5, semente: 31);
+      final n = fbm(u * 5, v * 5, semente: 31);
       final veio = math.max(
-          0.0, .5 - (_fbm(u * 9, v * 2.5, semente: 32) - .5).abs() * 6);
-      final grao = _noise(x * 53 + y * 7) - .5;
+          0.0, .5 - (fbm(u * 9, v * 2.5, semente: 32) - .5).abs() * 6);
+      final grao = ruido(x * 53 + y * 7) - .5;
       final base = .36 + .24 * (n - .5) + .06 * grao - .10 * veio;
-      rgb[0] = _canal(base + .04);
-      rgb[1] = _canal(base);
-      rgb[2] = _canal(base - .04);
+      rgb[0] = canal8(base + .04);
+      rgb[1] = canal8(base);
+      rgb[2] = canal8(base - .04);
     });
 
 // ============================================================== NOS
 
 SceneNode _terreno() {
-  final m = _Malha([
-    _material('Chao', 0xffffffff, rugosidade: .88, imagem: _texturaChao()),
+  final m = MalhaCodigo([
+    materialCodigo('Chao', 0xffffffff, rugosidade: .88, imagem: _texturaChao()),
   ]);
   const n = 48;
   const meio = _mapaMeio;
@@ -441,17 +185,17 @@ SceneNode _terreno() {
 
 /// A SERRA AO FUNDO: um perfil de cumes que a neblina come.
 SceneNode _serra() {
-  final m = _Malha([
-    _material('Serra', 0xff26343f, rugosidade: 1),
+  final m = MalhaCodigo([
+    materialCodigo('Serra', 0xff26343f, rugosidade: 1),
   ]);
   const n = 80;
   final frente = <int>[], cume = <int>[], tras = <int>[];
   for (var i = 0; i <= n; i++) {
     final x = -4400 + i * 8800 / n;
-    var h = 150 + 240 * _fbm(x / 1500 + 4, 0.3, semente: 51) +
-        90 * _fbm(x / 420 + 1, 0.7, oitavas: 2, semente: 52);
+    var h = 150 + 240 * fbm(x / 1500 + 4, 0.3, semente: 51) +
+        90 * fbm(x / 420 + 1, 0.7, oitavas: 2, semente: 52);
     // Mais alta a direita, como na referencia.
-    h += 260 * _suave(((x - 200) / 2600).clamp(0.0, 1.0));
+    h += 260 * suave(((x - 200) / 2600).clamp(0.0, 1.0));
     frente.add(m.vertice(0, Vec3(x, 0, -2100), const Vec3(0, .6, .8)));
     cume.add(m.vertice(0, Vec3(x, h, -2750), const Vec3(0, 1, 0)));
     tras.add(m.vertice(0, Vec3(x, 0, -3500), const Vec3(0, .6, -.8)));
@@ -470,19 +214,19 @@ SceneNode _serra() {
 /// fica para cima: e o que acende a ponta em contraluz e deixa o pe na
 /// sombra — a grama de verdade em fim de tarde e isso. Metade das
 /// laminas vira para o outro lado, para o tufo nao ficar uniforme.
-_Malha _tufo(int variante) {
-  final m = _Malha([
-    _material('Grama · lamina', 0xff78a532, rugosidade: .6, doisLados: true),
+MalhaCodigo _tufo(int variante) {
+  final m = MalhaCodigo([
+    materialCodigo('Grama · lamina', 0xff78a532, rugosidade: .6, doisLados: true),
   ]);
-  final altura = 22.0 + 12 * _noise(variante * 7 + 1);
+  final altura = 22.0 + 12 * ruido(variante * 7 + 1);
   const cima = Vec3(0, 1, 0);
   for (var k = 0; k < 4; k++) {
-    final ang = (k / 4) * 2 * math.pi + variante * .7 + _noise(variante * 11 + k) * 1.1;
-    final inclina = .22 + .40 * _noise(variante * 13 + k * 5);
-    final h = altura * (.7 + .5 * _noise(variante * 17 + k * 3));
+    final ang = (k / 4) * 2 * math.pi + variante * .7 + ruido(variante * 11 + k) * 1.1;
+    final inclina = .22 + .40 * ruido(variante * 13 + k * 5);
+    final h = altura * (.7 + .5 * ruido(variante * 17 + k * 3));
     final dir = Vec3(math.cos(ang), 0, math.sin(ang));
     final lado = Vec3(-dir.z, 0, dir.x) * 1.1;
-    final base = dir * (2.5 * _noise(variante * 19 + k));
+    final base = dir * (2.5 * ruido(variante * 19 + k));
     final topo = base + dir * (h * inclina) + Vec3(0, h, 0);
     final paraLuz = k.isEven ? _paraOSol : _paraOSol * -1;
     final nBase = (cima + dir * .3).normalized;
@@ -504,9 +248,9 @@ List<Vec3> _espalha(int semente, int quantos, double alturaDoTufo) {
   final out = <Vec3>[];
   var i = 0;
   while (out.length < quantos && i < quantos * 40) {
-    final u = _noise(semente * 100003 + i * 3);
-    final v = _noise(semente * 100003 + i * 3 + 1);
-    final p = _noise(semente * 100003 + i * 3 + 2);
+    final u = ruido(semente * 100003 + i * 3);
+    final v = ruido(semente * 100003 + i * 3 + 1);
+    final p = ruido(semente * 100003 + i * 3 + 2);
     i++;
     final x = -1500 + u * 3000, z = -1500 + v * 3000;
     final r = math.sqrt(x * x + (z - 30) * (z - 30));
@@ -551,7 +295,7 @@ List<SceneNode> _grama() {
   final out = <SceneNode>[];
   for (var v = 0; v < 8; v++) {
     final m = _tufo(v);
-    final altura = 22.0 + 12 * _noise(v * 7 + 1);
+    final altura = 22.0 + 12 * ruido(v * 7 + 1);
     out.add(m.no(
       'colina_grama_$v',
       'Grama · tufos ${v + 1}',
@@ -563,17 +307,17 @@ List<SceneNode> _grama() {
 }
 
 /// FLORES: quatro petalas (um triangulo cada) sobre um caule fino.
-_Malha _flor(int cor, int semente) {
-  final m = _Malha([
-    _material('Flor', cor, rugosidade: .7, brilho: .15, doisLados: true),
-    _material('Caule', 0xff4f7d2a, rugosidade: .8, doisLados: true),
+MalhaCodigo _flor(int cor, int semente) {
+  final m = MalhaCodigo([
+    materialCodigo('Flor', cor, rugosidade: .7, brilho: .15, doisLados: true),
+    materialCodigo('Caule', 0xff4f7d2a, rugosidade: .8, doisLados: true),
   ]);
   const h = 15.0;
   final centro = Vec3(0, h / 2, 0);
   m.triPlano(1, Vec3(-.7, -h / 2, 0), Vec3(.7, -h / 2, 0), centro);
   const n = Vec3(0, 1, 0);
   for (var k = 0; k < 4; k++) {
-    final ang = k * math.pi / 2 + _noise(semente + k) * .4;
+    final ang = k * math.pi / 2 + ruido(semente + k) * .4;
     final dir = Vec3(math.cos(ang), 0, math.sin(ang));
     final lado = Vec3(-dir.z, 0, dir.x) * 3.4;
     final ponta = centro + dir * 7.6 + const Vec3(0, 1.2, 0);
@@ -600,8 +344,8 @@ List<SceneNode> _flores() => [
 SceneNode _rocha(int k) {
   final r = _rochas[k];
   final vermelha = k == 1 || k == 2;
-  final m = _Malha([
-    _material(
+  final m = MalhaCodigo([
+    materialCodigo(
       vermelha ? 'Arenito' : 'Basalto',
       vermelha ? 0xffd8906a : 0xffe6ddcf,
       rugosidade: .95,
@@ -621,7 +365,7 @@ SceneNode _rocha(int k) {
           math.sin(lat) * math.sin(lon));
       final deform = .80 +
           .36 *
-              _fbm(d.x * 2.2 + r.$7 * 9, d.z * 2.2 + d.y * 1.7,
+              fbm(d.x * 2.2 + r.$7 * 9, d.z * 2.2 + d.y * 1.7,
                   semente: 60 + r.$7);
       anel.add(Vec3(r.$1 + d.x * r.$4 * deform, cy + d.y * r.$5 * deform,
           r.$3 + d.z * r.$6 * deform));
@@ -656,13 +400,13 @@ SceneNode _tv() {
   // A TV da referencia ocupa uns 10% da largura no fim do plano.
   const e = .72;
   const hw = 76.0 * e, hh = 58.0 * e, hd = 68.0 * e;
-  final m = _Malha([
-    _material('Gabinete', 0xff6a3222, rugosidade: .45, metal: .12),
-    _material('Bisel', 0xff1a1210, rugosidade: .7),
-    _material('Tela', 0xfffff2dc, semLuz: true, brilho: 1),
-    _material('Painel', 0xff2b2725, rugosidade: .6),
-    _material('Metal', 0xffb9b5ad, rugosidade: .28, metal: .7),
-    _material('Borracha', 0xff15110f, rugosidade: .9),
+  final m = MalhaCodigo([
+    materialCodigo('Gabinete', 0xff6a3222, rugosidade: .45, metal: .12),
+    materialCodigo('Bisel', 0xff1a1210, rugosidade: .7),
+    materialCodigo('Tela', 0xfffff2dc, semLuz: true, brilho: 1),
+    materialCodigo('Painel', 0xff2b2725, rugosidade: .6),
+    materialCodigo('Metal', 0xffb9b5ad, rugosidade: .28, metal: .7),
+    materialCodigo('Borracha', 0xff15110f, rugosidade: .9),
   ]);
 
   // GABINETE: superelipsoide — esfera cujas direcoes viram caixa de
@@ -780,7 +524,7 @@ SceneNode _tv() {
 }
 
 /// Cilindro de faces planas, de [base] ao longo de [eixo].
-void _cilindro(_Malha m, int material, Vec3 base, Vec3 eixo, double raio,
+void _cilindro(MalhaCodigo m, int material, Vec3 base, Vec3 eixo, double raio,
     double comprimento, {int lados = 8}) {
   final e = eixo.normalized;
   final ref = e.y.abs() < .9 ? const Vec3(0, 1, 0) : const Vec3(1, 0, 0);
@@ -799,8 +543,8 @@ void _cilindro(_Malha m, int material, Vec3 base, Vec3 eixo, double raio,
 /// POEIRA NO AR: pontos claros sem luz, que a profundidade de campo
 /// transforma nas bolas de bokeh da referencia. Sobem devagar.
 SceneNode _poeira() {
-  final m = _Malha([
-    _material('Poeira', 0xffeadcbd, semLuz: true),
+  final m = MalhaCodigo([
+    materialCodigo('Poeira', 0xffeadcbd, semLuz: true),
   ]);
   // Um tetraedro minusculo por particula.
   const s = .8;
@@ -817,9 +561,9 @@ SceneNode _poeira() {
     instancias: [
       for (var i = 0; i < 48; i++)
         Vec3(
-          (_noise(i * 3 + 5000) - .5) * 1500,
-          60 + _noise(i * 3 + 5001) * 320,
-          -100 + _noise(i * 3 + 5002) * 800,
+          (ruido(i * 3 + 5000) - .5) * 1500,
+          60 + ruido(i * 3 + 5001) * 320,
+          -100 + ruido(i * 3 + 5002) * 800,
         ),
     ],
   );
@@ -838,7 +582,7 @@ Vec3 _alvo(double t) => Vec3(
     );
 
 Vec3 _posicaoDaCamera(double t) {
-  final e = _suave((t / 6).clamp(0.0, 1.0));
+  final e = suave((t / 6).clamp(0.0, 1.0));
   final ang = -.52 + .92 * e;
   final r = 1190 - 410 * e;
   final y = colinaAltura(0, 40) - 120 + 130 * e + 9 * math.sin(t * 1.7);

@@ -21,6 +21,8 @@ import '../application/thumbnail_service.dart';
 import '../domain/alight_xml_import.dart';
 import '../domain/abyss_cinematic_template.dart';
 import '../domain/colina_tv_template.dart';
+import '../application/monolito_assets.dart';
+import '../domain/monolito_template.dart';
 import '../domain/notes_motion_template.dart';
 import '../domain/pindown_motion_template.dart';
 import '../domain/project_presets.dart';
@@ -72,6 +74,22 @@ class ProjectsTab extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Nao consegui preparar o motion VHF. Tente novamente.'),
+      ));
+    }
+  }
+
+  /// Os modelos do Monolito (astronauta, portal, arvore) viram arquivos
+  /// e passam pelo importador antes do projeto abrir.
+  Future<void> _openMonolito(BuildContext context, WidgetRef ref) async {
+    try {
+      final modelos = await carregarMonolitoModelos();
+      if (context.mounted) {
+        await _abrirModelo(context, ref, buildMonolitoTemplate(modelos: modelos));
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Nao consegui preparar os modelos do Monolito: $e'),
       ));
     }
   }
@@ -404,6 +422,12 @@ class ProjectsTab extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
+                  _CartaoModelo(
+                    imagem: 'assets/templates/monolito.jpg',
+                    titulo: 'MONOLITO · O astronauta e a porta',
+                    detalhe: '16 s · noite, neblina e luz magenta',
+                    onTap: () => _openMonolito(context, ref),
+                  ),
                   _CartaoModelo(
                     imagem: 'assets/templates/colina.jpg',
                     titulo: 'COLINA · A TV no morro',
