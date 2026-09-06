@@ -2133,21 +2133,30 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               for (var k = 0; k < niveis; k++) 1 / (1 << k),
             ];
             final soma = pesos.fold<double>(0, (a, b) => a + b);
+            // O TETO. O preset Neon (raio 60, piramide 4) pedia sigma
+            // 480 no ultimo nivel; o Sonho, 2400. Cada um desses e uma
+            // textura de centenas de megabytes na GPU — e o app fechava
+            // antes de desenhar o quadro. Ver [sigmaTeto].
+            final piramide = piramideAteOTeto(
+              [for (var k = 0; k < niveis; k++) sigma * (1 << k)],
+              [for (var k = 0; k < niveis; k++) pesos[k] / soma],
+              sigmaTeto(fxWidth, fxHeight),
+            );
             out = Stack(
               clipBehavior: Clip.none,
               children: [
                 out,
-                for (var k = 0; k < niveis; k++)
+                for (final nivel in piramide)
                   BlendMask(
                     blendMode: modo,
-                    margem: 3 * sigma * (1 << k) + 4,
+                    margem: 3 * nivel.sigma + 4,
                     child: Opacity(
-                      opacity: (pesos[k] / soma).clamp(0.0, 1.0),
+                      opacity: nivel.peso.clamp(0.0, 1.0),
                       // EM ESPACO LINEAR: glow SOMA luz, e soma de luz em
                       // sRGB da o halo lavado com borda escura de sempre.
                       child: LinearLight.blurred(
-                        sigmaX: sigma * (1 << k),
-                        sigmaY: sigma * (1 << k),
+                        sigmaX: nivel.sigma,
+                        sigmaY: nivel.sigma,
                         size: fxSize,
                         child: tingido,
                       ),
@@ -2712,7 +2721,17 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 math.max(multB, 1.0),
               );
               final eixo = math.max(aspecto, 1 / aspecto);
-              return 3 * sigma * mult * eixo * (modoGlow == 1 ? 2.2 : 1.0) + 4;
+              final bruto =
+                  3 * sigma * mult * eixo * (modoGlow == 1 ? 2.2 : 1.0) + 4;
+              // A margem multiplicava o sigma pelo canal (ate 2x), pela
+              // proporcao (ate 10x) e pelo modo (2,2x): um raio grande
+              // pedia noventa mil pixels de margem de cada lado. Nada do
+              // que passa da composicao inteira aparece — o resto e so
+              // textura que o aparelho nao tem.
+              return math.min(
+                bruto,
+                math.max(fxWidth, fxHeight) * 1.0,
+              );
             }
 
             Widget nivel(double sigma, double peso) {
@@ -2740,9 +2759,17 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               return Opacity(opacity: peso.clamp(0.0, 1.0), child: w);
             }
 
+            // O TETO, igual ao do Glow: com qualidade Alta a piramide
+            // vai a cinco niveis e o ultimo sigma e dezesseis vezes o
+            // raio. Ver [sigmaTeto] e [piramideAteOTeto].
+            final piramide = piramideAteOTeto(
+              sigmas,
+              pesos,
+              sigmaTeto(fxWidth, fxHeight),
+            );
             final camadas = <(Widget, double)>[
-              for (var k = 0; k < niveis; k++)
-                (nivel(sigmas[k], pesos[k]), alcance(sigmas[k])),
+              for (final n in piramide)
+                (nivel(n.sigma, n.peso), alcance(n.sigma)),
             ];
 
             // BLEND: Add e o padrao — luz soma. Screen e mais suave nas

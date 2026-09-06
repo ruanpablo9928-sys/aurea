@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -520,7 +519,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         key: paramSheetHostKey,
         backgroundColor: AmColors.bg,
         body: SafeArea(
-          child: Stack(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // ALTURA DO PAINEL DE FERRAMENTA, medida no espaco que
+              // existe de verdade.
+              //
+              // O corpo de um painel pede 270 px e a casca (contexto de
+              // keyframe, fileira de acoes, margens) come outros 102:
+              // abaixo de 372 o painel ROLA. Ele tinha 40% da tela com
+              // teto de 372 — e em todo iPhone 40% da menos que 372,
+              // entao rolava sempre. Um testador descreveu isso como
+              // "nao da pra mexer nas abas porque ta descendo".
+              //
+              // A conta agora sai do que sobra: cabecalho, transporte e
+              // timeline sao fixos, e o palco fica com 120 px no minimo
+              // — abaixo disso nao se enquadra nada. Num aparelho baixo
+              // o painel volta a rolar, e ai rolar e a escolha certa:
+              // a alternativa seria nao ver o video.
+              final alturaDoPainel = (constraints.maxHeight - 340).clamp(
+                240.0,
+                430.0,
+              );
+              return Stack(
             children: [
               Column(
                 children: [
@@ -558,7 +578,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   // estruturais sempre no mesmo lugar; desabilitado fica
                   // esmaecido, nunca some.
                   if (!_previewExpanded) ...[
-                    _ActionBar(playback: _playback),
+                    // A BARRA DE ACOES SO NO MODO PRINCIPAL. Ela guarda
+                    // comandos de estrutura — somar camada, cortar,
+                    // duplicar, precompor, vincular — e nenhum deles se
+                    // usa no meio de um ajuste de parametro. Escondida
+                    // durante um painel, os 44 px dela vao para o
+                    // painel, que era o que faltava para as abas de
+                    // transformacao caberem sem rolagem.
+                    if (_mode == _Mode.main) _ActionBar(playback: _playback),
                     RepaintBoundary(
                       child: AmTimeline(
                         playback: _playback,
@@ -598,10 +625,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     // rolagem interna.
                     if (panel != null)
                       SizedBox(
-                        height: math.min(
-                          372.0,
-                          MediaQuery.sizeOf(context).height * 0.40,
-                        ),
+                        height: alturaDoPainel,
                         child: RepaintBoundary(child: panel),
                       ),
                   ],
@@ -618,6 +642,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
                 ),
             ],
+              );
+            },
           ),
         ),
       ),

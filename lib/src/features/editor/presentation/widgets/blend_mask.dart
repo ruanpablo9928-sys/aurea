@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
@@ -118,13 +119,13 @@ class _RenderBlendMask extends RenderProxyBox {
   }
 
   /// A foto do filho, com a margem, na razao de pixels do preview.
-  ui.Image _fotografar(RenderBox filho, Rect limites) {
+  ui.Image _fotografar(RenderBox filho, Rect limites, double razao) {
     final camada = OffsetLayer();
     final ctx = PaintingContext(camada, limites);
     ctx.paintChild(filho, Offset.zero);
     // ignore: invalid_use_of_protected_member
     ctx.stopRecordingIfNeeded();
-    final img = camada.toImageSync(limites, pixelRatio: _pixelRatio);
+    final img = camada.toImageSync(limites, pixelRatio: razao);
     camada.dispose();
     return img;
   }
@@ -161,7 +162,8 @@ class _RenderBlendMask extends RenderProxyBox {
       return;
     }
 
-    final m = _margem < 0 ? 0.0 : _margem;
+    final cabe = fotoQueCabe(size, _margem, _pixelRatio);
+    final m = cabe.margem;
     final limites = Rect.fromLTWH(
       -m,
       -m,
@@ -169,11 +171,12 @@ class _RenderBlendMask extends RenderProxyBox {
       size.height + 2 * m,
     );
     if (limites.isEmpty) return;
-    final foto = _fotografar(filho, limites);
+    final razao = cabe.razao;
+    final foto = _fotografar(filho, limites, razao);
 
     canvas.save();
     canvas.translate(offset.dx - m, offset.dy - m);
-    canvas.scale(1 / _pixelRatio);
+    canvas.scale(1 / razao);
     canvas.drawImage(
       foto,
       Offset.zero,
@@ -186,4 +189,38 @@ class _RenderBlendMask extends RenderProxyBox {
     // liberada agora (mesmo ciclo da mescla customizada).
     foto.dispose();
   }
+}
+
+/// TETO DA FOTO DA MESCLA, em megapixels.
+///
+/// `toImageSync` aloca uma textura de verdade: largura x altura x razao
+/// de pixels, quatro bytes cada. Um Deep Glow de raio grande pedia dois
+/// mil pixels de margem numa composicao 1080x1920 a 3x — 284
+/// megapixels, 1,1 GB — e o app fechava antes de desenhar o quadro.
+/// Corrigir os efeitos um a um nao basta: um efeito novo pode pedir o
+/// mesmo amanha, e este e o unico ponto por onde todos passam.
+const double kFotoTetoMegapixels = 12;
+
+/// Margem maxima da foto, em pixels logicos. Acima disto o halo ja saiu
+/// da composicao inteira: o que se ganha e nada, e o que se paga e a
+/// resolucao de tudo o que sobrou dentro da foto.
+const double kFotoTetoDaMargem = 2048;
+
+/// A MARGEM E A RESOLUCAO que cabem no teto, para um filho de
+/// [tamanho] com [margem] pedida e razao de pixels [pixelRatio].
+///
+/// Quando o pedido passa do teto a foto sai em RESOLUCAO MENOR, nunca
+/// cortada: um halo desfocado em meia resolucao continua sendo o mesmo
+/// halo; um halo cortado e um retangulo no meio da tela.
+({double margem, double razao}) fotoQueCabe(
+  Size tamanho,
+  double margem,
+  double pixelRatio,
+) {
+  final m = margem.isFinite ? margem.clamp(0.0, kFotoTetoDaMargem) : 0.0;
+  final area = (tamanho.width + 2 * m) * (tamanho.height + 2 * m);
+  final pr = pixelRatio.isFinite && pixelRatio > 0 ? pixelRatio : 1.0;
+  if (area <= 0) return (margem: m, razao: pr);
+  final maxima = math.sqrt(kFotoTetoMegapixels * 1e6 / area);
+  return (margem: m, razao: math.min(pr, math.max(0.05, maxima)));
 }

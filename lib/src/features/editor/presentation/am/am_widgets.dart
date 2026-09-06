@@ -192,6 +192,13 @@ Future<void> showParamSheet(
       backgroundColor: AmColors.panel,
       barrierColor: Colors.transparent,
       isScrollControlled: true,
+      // NAO ARRASTA A FOLHA INTEIRA. Dentro de um painel de parametro
+      // quase tudo se ajusta arrastando — o pad de mover, os sliders,
+      // as reguas. Com a folha arrastavel, cada arrasto que um controle
+      // nao reivindicasse puxava a folha para baixo e a fechava no meio
+      // do ajuste. A altura se muda pela alca; fechar, pelo botao ou
+      // deslizando para a direita.
+      enableDrag: false,
       constraints: BoxConstraints(maxHeight: maxHeight),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -211,6 +218,8 @@ Future<void> showParamSheet(
   controller = host.showBottomSheet(
     (ctx) => embrulhado(fechar),
     backgroundColor: AmColors.panel,
+    // Ver o enableDrag do caminho modal, logo acima.
+    enableDrag: false,
     constraints: BoxConstraints(maxHeight: maxHeight),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),

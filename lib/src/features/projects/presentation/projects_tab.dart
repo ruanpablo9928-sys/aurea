@@ -322,49 +322,99 @@ class ProjectsTab extends ConsumerWidget {
           // diferentes para a mesma coisa — um projeto editavel.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: FilledButton.icon(
-                      icon: const Icon(CupertinoIcons.plus, size: 19),
-                      label: const Text('Novo projeto'),
-                      onPressed: () => _createProject(context, ref),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(CupertinoIcons.sparkles, size: 18),
-                      label: const Text('AutoEdit'),
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const AutoEditScreen(),
+            // NUM CELULAR ESTREITO, DUAS LINHAS.
+            //
+            // Os dois botoes de texto mais os dois quadrados de 48 nao
+            // cabem em 375 px de tela: "Novo projeto" saia cortado num
+            // iPhone SE. Quando o espaco nao da, os dois quadrados —
+            // que sao os secundarios — descem para a linha de baixo,
+            // com o nome escrito, em vez de espremerem o principal.
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final apertado = constraints.maxWidth < 340;
+                Widget principais() => Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton.icon(
+                          icon: const Icon(CupertinoIcons.plus, size: 19),
+                          label: const Text('Novo projeto'),
+                          onPressed: () => _createProject(context, ref),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                // Template e preset do Alight sao estudio.
-                if (completo) ...[
-                  const SizedBox(width: 10),
-                  _IconeQuadrado(
-                    icon: CupertinoIcons.doc_on_doc,
-                    tooltip: 'Abrir template',
-                    onTap: () => _openTemplate(context, ref),
-                  ),
-                  const SizedBox(width: 10),
-                  _IconeQuadrado(
-                    icon: CupertinoIcons.arrow_down_doc,
-                    tooltip: 'Importar preset do Alight (XML)',
-                    onTap: () => _importarAlight(context, ref),
-                  ),
-                ],
-              ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(CupertinoIcons.sparkles, size: 18),
+                          label: const Text('AutoEdit'),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const AutoEditScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Template e preset do Alight sao estudio.
+                    if (completo && !apertado) ...[
+                      const SizedBox(width: 10),
+                      _IconeQuadrado(
+                        icon: CupertinoIcons.doc_on_doc,
+                        tooltip: 'Abrir template',
+                        onTap: () => _openTemplate(context, ref),
+                      ),
+                      const SizedBox(width: 10),
+                      _IconeQuadrado(
+                        icon: CupertinoIcons.arrow_down_doc,
+                        tooltip: 'Importar preset do Alight (XML)',
+                        onTap: () => _importarAlight(context, ref),
+                      ),
+                    ],
+                  ],
+                );
+                if (!completo || !apertado) return principais();
+                return Column(
+                  children: [
+                    principais(),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(
+                                CupertinoIcons.doc_on_doc,
+                                size: 17,
+                              ),
+                              label: const Text('Template'),
+                              onPressed: () => _openTemplate(context, ref),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(
+                                CupertinoIcons.arrow_down_doc,
+                                size: 17,
+                              ),
+                              label: const Text('Preset XML'),
+                              onPressed: () => _importarAlight(context, ref),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),

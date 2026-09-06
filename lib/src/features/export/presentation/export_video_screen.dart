@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gal/gal.dart';
 
 import '../../editor/application/editor_controller.dart';
 import '../../editor/application/panorama_cache.dart';
@@ -22,6 +23,7 @@ import '../../editor/application/duck_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../application/export_engine.dart';
 import '../domain/export_settings.dart';
+import '../../settings/application/settings_controller.dart';
 
 /// EXPORTAR VIDEO.
 ///
@@ -56,6 +58,13 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   String _detalhe = '';
   String? _erro;
   File? _saida;
+
+  /// O QUE ACONTECEU COM A GALERIA. Ate agora o video terminava dentro
+  /// da pasta do app e a tela oferecia "copiar caminho" — num celular
+  /// isso nao leva a lugar nenhum, e os testadores exportaram tres
+  /// videos sem achar nenhum. Agora ele vai para a galeria e esta linha
+  /// diz se foi, ou por que nao foi.
+  String? _galeria;
 
   /// Quadros das camadas de video: pasta por camada + imagem do quadro
   /// atual, ja decodificada.
@@ -226,12 +235,14 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         ),
       );
       await engine.cleanup();
+      final naGaleria = await _salvarNaGaleria(file);
       if (!mounted) return;
       setState(() {
         _fase = _Fase.pronto;
         _progresso = 1;
         _saida = file;
         _detalhe = file.path;
+        _galeria = naGaleria;
       });
     } on ExportException catch (e) {
       await engine.cleanup();
@@ -369,6 +380,30 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     return data?.buffer.asUint8List();
+  }
+
+  /// LEVA O VIDEO PARA A GALERIA.
+  ///
+  /// Devolve a frase que a tela mostra — nunca lanca. Uma exportacao que
+  /// terminou nao pode virar erro porque a permissao da galeria foi
+  /// negada: o arquivo existe, e o caminho continua na tela.
+  Future<String?> _salvarNaGaleria(File file) async {
+    if (!ref.read(settingsControllerProvider).saveToGallery) return null;
+    if (!(Platform.isAndroid || Platform.isIOS)) {
+      return 'Galeria so no celular — o arquivo esta na pasta abaixo';
+    }
+    try {
+      if (!await Gal.hasAccess(toAlbum: true) &&
+          !await Gal.requestAccess(toAlbum: true)) {
+        return 'Sem permissao para a galeria. O arquivo esta na pasta abaixo';
+      }
+      await Gal.putVideo(file.path, album: 'Aurea');
+      return 'Salvo na galeria, no album Aurea';
+    } on GalException catch (e) {
+      return 'Nao deu para salvar na galeria: ${e.type.message}';
+    } catch (_) {
+      return 'Nao deu para salvar na galeria. O arquivo esta na pasta abaixo';
+    }
   }
 
   @override
@@ -519,6 +554,17 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                 ),
               ],
             ),
+            if (_galeria != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _galeria!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: AmColors.text,
+                ),
+              ),
+            ],
             const SizedBox(height: 6),
             Text(
               _saida?.path ?? '',

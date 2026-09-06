@@ -44,10 +44,11 @@ class ProjectsController extends Notifier<List<VideoProject>> {
   /// Mantem a lista em dia quando o editor altera o projeto aberto e
   /// agenda a gravacao em disco (debounce por projeto).
   void upsert(VideoProject project) {
-    final exists = state.any((p) => p.id == project.id);
-    state = exists
-        ? [for (final p in state) p.id == project.id ? project : p]
-        : [project, ...state];
+    // RECENTE QUER DIZER RECENTE. O projeto editado ficava no lugar em
+    // que nasceu: depois de criar cinco, aquele em que se passou a
+    // tarde continuava em quinto na Inicio. Quem mexeu por ultimo vai
+    // para a frente.
+    state = [project, ...state.where((p) => p.id != project.id)];
     _saveTimers[project.id]?.cancel();
     _saveTimers[project.id] = Timer(const Duration(milliseconds: 900), () {
       _saveTimers.remove(project.id);

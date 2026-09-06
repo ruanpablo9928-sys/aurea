@@ -924,6 +924,50 @@ class _AmLayerRow extends ConsumerStatefulWidget {
 }
 
 class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
+  /// UM ARRASTO DE BARRA EM ANDAMENTO.
+  ///
+  /// Os tratadores de FIM do arrasto so existem enquanto a condicao do
+  /// build vale: `selected && !compact` para mover e para as alcas de
+  /// trim, `transition != null` para a transicao. Se a camada e
+  /// desselecionada, a timeline vira compacta ou a transicao some NO
+  /// MEIO do arrasto, o fim nunca chega — e a timeline fica presa em
+  /// "editando barra".
+  ///
+  /// Presa assim ela deixa de seguir o relogio: o cabecote continua
+  /// desenhado no centro, mas o conteudo nao acompanha mais. O keyframe
+  /// cravado em seguida nasce no tempo CERTO e aparece longe do
+  /// cabecote — que foi o que os testadores relataram ("olha onde eu
+  /// coloquei e olha onde ele aparece").
+  ///
+  /// Este campo fecha o arrasto mesmo quando a condicao que criava o
+  /// tratador ja nao existe.
+  bool _arrastandoBarra = false;
+
+  void _comecarArrasto() {
+    _arrastandoBarra = true;
+    onEditStart();
+  }
+
+  void _terminarArrasto() {
+    if (!_arrastandoBarra) return;
+    _arrastandoBarra = false;
+    onEditEnd();
+  }
+
+  @override
+  void didUpdateWidget(_AmLayerRow old) {
+    super.didUpdateWidget(old);
+    if (_arrastandoBarra && !(selected && !compact)) _terminarArrasto();
+  }
+
+  @override
+  void dispose() {
+    // A fileira pode sair da arvore no meio do arrasto (trocar de
+    // painel, desfazer): o fim tem de sair mesmo assim.
+    _terminarArrasto();
+    super.dispose();
+  }
+
   Layer get layer => widget.layer;
   double get pps => widget.pps;
   double get totalWidth => widget.totalWidth;
@@ -1062,7 +1106,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                     },
               onHorizontalDragStart: selected && !compact
                   ? (_) {
-                      onEditStart();
+                      _comecarArrasto();
                       _dragStart0 = layer.startTime;
                       _accumPx = 0;
                     }
@@ -1077,9 +1121,11 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                     }
                   : null,
               onHorizontalDragEnd: selected && !compact
-                  ? (_) => onEditEnd()
+                  ? (_) => _terminarArrasto()
                   : null,
-              onHorizontalDragCancel: selected && !compact ? onEditEnd : null,
+              onHorizontalDragCancel: selected && !compact
+                  ? _terminarArrasto
+                  : null,
               child: CustomPaint(
                 painter: _AmBarPainter(
                   selected: selected,
@@ -1171,7 +1217,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                   onHorizontalDragStart: transition == null
                       ? null
                       : (_) {
-                          onEditStart();
+                          _comecarArrasto();
                           _transitionDuration0 = transition.duration;
                           _transitionAccumPx = 0;
                         },
@@ -1191,10 +1237,10 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                         },
                   onHorizontalDragEnd: transition == null
                       ? null
-                      : (_) => onEditEnd(),
+                      : (_) => _terminarArrasto(),
                   onHorizontalDragCancel: transition == null
                       ? null
-                      : onEditEnd,
+                      : _terminarArrasto,
                   child: Center(
                     child: Container(
                       key: ValueKey('level5-transition-${layer.id}'),
@@ -1358,11 +1404,11 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
             _TrimHandle(
               left: left - 3,
               onStart: () {
-                onEditStart();
+                _comecarArrasto();
                 _trimStart0 = layer.startTime;
                 _trimAccumPx = 0;
               },
-              onEnd: onEditEnd,
+              onEnd: _terminarArrasto,
               onDrag: (dx) {
                 _trimAccumPx += dx;
                 final desired = _trimStart0 + _pxToDur(_trimAccumPx);
@@ -1374,11 +1420,11 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
             _TrimHandle(
               left: left + width - 13,
               onStart: () {
-                onEditStart();
+                _comecarArrasto();
                 _trimStart0 = layer.endTime;
                 _trimAccumPx = 0;
               },
-              onEnd: onEditEnd,
+              onEnd: _terminarArrasto,
               onDrag: (dx) {
                 _trimAccumPx += dx;
                 final desired = _trimStart0 + _pxToDur(_trimAccumPx);

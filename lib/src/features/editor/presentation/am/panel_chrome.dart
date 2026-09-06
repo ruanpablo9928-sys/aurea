@@ -490,68 +490,92 @@ class AmRightTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 58,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          children: [
-            for (final aba in abas)
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onAba(aba.id),
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(4, 0, 6, 6),
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  decoration: BoxDecoration(
-                    color: ativa == aba.id ? AmColors.accent : AmColors.chip,
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (aba.icone != null)
-                        Icon(
-                          aba.icone,
-                          size: 19,
-                          color: ativa == aba.id
-                              ? AmColors.panel
-                              : AmColors.text,
-                        ),
-                      if (aba.icone != null) const SizedBox(height: 3),
-                      Text(
-                        aba.label,
-                        maxLines: 2,
-                        textAlign: TextAlign.center,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 9,
-                          height: 1.1,
-                          fontWeight: FontWeight.w600,
-                          color: ativa == aba.id
-                              ? AmColors.panel
-                              : AmColors.text,
-                        ),
+      child: LayoutBuilder(
+        builder: (context, limites) {
+          // O TRILHO CABE INTEIRO, SEMPRE.
+          //
+          // Ele era so um scroll: com seis abas num iPhone, Pivo e
+          // Opacidade ficavam abaixo da borda e so apareciam rolando. E
+          // rolar um trilho de seis itens para trocar de aba foi
+          // exatamente a queixa do testador — "essas opcao de subir e
+          // descer atrapalha". Agora, quando falta espaco, as abas
+          // encolhem ate caberem: menos respiro entre elas e melhor que
+          // uma aba escondida.
+          //
+          // O piso de 0,7 evita o outro extremo — abas ilegiveis. Abaixo
+          // dele o scroll continua ali, de reserva.
+          final naturalPorAba = 62.0;
+          final natural = abas.length * naturalPorAba + 12;
+          final k = limites.maxHeight <= 0 || natural <= limites.maxHeight
+              ? 1.0
+              : (limites.maxHeight / natural).clamp(0.7, 1.0);
+          return SingleChildScrollView(
+            padding: EdgeInsets.symmetric(vertical: 6 * k),
+            child: Column(
+              children: [
+                for (final aba in abas)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onAba(aba.id),
+                    child: Container(
+                      margin: EdgeInsets.fromLTRB(4, 0, 6, 6 * k),
+                      padding: EdgeInsets.symmetric(vertical: 7 * k),
+                      decoration: BoxDecoration(
+                        color: ativa == aba.id
+                            ? AmColors.accent
+                            : AmColors.chip,
+                        borderRadius: BorderRadius.circular(11),
                       ),
-                      // O PONTO diz que aquela aba ja tem keyframe, sem
-                      // precisar entrar em cada uma para descobrir.
-                      if (aba.animated) ...[
-                        const SizedBox(height: 3),
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: ativa == aba.id
-                                ? AmColors.panel
-                                : AmColors.accent,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (aba.icone != null)
+                            Icon(
+                              aba.icone,
+                              size: 19 * k,
+                              color: ativa == aba.id
+                                  ? AmColors.panel
+                                  : AmColors.text,
+                            ),
+                          if (aba.icone != null) SizedBox(height: 3 * k),
+                          Text(
+                            aba.label,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 9,
+                              height: 1.1,
+                              fontWeight: FontWeight.w600,
+                              color: ativa == aba.id
+                                  ? AmColors.panel
+                                  : AmColors.text,
+                            ),
                           ),
-                        ),
-                      ],
-                    ],
+                          // O PONTO diz que aquela aba ja tem keyframe,
+                          // sem precisar entrar em cada uma para
+                          // descobrir.
+                          if (aba.animated) ...[
+                            SizedBox(height: 3 * k),
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: ativa == aba.id
+                                    ? AmColors.panel
+                                    : AmColors.accent,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
-          ],
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

@@ -134,3 +134,49 @@ double glowAfterThreshold(double l, double threshold, double softness,
   final (escala, desl) = glowThresholdMatrix(threshold, softness, gain);
   return ((l * 255 * escala + desl) / 255).clamp(0.0, 1.0);
 }
+
+/// TETO DE SIGMA para uma composicao de [compWidth] x [compHeight].
+///
+/// Um desfoque gaussiano de sigma S nao e desenhado em S pixels: o motor
+/// precisa de tres sigmas de margem de cada lado para o halo nao sair
+/// cortado, entao ele pinta num alvo de (L + 6S) x (A + 6S) — e faz isso
+/// na razao de pixels da tela. Com S = 688, numa composicao 1080x1920 a
+/// 3x, esse alvo tem 284 megapixels: 1,1 GB de textura. O aparelho nao
+/// desenha isso; ele fecha o app. Foi o que os testadores encontraram
+/// abrindo o Deep Glow e o preset Neon do Glow.
+///
+/// O teto e um quinto do menor lado. Um halo de sigma maior que isso ja
+/// cobre a composicao inteira num lavado uniforme — dobrar de novo nao
+/// muda um pixel do que se ve, so a conta.
+double sigmaTeto(int compWidth, int compHeight) =>
+    math.max(8.0, math.min(compWidth, compHeight) * 0.2);
+
+/// Um nivel da piramide depois do teto.
+typedef NivelDeBloom = ({double sigma, double peso});
+
+/// A PIRAMIDE CORTADA NO TETO, com a luz preservada.
+///
+/// Os niveis que passariam de [teto] teriam todos o mesmo sigma — o
+/// mesmo lavado, desenhado varias vezes. Entao eles nao entram: o peso
+/// deles e somado ao ultimo nivel que coube. A soma dos pesos continua
+/// a mesma, entao o glow nao clareia nem escurece por causa do corte —
+/// so para de pagar por copias do mesmo borrao.
+List<NivelDeBloom> piramideAteOTeto(
+  List<double> sigmas,
+  List<double> pesos,
+  double teto,
+) {
+  final out = <NivelDeBloom>[];
+  final n = math.min(sigmas.length, pesos.length);
+  for (var i = 0; i < n; i++) {
+    if (out.isNotEmpty && out.last.sigma >= teto && sigmas[i] >= teto) {
+      out[out.length - 1] = (
+        sigma: out.last.sigma,
+        peso: out.last.peso + pesos[i],
+      );
+      continue;
+    }
+    out.add((sigma: math.min(sigmas[i], teto), peso: pesos[i]));
+  }
+  return out;
+}
