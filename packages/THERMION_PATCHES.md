@@ -18,6 +18,6 @@ Changes made by Aurea:
 7. Three small native functions execute on Thermion's render thread: configure Filament dynamic resolution, read the last effective scale, and read a valid GPU duration from Filament frame history. Pending/unsupported durations remain unavailable.
 8. Aurea preview uses a fourth native function that submits begin/render/end as one render-thread task, checks `beginFrame` backpressure, and never calls `flushAndWait`. It targets only surfaces attached to that view. Upstream `renderSingleFrame` remains available for callers needing its existing behavior.
 
-Filament libraries and headers are fetched by the upstream build hook (v1.69.1 default). Downloaded build artifacts are ignored, not vendored into Git. No shader/runtime binary is generated or patched by hand.
+Filament libraries are fetched by the upstream build hook (v1.69.1 default). The matching headers in `native/include/filament` are supplied by the published Thermion source archive and must be committed: the hook does not download them. Downloaded binary build artifacts are ignored. No shader/runtime binary is generated or patched by hand.
 
 This is a migration branch in the working tree, not an upstream Thermion release. Rebase these patches when upgrading the adapter, and run native builds and hardware tests before changing the production renderer default. Keep source licenses and notices when redistributing.
