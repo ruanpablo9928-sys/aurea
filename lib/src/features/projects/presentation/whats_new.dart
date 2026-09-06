@@ -16,6 +16,17 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.cube_box,
+    'O 3D nao derruba mais o iPhone',
+    'Neblina sobre faces com imagem, reflexo do chao e sombra de contato '
+        'abriam uma camada de GPU por TRIANGULO. Com alguns milhares de '
+        'faces o driver desistia, a tela apagava e o iOS reiniciava. Agora '
+        'cada um custa uma camada por quadro, seja qual for o modelo. O '
+        'contorno suavizado sai em modelos acima de 4 mil faces, e a '
+        'largura do contorno de estilo tem teto de 100 px (a dilatacao '
+        'na GPU crescia junto com ela).',
+  ),
+  NewsItem(
     CupertinoIcons.wand_stars,
     'FX V2: processamento por pixel',
     '30 efeitos ganharam kernels novos: cor, ruido, distorcao, blur e glitch. '

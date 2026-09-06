@@ -1781,7 +1781,14 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     // Contorno: silhueta dilatada por tras.
     if (s.stroke?.enabled ?? false) {
       final st = s.stroke!;
-      final w = st.width.valueAt(local);
+      // TETO DA DILATACAO. O dilate do Impeller e um laco de 2r+1
+      // leituras por pixel, por eixo, na resolucao inteira — nao ha a
+      // reducao que o desfoque tem. Sem teto, um contorno largo demais
+      // (ou um keyframe passando por um valor alto) vira segundos de GPU
+      // por quadro, e o iPhone reinicia. Cem pixels e o mesmo teto do
+      // espalhamento da sombra, e ja e mais grosso que qualquer contorno
+      // legivel.
+      final w = st.width.valueAt(local).clamp(0.0, 100.0).toDouble();
       if (w > 0.01) {
         out = Stack(
           clipBehavior: Clip.none,

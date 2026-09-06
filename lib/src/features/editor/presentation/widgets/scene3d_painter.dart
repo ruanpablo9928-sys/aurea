@@ -328,22 +328,46 @@ class Scene3DPainter extends CustomPainter {
     final opacity = (0.28 * (1 - scene.planarFloorRoughness))
         .clamp(0.02, 0.28)
         .toDouble();
+    final chao = Rect.fromLTRB(0, floor, size.width, size.height);
     canvas.save();
-    canvas.clipRect(Rect.fromLTRB(0, floor, size.width, size.height));
-    final paint = Paint()..isAntiAlias = true;
+    canvas.clipRect(chao);
     final blur = scene.planarFloorRoughness.clamp(0.0, 1.0).toDouble() * 10;
+    // UM DESFOQUE PARA O REFLEXO INTEIRO. Antes cada triangulo espelhado
+    // saia como um caminho com MaskFilter.blur — e no Impeller cada um
+    // desses e um passe de desfoque proprio na GPU: uma camada, dois
+    // passes gaussianos, uma composicao. Milhares de faces eram milhares
+    // de passes por quadro, e o aparelho reiniciava. Agora o reflexo e um
+    // unico drawVertices dentro de UMA camada desfocada.
     if (blur > 0) {
-      paint.maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
+      canvas.saveLayer(
+        chao,
+        Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+      );
     }
-    for (final tri in [...frame.opaque, ...frame.transparent]) {
-      final path = Path()
-        ..moveTo(tri.a.dx, floor * 2 - tri.a.dy)
-        ..lineTo(tri.b.dx, floor * 2 - tri.b.dy)
-        ..lineTo(tri.c.dx, floor * 2 - tri.c.dy)
-        ..close();
-      paint.color = tri.color.withValues(alpha: tri.color.a * opacity);
-      canvas.drawPath(path, paint);
+    final tris = [...frame.opaque, ...frame.transparent];
+    if (tris.isNotEmpty) {
+      final positions = Float32List(tris.length * 6);
+      final colors = Int32List(tris.length * 3);
+      for (var k = 0; k < tris.length; k++) {
+        final t = tris[k];
+        positions[k * 6] = t.a.dx;
+        positions[k * 6 + 1] = floor * 2 - t.a.dy;
+        positions[k * 6 + 2] = t.b.dx;
+        positions[k * 6 + 3] = floor * 2 - t.b.dy;
+        positions[k * 6 + 4] = t.c.dx;
+        positions[k * 6 + 5] = floor * 2 - t.c.dy;
+        final cor = t.color.withValues(alpha: t.color.a * opacity).toARGB32();
+        colors[k * 3] = cor;
+        colors[k * 3 + 1] = cor;
+        colors[k * 3 + 2] = cor;
+      }
+      canvas.drawVertices(
+        ui.Vertices.raw(ui.VertexMode.triangles, positions, colors: colors),
+        BlendMode.modulate,
+        Paint()..color = const Color(0xFFFFFFFF),
+      );
     }
+    if (blur > 0) canvas.restore();
     canvas.restore();
   }
 
@@ -374,23 +398,37 @@ class Scene3DPainter extends CustomPainter {
     }
     if (caixas.isEmpty) return;
 
-    final tinta = Paint()
-      ..color = const Color(0x66000000)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9);
-
+    // AS MANCHAS DE TODOS OS OBJETOS numa camada so, com UM desfoque.
+    // Cada MaskFilter e um passe de GPU proprio; uma cena com centenas de
+    // nos (modelo importado) virava centenas de passes por quadro.
+    final ovais = <Rect>[];
     for (final r in caixas.values) {
       if (r.width < 2 || r.height < 2) continue;
       final largura = r.width * 0.62;
       final altura = math.max(4.0, r.width * 0.16);
-      canvas.drawOval(
+      ovais.add(
         Rect.fromCenter(
           center: Offset(r.center.dx, r.bottom - altura * 0.35),
           width: largura,
           height: altura,
         ),
-        tinta,
       );
     }
+    if (ovais.isEmpty) return;
+    var caixa = ovais.first;
+    for (final o in ovais.skip(1)) {
+      caixa = caixa.expandToInclude(o);
+    }
+    const sigma = 9.0;
+    canvas.saveLayer(
+      caixa.inflate(sigma * 3),
+      Paint()..imageFilter = ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+    );
+    final tinta = Paint()..color = const Color(0x66000000);
+    for (final o in ovais) {
+      canvas.drawOval(o, tinta);
+    }
+    canvas.restore();
   }
 
   /// LINHAS DE PROFUNDIDADE ligando cada objeto ao plano do chao — e o
@@ -449,6 +487,8 @@ class Scene3DPainter extends CustomPainter {
 
   void _paintTriangles(Canvas canvas, List<RenderTri> tris) {
     if (tris.isEmpty) return;
+    // O contorno suavizado so ate um teto de faces: ver _tetoDoContorno.
+    final contornar = scene.msaa && tris.length <= _tetoDoContorno;
     // Uma chamada de desenho por LOTE de mesma cor: drawVertices e o
     // mais proximo de instanciacao que o Canvas oferece.
     final paint = Paint()
@@ -465,43 +505,6 @@ class Scene3DPainter extends CustomPainter {
     while (i < tris.length) {
       final start = i;
       if (!lisa(tris[i])) {
-        // Apply fog AFTER texture modulation, before the next surface. A
-        // single fog overlay over a whole batch breaks internal occlusion.
-        if (scene.fogDensity > 0) {
-          canvas.saveLayer(null, Paint());
-          _paintTextured(
-            canvas,
-            tris,
-            i,
-            i + 1,
-            cache.imageFor(tris[i].texture!)!,
-            paint,
-          );
-          final t = tris[i++];
-          final positions = Float32List.fromList([
-            t.a.dx,
-            t.a.dy,
-            t.b.dx,
-            t.b.dy,
-            t.c.dx,
-            t.c.dy,
-          ]);
-          final colors = Int32List.fromList([
-            scene.fogColor.withValues(alpha: t.fogA).toARGB32(),
-            scene.fogColor.withValues(alpha: t.fogB).toARGB32(),
-            scene.fogColor.withValues(alpha: t.fogC).toARGB32(),
-          ]);
-          canvas.drawVertices(
-            ui.Vertices.raw(ui.VertexMode.triangles, positions, colors: colors),
-            BlendMode.modulate,
-            paint
-              ..color = Colors.white
-              ..blendMode = BlendMode.srcATop,
-          );
-          canvas.restore();
-          paint.blendMode = BlendMode.srcOver;
-          continue;
-        }
         final tex = tris[i].texture;
         final wrapX = tris[i].wrapX, wrapY = tris[i].wrapY;
         while (i < tris.length &&
@@ -510,7 +513,17 @@ class Scene3DPainter extends CustomPainter {
             tris[i].wrapY == wrapY) {
           i++;
         }
-        _paintTextured(canvas, tris, start, i, cache.imageFor(tex!)!, paint);
+        final img = cache.imageFor(tex!)!;
+        if (scene.fogDensity <= 0) {
+          _paintTextured(canvas, tris, start, i, img, paint);
+          continue;
+        }
+        // NEBLINA SOBRE A IMAGEM, em fatias do lote: ver _paintFog.
+        for (var de = start; de < i; de += _fatiaDaNeblina) {
+          final ate = math.min(i, de + _fatiaDaNeblina);
+          _paintTextured(canvas, tris, de, ate, img, paint);
+          _paintFog(canvas, tris, de, ate, paint);
+        }
         continue;
       }
       final color = tris[i].color;
@@ -546,7 +559,7 @@ class Scene3DPainter extends CustomPainter {
       // denuncia um render. Contornar o mesmo lote com um traco fino da
       // MESMA cor, esse sim suavizado, cobre o degrau — e de quebra
       // fecha as costuras de meio pixel entre triangulos vizinhos.
-      if (scene.msaa && !smooth) {
+      if (contornar && !smooth) {
         final contorno = Path();
         for (var k = 0; k < count; k++) {
           final t = tris[start + k];
@@ -567,6 +580,82 @@ class Scene3DPainter extends CustomPainter {
         );
       }
     }
+  }
+
+  /// QUANTAS FACES COM IMAGEM entram por fatia quando ha neblina.
+  ///
+  /// A neblina de uma face com imagem e um segundo desenho por cima dela
+  /// (a cor do vertice multiplica a textura; nao da para misturar a
+  /// neblina nela). Um segundo desenho do LOTE INTEIRO pintaria a
+  /// neblina de uma face de tras por cima de uma face da frente — e a
+  /// diferenca entre as duas pode ser grande num objeto fundo. Um
+  /// segundo desenho POR FACE seria certo, mas sao duas chamadas por
+  /// triangulo. A fatia e o meio: as faces vem ordenadas por
+  /// profundidade, entao 64 vizinhas tem profundidade quase igual, e a
+  /// neblina de uma sobre a outra e a mesma a olho.
+  static const int _fatiaDaNeblina = 64;
+
+  /// ATE QUANTAS FACES o contorno suavizado vale a pena.
+  ///
+  /// O contorno e um caminho com um subcaminho fechado por triangulo,
+  /// tracado com junta redonda. Cada junta vira dezenas de vertices na
+  /// tesselacao; num modelo importado de cem mil faces isso e milhoes de
+  /// vertices POR QUADRO so para esconder o degrau da silhueta — que,
+  /// nessa densidade, ninguem ve. Acima do teto o contorno sai; abaixo
+  /// dele (todo elemento 3D primitivo, todo modelo leve) continua.
+  static const int _tetoDoContorno = 4000;
+
+  /// A NEBLINA das faces com imagem: o mesmo trecho do lote, pintado de
+  /// novo com a cor da neblina e o alfa de cada vertice, por cima.
+  ///
+  /// O que NAO pode e o que havia aqui antes: um saveLayer sem limites
+  /// POR TRIANGULO, para a neblina cair so nos pixels daquela face. Cada
+  /// saveLayer e um alvo de render do tamanho do palco, mais um passe de
+  /// GPU e uma composicao; com um modelo de alguns milhares de faces com
+  /// imagem eram milhares de passes por quadro, e o iPhone reiniciava —
+  /// o driver da GPU desiste e o sistema cai junto.
+  ///
+  /// Sem camada, a neblina entra com srcATop NO CANVAS: so pinta onde ja
+  /// ha pixel e mantem o alfa que estava la. Sobre fundo transparente e
+  /// exatamente o resultado da camada (o alfa da textura sobrevive). A
+  /// unica diferenca e sobre fundo opaco, nos texels transparentes de um
+  /// recorte: ali a neblina desta face cai no que esta atras — que esta
+  /// mais longe e ja e mais enevoado, entao a olho e a mesma cor. E esse
+  /// e o preco certo.
+  void _paintFog(
+    Canvas canvas,
+    List<RenderTri> tris,
+    int start,
+    int end,
+    Paint paint,
+  ) {
+    final count = end - start;
+    if (count <= 0) return;
+    final positions = Float32List(count * 6);
+    final colors = Int32List(count * 3);
+    final fog = scene.fogColor;
+    for (var k = 0; k < count; k++) {
+      final t = tris[start + k];
+      positions[k * 6] = t.a.dx;
+      positions[k * 6 + 1] = t.a.dy;
+      positions[k * 6 + 2] = t.b.dx;
+      positions[k * 6 + 3] = t.b.dy;
+      positions[k * 6 + 4] = t.c.dx;
+      positions[k * 6 + 5] = t.c.dy;
+      colors[k * 3] = fog.withValues(alpha: t.fogA).toARGB32();
+      colors[k * 3 + 1] = fog.withValues(alpha: t.fogB).toARGB32();
+      colors[k * 3 + 2] = fog.withValues(alpha: t.fogC).toARGB32();
+    }
+    paint
+      ..shader = null
+      ..color = const Color(0xFFFFFFFF)
+      ..blendMode = BlendMode.srcATop;
+    canvas.drawVertices(
+      ui.Vertices.raw(ui.VertexMode.triangles, positions, colors: colors),
+      BlendMode.modulate,
+      paint,
+    );
+    paint.blendMode = BlendMode.srcOver;
   }
 
   /// FACES COM IMAGEM: a imagem entra como shader e a luz como cor por
