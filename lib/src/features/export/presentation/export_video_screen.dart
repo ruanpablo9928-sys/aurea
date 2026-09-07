@@ -106,7 +106,9 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   }
 
   Future<void> _rodar() async {
-    final project = ref.read(editorControllerProvider);
+    // O projeto completo (dobrando o que esta aberto dentro de grupos) e
+    // sem as camadas de olho fechado.
+    final project = ref.read(editorControllerProvider.notifier).projetoParaExportar;
     // Os mesmos envelopes que o preview usou: o arquivo tem de sair com
     // o abaixamento que a pessoa acabou de ouvir, nao com um recalculado.
     final engine = ExportEngine(

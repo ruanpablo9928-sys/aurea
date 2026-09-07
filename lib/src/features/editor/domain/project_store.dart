@@ -2423,6 +2423,7 @@ Map<String, dynamic> _meta(LayerMeta m) => {
   if (m.solo) 'solo': true,
   if (m.shy) 'shy': true,
   if (m.locked) 'lock': true,
+  if (m.hidden) 'hide': true,
   if (m.folder != null) 'folder': m.folder,
   if (!m.styles.isEmpty) 'styles': _styles(m.styles),
   if (m.textBox != null)
@@ -2487,6 +2488,7 @@ LayerMeta _asMeta(Map<String, dynamic> m) => LayerMeta(
   solo: m['solo'] as bool? ?? false,
   shy: m['shy'] as bool? ?? false,
   locked: m['lock'] as bool? ?? false,
+  hidden: m['hide'] as bool? ?? false,
   folder: m['folder'] as String?,
   styles: m['styles'] == null
       ? const LayerStyles()

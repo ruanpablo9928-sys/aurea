@@ -884,6 +884,7 @@ class LayerMeta {
     this.solo = false,
     this.shy = false,
     this.locked = false,
+    this.hidden = false,
     this.folder,
     this.styles = const LayerStyles(),
     this.textBox,
@@ -900,6 +901,11 @@ class LayerMeta {
   final bool solo;
   final bool shy;
   final bool locked;
+
+  /// OLHO FECHADO na timeline: a camada some do preview e da exportacao,
+  /// mas continua no projeto (Fase 2 do redesign). Diferente de solo
+  /// (ajuda de trabalho, so no preview) e de timida (some da lista).
+  final bool hidden;
   final String? folder;
   final LayerStyles styles;
   final TextBoxSpec? textBox;
@@ -925,6 +931,7 @@ class LayerMeta {
       !solo &&
       !shy &&
       !locked &&
+      !hidden &&
       folder == null &&
       styles.isEmpty &&
       textBox == null &&
@@ -941,6 +948,7 @@ class LayerMeta {
     bool? solo,
     bool? shy,
     bool? locked,
+    bool? hidden,
     String? folder,
     LayerStyles? styles,
     TextBoxSpec? textBox,
@@ -962,6 +970,7 @@ class LayerMeta {
       solo: solo ?? this.solo,
       shy: shy ?? this.shy,
       locked: locked ?? this.locked,
+      hidden: hidden ?? this.hidden,
       folder: folder ?? this.folder,
       styles: styles ?? this.styles,
       textBox: textBox ?? this.textBox,

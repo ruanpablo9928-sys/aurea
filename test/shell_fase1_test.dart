@@ -3,7 +3,6 @@ import 'package:aurea/src/features/editor/application/ui/editor_layout.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
-import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:aurea/src/features/editor/presentation/shell/transport_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

@@ -151,6 +151,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ref.read(selectedLayerProvider.notifier).state = null;
           return;
         }
+        // Dentro de um grupo, Voltar sai do grupo (um nivel).
+        if (ref.read(editorControllerProvider.notifier).dentroDeGrupo) {
+          ref.read(editorControllerProvider.notifier).exitGroup();
+          return;
+        }
         // A miniatura do projeto para a tela inicial: capturada AGORA,
         // com o palco ainda vivo; a escrita segue em segundo plano.
         ThumbnailService.instance.capture(
@@ -170,7 +175,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         s.previewExpanded ||
         s.timelineExpanded ||
         ref.read(selectedLayerProvider) != null ||
-        ref.read(multiSelectProvider).isNotEmpty;
+        ref.read(multiSelectProvider).isNotEmpty ||
+        ref.read(editorControllerProvider.notifier).dentroDeGrupo;
   }
 
   String get _backLabel => _temContexto ? 'Voltar' : 'Projetos';
@@ -595,7 +601,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         RecentSheets.instance.clear();
         closeActiveParamSheet(context);
       }
-      ref.read(projectsControllerProvider.notifier).upsert(updated);
+      // Dentro de um grupo o estado e o grupo; o que se salva e o todo.
+      ref
+          .read(projectsControllerProvider.notifier)
+          .upsert(ref.read(editorControllerProvider.notifier).projetoCompleto);
       _syncVideos();
     });
 
@@ -695,7 +704,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         s.previewExpanded ||
         s.timelineExpanded ||
         selectedId != null ||
-        multi.isNotEmpty;
+        multi.isNotEmpty ||
+        ref.read(editorControllerProvider.notifier).dentroDeGrupo;
 
     // O CONTEUDO DA ZONA E, pela selecao.
     final Widget conteudo;
@@ -807,6 +817,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                 _onTapLayer(l);
                               },
                               onScrub: _videos.scrub,
+                              onExpand: _session.toggleTimelineExpanded,
+                              expanded: s.timelineExpanded,
                               activeTimesUs: activeTimesUs,
                               onForeignKeyframe: panel == null
                                   ? null

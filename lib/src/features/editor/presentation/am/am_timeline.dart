@@ -14,6 +14,8 @@ import '../../domain/cut_ops.dart';
 import '../../domain/video_project.dart' as proj;
 import '../../application/media_preview_service.dart';
 import '../../application/proxy_service.dart';
+import '../../application/ui/pro_mode.dart';
+import '../../../../core/storage/prefs.dart';
 import 'am_colors.dart';
 import 'layer_look.dart';
 import 'clip_preview_painters.dart';
@@ -32,7 +34,56 @@ const double kAmBarHeight = 30;
 ///
 /// Desligada: cada clipe tem posicao livre, e excluir deixa o buraco.
 /// E o que se quer quando outra trilha precisa continuar no mesmo lugar.
-final magneticProvider = StateProvider<bool>((ref) => true);
+final magneticProvider = StateProvider<bool>((ref) {
+  try {
+    return ref.read(sharedPreferencesProvider).getBool(kTimelineImaPref) ??
+        true;
+  } catch (_) {
+    return true;
+  }
+});
+
+const kTimelineImaPref = 'timeline.ima';
+
+/// Liga/desliga o ima pela regua, e lembra.
+void alternarIma(WidgetRef ref) {
+  final v = !ref.read(magneticProvider);
+  ref.read(magneticProvider.notifier).state = v;
+  try {
+    ref.read(sharedPreferencesProvider).setBool(kTimelineImaPref, v);
+  } catch (_) {}
+}
+
+/// EMPACOTAMENTO VISUAL (decisao Q8): pedacos do MESMO arquivo de video
+/// ou audio, vizinhos na pilha e sem sobreposicao no tempo, desenham na
+/// mesma linha. O modelo continua uma camada por pedaco.
+List<List<Layer>> empacotarTrilhas(List<Layer> layers) {
+  final out = <List<Layer>>[];
+  for (final l in layers) {
+    final fonte = _fonteDe(l);
+    if (fonte != null && out.isNotEmpty) {
+      final t = out.last;
+      final cabe = t.every(
+        (o) =>
+            o.runtimeType == l.runtimeType &&
+            _fonteDe(o) == fonte &&
+            (o.endTime <= l.startTime || l.endTime <= o.startTime),
+      );
+      if (cabe) {
+        t.add(l);
+        continue;
+      }
+    }
+    out.add([l]);
+  }
+  return out;
+}
+
+String? _fonteDe(Layer l) => switch (l) {
+  VideoLayer v => v.sourcePath,
+  AudioLayer a => a.sourcePath,
+  _ => null,
+};
 
 /// Timeline do editor: regua com relogio central, playhead fixo no centro,
 /// pilulas de camada (olho + miniatura) fixas a esquerda e barras teal.
@@ -50,10 +101,16 @@ class AmTimeline extends ConsumerStatefulWidget {
     this.activeTimesUs,
     this.onScrub,
     this.onForeignKeyframe,
+    this.onExpand,
+    this.expanded = false,
   });
 
   final PlaybackController playback;
   final String? singleLayerId;
+
+  /// Botao no canto direito da regua: a timeline toma a tela (Fase 2).
+  final VoidCallback? onExpand;
+  final bool expanded;
   final Color playheadColor;
   final double height;
   final void Function(Layer layer)? onTapLayer;
@@ -150,6 +207,87 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
 
   double _timeToPx(Duration t) => t.inMicroseconds / 1e6 * _pps;
 
+  /// BUSCA (Pro): nome, tipo ou rotulo; tocar leva o cabecote ate a
+  /// camada e a seleciona.
+  Future<void> _buscarCamada(BuildContext context) async {
+    final controller = ref.read(editorControllerProvider.notifier);
+    var consulta = '';
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AmColors.panel,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final achadas = controller.searchLayers(consulta);
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: SafeArea(
+              child: SizedBox(
+                height: 360,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                      child: CupertinoSearchTextField(
+                        key: const ValueKey('busca-campo'),
+                        autofocus: true,
+                        placeholder: 'Nome, tipo ou rotulo',
+                        style: const TextStyle(color: AmColors.text),
+                        onChanged: (v) => setSheetState(() => consulta = v),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: achadas.length,
+                        itemBuilder: (_, i) {
+                          final l = achadas[i];
+                          return ListTile(
+                            key: ValueKey('busca-camada-${l.id}'),
+                            dense: true,
+                            leading: Icon(
+                              layerTypeIcon(l),
+                              size: 18,
+                              color: layerTypeColor(l),
+                            ),
+                            title: Text(
+                              l.name,
+                              style: const TextStyle(color: AmColors.text),
+                            ),
+                            subtitle: Text(
+                              formatTimecode(
+                                l.startTime,
+                                ref.read(editorControllerProvider).fps,
+                              ),
+                              style: const TextStyle(
+                                color: AmColors.muted,
+                                fontSize: 11,
+                              ),
+                            ),
+                            onTap: () {
+                              ref.read(multiSelectProvider.notifier).state =
+                                  const {};
+                              ref.read(selectedLayerProvider.notifier).state =
+                                  l.id;
+                              widget.playback.pause();
+                              widget.playback.seek(l.startTime);
+                              Navigator.of(sheetContext).pop();
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   /// Onde o dedo tocou na regua, para o segundo toque saber o lugar.
   double _xDoDuploToque = 0;
 
@@ -226,6 +364,12 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
           layer.matteSourceId!,
     };
     final totalWidth = _timeToPx(project.duration);
+    final trilhas = empacotarTrilhas(layers);
+    final selecionadas = <String>{?selectedId, ...multi};
+    final controller = ref.read(editorControllerProvider.notifier);
+    final caminho = controller.caminhoDoGrupo;
+    final ima = ref.watch(magneticProvider);
+    final pro = ref.watch(proModeProvider);
     final selected = selectedId == null ? null : project.layerById(selectedId);
     final keyCount = selected?.keyframeTimes.length ?? 0;
     if (_revealedSelection != selectedId ||
@@ -234,7 +378,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       _revealedSelection = selectedId;
       _revealedKeyCount = keyCount;
       _revealedSingleLayer = widget.singleLayerId;
-      final index = layers.indexWhere((l) => l.id == selectedId);
+      final index = trilhas.indexWhere(
+        (t) => t.any((l) => l.id == selectedId),
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             !_rowsScroll.hasClients ||
@@ -386,18 +532,15 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                 controller: _rowsScroll,
                                 padding: EdgeInsets.zero,
                                 itemExtent: kAmRowHeight,
-                                itemCount: layers.length,
+                                itemCount: trilhas.length,
                                 itemBuilder: (context, index) {
-                                  final layer = layers[index];
+                                  final trilha = trilhas[index];
                                   return _AmLayerRow(
-                                    key: ValueKey(layer.id),
-                                    layer: layer,
+                                    key: ValueKey(trilha.first.id),
+                                    trilha: trilha,
                                     pps: _pps,
                                     totalWidth: totalWidth,
-                                    selected:
-                                        layer.id == selectedId ||
-                                        multi.contains(layer.id) ||
-                                        widget.singleLayerId != null,
+                                    selectedIds: selecionadas,
                                     compact: widget.singleLayerId != null,
                                     playback: widget.playback,
                                     onTapLayer: widget.onTapLayer,
@@ -471,7 +614,84 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                   ),
                 // Dividir e Congelar moram nas acoes rapidas da camada (E2);
                 // nada flutua sobre as linhas da timeline (Fase 2).
-                // Pilulas fixas a esquerda (olho + miniatura), uma por linha.
+                // CANTO ESQUERDO DA REGUA: o ima (encaixe, com estado a
+                // vista) e, no Pro, a busca de camadas.
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  height: 22,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _BotaoDaRegua(
+                        key: const ValueKey('timeline-ima'),
+                        tooltip: ima ? 'Encaixe ligado' : 'Encaixe desligado',
+                        ativo: ima,
+                        onTap: () => alternarIma(ref),
+                        child: CustomPaint(
+                          size: const Size(14, 14),
+                          painter: _ImaPainter(
+                            ima ? AmColors.action : AmColors.muted,
+                          ),
+                        ),
+                      ),
+                      if (pro)
+                        _BotaoDaRegua(
+                          key: const ValueKey('timeline-buscar'),
+                          tooltip: 'Buscar camada',
+                          onTap: () => _buscarCamada(context),
+                          child: const Icon(
+                            CupertinoIcons.search,
+                            size: 14,
+                            color: AmColors.text,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // CANTO DIREITO: expandir a timeline (preview vira janela).
+                if (widget.onExpand != null)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    height: 22,
+                    child: _BotaoDaRegua(
+                      key: const ValueKey('timeline-expandir'),
+                      tooltip: widget.expanded
+                          ? 'Recolher timeline'
+                          : 'Expandir timeline',
+                      ativo: widget.expanded,
+                      onTap: widget.onExpand!,
+                      child: Icon(
+                        widget.expanded
+                            ? CupertinoIcons.arrow_down_right_arrow_up_left
+                            : CupertinoIcons.arrow_up_left_arrow_down_right,
+                        size: 14,
+                        color: widget.expanded ? AmColors.action : AmColors.text,
+                      ),
+                    ),
+                  ),
+                // CAMINHO DO GRUPO: Projeto › Grupo. Tocar em Projeto sai.
+                if (caminho.isNotEmpty)
+                  Positioned(
+                    left: 4,
+                    top: 25,
+                    height: 24,
+                    width: constraints.maxWidth / 2 - 56,
+                    child: _Breadcrumb(
+                      key: const ValueKey('timeline-breadcrumb'),
+                      caminho: caminho,
+                      onNivel: (nivel) {
+                        // nivel 0 = Projeto; n = o grupo n (1-based).
+                        var sair = caminho.length - nivel;
+                        while (sair-- > 0) {
+                          controller.exitGroup();
+                        }
+                      },
+                    ),
+                  ),
+                // COLUNA ESQUERDA FIXA: olho, cadeado, keyframe — uma por
+                // linha (Fase 2). A miniatura mora dentro da barra.
                 Positioned(
                   left: 0,
                   top: 50,
@@ -481,14 +701,14 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                     controller: _pillsScroll,
                     padding: EdgeInsets.zero,
                     itemExtent: kAmRowHeight,
-                    itemCount: layers.length,
+                    itemCount: trilhas.length,
                     itemBuilder: (context, index) {
-                      final layer = layers[index];
-                      return Align(
-                        alignment: Alignment.centerLeft,
-                        child: _AmLayerPill(
-                          layer: layer,
-                          isMatteSource: matteSourceIds.contains(layer.id),
+                      final trilha = trilhas[index];
+                      return _ControlesDaTrilha(
+                        trilha: trilha,
+                        playback: widget.playback,
+                        isMatteSource: trilha.any(
+                          (l) => matteSourceIds.contains(l.id),
                         ),
                       );
                     },
@@ -503,82 +723,228 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 }
 
-/// Pilula fixa: olho + miniatura da camada.
-class _AmLayerPill extends StatelessWidget {
-  const _AmLayerPill({required this.layer, required this.isMatteSource});
+/// COLUNA ESQUERDA DE UMA LINHA: olho · cadeado · ◆ (Fase 2).
+///
+/// Numa linha empacotada (pedacos do mesmo clipe), o olho e o cadeado
+/// valem para todos os pedacos — sao o mesmo clipe para quem edita.
+class _ControlesDaTrilha extends ConsumerWidget {
+  const _ControlesDaTrilha({
+    required this.trilha,
+    required this.playback,
+    required this.isMatteSource,
+  });
 
-  final Layer layer;
+  final List<Layer> trilha;
+  final PlaybackController playback;
   final bool isMatteSource;
 
-  Color get _thumbColor => switch (layer) {
-    ShapeLayer l => l.primaryColor,
-    TextLayer _ => Colors.white,
-    VideoLayer _ => const Color(0xFF3D6BB3),
-    ImageLayer _ => const Color(0xFF8A5BA0),
-    AudioLayer _ => const Color(0xFF2E8B62),
-    CaptionLayer _ => const Color(0xFFE8B93E),
-    GroupLayer _ => const Color(0xFF6B7A94),
-    NullLayer _ => const Color(0xFF9F8CFF),
-    ParticlesLayer l => l.color,
-    Element3DLayer l => l.color,
-    AdjustmentLayer _ => const Color(0xFF56D1C4),
-    Scene3DLayer _ => const Color(0xFF35C4E7),
-  };
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: kAmRowHeight,
-      padding: const EdgeInsets.only(bottom: 8),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(editorControllerProvider.notifier);
+    final ids = [for (final l in trilha) l.id];
+    final principal = trilha.first;
+    final (oculta, bloqueada) = ref.watch(
+      editorControllerProvider.select(
+        (p) => (
+          ids.every((id) => p.metaOf(id).hidden),
+          ids.every((id) => p.metaOf(id).locked),
+        ),
+      ),
+    );
+    final comKeyframe = trilha.where((l) => l.hasAnimation).firstOrNull;
+
+    Widget botao({
+      required String key,
+      required IconData icon,
+      required Color cor,
+      required String tooltip,
+      required VoidCallback onTap,
+    }) => Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        key: ValueKey(key),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 30,
+          height: kAmRowHeight,
+          child: Icon(icon, size: 16, color: cor),
+        ),
+      ),
+    );
+
+    return Semantics(
+      label: isMatteSource ? 'Fonte de recorte por camada' : null,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 4, 12, 4),
-        decoration: const BoxDecoration(
+        height: kAmRowHeight,
+        width: 92,
+        decoration: BoxDecoration(
           color: AmColors.panel,
-          borderRadius: BorderRadius.only(
-            topRight: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-          ),
+          border: isMatteSource
+              ? const Border(left: BorderSide(color: AmColors.accent, width: 3))
+              : null,
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(CupertinoIcons.eye, size: 18, color: AmColors.text),
-            const SizedBox(width: 8),
-            if (isMatteSource) ...[
-              Semantics(
-                label: 'Fonte de recorte por camada',
-                child: const Icon(
-                  CupertinoIcons.scope,
-                  size: 15,
-                  color: AmColors.accent,
-                ),
-              ),
-              const SizedBox(width: 7),
-            ],
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: _thumbColor,
-                borderRadius: BorderRadius.circular(
-                  layer is ShapeLayer ? 13 : 5,
-                ),
-              ),
-              child: layer is TextLayer
-                  ? const Center(
-                      child: Text(
-                        'T',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
-                  : null,
+            botao(
+              key: 'olho-${principal.id}',
+              icon: oculta ? CupertinoIcons.eye_slash : CupertinoIcons.eye,
+              cor: oculta ? AmColors.muted : AmColors.text,
+              tooltip: oculta ? 'Mostrar camada' : 'Ocultar camada',
+              onTap: () => controller.runAsOneUndo(() {
+                for (final id in ids) {
+                  controller.toggleHidden(id);
+                }
+              }),
+            ),
+            botao(
+              key: 'cadeado-${principal.id}',
+              icon: bloqueada ? CupertinoIcons.lock_fill : CupertinoIcons.lock_open,
+              cor: bloqueada ? AmColors.action : AmColors.muted,
+              tooltip: bloqueada ? 'Desbloquear camada' : 'Bloquear camada',
+              onTap: () => controller.runAsOneUndo(() {
+                for (final id in ids) {
+                  controller.toggleLocked(id);
+                }
+              }),
+            ),
+            botao(
+              key: 'kf-${principal.id}',
+              icon: comKeyframe != null
+                  ? CupertinoIcons.rhombus_fill
+                  : CupertinoIcons.rhombus,
+              cor: comKeyframe != null
+                  ? AmColors.accent
+                  : AmColors.muted.withValues(alpha: 0.45),
+              tooltip: comKeyframe != null
+                  ? 'Ir ao primeiro keyframe'
+                  : 'Sem keyframes',
+              onTap: () {
+                final alvo = comKeyframe ?? principal;
+                ref.read(multiSelectProvider.notifier).state = const {};
+                ref.read(selectedLayerProvider.notifier).state = alvo.id;
+                final times = alvo.keyframeTimes;
+                if (times.isNotEmpty) {
+                  playback.pause();
+                  playback.seek(alvo.startTime + times.first);
+                }
+              },
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Botaozinho da regua (ima, busca, expandir).
+class _BotaoDaRegua extends StatelessWidget {
+  const _BotaoDaRegua({
+    super.key,
+    required this.tooltip,
+    required this.onTap,
+    required this.child,
+    this.ativo = false,
+  });
+
+  final String tooltip;
+  final VoidCallback onTap;
+  final Widget child;
+  final bool ativo;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 22,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: ativo ? AmColors.actionDim : AmColors.bg.withValues(alpha: .85),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+/// Um ima em ferradura: o encaixe.
+class _ImaPainter extends CustomPainter {
+  const _ImaPainter(this.cor);
+
+  final Color cor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = cor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6
+      ..strokeCap = StrokeCap.butt;
+    final r = size.width * 0.36;
+    final c = Offset(size.width / 2, size.height * 0.42);
+    canvas.drawArc(Rect.fromCircle(center: c, radius: r), 3.14159, 3.14159, false, p);
+    canvas.drawLine(Offset(c.dx - r, c.dy), Offset(c.dx - r, size.height - 1), p);
+    canvas.drawLine(Offset(c.dx + r, c.dy), Offset(c.dx + r, size.height - 1), p);
+  }
+
+  @override
+  bool shouldRepaint(_ImaPainter old) => old.cor != cor;
+}
+
+/// Projeto › Grupo › Subgrupo. Cada nivel e tocavel; o ultimo e o atual.
+class _Breadcrumb extends StatelessWidget {
+  const _Breadcrumb({super.key, required this.caminho, required this.onNivel});
+
+  final List<String> caminho;
+  final ValueChanged<int> onNivel;
+
+  @override
+  Widget build(BuildContext context) {
+    final nomes = ['Projeto', ...caminho];
+    return Container(
+      decoration: BoxDecoration(
+        color: AmColors.bg.withValues(alpha: .9),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < nomes.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 3),
+                child: Text(
+                  '›',
+                  style: TextStyle(color: AmColors.muted, fontSize: 12),
+                ),
+              ),
+            Flexible(
+              child: GestureDetector(
+                key: ValueKey('timeline-breadcrumb-$i'),
+                behavior: HitTestBehavior.opaque,
+                onTap: i == nomes.length - 1 ? null : () => onNivel(i),
+                child: Text(
+                  nomes[i],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: i == nomes.length - 1
+                        ? AmColors.text
+                        : AmColors.selection,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -847,8 +1213,78 @@ class _AmRulerPainter extends CustomPainter {
   bool shouldRepaint(_AmRulerPainter old) => old.pps != pps;
 }
 
-class _AmLayerRow extends ConsumerStatefulWidget {
+/// UMA LINHA DA TIMELINE: uma trilha com um ou mais pedacos (Fase 2).
+///
+/// O toque no vazio da linha tira a selecao — e com ela fecha as
+/// ferramentas da camada e qualquer painel aberto ("clicar na timeline
+/// fecha essa aba").
+class _AmLayerRow extends ConsumerWidget {
   const _AmLayerRow({
+    super.key,
+    required this.trilha,
+    required this.pps,
+    required this.totalWidth,
+    required this.selectedIds,
+    required this.compact,
+    required this.playback,
+    required this.onEditStart,
+    required this.onEditEnd,
+    this.onTapLayer,
+    this.activeTimesUs,
+    this.onForeignKeyframe,
+  });
+
+  final List<Layer> trilha;
+  final double pps;
+  final double totalWidth;
+  final Set<String> selectedIds;
+  final bool compact;
+  final PlaybackController playback;
+  final VoidCallback onEditStart;
+  final VoidCallback onEditEnd;
+  final void Function(Layer layer)? onTapLayer;
+  final Set<int>? activeTimesUs;
+  final void Function(Duration kfTime)? onForeignKeyframe;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SizedBox(
+    height: kAmRowHeight,
+    width: totalWidth,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              ref.read(multiSelectProvider.notifier).state = const {};
+              ref.read(selectedLayerProvider.notifier).state = null;
+            },
+          ),
+        ),
+        for (final l in trilha)
+          _AmBar(
+            key: ValueKey('bar-${l.id}'),
+            layer: l,
+            pps: pps,
+            totalWidth: totalWidth,
+            selected: compact || selectedIds.contains(l.id),
+            compact: compact,
+            playback: playback,
+            onEditStart: onEditStart,
+            onEditEnd: onEditEnd,
+            onTapLayer: onTapLayer,
+            activeTimesUs: activeTimesUs,
+            onForeignKeyframe: onForeignKeyframe,
+          ),
+      ],
+    ),
+  );
+}
+
+/// A BARRA de um pedaco: gestos, alcas, transicao, keyframes.
+class _AmBar extends ConsumerStatefulWidget {
+  const _AmBar({
     super.key,
     required this.layer,
     required this.pps,
@@ -882,10 +1318,24 @@ class _AmLayerRow extends ConsumerStatefulWidget {
   final void Function(Duration kfTime)? onForeignKeyframe;
 
   @override
-  ConsumerState<_AmLayerRow> createState() => _AmLayerRowState();
+  ConsumerState<_AmBar> createState() => _AmBarState();
 }
 
-class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
+class _AmBarState extends ConsumerState<_AmBar> {
+  /// Toque longo em andamento: mover reordena; soltar sem mover alterna
+  /// a selecao multipla (o gesto antigo).
+  double _ultimoDyLongo = 0;
+  bool _moveuNoToqueLongo = false;
+
+  void _alternarNaSelecaoMultipla() {
+    final set = {...ref.read(multiSelectProvider)};
+    final primary = ref.read(selectedLayerProvider);
+    if (primary != null) set.add(primary);
+    if (!set.add(layer.id)) set.remove(layer.id);
+    ref.read(multiSelectProvider.notifier).state = set;
+    HapticFeedback.selectionClick();
+  }
+
   /// Quanto o dedo ja subiu ou desceu no arrasto vertical da barra
   /// selecionada, em pixels; a cada linha inteira a camada troca de
   /// degrau na pilha.
@@ -942,7 +1392,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
   }
 
   @override
-  void didUpdateWidget(_AmLayerRow old) {
+  void didUpdateWidget(_AmBar old) {
     super.didUpdateWidget(old);
     if (_arrastandoBarra && !(selected && !compact)) _terminarArrasto();
   }
@@ -1055,25 +1505,18 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
     final controller = ref.read(editorControllerProvider.notifier);
     final left = layer.startTime.inMicroseconds / 1e6 * pps;
     final width = (layer.duration.inMicroseconds / 1e6 * pps).clamp(40.0, 1e6);
+    final meta = ref.watch(
+      editorControllerProvider.select((p) => p.metaOf(layer.id)),
+    );
+    final hidden = meta.hidden;
+    final locked = meta.locked;
+    // Bloqueada: nem move, nem apara, nem reordena pelo arrasto.
+    final podeMover = selected && !compact && !locked;
 
-    return SizedBox(
-      height: kAmRowHeight,
-      width: totalWidth,
+    return Positioned.fill(
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // TOCAR NO VAZIO DA TIMELINE TIRA A SELECAO — e com ela fecha
-          // as ferramentas da camada e qualquer painel aberto. E a saida
-          // que o beta pediu: "clicar na timeline fecha essa aba".
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () {
-                ref.read(multiSelectProvider.notifier).state = const {};
-                ref.read(selectedLayerProvider.notifier).state = null;
-              },
-            ),
-          ),
           Positioned(
             left: left,
             top: 0,
@@ -1097,34 +1540,57 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                   ref.read(selectedLayerProvider.notifier).state = layer.id;
                 }
               },
-              // Toque LONGO alterna a camada na selecao multipla (a
-              // barra de acoes agrupa/duplica/exclui o conjunto).
-              onLongPress: compact
+              // TOQUE DUPLO num grupo entra nele (Fase 2). So em grupos:
+              // o reconhecedor de toque duplo atrasa o toque simples.
+              onDoubleTap: layer is GroupLayer && !compact
+                  ? () => controller.enterGroup(layer.id)
+                  : null,
+              // TOQUE LONGO + ARRASTAR reordena (um degrau por linha);
+              // toque longo SEM mover alterna a camada na selecao
+              // multipla (a barra de acoes agrupa/duplica/exclui o
+              // conjunto).
+              onLongPressStart: compact
                   ? null
-                  : () {
-                      final set = {...ref.read(multiSelectProvider)};
-                      final primary = ref.read(selectedLayerProvider);
-                      if (primary != null) set.add(primary);
-                      if (!set.add(layer.id)) set.remove(layer.id);
-                      ref.read(multiSelectProvider.notifier).state = set;
-                      HapticFeedback.selectionClick();
+                  : (_) {
+                      _moveuNoToqueLongo = false;
+                      _ultimoDyLongo = 0;
+                      _acumuladoVertical = 0;
+                      HapticFeedback.mediumImpact();
+                    },
+              onLongPressMoveUpdate: compact
+                  ? null
+                  : (d) {
+                      final dy = d.offsetFromOrigin.dy;
+                      if (!_moveuNoToqueLongo &&
+                          d.offsetFromOrigin.distance < 8) {
+                        return;
+                      }
+                      _moveuNoToqueLongo = true;
+                      if (locked) return;
+                      _reordenarPorArrasto(dy - _ultimoDyLongo);
+                      _ultimoDyLongo = dy;
+                    },
+              onLongPressEnd: compact
+                  ? null
+                  : (_) {
+                      if (!_moveuNoToqueLongo) _alternarNaSelecaoMultipla();
                     },
               // ARRASTO VERTICAL na barra selecionada: sobe ou desce a
               // camada na pilha, um degrau por linha.
-              onVerticalDragStart: selected && !compact
+              onVerticalDragStart: podeMover
                   ? (_) => _acumuladoVertical = 0
                   : null,
-              onVerticalDragUpdate: selected && !compact
+              onVerticalDragUpdate: podeMover
                   ? (d) => _reordenarPorArrasto(d.delta.dy)
                   : null,
-              onHorizontalDragStart: selected && !compact
+              onHorizontalDragStart: podeMover
                   ? (_) {
                       _comecarArrasto();
                       _dragStart0 = layer.startTime;
                       _accumPx = 0;
                     }
                   : null,
-              onHorizontalDragUpdate: selected && !compact
+              onHorizontalDragUpdate: podeMover
                   ? (d) {
                       _accumPx += d.delta.dx;
                       final desired = _dragStart0 + _pxToDur(_accumPx);
@@ -1133,16 +1599,18 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                       controller.moveLayer(layer.id, snapped);
                     }
                   : null,
-              onHorizontalDragEnd: selected && !compact
+              onHorizontalDragEnd: podeMover
                   ? (_) => _terminarArrasto()
                   : null,
-              onHorizontalDragCancel: selected && !compact
+              onHorizontalDragCancel: podeMover
                   ? _terminarArrasto
                   : null,
               child: CustomPaint(
                 painter: _AmBarPainter(
                   selected: selected,
-                  color: layerTypeColor(layer),
+                  color: hidden
+                      ? layerTypeColor(layer).withValues(alpha: 0.35)
+                      : layerTypeColor(layer),
                   stripeColor: layerTypeStripe(layer),
                 ),
                 // FORMA DE ONDA e TIRA DE MINIATURAS dentro da barra:
@@ -1159,9 +1627,20 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                           child: Icon(
                             layerTypeIcon(layer),
                             size: 11,
-                            color: Colors.white.withValues(alpha: 0.85),
+                            color: Colors.white.withValues(
+                              alpha: hidden ? 0.45 : 0.85,
+                            ),
                           ),
                         ),
+                        if (locked)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 5),
+                            child: Icon(
+                              CupertinoIcons.lock_fill,
+                              size: 10,
+                              color: Colors.white70,
+                            ),
+                          ),
                         Flexible(
                           child: Text(
                             layer.name,
@@ -1180,6 +1659,30 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                             CupertinoIcons.rhombus,
                             size: 12,
                             color: Colors.white,
+                          ),
+                        ],
+                        // GRUPO: a contagem de filhos, e o toque duplo
+                        // entra.
+                        if (layer is GroupLayer) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            key: ValueKey('grupo-contagem-${layer.id}'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: .35),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${(layer as GroupLayer).children.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                         ],
                         const Spacer(),
@@ -1289,6 +1792,44 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
               );
             },
           ),
+          // JUNTAR a vista na juncao: dois pedacos do mesmo arquivo,
+          // encostados, voltam a ser um clipe (alem do toque longo).
+          if (podeMover && controller.hasJoinableNeighbour(layer.id))
+            Positioned(
+              left: left + width - (layer is VideoLayer ? 14 : 3) - 50,
+              top: 5,
+              width: 48,
+              height: kAmBarHeight - 10,
+              child: GestureDetector(
+                key: ValueKey('juntar-${layer.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (controller.joinWithNeighbour(layer.id)) {
+                    AureaSnack.show(
+                      context,
+                      'Pedacos juntados',
+                      actionLabel: 'Desfazer',
+                      onAction: controller.undo,
+                    );
+                  }
+                },
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AmColors.action,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Juntar',
+                    style: TextStyle(
+                      color: AmColors.onAction,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           // Cues de legenda como marcas dentro da barra (§6.5).
           if (layer is CaptionLayer)
             for (final cue in (layer as CaptionLayer).cues)
@@ -1331,7 +1872,7 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
             ),
           ],
           // Alcas de trim (com snap magnetico).
-          if (selected && !compact) ...[
+          if (podeMover) ...[
             _TrimHandle(
               left: left - 3,
               onStart: () {

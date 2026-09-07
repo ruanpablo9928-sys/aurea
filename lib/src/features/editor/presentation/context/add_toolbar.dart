@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../../../core/theme/tokens.dart';
+import '../am/layer_look.dart';
 
 /// O que cada tile do E1 pede.
 enum AddTarget {
@@ -40,15 +41,15 @@ class AddToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AureaTokens.of(context);
     final principais = <(AddTarget, IconData, String, Color)>[
-      (AddTarget.midia, CupertinoIcons.photo_on_rectangle, 'Mídia', const Color(0xFF6A52E0)),
-      (AddTarget.audio, CupertinoIcons.music_note, 'Áudio', const Color(0xFF1F8C93)),
-      (AddTarget.texto, CupertinoIcons.textformat, 'Texto', const Color(0xFFB07A16)),
-      (AddTarget.forma, CupertinoIcons.square_on_circle, 'Forma', const Color(0xFF2E9459)),
-      (AddTarget.efeito, CupertinoIcons.wand_stars, 'Efeito', const Color(0xFFB0417A)),
-      (AddTarget.icone, CupertinoIcons.smiley, 'Ícone', const Color(0xFF2E9459)),
-      (AddTarget.grupo, CupertinoIcons.folder, 'Grupo', const Color(0xFF4C5566)),
+      (AddTarget.midia, CupertinoIcons.photo_on_rectangle, 'Mídia', layerKindColor(LayerKind.video)),
+      (AddTarget.audio, CupertinoIcons.music_note, 'Áudio', layerKindColor(LayerKind.audio)),
+      (AddTarget.texto, CupertinoIcons.textformat, 'Texto', layerKindColor(LayerKind.text)),
+      (AddTarget.forma, CupertinoIcons.square_on_circle, 'Forma', layerKindColor(LayerKind.shape)),
+      (AddTarget.efeito, CupertinoIcons.wand_stars, 'Efeito', layerKindColor(LayerKind.adjustment)),
+      (AddTarget.icone, CupertinoIcons.smiley, 'Ícone', layerKindColor(LayerKind.shape)),
+      (AddTarget.grupo, CupertinoIcons.folder, 'Grupo', layerKindColor(LayerKind.group)),
       if (pro)
-        (AddTarget.objeto, CupertinoIcons.cube, 'Objeto', const Color(0xFFC06A24)),
+        (AddTarget.objeto, CupertinoIcons.cube, 'Objeto', layerKindColor(LayerKind.element3d)),
     ];
     final projeto = <(AddTarget, IconData, String)>[
       (AddTarget.legendas, CupertinoIcons.captions_bubble, 'Legendas'),

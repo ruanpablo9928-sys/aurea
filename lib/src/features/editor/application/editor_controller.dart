@@ -186,6 +186,7 @@ class EditorController extends Notifier<VideoProject> {
       ref.read(onionSkinProvider.notifier).state = 0;
     }
     state = project;
+    _grupos.clear();
     _undoStack.clear();
     _redoStack.clear();
     _visibilityBeforeIsolation.clear();
@@ -394,6 +395,135 @@ class EditorController extends Notifier<VideoProject> {
 
   void toggleLocked(String id) =>
       _updateMeta(id, (m) => m.copyWith(locked: !m.locked));
+
+  /// OLHO da timeline: esconde do preview e da exportacao.
+  void toggleHidden(String id) =>
+      _updateMeta(id, (m) => m.copyWith(hidden: !m.hidden));
+
+  bool isLocked(String id) => state.metaOf(id).locked;
+
+  // ------------------------------------------ dentro de um grupo
+
+  /// ENTRAR NUM GRUPO (Fase 2 do redesign): o grupo abre como a
+  /// composicao de trabalho — os filhos viram as camadas de cima, em
+  /// tempo local — e TODA operacao do editor funciona neles sem mudar
+  /// nada. Ao sair, os filhos voltam para dentro do grupo num passo de
+  /// desfazer so. O que era projeto (marcas, batidas, paleta) continua o
+  /// mesmo objeto por baixo.
+  final List<_QuadroDeGrupo> _grupos = [];
+
+  bool get dentroDeGrupo => _grupos.isNotEmpty;
+
+  /// O grupo aberto por ultimo (o mais fundo).
+  String? get grupoAberto => _grupos.isEmpty ? null : _grupos.last.groupId;
+
+  /// Os nomes do caminho, de fora para dentro: ['Grupo 1', 'Grupo 2'].
+  List<String> get caminhoDoGrupo => [
+    for (final q in _grupos) q.fora.layerById(q.groupId)?.name ?? 'Grupo',
+  ];
+
+  void enterGroup(String id) {
+    final g = _layer(id);
+    if (g is! GroupLayer) return;
+    _grupos.add(
+      _QuadroDeGrupo(
+        fora: state,
+        groupId: id,
+        undo: [..._undoStack],
+        redo: [..._redoStack],
+      ),
+    );
+    _undoStack.clear();
+    _redoStack.clear();
+    // A primeira edicao la dentro tem de empilhar, mesmo que o agrupar
+    // tenha sido ha menos de 450 ms.
+    _lastPush = DateTime.fromMillisecondsSinceEpoch(0);
+    ref.read(selectedLayerProvider.notifier).state = null;
+    ref.read(multiSelectProvider.notifier).state = const {};
+    // Sem _mutate: entrar nao e uma edicao.
+    state = state.copyWith(name: g.name, layers: g.children);
+  }
+
+  /// Sai do grupo mais fundo, gravando os filhos de volta.
+  void exitGroup() {
+    if (_grupos.isEmpty) return;
+    final q = _grupos.removeLast();
+    final dentro = state;
+    final fora = q.fora;
+    _undoStack
+      ..clear()
+      ..addAll(q.undo);
+    _redoStack
+      ..clear()
+      ..addAll(q.redo);
+    ref.read(multiSelectProvider.notifier).state = const {};
+    ref.read(selectedLayerProvider.notifier).state = q.groupId;
+    state = fora;
+    final g = fora.layerById(q.groupId);
+    if (g is! GroupLayer) return;
+    final mudou =
+        !identical(dentro.layers, g.children) ||
+        dentro.name != g.name ||
+        !identical(dentro.meta, fora.meta);
+    if (!mudou) return;
+    // A gravacao do grupo e um passo de desfazer proprio.
+    _lastPush = DateTime.fromMillisecondsSinceEpoch(0);
+    _mutate(_gravarGrupo(fora, q.groupId, dentro));
+  }
+
+  /// Sai de todos os grupos abertos.
+  void exitAllGroups() {
+    while (_grupos.isNotEmpty) {
+      exitGroup();
+    }
+  }
+
+  static VideoProject _gravarGrupo(
+    VideoProject fora,
+    String groupId,
+    VideoProject dentro,
+  ) {
+    final g = fora.layerById(groupId);
+    if (g is! GroupLayer) return fora;
+    final novo = g.copyLayer(name: dentro.name, children: dentro.layers);
+    // A meta dos filhos (olho, cadeado, rotulo) acompanha o grupo.
+    final ids = {for (final l in dentro.layers) l.id};
+    final meta = {
+      for (final e in fora.meta.entries)
+        if (!ids.contains(e.key)) e.key: e.value,
+      for (final e in dentro.meta.entries)
+        if (ids.contains(e.key)) e.key: e.value,
+    };
+    return fora.copyWith(
+      layers: [
+        for (final l in fora.layers)
+          if (l.id == groupId) novo else l,
+      ],
+      meta: meta,
+    );
+  }
+
+  /// O PROJETO INTEIRO, com o que esta sendo editado dentro de grupos ja
+  /// dobrado de volta — e o que se salva e o que se exporta.
+  VideoProject get projetoCompleto {
+    var p = state;
+    for (final q in _grupos.reversed) {
+      p = _gravarGrupo(q.fora, q.groupId, p);
+    }
+    return p;
+  }
+
+  /// O projeto para exportar: completo e sem as camadas de olho fechado.
+  VideoProject get projetoParaExportar {
+    final p = projetoCompleto;
+    if (!p.meta.values.any((m) => m.hidden)) return p;
+    return p.copyWith(
+      layers: [
+        for (final l in p.layers)
+          if (!p.isHidden(l.id)) l,
+      ],
+    );
+  }
 
   void setLayerFolder(String id, String? folder) =>
       _updateMeta(id, (m) => m.copyWith(folder: folder));
@@ -6157,3 +6287,19 @@ class EditorController extends Notifier<VideoProject> {
 
 final editorControllerProvider =
     NotifierProvider<EditorController, VideoProject>(EditorController.new);
+
+/// Um nivel de "dentro do grupo": o projeto de fora, o id do grupo e as
+/// pilhas de desfazer de fora, guardadas ate sair.
+class _QuadroDeGrupo {
+  const _QuadroDeGrupo({
+    required this.fora,
+    required this.groupId,
+    required this.undo,
+    required this.redo,
+  });
+
+  final VideoProject fora;
+  final String groupId;
+  final List<VideoProject> undo;
+  final List<VideoProject> redo;
+}

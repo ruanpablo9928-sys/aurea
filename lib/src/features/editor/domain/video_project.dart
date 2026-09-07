@@ -215,7 +215,11 @@ class VideoProject {
   /// renderizam.
   late final bool hasSolo = meta.values.any((m) => m.solo);
 
-  bool rendersInPreview(String layerId) => !hasSolo || metaOf(layerId).solo;
+  bool rendersInPreview(String layerId) =>
+      !metaOf(layerId).hidden && (!hasSolo || metaOf(layerId).solo);
+
+  /// Olho fechado na timeline: fora do preview e da exportacao.
+  bool isHidden(String layerId) => metaOf(layerId).hidden;
 
   factory VideoProject.empty(
     String name, {

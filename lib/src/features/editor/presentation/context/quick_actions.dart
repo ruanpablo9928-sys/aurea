@@ -142,6 +142,14 @@ List<QuickAction> quickActionsFor(
       },
     ),
     if (layer is GroupLayer) ...[
+      // ENTRAR NO GRUPO: os filhos viram a timeline, em tempo local, com
+      // o caminho Projeto › Grupo na regua (Fase 2).
+      QuickAction(
+        key: 'entrar',
+        icon: CupertinoIcons.folder_open,
+        label: 'Entrar',
+        onTap: () => controller.enterGroup(id),
+      ),
       QuickAction(
         key: 'precomp',
         icon: CupertinoIcons.timer,
