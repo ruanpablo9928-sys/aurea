@@ -1061,6 +1061,43 @@ class EditorController extends Notifier<VideoProject> {
     _applyCenters(spaceLayers(_layoutBoxes(ids, t), axis, gap), t);
   }
 
+  // ------------------------------------------------------- expressao
+
+  /// EXPRESSAO numa propriedade (Pro, Fase 5): poe, troca ou tira (nulo
+  /// ou vazio). So as trilhas numericas aceitam; posicao e pivo nao.
+  void setPropExpression(String id, LayerProp prop, String? fonte) {
+    final layer = _layer(id);
+    if (layer == null) return;
+    final f = (fonte ?? '').trim().isEmpty ? null : fonte!.trim();
+    final novo = switch (prop) {
+      LayerProp.opacity => layer.copyLayer(
+        opacity: layer.opacity.withExpression(f),
+      ),
+      LayerProp.rotation => layer.copyLayer(
+        rotation: layer.rotation.withExpression(f),
+      ),
+      LayerProp.scale => layer.copyLayer(
+        scaleX: layer.scaleX.withExpression(f),
+        scaleY: layer.scaleY.withExpression(f),
+      ),
+      LayerProp.skew => layer.copyLayer(
+        skewX: layer.skewX.withExpression(f),
+        skewY: layer.skewY.withExpression(f),
+      ),
+      _ => null,
+    };
+    if (novo != null) _replace(novo);
+  }
+
+  /// A expressao atual de uma propriedade (nula quando nao ha).
+  String? propExpression(Layer layer, LayerProp prop) => switch (prop) {
+    LayerProp.opacity => layer.opacity.expression,
+    LayerProp.rotation => layer.rotation.expression,
+    LayerProp.scale => layer.scaleX.expression,
+    LayerProp.skew => layer.skewX.expression,
+    _ => null,
+  };
+
   // ------------------------------------------------------------ loop
 
   /// Liga/desliga o LOOP de keyframes de uma propriedade (PR-X6).
@@ -3589,7 +3626,15 @@ class EditorController extends Notifier<VideoProject> {
 
   // -------------------------------------------------- transform + keyframes
 
-  void editPosition(String id, Duration globalTime, Offset value) {
+  /// [autoKey] forca (ou nega) o keyframe automatico nesta edicao — o
+  /// palco no Simples anima ao mover, mesmo com o auto-key global
+  /// desligado (secao 2 do plano).
+  void editPosition(
+    String id,
+    Duration globalTime,
+    Offset value, {
+    bool? autoKey,
+  }) {
     final layer = _layer(id);
     if (layer == null) return;
     _replace(
@@ -3598,6 +3643,7 @@ class EditorController extends Notifier<VideoProject> {
           layer.position,
           layer.localTime(globalTime),
           value,
+          autoKey: autoKey,
         ),
       ),
     );
@@ -3617,9 +3663,12 @@ class EditorController extends Notifier<VideoProject> {
   AnimatedOffset _editOffset(
     AnimatedOffset track,
     Duration time,
-    Offset value,
-  ) {
-    if (!ref.read(autoKeyframeProvider)) return track.edited(time, value);
+    Offset value, {
+    bool? autoKey,
+  }) {
+    if (!(autoKey ?? ref.read(autoKeyframeProvider))) {
+      return track.edited(time, value);
+    }
     final anchored = !track.isAnimated && time > Duration.zero
         ? track.withKeyframe(Duration.zero, track.base)
         : track;

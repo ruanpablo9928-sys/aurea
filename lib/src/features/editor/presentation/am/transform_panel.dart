@@ -14,6 +14,7 @@ import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'panel_chrome.dart';
 import '../context/parameter_row.dart';
+import '../../application/ui/pro_mode.dart';
 import 'property_keyframe_context.dart';
 
 export '../../application/ui/editor_session.dart'
@@ -40,6 +41,36 @@ KeyframeState _kf(
         .toggleKeyframe(layer.id, t, prop),
     onCurve: times.isNotEmpty ? onCurve : null,
   );
+}
+
+/// O toque longo no valor (Pro) abre a expressao da propriedade.
+VoidCallback? _expressao(
+  BuildContext context,
+  WidgetRef ref,
+  Layer layer,
+  LayerProp prop,
+  String nome,
+) {
+  if (!ref.watch(proModeProvider)) return null;
+  return () async {
+    final controller = ref.read(editorControllerProvider.notifier);
+    final atual = controller.propExpression(layer, prop);
+    final erro = switch (prop) {
+      LayerProp.opacity => layer.opacity.expressionError?.mensagem,
+      LayerProp.rotation => layer.rotation.expressionError?.mensagem,
+      LayerProp.scale => layer.scaleX.expressionError?.mensagem,
+      LayerProp.skew => layer.skewX.expressionError?.mensagem,
+      _ => null,
+    };
+    final r = await showExpressionEditor(
+      context,
+      atual: atual,
+      erro: erro,
+      nome: nome,
+    );
+    if (r == null) return;
+    controller.setPropExpression(layer.id, prop, r);
+  };
 }
 
 class TransformPanel extends ConsumerStatefulWidget {
@@ -902,6 +933,8 @@ class _ScaleControl extends ConsumerWidget {
                 rulerKey: const ValueKey('scale-width-ruler'),
                 valueKey: const ValueKey('scale-width-valor'),
                 keyframe: _kf(ref, layer, LayerProp.scale, t, null),
+                expression: layer.scaleX.expression,
+                onExpression: _expressao(context, ref, layer, LayerProp.scale, 'Escala'),
                 onReset: () => controller.resetProp(layer.id, LayerProp.scale),
                 onChanged: (v) => aplicar(true, v),
               ),
@@ -973,6 +1006,8 @@ class _SkewControl extends ConsumerWidget {
           unit: '°',
           accentCenter: true,
           keyframe: _kf(ref, layer, LayerProp.skew, t, null),
+          expression: layer.skewX.expression,
+          onExpression: _expressao(context, ref, layer, LayerProp.skew, 'Inclinar'),
           onReset: () => controller.resetProp(layer.id, LayerProp.skew),
           onChanged: (v) => controller.editSkewX(layer.id, t, v),
         ),
@@ -1018,6 +1053,8 @@ class _OpacityControl extends ConsumerWidget {
           unit: '%',
           valueKey: const ValueKey('opacidade-valor'),
           keyframe: _kf(ref, layer, LayerProp.opacity, t, null),
+          expression: layer.opacity.expression,
+          onExpression: _expressao(context, ref, layer, LayerProp.opacity, 'Opacidade'),
           onReset: () => controller.resetProp(layer.id, LayerProp.opacity),
           onChanged: (v) => controller.editOpacity(
             layer.id,

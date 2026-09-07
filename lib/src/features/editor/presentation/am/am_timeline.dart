@@ -103,7 +103,11 @@ class AmTimeline extends ConsumerStatefulWidget {
     this.onForeignKeyframe,
     this.onExpand,
     this.expanded = false,
+    this.onKeyframeTap,
   });
+
+  /// Tocaram num diamante ACESO: quem recebe abre o easing (E5).
+  final void Function(Layer layer, Duration kfTime)? onKeyframeTap;
 
   final PlaybackController playback;
   final String? singleLayerId;
@@ -546,6 +550,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                     onTapLayer: widget.onTapLayer,
                                     activeTimesUs: widget.activeTimesUs,
                                     onForeignKeyframe: widget.onForeignKeyframe,
+                                    onKeyframeTap: widget.onKeyframeTap,
                                     onEditStart: () => _editingBar = true,
                                     onEditEnd: () => _editingBar = false,
                                   );
@@ -1232,8 +1237,10 @@ class _AmLayerRow extends ConsumerWidget {
     this.onTapLayer,
     this.activeTimesUs,
     this.onForeignKeyframe,
+    this.onKeyframeTap,
   });
 
+  final void Function(Layer layer, Duration kfTime)? onKeyframeTap;
   final List<Layer> trilha;
   final double pps;
   final double totalWidth;
@@ -1276,6 +1283,7 @@ class _AmLayerRow extends ConsumerWidget {
             onTapLayer: onTapLayer,
             activeTimesUs: activeTimesUs,
             onForeignKeyframe: onForeignKeyframe,
+            onKeyframeTap: onKeyframeTap,
           ),
       ],
     ),
@@ -1297,8 +1305,10 @@ class _AmBar extends ConsumerStatefulWidget {
     this.onTapLayer,
     this.activeTimesUs,
     this.onForeignKeyframe,
+    this.onKeyframeTap,
   });
 
+  final void Function(Layer layer, Duration kfTime)? onKeyframeTap;
   final Layer layer;
   final double pps;
   final double totalWidth;
@@ -1975,6 +1985,8 @@ class _AmBarState extends ConsumerState<_AmBar> {
                       if (active) {
                         playback.pause();
                         playback.seek(layer.startTime + grupo.times.first);
+                        // E5: tocar o losango leva ao easing dele.
+                        widget.onKeyframeTap?.call(layer, grupo.times.first);
                       } else {
                         onForeignKeyframe?.call(grupo.times.first);
                       }

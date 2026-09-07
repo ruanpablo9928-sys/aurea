@@ -12,6 +12,7 @@ import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import '../../application/ui/pro_mode.dart';
 
 /// Painel "Curva de gradacao": grafico tempo->tempo com grade, alcas
 /// grandes, thumbnails de preset a direita e navegacao entre segmentos.
@@ -188,6 +189,94 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
     }
 
     final ease = segment == null ? null : _easeOf(layer, segment.$1);
+    final pro = ref.watch(proModeProvider);
+
+    // SIMPLES (E5): a grade de presets com miniatura, grande, e a
+    // navegacao entre trechos. O editor de curva e Pro.
+    if (!pro && segment != null && ease != null) {
+      return ColoredBox(
+        color: AmColors.panel,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 32,
+              child: Row(
+                children: [
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(8),
+                    onPressed: () => _jumpSegment(layer, -1),
+                    child: const Icon(
+                      CupertinoIcons.chevron_left,
+                      size: 18,
+                      color: AmColors.muted,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Trecho ${times.indexOf(segment.$1) + 1}'
+                      '\u2192${times.indexOf(segment.$1) + 2}'
+                      ' \u00b7 ${ease.label}',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 12, color: AmColors.muted),
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(8),
+                    onPressed: () => _jumpSegment(layer, 1),
+                    child: const Icon(
+                      CupertinoIcons.chevron_right,
+                      size: 18,
+                      color: AmColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: _ScopeToggle(
+                todos: _aplicarEmTodos,
+                horizontal: true,
+                onChanged: (v) => setState(() => _aplicarEmTodos = v),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: GridView.count(
+                key: const ValueKey('curve-presets-grid'),
+                crossAxisCount: 4,
+                childAspectRatio: 1.35,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 8,
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                children: [
+                  for (final preset in _presets)
+                    _PresetTile(
+                      key: ValueKey('curva-preset-${preset.nome}'),
+                      ease: preset.ease,
+                      label: preset.nome,
+                      selected: _samePreset(ease, preset.ease),
+                      onTap: () => _aplicarEmTodos
+                          ? controller.applyEaseToAllSegments(
+                              id,
+                              widget.prop,
+                              preset.ease,
+                            )
+                          : controller.setSegmentEase(
+                              id,
+                              widget.prop,
+                              segment!.$1,
+                              preset.ease,
+                            ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return ColoredBox(
       color: AmColors.panel,
@@ -281,6 +370,19 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                             checked: _overshoot,
                             child: const Text('Overshoot'),
                           ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: 'loop-none',
+                            child: Text('Loop: nenhum'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'loop-cycle',
+                            child: Text('Loop: repetir'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'loop-pingPong',
+                            child: Text('Loop: vai e volta'),
+                          ),
                         ],
                         onSelected: (action) {
                           switch (action) {
@@ -303,6 +405,24 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                               );
                             case 'overshoot':
                               setState(() => _overshoot = !_overshoot);
+                            case 'loop-none':
+                              controller.setPropertyLoop(
+                                id,
+                                widget.prop,
+                                const LoopSpec(),
+                              );
+                            case 'loop-cycle':
+                              controller.setPropertyLoop(
+                                id,
+                                widget.prop,
+                                const LoopSpec(mode: LoopMode.cycle),
+                              );
+                            case 'loop-pingPong':
+                              controller.setPropertyLoop(
+                                id,
+                                widget.prop,
+                                const LoopSpec(mode: LoopMode.pingPong),
+                              );
                           }
                         },
                       ),
@@ -1212,6 +1332,7 @@ class _AmCurvePainter extends CustomPainter {
 
 class _PresetTile extends StatelessWidget {
   const _PresetTile({
+    super.key,
     required this.ease,
     required this.label,
     required this.selected,

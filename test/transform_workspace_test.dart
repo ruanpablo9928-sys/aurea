@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
+import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/presentation/am/am_widgets.dart';
 import 'package:aurea/src/features/editor/presentation/am/transform_panel.dart';
@@ -41,6 +42,8 @@ void main() {
       tester,
     ) async {
       final c = await openEditor(tester, size: size);
+      // O editor de curva (alcas) e Pro desde a Fase 5; Simples ve a grade.
+      c.read(proModeProvider.notifier).set(true);
       final editor = c.read(editorControllerProvider.notifier);
       final id = c.read(editorControllerProvider).layers.first.id;
       c.read(selectedLayerProvider.notifier).state = id;

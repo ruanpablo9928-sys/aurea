@@ -14,6 +14,7 @@ import 'package:video_player/video_player.dart';
 import '../../application/texture_cache.dart';
 import '../../application/blob_track_service.dart';
 import '../../application/editor_controller.dart';
+import '../../application/ui/pro_mode.dart';
 import '../../application/freehand_session.dart' show onionSkinProvider;
 export '../../application/freehand_session.dart' show onionSkinProvider;
 import '../../application/playback_controller.dart';
@@ -221,7 +222,14 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
       }
     }
 
-    controller.editPosition(id, t, target);
+    // SIMPLES: mover no palco anima (auto-key), sem precisar ligar nada.
+    // No Pro vale o interruptor de auto-key.
+    controller.editPosition(
+      id,
+      t,
+      target,
+      autoKey: ref.read(proModeProvider) ? null : true,
+    );
   }
 
   @override

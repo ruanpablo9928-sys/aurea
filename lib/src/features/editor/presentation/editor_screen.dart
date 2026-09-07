@@ -219,6 +219,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return null;
   }
 
+  /// TOCARAM NUM DIAMANTE ACESO (Fase 5): sem painel aberto, o toque
+  /// abre o easing do keyframe (E5) — selecionar, tocar o losango,
+  /// escolher o preset: tres toques. Com painel aberto, so navega.
+  void _onKeyframeTap(Layer layer, Duration t) {
+    if (_s.panel != EditorPanel.none) return;
+    if (ref.read(selectedLayerProvider) != layer.id) {
+      ref.read(selectedLayerProvider.notifier).state = layer.id;
+    }
+    final dono = _donoDoKeyframe(layer, t);
+    if (dono == null) return;
+    final (prop, nome) = dono;
+    if (nome == 'Efeitos') {
+      _session.openPanel(EditorPanel.effects);
+    } else if (nome == 'Mascaras') {
+      selectMaskInBlendingPanel(ref);
+      _session.openPanel(EditorPanel.blending);
+    } else {
+      _session.openCurve(prop);
+    }
+  }
+
   /// TOCARAM NUM DIAMANTE APAGADO: dizer de quem e, e levar ate la.
   void _onForeignKeyframe(Duration t) {
     final id = ref.read(selectedLayerProvider);
@@ -784,6 +805,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               onForeignKeyframe: panel == null
                                   ? null
                                   : _onForeignKeyframe,
+                              onKeyframeTap: _onKeyframeTap,
                             ),
                           ),
                           ContextSheet(

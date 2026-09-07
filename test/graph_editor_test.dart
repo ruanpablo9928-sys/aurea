@@ -1,4 +1,5 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
+import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/presentation/am/curve_panel.dart';
@@ -178,6 +179,8 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final container = comAnimacao();
+      // O editor de curva (alcas) e Pro desde a Fase 5.
+      container.read(proModeProvider.notifier).set(true);
       final c = container.read(editorControllerProvider.notifier);
       final id = container.read(editorControllerProvider).layers.first.id;
       // Uma curva com as duas alcas bem separadas.

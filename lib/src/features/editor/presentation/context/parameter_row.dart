@@ -51,8 +51,12 @@ class ParameterRow extends StatelessWidget {
     this.valueKey,
     this.accentCenter = false,
     this.onExpression,
+    this.expression,
     this.height = AureaTokens.minTap,
   });
+
+  /// A expressao em vigor (Pro): o chip mostra "fx" e o toque longo edita.
+  final String? expression;
 
   final String label;
   final double value;
@@ -95,6 +99,7 @@ class ParameterRow extends StatelessWidget {
           ParameterValue(
             key: valueKey,
             text: '${amNumber(value, decimals)}$unit',
+            prefix: (expression ?? '').trim().isEmpty ? null : 'fx',
             onLongPress: onExpression,
             onTap: () async {
               final v = await showNumberInput(
@@ -501,4 +506,62 @@ Future<double?> showNumberInput(
   final v = evalExpression(r.replaceAll(',', '.'), percentOf: percentOf);
   if (v == null || v.isNaN) return null;
   return v.clamp(min, max).toDouble();
+}
+
+/// EDITOR DE EXPRESSAO (Pro, Fase 5): um campo de texto, o erro do motor
+/// quando ha, e Limpar. Devolve null ao cancelar; '' para tirar.
+Future<String?> showExpressionEditor(
+  BuildContext context, {
+  String? atual,
+  String? erro,
+  String? nome,
+}) async {
+  final ctrl = TextEditingController(text: atual ?? '');
+  final r = await showCupertinoDialog<String>(
+    context: context,
+    builder: (ctx) => CupertinoAlertDialog(
+      title: Text('Expressão${nome == null ? '' : ' · $nome'}'),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoTextField(
+              key: const ValueKey('expressao-campo'),
+              controller: ctrl,
+              autofocus: true,
+              maxLines: 3,
+              minLines: 1,
+              placeholder: 'ex.: wiggle(2, 30) ou time * 90',
+              onSubmitted: (v) => Navigator.pop(ctx, v),
+            ),
+            if (erro != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                erro,
+                style: const TextStyle(fontSize: 12, color: Color(0xFFFF6B6B)),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.pop(ctx, ''),
+          child: const Text('Limpar'),
+        ),
+        CupertinoDialogAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(ctx, ctrl.text),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+  ctrl.dispose();
+  return r;
 }
