@@ -379,3 +379,29 @@ Relatos: "a barra de adicionar fica aparecendo sozinha", "a rotação não gira"
 | Barra da timeline **encolhe o conteúdo** em vez de estourar em clipes curtos. | Projetos importados têm pedaços de 266 ms. |
 
 O que o importador de cena ainda deixa de fora, e diz na hora: mídia do aparelho de origem (`content://`), áudio, cor animada de preenchimento, e os efeitos sem equivalente (`transform2`, `squeeze`, `textspacing`, `pinchbulge`).
+
+---
+
+## 12. Rastreio e a mão enterrada (2026-09-07, beta 53)
+
+Pedido: "Blobtracker FUNCIONAL e CAMERA TRACKER 3D funcional igual ao do AE", sem quebrar nada.
+
+| O que entrou | Onde | Por quê |
+|---|---|---|
+| **⌖ Rastrear** nas ações rápidas de vídeo, antes de Reenquadrar e Estabilizar. | `quick_actions.dart`, `rastreio_sheet.dart` | As três leem o vídeo do mesmo jeito, mas só esta responde à pergunta que se faz primeiro ("como faço isso seguir aquilo?"). Escondida no fim da fila, ninguém achava. |
+| **Grudar uma camada num blob** (com escala opcional). | `editor_controller.grudarNoBlob` | O Blob Tracker só desenhava caixas. Ver o rastreio é metade do trabalho; a outra metade é pendurar algo nele. |
+| **Um toque analisa**: a folha cria o efeito de rastreio se não existir. | `rastreio_sheet.dart` | Antes eram quatro passos e era preciso saber o nome do efeito. |
+| **Rastreio de câmera 3D**, com nuvem de pontos e câmera com keyframe por quadro. | `pontos_seguidos.dart`, `camera_solver3d.dart`, `algebra_numerica.dart`, `cena_do_rastreio.dart`, `camera_track_service.dart` | Sem ele, cena 3D em cima de vídeo é sempre adesivo. Detalhes em `docs/rastreio-camera-3d.md`. |
+| **Recusa honesta** de plano de tripé ou cena plana, medida por resíduo de homografia. | `camera_solver3d.dart` | A solução degenerada parece certa (erro de reprojeção zero) e só se revela quando o objeto colado começa a nadar. |
+| **MÃO ENTERRADA · 15 s**, quatro planos, na galeria de modelos. | `mao_enterrada_template.dart` | Cena de prova do motor 3D: malha orgânica varrida, terreno de três oitavas, céu texturizado e quatro câmeras com corte seco. |
+
+### O que os testes pegaram, e ninguém teria visto olhando
+
+- O chão das dunas estava **enrolado ao contrário**: sumia visto de cima, que é de onde a câmera sempre olha.
+- As pontas dos dedos eram **cones** (leque até um ponto), e a palma terminava num espeto entre os dedos.
+- A câmera do quarto plano, fora da própria tomada, ficava a **1726 unidades abaixo da areia** — invisível no vídeo, e um susto para quem abrisse a cena no editor.
+- O rastreio de câmera aceitava **panorâmica de tripé** e devolvia uma cena inteira inventada.
+
+### Como conferir
+
+`flutter analyze` limpo (fora dos pacotes de terceiros); `flutter test` verde — 1588 passando, 1 pulado. Quadros da cena em `test/mao_visual_dump.dart` (pintor de CPU; a sombra do sol só aparece no motor de GPU).

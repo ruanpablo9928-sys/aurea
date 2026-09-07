@@ -33,6 +33,17 @@ class BlobTrackService {
 
   bool isRunning(String effectId) => _emAndamento.contains(effectId);
 
+  /// Poe uma analise no cache sem passar pelo video.
+  ///
+  /// Existe para os testes: extrair quadros exige ffmpeg e um arquivo de
+  /// verdade, e nada disso tem a ver com "o que acontece DEPOIS de
+  /// analisar", que e o que os testes de grudar precisam exercitar.
+  @visibleForTesting
+  void injetar(String effectId, BlobTrackData dados) {
+    _cache[effectId] = dados;
+    revision.value++;
+  }
+
   Future<Directory> _pasta() async {
     final base = await getApplicationSupportDirectory();
     final d = Directory('${base.path}/blobs');

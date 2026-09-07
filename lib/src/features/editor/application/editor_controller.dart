@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,12 +8,15 @@ import 'package:video_player/video_player.dart';
 import '../../media/application/media_import_service.dart';
 import '../domain/blend_extra.dart';
 import 'blob_track_service.dart';
+import 'camera_track_service.dart';
 import 'freehand_session.dart';
 import '../domain/blob_track.dart';
 import '../domain/caption.dart';
 import '../domain/caption_highlight.dart';
 import '../domain/camera3d.dart';
 import '../domain/camera_cuts.dart';
+import '../domain/camera_solver3d.dart';
+import '../domain/cena_do_rastreio.dart';
 import '../domain/cut.dart';
 import '../domain/cut_ops.dart';
 import '../domain/scene3d.dart';
@@ -2417,6 +2421,159 @@ class EditorController extends Notifier<VideoProject> {
       persistence: fx.paramAt('persistence', t0).round(),
       smoothing: fx.paramAt('smoothing', t0) / 100,
     );
+  }
+
+  /// GRUDA UMA CAMADA NUM BLOB RASTREADO — o passo que faltava para o
+  /// rastreio de regioes servir para alguma coisa.
+  ///
+  /// Ate aqui o Blob Tracker so DESENHAVA caixas. Ver o rastreio e
+  /// metade do trabalho; a outra metade e pendurar algo nele — a seta
+  /// que segue o carro, o nome que segue a pessoa. Sem isso o efeito e
+  /// uma decoracao com cara de ferramenta.
+  ///
+  /// As caixas estao na escala da analise (240 px de largura). Elas viram
+  /// coordenadas da composicao passando pela caixa da CAMADA DE VIDEO —
+  /// e nao pela composicao inteira —, porque o video pode estar
+  /// deslocado, ampliado ou girado, e nesse caso o objeto tem de
+  /// acompanhar o que se ve, nao o arquivo.
+  ///
+  /// Com [comEscala], a camada tambem cresce e encolhe junto com a caixa.
+  ///
+  /// Devolve quantos keyframes foram escritos, ou null se faltar analise.
+  int? grudarNoBlob({
+    required String alvoId,
+    required String videoId,
+    required String effectId,
+    required int blobId,
+    bool comEscala = false,
+  }) {
+    final alvo = _layer(alvoId);
+    final video = _layer(videoId);
+    if (alvo == null || video == null) return null;
+    final dados = BlobTrackService.instance.dataFor(effectId);
+    if (dados == null || dados.isEmpty || dados.fps <= 0) return null;
+    final caminho = dados.caminhoDe(blobId);
+    if (caminho.length < 2) return null;
+
+    final caixaDoVideo = layerBoxSize(video, video.startTime);
+    if (caixaDoVideo.width <= 0 || caixaDoVideo.height <= 0) return null;
+
+    var posicao = AnimatedOffset(alvo.position.valueAt(Duration.zero));
+    var escalaX = AnimatedDouble(alvo.scaleX.valueAt(Duration.zero));
+    var escalaY = AnimatedDouble(alvo.scaleY.valueAt(Duration.zero));
+    final escalaBase = alvo.scaleX.valueAt(Duration.zero);
+    final escalaBaseY = alvo.scaleY.valueAt(Duration.zero);
+    final quadros = caminho.keys.toList()..sort();
+    final larguraInicial = caminho[quadros.first]!.width;
+
+    var escritos = 0;
+    for (final q in quadros) {
+      final caixa = caminho[q]!;
+      // Instante no video, e dai o instante LOCAL da camada de destino:
+      // as duas camadas raramente comecam juntas.
+      final noVideo = Duration(
+        microseconds: (q * 1000000 / dados.fps).round(),
+      );
+      final absoluto = video.startTime + noVideo;
+      final local = absoluto - alvo.startTime;
+      if (local < Duration.zero || local > alvo.duration) continue;
+
+      final fx = caixa.center.dx / dados.width;
+      final fy = caixa.center.dy / dados.height;
+      final vt = absoluto - video.startTime;
+      final vp = video.position.valueAt(vt);
+      var d = Offset(
+        (fx - .5) * caixaDoVideo.width * video.scaleX.valueAt(vt),
+        (fy - .5) * caixaDoVideo.height * video.scaleY.valueAt(vt),
+      );
+      final giro = video.rotation.valueAt(vt) * math.pi / 180;
+      if (giro != 0) {
+        d = Offset(
+          d.dx * math.cos(giro) - d.dy * math.sin(giro),
+          d.dx * math.sin(giro) + d.dy * math.cos(giro),
+        );
+      }
+      posicao = posicao.withKeyframe(local, vp + d);
+
+      if (comEscala && larguraInicial > 1) {
+        final fator = caixa.width / larguraInicial;
+        escalaX = escalaX.withKeyframe(local, escalaBase * fator);
+        escalaY = escalaY.withKeyframe(local, escalaBaseY * fator);
+      }
+      escritos++;
+    }
+    if (escritos == 0) return 0;
+
+    _replace(
+      alvo.copyLayer(
+        position: posicao,
+        scaleX: comEscala ? escalaX : null,
+        scaleY: comEscala ? escalaY : null,
+      ),
+    );
+    return escritos;
+  }
+
+  // ------------------------------------------------- rastrear camera 3D
+
+  /// RASTREIA A CAMERA de um clipe e devolve a solucao.
+  ///
+  /// Nao mexe no projeto: quem decide o que fazer com o resultado e a
+  /// pessoa, depois de ver se o rastreio pegou. Um rastreio que ja
+  /// entrasse criando camadas obrigaria a desfazer toda vez que saisse
+  /// ruim — e sai ruim com frequencia, porque depende do plano filmado.
+  Future<SolucaoCamera3D> rastrearCamera3D(String layerId, {int fps = 8}) async {
+    final layer = _layer(layerId);
+    if (layer is! VideoLayer) {
+      throw const RastreioException(
+        FalhaDoRastreio.poucosPontos,
+        'So da para rastrear a camera de um video.',
+      );
+    }
+    return CameraTrackService.instance.rastrear(
+      layerId: layerId,
+      sourcePath: layer.sourcePath,
+      start: layer.sourceOffset,
+      duration: layer.sourceSpan,
+      fps: fps,
+    );
+  }
+
+  /// CRIA A CENA 3D em cima do clipe, com a camera rastreada.
+  ///
+  /// A camada entra IMEDIATAMENTE ACIMA do clipe rastreado, e nao no
+  /// topo da pilha: o que estava por cima do video (uma legenda, uma
+  /// marca) tem de continuar por cima da cena tambem.
+  ///
+  /// Devolve o id da camada criada.
+  String? criarCenaDoRastreio(
+    String layerId,
+    SolucaoCamera3D solucao, {
+    bool comNuvem = true,
+  }) {
+    final layer = _layer(layerId);
+    if (layer == null) return null;
+    final camada = camadaDoRastreio(
+      solucao,
+      startTime: layer.startTime,
+      duration: layer.duration,
+      position: _center,
+      nome: 'Rastreio 3D · ${layer.name}',
+      comNuvem: comNuvem,
+    );
+    final indice = state.layers.indexWhere((l) => l.id == layerId);
+    final lista = [...state.layers];
+    lista.insert(indice < 0 ? 0 : indice, camada);
+    _mutate(state.copyWith(layers: lista));
+    ref.read(selectedLayerProvider.notifier).state = camada.id;
+    return camada.id;
+  }
+
+  /// Poe um NULO num ponto rastreado, para pendurar coisas nele.
+  void criarNoDoPonto(String cenaId, SolucaoCamera3D solucao, int idDoPonto) {
+    final no = noNoPonto(solucao, idDoPonto);
+    if (no == null) return;
+    updateScene3D(cenaId, (cena) => cena.copyWith(nodes: [...cena.nodes, no]));
   }
 
   // ------------------------------------------------------- estabilizar

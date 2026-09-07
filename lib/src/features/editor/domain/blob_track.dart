@@ -327,6 +327,48 @@ class BlobTrackData {
     return frames[i];
   }
 
+  /// OS BLOBS QUE VALE A PENA OFERECER, do mais duradouro para o mais
+  /// fugaz.
+  ///
+  /// Detectar produz dezenas de identidades, e a maioria vive tres
+  /// quadros. Quem vai grudar um texto num objeto quer o objeto que
+  /// atravessa o plano — mostrar a lista crua, na ordem em que apareceu,
+  /// esconderia justamente ele.
+  List<int> get idsPorDuracao {
+    final conta = <int, int>{};
+    for (final quadro in frames) {
+      for (final b in quadro) {
+        conta[b.id] = (conta[b.id] ?? 0) + 1;
+      }
+    }
+    final ids = conta.keys.toList()
+      ..sort((a, b) => conta[b]!.compareTo(conta[a]!));
+    return ids;
+  }
+
+  /// Em quantos quadros esse blob aparece.
+  int duracaoDe(int id) {
+    var n = 0;
+    for (final quadro in frames) {
+      for (final b in quadro) {
+        if (b.id == id) n++;
+      }
+    }
+    return n;
+  }
+
+  /// O CAMINHO de um blob: quadro -> caixa. E o que vira keyframe quando
+  /// alguem gruda uma camada nele.
+  Map<int, Rect> caminhoDe(int id) {
+    final saida = <int, Rect>{};
+    for (var i = 0; i < frames.length; i++) {
+      for (final b in frames[i]) {
+        if (b.id == id) saida[i] = b.rect;
+      }
+    }
+    return saida;
+  }
+
   Map<String, dynamic> toJson() => {
         'fps': fps,
         'w': width,

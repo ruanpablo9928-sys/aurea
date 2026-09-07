@@ -21,6 +21,7 @@ import '../application/vhf_motion_assets.dart';
 import '../application/thumbnail_service.dart';
 import '../domain/cena_xml_import.dart';
 import '../domain/abyss_cinematic_template.dart';
+import '../domain/mao_enterrada_template.dart';
 import '../domain/colina_tv_template.dart';
 import '../domain/deriva_template.dart';
 import '../domain/flor_template.dart';
@@ -586,6 +587,16 @@ class ProjectsTab extends ConsumerWidget {
                     detalhe: '6 s · cena 3D realista · orbita rasteira',
                     onTap: () =>
                         _abrirModelo(context, ref, buildColinaTvTemplate()),
+                  ),
+                  _CartaoModelo(
+                    imagem: 'assets/templates/mao-enterrada.png',
+                    titulo: 'MÃO ENTERRADA · Deserto ao entardecer',
+                    detalhe: '15 s · 4 câmeras · malha orgânica e céu',
+                    onTap: () => _abrirModelo(
+                      context,
+                      ref,
+                      buildMaoEnterradaTemplate(),
+                    ),
                   ),
                   _CartaoModelo(
                     imagem: 'assets/templates/abyss.jpg',
