@@ -119,8 +119,13 @@ class EditorTopBar extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: GestureDetector(
               key: const ValueKey('editor-pro'),
+              behavior: HitTestBehavior.opaque,
               onTap: () => ref.read(proModeProvider.notifier).toggle(),
-              child: Container(
+              // O alvo tem 44 pt de altura (regra 6); o chip desenhado, 30.
+              child: SizedBox(
+                height: AureaTokens.minTap,
+                child: Center(
+                  child: Container(
                 height: 30,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 alignment: Alignment.center,
@@ -137,6 +142,8 @@ class EditorTopBar extends ConsumerWidget {
                   ),
                 ),
               ),
+                ),
+              ),
             ),
           ),
           // EXPORTAR: a pilula de acao, sempre no mesmo lugar.
@@ -144,8 +151,12 @@ class EditorTopBar extends ConsumerWidget {
             padding: const EdgeInsets.only(left: 4, right: 6),
             child: GestureDetector(
               key: const ValueKey('editor-export'),
+              behavior: HitTestBehavior.opaque,
               onTap: () => showExportSheet(context, ref),
-              child: Container(
+              child: SizedBox(
+                height: AureaTokens.minTap,
+                child: Center(
+                  child: Container(
                 height: 34,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 alignment: Alignment.center,
@@ -176,6 +187,8 @@ class EditorTopBar extends ConsumerWidget {
                       ],
                     ],
                   ),
+                ),
+              ),
                 ),
               ),
             ),

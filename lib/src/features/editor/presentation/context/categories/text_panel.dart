@@ -9,6 +9,8 @@ import '../../am/am_colors.dart';
 import '../../am/color_picker_sheet.dart';
 import '../../am/font_sheet.dart';
 import '../parameter_row.dart';
+import '../../../application/ui/pro_mode.dart';
+import '../../../domain/layer_meta.dart';
 
 /// E3 · EDITAR TEXTO (Fase 3): conteudo, fonte, tamanho, negrito, cor e
 /// a porta para as animacoes. Tudo em `ParameterRow`, sem folha modal.
@@ -32,6 +34,11 @@ class TextPanel extends ConsumerWidget {
       return const ColoredBox(color: AmColors.panel);
     }
     final controller = ref.read(editorControllerProvider.notifier);
+    final pro = ref.watch(proModeProvider);
+    final dados = project.data;
+    final vinculo = project.bindings
+        .where((b) => b.layerId == id && b.property == 'text')
+        .firstOrNull;
 
     return ColoredBox(
       color: AmColors.panel,
@@ -127,6 +134,68 @@ class TextPanel extends ConsumerWidget {
               if (picked != null) controller.editTextLayer(id, color: picked);
             },
           ),
+          // DADOS (Pro, Fase 8): o texto segue uma coluna do CSV do projeto.
+          if (pro && dados != null && dados.columns.isNotEmpty)
+            ParameterCustomRow(
+              label: 'Dados',
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  key: const ValueKey('texto-dados'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    final coluna = await showCupertinoModalPopup<String?>(
+                      context: context,
+                      builder: (ctx) => CupertinoActionSheet(
+                        title: Text('Coluna de ${dados.name}'),
+                        actions: [
+                          for (final col in dados.columns)
+                            CupertinoActionSheetAction(
+                              key: ValueKey('texto-dados-$col'),
+                              onPressed: () => Navigator.pop(ctx, col),
+                              child: Text(col),
+                            ),
+                          if (vinculo != null)
+                            CupertinoActionSheetAction(
+                              isDestructiveAction: true,
+                              onPressed: () => Navigator.pop(ctx, ''),
+                              child: const Text('Desvincular'),
+                            ),
+                        ],
+                        cancelButton: CupertinoActionSheetAction(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                    );
+                    if (coluna == null) return;
+                    controller.removeDataBinding(id);
+                    if (coluna.isNotEmpty) {
+                      controller.addDataBinding(
+                        DataBinding(layerId: id, column: coluna),
+                      );
+                      controller.applyDataBindings();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: t.chip,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      vinculo == null
+                          ? 'Vincular a uma coluna'
+                          : 'Coluna: ${vinculo.column}',
+                      style: TextStyle(fontSize: 12.5, color: t.text),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ParameterCustomRow(
             label: 'Animação',
             child: Align(

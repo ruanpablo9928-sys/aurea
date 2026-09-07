@@ -1,5 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../features/help/presentation/quick_guide_screen.dart';
@@ -304,6 +307,45 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
                 ),
                 onTap: () {
                   c.unexposeProperty(ex.id);
+                  atualiza();
+                },
+              ),
+          ],
+          if (pro) ...[
+            const SecaoDoEstudio('Dados (CSV)'),
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-dados'),
+              icone: CupertinoIcons.table,
+              titulo: p.data == null ? 'Carregar CSV' : p.data!.name,
+              subtitulo: p.data == null
+                  ? 'Colunas viram fontes para textos (vincular no painel do texto)'
+                  : '${p.data!.columns.length} colunas · ${p.data!.rows.length} linhas · toque para trocar',
+              chevron: true,
+              onTap: () async {
+                try {
+                  final r = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: const ['csv', 'txt'],
+                  );
+                  final caminho = r?.files.single.path;
+                  if (caminho == null) return;
+                  final conteudo = await File(caminho).readAsString();
+                  c.setDataSource(
+                    parseCsv(conteudo, name: r!.files.single.name),
+                  );
+                  c.applyDataBindings();
+                } catch (_) {}
+                atualiza();
+              },
+            ),
+            if (p.data != null)
+              LinhaDoEstudio(
+                key: const ValueKey('projeto-dados-remover'),
+                icone: CupertinoIcons.clear,
+                titulo: 'Remover dados',
+                perigo: true,
+                onTap: () {
+                  c.setDataSource(null);
                   atualiza();
                 },
               ),

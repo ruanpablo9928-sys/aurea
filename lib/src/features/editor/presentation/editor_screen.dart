@@ -755,26 +755,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   sheetMayCoverTimeline: s.adding,
                 );
                 final ws = EditorLayoutMetrics.workspace(constraints.maxHeight);
-                return Stack(
-                  children: [
-                    Column(
-                      children: [
-                        if (!s.previewExpanded)
-                          EditorTopBar(onBack: _back, backLabel: _backLabel),
-                        // RepaintBoundary: palco, timeline e painel pintam
-                        // em camadas separadas.
-                        SizedBox(
-                          height: m.preview,
-                          child: RepaintBoundary(
-                            key: previewStageKey,
-                            child: PreviewStage(
-                              playback: _playback,
-                              videos: _videos,
-                            ),
-                          ),
-                        ),
-                        if (!s.previewExpanded)
-                          PreviewResizeHandle(
+                // AS PECAS, montadas uma vez; o arranjo depende da largura
+                // (Fase 7: acima de 700 pt, timeline e painel lado a lado —
+                // tablet e paisagem).
+                Widget preview(double? altura) => SizedBox(
+                  height: altura,
+                  child: RepaintBoundary(
+                    key: previewStageKey,
+                    child: PreviewStage(playback: _playback, videos: _videos),
+                  ),
+                );
+                final alca =                           PreviewResizeHandle(
                             expanded: false,
                             onExpand: _session.togglePreviewExpanded,
                             onReset: () => _session.setPreviewFraction(0.401),
@@ -784,8 +775,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                       ? 0
                                       : dy / constraints.maxHeight),
                             ),
-                          ),
-                        EditorTransportBar(
+                          );
+                final transporte =                         EditorTransportBar(
                           playback: _playback,
                           keyframeEnabled: layer != null,
                           keyframeHere: layer != null && _keyframeAqui(layer, s),
@@ -793,12 +784,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             if (layer != null) _toggleKeyframe(layer, s);
                           },
                           onAdd: s.adding ? null : () => _openAdd(),
-                        ),
-                        if (!s.previewExpanded) ...[
-                          RepaintBoundary(
+                        );
+                Widget timeline(double alturaTimeline) =>                           RepaintBoundary(
                             child: AmTimeline(
                               playback: _playback,
-                              height: m.timeline,
+                              height: alturaTimeline,
                               singleLayerId: panel == null ? null : selectedId,
                               playheadColor: pinkPlayhead
                                   ? AmColors.pink
@@ -819,9 +809,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                   : _onForeignKeyframe,
                               onKeyframeTap: _onKeyframeTap,
                             ),
-                          ),
-                          ContextSheet(
-                            height: m.sheet,
+                          );
+                Widget folha(double alturaFolha) =>                           ContextSheet(
+                            height: alturaFolha,
                             title: titulo,
                             subtitle: trilha,
                             onBack: titulo == null ? null : _back,
@@ -830,10 +820,62 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             ),
                             onDragEnd: _session.snapSheet,
                             child: RepaintBoundary(child: conteudo),
+                          );
+                final largo = constraints.maxWidth > 700 && !s.previewExpanded;
+                final alturaTimelineLarga =
+                    ((constraints.maxHeight -
+                                AureaTokens.topBar -
+                                AureaTokens.transport -
+                                EditorLayoutMetrics.handleHeight) *
+                            0.34)
+                        .clamp(148.0, 360.0)
+                        .toDouble();
+                return Stack(
+                  children: [
+                    if (largo)
+                      Column(
+                        key: const ValueKey('editor-largo'),
+                        children: [
+                          EditorTopBar(onBack: _back, backLabel: _backLabel),
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      Expanded(child: preview(null)),
+                                      alca,
+                                      transporte,
+                                      timeline(alturaTimelineLarga),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 380,
+                                  child: folha(
+                                    constraints.maxHeight - AureaTokens.topBar,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ],
-                    ),
+                      )
+                    else
+                      Column(
+                        children: [
+                          if (!s.previewExpanded)
+                            EditorTopBar(onBack: _back, backLabel: _backLabel),
+                          preview(m.preview),
+                          if (!s.previewExpanded) alca,
+                          transporte,
+                          if (!s.previewExpanded) ...[
+                            timeline(m.timeline),
+                            folha(m.sheet),
+                          ],
+                        ],
+                      ),
                     if (s.previewExpanded)
                       Positioned(
                         right: 10,

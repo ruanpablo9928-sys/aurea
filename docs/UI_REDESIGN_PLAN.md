@@ -321,3 +321,42 @@ O desempate é o prompt. Onde o prompt e uma regra do projeto conflitam, a regra
 
 Entrega: APK (`--split-per-abi`) e IPA (tag `ipa-*`) ao fim, com versão nova.
 
+
+---
+
+## 10. Relato de entrega (2026-09-07 · beta 51, versão 1.5.0+51)
+
+Tudo do documento foi implementado no lugar, fase a fase, com a suíte verde ao fim de cada fase (1.466 → 1.53x testes) e um commit por fase. O que segue é o que ficou feito, o que ficou diferente do plano (e por quê), e o que ainda falta.
+
+### Feito, por fase
+
+| Fase | Commit | O que entrou |
+|---|---|---|
+| 1 · Casca | `b9702bc` | Tokens (`AureaTokens`, paletas escura e clara); `EditorSession` (provider autoDispose) e `EditorLayoutMetrics` (preview nunca cede; painel encolhe; timeline ≥ 88); top bar de um estado (Voltar · nome · desfazer/refazer · ⚙ · Simples/Pro · Exportar sempre à vista); transporte com timecode tocável, loop, ◆ único e marca; painel contextual com alça e níveis 22/40/60 %; E1 barra de adicionar; E2 cabeçalho Duplicar·Excluir·Mais + ações rápidas + grade; seleção múltipla. Os botões flutuantes Dividir/Congelar saíram do cabeçote (cobriam a segunda linha). |
+| 2 · Timeline | `7c970b0` | Coluna esquerda olho (`LayerMeta.hidden`, some do preview e da exportação, persiste) · cadeado (não move, não apara) · ◆; reordenar por toque longo + arrastar (o toque longo parado continua alternando a seleção múltipla); grupos: toque duplo / "Entrar" abre o grupo como composição de trabalho no controlador (filhos em tempo local; tudo que o editor faz funciona neles; sair grava num undo só; `projetoCompleto` é o que se salva e exporta); breadcrumb Projeto › Grupo; expandir timeline; empacotamento visual dos pedaços do mesmo arquivo com "Juntar" na junção; ímã com estado (persistido) e busca de camadas (Pro); `LayerKind` para cor por tipo em tudo. |
+| 3 · Painel | `3f4cbdd` | `ParameterRow` [◆][nome][régua][valor tocável] (teclado aceita `1080/3` e `50%`; toque longo no nome reseta) e variantes ponto/interruptor/cor/livre; Transformar, Mesclagem (6 modos com miniatura no Simples, 27 no Pro) e Editar texto (conteúdo, fonte, tamanho, negrito, cor, animar) em linhas; Voltar escrito no cabeçalho do painel; menu modal antigo apagado (testes portados para o E2 real). |
+| 4 · Efeitos | `740e112` | Os 47 efeitos com Pronto (3 presets) e Ajustar (≤ 3 números); galeria com miniatura por efeito renderizada pelo motor real sobre uma cartela e cacheada em memória e disco, busca, categorias em português, favoritos (Pro), presets de fábrica e salvos; cartão com Simples (Pronto/Ajustar) e Pro (Avançado, salvar preset, assar em keyframes). Correção de motor encontrada pelas miniaturas: o Force Motion Blur empilhava `Opacity(Positioned)` num `Stack`. O "+" saiu de cima da timeline e mora no transporte. |
+| 5 · Keyframes | `7bb7b04` | Tocar o losango na barra abre o E5 (3 toques até o preset); grade de 14 presets com miniatura no Simples, editor de curva no Pro; expressões por propriedade (Pro, toque longo no valor, com o erro do motor); loop de keyframes no menu da curva (Pro); auto-key ao mover no palco no Simples sem ligar nada. |
+| 6 · Export/⚙/onboarding/tema | `41ea23c` | Exportar em dois toques (presets 1080p/720p/4K); Pro com formato, tamanho, quadros, codec, qualidade, PNG, Lottie, SVG, template e **SRT**; ⚙ Projeto com nome, proporção, resolução, fps, **fundo da composição** (campo novo `backgroundColor`, pintado no preview e na exportação), casca de cebola; Pro: guias, motion blur da composição, paleta, propriedades expostas, diagnóstico; quatro dicas de primeiro uso, estado vazio com chamada, Ajuda no E1 e em ⚙; tema escuro/claro/sistema em Ajustes (o editor continua escuro). |
+| 7 · QA | (este) | Tablet/paisagem acima de 700 pt: timeline e painel lado a lado (`editor-largo`); alvos de 44 pt nas barras de cima e de transporte (o Pro e o Exportar ganharam área de toque de 44 pt); fluxos da seção 10 como testes com contagem de toques (dividir 1, categoria 2, keyframe 1, opacidade exata 4, exportar 2, easing 3). |
+| 8 · Ofício | (este) | Edição de 3 pontos: Entrada/Saída na régua (Pro) e ações rápidas Inserir aqui, Sobrescrever, Levantar, Extrair; voz e EQ (limpar ruído, voz, de-esser, graves/médios/agudos) na ficha de som (Pro); dados CSV em ⚙ Projeto e "vincular a uma coluna" no painel do texto (Pro). |
+
+### O que ficou diferente do plano, e por quê
+
+- **Transformar mantém as seis sub-abas** (Mover, Girar, Escalar, Inclinar, Pivô, Opacid.) também no Simples: os testes de caber na tela exigem as seis à vista e a navegação por abas é o que evita a pilha infinita de linhas. Inclinar e Pivô ficaram visíveis no Simples (o plano os punha no Pro).
+- **Efeito assado, favoritos, Avançado, salvar preset**: Pro (tabela do §2), embora o §3 listasse favoritos no Simples.
+- **Borda & Sombra, Volume/Fade, Legendas, Partículas, Elemento 3D, Grid, Precomp** continuam abrindo as fichas persistentes de antes (folhas sobre o painel), agora com Voltar no cabeçalho; não foram reescritas em `ParameterRow`. A Cena 3D e o Edit Points continuam em tela cheia (Q10).
+- **Entrar no grupo** foi feito no controlador (o grupo vira a composição de trabalho) em vez de UI pura sobre `children`: era a única forma de os filhos aceitarem todas as operações sem duplicar o motor de tempo. Vínculos entre filhos continuam sem suporte, como antes.
+- **Tema claro**: `AppColors` virou papéis que trocam de valor; as telas de Projetos/Ajustes acompanham. O editor é escuro por definição. Ainda não conferido a olho no aparelho.
+- **Miniaturas dos efeitos** são renderizadas na primeira abertura da galeria (cartela pequena, motor real) e guardadas em disco por versão; em teste ficam na composição viva.
+
+### O que falta (fora desta entrega)
+
+- Reescrever em `ParameterRow` as fichas que ainda são folhas (estilos de camada, som, legendas, partículas, elemento 3D, grid, precomp) e a "Propriedades do elemento" única do E2.
+- Medir no aparelho: 60 fps com 30 camadas, arrasto da régua, tema claro, miniaturas dos efeitos no Moto G05 e no iPhone 13.
+- Onboarding por zona (tooltips ancorados) — as quatro dicas são um cartão único.
+- Expor propriedade pelo toque longo no nome do parâmetro (a lista em ⚙ só remove).
+
+### Como conferir
+
+`flutter analyze` limpo (fora dos pacotes de terceiros); `flutter test` verde; capturas em `C:\Users\SnyX\Downloads\Aurea-UI\` geradas por `test/zz_ui_screenshot_test.dart` (não versionado).

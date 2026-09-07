@@ -6,6 +6,7 @@ import '../../../../core/theme/tokens.dart';
 import '../../../../core/ui/snack.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../application/ui/editor_session.dart';
 import '../../domain/layer.dart';
 import '../am/align_sheet.dart';
 import '../am/audio_sheet.dart';
@@ -126,6 +127,81 @@ List<QuickAction> quickActionsFor(
       label: 'Alinhar',
       pro: true,
       onTap: () => showAlignSheet(context, ref, [id], t),
+    ),
+    // EDICAO DE 3 PONTOS (Pro, Fase 8): inserir e sobrescrever poem uma
+    // copia deste clipe no cabecote; levantar e extrair usam o trecho
+    // Entrada→Saida marcado na regua.
+    if (temSom || layer is VideoLayer) ...[
+      QuickAction(
+        key: 'inserir',
+        icon: CupertinoIcons.arrow_right_to_line,
+        label: 'Inserir aqui',
+        pro: true,
+        onTap: () {
+          controller.insertLayerAt(layer.duplicated(), t);
+          AureaSnack.show(
+            context,
+            'Inserido no cabecote; o que vinha depois foi empurrado',
+            actionLabel: 'Desfazer',
+            onAction: controller.undo,
+          );
+        },
+      ),
+      QuickAction(
+        key: 'sobrescrever',
+        icon: CupertinoIcons.rectangle_on_rectangle,
+        label: 'Sobrescrever',
+        pro: true,
+        onTap: () {
+          controller.overwriteLayerAt(layer.duplicated(), t);
+          AureaSnack.show(
+            context,
+            'Sobrescrito no cabecote',
+            actionLabel: 'Desfazer',
+            onAction: controller.undo,
+          );
+        },
+      ),
+    ],
+    QuickAction(
+      key: 'levantar',
+      icon: CupertinoIcons.arrow_up_to_line,
+      label: 'Levantar',
+      pro: true,
+      onTap: () {
+        final trecho = ref.read(editorSessionProvider).inOut;
+        if (trecho == null) {
+          showReasonToast(context, 'Marque Entrada (I) e Saida (O) na regua');
+          return;
+        }
+        controller.liftTimeRange(trecho.$1, trecho.$2, only: {id});
+        AureaSnack.show(
+          context,
+          'Trecho levantado (ficou o buraco)',
+          actionLabel: 'Desfazer',
+          onAction: controller.undo,
+        );
+      },
+    ),
+    QuickAction(
+      key: 'extrair',
+      icon: CupertinoIcons.scissors_alt,
+      label: 'Extrair',
+      pro: true,
+      onTap: () {
+        final trecho = ref.read(editorSessionProvider).inOut;
+        if (trecho == null) {
+          showReasonToast(context, 'Marque Entrada (I) e Saida (O) na regua');
+          return;
+        }
+        controller.extractTimeRange(trecho.$1, trecho.$2, only: {id});
+        AureaSnack.show(
+          context,
+          'Trecho extraido (o resto encostou)',
+          actionLabel: 'Desfazer',
+          onAction: controller.undo,
+        );
+      },
     ),
     QuickAction(
       key: 'vincular',

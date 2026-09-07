@@ -7,6 +7,7 @@ import '../../domain/audio_ops.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import '../../application/ui/pro_mode.dart';
 
 /// SOM da camada: fade, ganho, mudo, abaixar pela voz — e os dois
 /// comandos que economizam mais tempo numa edicao falada, normalizar e
@@ -43,6 +44,8 @@ Future<void> showAudioSheet(
           for (final l in project.layers)
             if (l.id != layerId && (l is AudioLayer || l is VideoLayer)) l,
         ];
+        final pro = ref.read(proModeProvider);
+        final proc = spec.processing;
 
         return SafeArea(
           child: SingleChildScrollView(
@@ -189,6 +192,85 @@ Future<void> showAudioSheet(
                     decimals: 2,
                     onChanged: (v) => edit((a) => a.copyWith(duckAmount: v)),
                   ),
+
+                // VOZ E EQ (Pro, Fase 8): limpeza de ruido, presenca de
+                // voz, de-esser e tres bandas — o AudioProcessing que ja
+                // existia no modelo ganha os controles.
+                if (pro) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Voz e EQ',
+                    key: ValueKey('som-voz-eq'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
+                  _Slider(
+                    label: 'Limpar ruido',
+                    value: proc.denoise,
+                    min: 0,
+                    max: 1,
+                    decimals: 2,
+                    onChanged: (v) => edit(
+                      (a) => a.copyWith(processing: a.processing.copyWith(denoise: v)),
+                    ),
+                  ),
+                  _Slider(
+                    label: 'Voz',
+                    value: proc.voice,
+                    min: 0,
+                    max: 1,
+                    decimals: 2,
+                    onChanged: (v) => edit(
+                      (a) => a.copyWith(processing: a.processing.copyWith(voice: v)),
+                    ),
+                  ),
+                  _Slider(
+                    label: 'De-esser',
+                    value: proc.deEsser,
+                    min: 0,
+                    max: 1,
+                    decimals: 2,
+                    onChanged: (v) => edit(
+                      (a) => a.copyWith(processing: a.processing.copyWith(deEsser: v)),
+                    ),
+                  ),
+                  _Slider(
+                    label: 'Graves',
+                    value: proc.lowDb,
+                    min: -12,
+                    max: 12,
+                    decimals: 1,
+                    suffix: ' dB',
+                    onChanged: (v) => edit(
+                      (a) => a.copyWith(processing: a.processing.copyWith(lowDb: v)),
+                    ),
+                  ),
+                  _Slider(
+                    label: 'Medios',
+                    value: proc.midDb,
+                    min: -12,
+                    max: 12,
+                    decimals: 1,
+                    suffix: ' dB',
+                    onChanged: (v) => edit(
+                      (a) => a.copyWith(processing: a.processing.copyWith(midDb: v)),
+                    ),
+                  ),
+                  _Slider(
+                    label: 'Agudos',
+                    value: proc.highDb,
+                    min: -12,
+                    max: 12,
+                    decimals: 1,
+                    suffix: ' dB',
+                    onChanged: (v) => edit(
+                      (a) => a.copyWith(processing: a.processing.copyWith(highDb: v)),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 16),
                 Wrap(

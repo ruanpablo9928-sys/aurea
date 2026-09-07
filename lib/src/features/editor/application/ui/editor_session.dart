@@ -58,7 +58,14 @@ class EditorSession {
     this.sheetLevel = SheetLevel.half,
     this.sheetFraction,
     this.timelineExpanded = false,
+    this.inPoint,
+    this.outPoint,
   });
+
+  /// ENTRADA e SAIDA (edicao de 3 pontos, Pro): o trecho que Levantar e
+  /// Extrair usam. Nulos = sem marca.
+  final Duration? inPoint;
+  final Duration? outPoint;
 
   final EditorPanel panel;
   final TransformTool tool;
@@ -113,6 +120,9 @@ class EditorSession {
     double? sheetFraction,
     bool clearSheetFraction = false,
     bool? timelineExpanded,
+    Duration? inPoint,
+    Duration? outPoint,
+    bool clearInOut = false,
   }) => EditorSession(
     panel: panel ?? this.panel,
     tool: tool ?? this.tool,
@@ -128,7 +138,17 @@ class EditorSession {
         ? null
         : (sheetFraction ?? this.sheetFraction),
     timelineExpanded: timelineExpanded ?? this.timelineExpanded,
+    inPoint: clearInOut ? null : (inPoint ?? this.inPoint),
+    outPoint: clearInOut ? null : (outPoint ?? this.outPoint),
   );
+
+  /// O trecho entre Entrada e Saida, quando as duas existem e fazem sentido.
+  (Duration, Duration)? get inOut {
+    final a = inPoint;
+    final b = outPoint;
+    if (a == null || b == null || b <= a) return null;
+    return (a, b);
+  }
 }
 
 class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
@@ -217,6 +237,16 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
 
   void toggleTimelineExpanded() =>
       state = state.copyWith(timelineExpanded: !state.timelineExpanded);
+
+  void setInPoint(Duration? t) => state = t == null
+      ? state.copyWith(clearInOut: state.outPoint == null)
+      : state.copyWith(inPoint: t);
+
+  void setOutPoint(Duration? t) => state = t == null
+      ? state.copyWith(clearInOut: state.inPoint == null)
+      : state.copyWith(outPoint: t);
+
+  void clearInOut() => state = state.copyWith(clearInOut: true);
 
   void setPreviewFraction(double f) =>
       state = state.copyWith(previewFraction: f.clamp(0.30, 0.60));

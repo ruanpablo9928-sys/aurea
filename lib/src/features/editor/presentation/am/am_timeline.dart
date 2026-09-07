@@ -15,6 +15,7 @@ import '../../domain/video_project.dart' as proj;
 import '../../application/media_preview_service.dart';
 import '../../application/proxy_service.dart';
 import '../../application/ui/pro_mode.dart';
+import '../../application/ui/editor_session.dart';
 import '../../../../core/storage/prefs.dart';
 import 'am_colors.dart';
 import 'layer_look.dart';
@@ -374,6 +375,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
     final caminho = controller.caminhoDoGrupo;
     final ima = ref.watch(magneticProvider);
     final pro = ref.watch(proModeProvider);
+    final sessao = ref.watch(editorSessionProvider);
     final selected = selectedId == null ? null : project.layerById(selectedId);
     final keyCount = selected?.keyframeTimes.length ?? 0;
     if (_revealedSelection != selectedId ||
@@ -508,6 +510,37 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                       ),
                                     ),
                                   ),
+                                  for (final (rotulo, tempo) in [
+                                    ('I', sessao.inPoint),
+                                    ('O', sessao.outPoint),
+                                  ])
+                                    if (tempo != null)
+                                      Positioned(
+                                        key: ValueKey('marca-$rotulo'),
+                                        left: _timeToPx(tempo) - 1,
+                                        top: 0,
+                                        bottom: 0,
+                                        child: IgnorePointer(
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Container(
+                                                width: 2,
+                                                color: AmColors.action,
+                                              ),
+                                              Text(
+                                                rotulo,
+                                                style: const TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: AmColors.action,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                   for (final m in project.markers)
                                     _MarcaNaRegua(
                                       marca: m,
@@ -640,7 +673,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                           ),
                         ),
                       ),
-                      if (pro)
+                      if (pro) ...[
                         _BotaoDaRegua(
                           key: const ValueKey('timeline-buscar'),
                           tooltip: 'Buscar camada',
@@ -651,6 +684,51 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                             color: AmColors.text,
                           ),
                         ),
+                        // ENTRADA / SAIDA (edicao de 3 pontos): toque marca
+                        // no cabecote; toque longo tira.
+                        _BotaoDaRegua(
+                          key: const ValueKey('timeline-entrada'),
+                          tooltip: 'Entrada no cabecote (toque longo: tirar)',
+                          ativo: sessao.inPoint != null,
+                          onTap: () => ref
+                              .read(editorSessionProvider.notifier)
+                              .setInPoint(widget.playback.time.value),
+                          onLongPress: () => ref
+                              .read(editorSessionProvider.notifier)
+                              .setInPoint(null),
+                          child: Text(
+                            'I',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: sessao.inPoint != null
+                                  ? AmColors.action
+                                  : AmColors.text,
+                            ),
+                          ),
+                        ),
+                        _BotaoDaRegua(
+                          key: const ValueKey('timeline-saida'),
+                          tooltip: 'Saida no cabecote (toque longo: tirar)',
+                          ativo: sessao.outPoint != null,
+                          onTap: () => ref
+                              .read(editorSessionProvider.notifier)
+                              .setOutPoint(widget.playback.time.value),
+                          onLongPress: () => ref
+                              .read(editorSessionProvider.notifier)
+                              .setOutPoint(null),
+                          child: Text(
+                            'O',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: sessao.outPoint != null
+                                  ? AmColors.action
+                                  : AmColors.text,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -850,10 +928,12 @@ class _BotaoDaRegua extends StatelessWidget {
     required this.onTap,
     required this.child,
     this.ativo = false,
+    this.onLongPress,
   });
 
   final String tooltip;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final Widget child;
   final bool ativo;
 
@@ -863,6 +943,7 @@ class _BotaoDaRegua extends StatelessWidget {
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         width: 30,
         height: 22,
