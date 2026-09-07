@@ -246,6 +246,22 @@ class _RastreioState extends State<_Rastreio> {
                 if (solucao != null && !solucao.isEmpty) ...[
                   const SizedBox(height: 10),
                   _Resultado(solucao),
+                  // A cena 3D e desenhada no tamanho da composicao, e o
+                  // angulo de visao resolvido vale para o quadro do
+                  // video. Proporcoes diferentes = 3D certo na
+                  // horizontal e desencontrado na vertical.
+                  if ((solucao.largura / solucao.altura -
+                              projeto.aspectRatio)
+                          .abs() >
+                      0.03) ...[
+                    const SizedBox(height: 8),
+                    const _Aviso(
+                      'O vídeo e a composição têm proporções diferentes. '
+                      'A cena 3D vai bater na horizontal e escorregar na '
+                      'vertical. Ajuste a composição para a proporção do '
+                      'vídeo antes de montar em cima.',
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   _Botao(
                     chave: 'rastreio-criar-cena',

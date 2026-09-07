@@ -2545,6 +2545,13 @@ class EditorController extends Notifier<VideoProject> {
   /// topo da pilha: o que estava por cima do video (uma legenda, uma
   /// marca) tem de continuar por cima da cena tambem.
   ///
+  /// A cena 3D e desenhada no tamanho da COMPOSICAO, e o angulo de visao
+  /// resolvido vale para a largura do quadro analisado. Os dois so
+  /// coincidem quando o clipe rastreado preenche a composicao — que e o
+  /// caso normal. Com o video encaixotado numa composicao de outra
+  /// proporcao, o 3D fica certo na horizontal e desencontrado na
+  /// vertical; a folha avisa quando isso acontece.
+  ///
   /// Devolve o id da camada criada.
   String? criarCenaDoRastreio(
     String layerId,

@@ -113,3 +113,14 @@ quadros. Seguir os pontos e resolver a câmera saem da thread da interface
 A solução é **gravada em disco** por camada. Resolver de novo a cada
 abertura custaria segundos e, pior, moveria o objeto que a pessoa colou
 no plano.
+
+## Uma limitação que vale saber
+
+A cena 3D é desenhada no tamanho da **composição**, e o ângulo de visão
+resolvido vale para a largura do **quadro analisado**. Os dois só
+coincidem quando o clipe rastreado preenche a composição — que é o caso
+normal.
+
+Com o vídeo encaixotado numa composição de outra proporção, o 3D fica
+certo na horizontal e desencontrado na vertical. A folha avisa quando as
+proporções diferem em mais de 3 %.
