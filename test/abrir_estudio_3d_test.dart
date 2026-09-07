@@ -69,7 +69,19 @@ void main() {
 
     await _abrirProjeto(
       tester,
-      (context, ref) => showLayerMenu(context, ref, cena, playback),
+      // O E2 (LayerToolsDock) e a grade da camada desde a Fase 1 do
+      // redesign; aqui ele abre numa folha so para o teste ter um botao.
+      (context, ref) => showModalBottomSheet<void>(
+        context: context,
+        builder: (_) => SizedBox(
+          height: 460,
+          child: LayerToolsDock(
+            layer: cena,
+            playback: playback,
+            onAction: (_) {},
+          ),
+        ),
+      ),
     );
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();

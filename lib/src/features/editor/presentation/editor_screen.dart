@@ -33,6 +33,7 @@ import 'am/shape_panel.dart';
 import 'am/text_animators_panel.dart';
 import 'am/transform_panel.dart';
 import 'context/add_toolbar.dart';
+import 'context/categories/text_panel.dart';
 import 'context/context_sheet.dart';
 import 'context/layer_header.dart';
 import 'shell/layer_actions.dart';
@@ -190,6 +191,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     EditorPanel.effects => 'Efeitos',
     EditorPanel.curve => 'Curva · ${labelOfProp(s.curveProp)}',
     EditorPanel.animators => 'Animacao de texto',
+    EditorPanel.editText => 'Editar texto',
     EditorPanel.editShape => 'Editar forma',
     EditorPanel.editPoints => 'Editar pontos',
   };
@@ -263,11 +265,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   void _openCurve(LayerProp prop) => _session.openCurve(prop);
 
-  Future<void> _onTapLayer(Layer layer) async {
+  /// Tocar na barra JA selecionada: o E2 ja esta no painel; so garante
+  /// que ele esteja a vista (sobe do nivel espiar para a metade).
+  void _onTapLayer(Layer layer) {
     _playback.pause();
-    final action = await showLayerMenu(context, ref, layer, _playback);
-    if (!mounted || action == null) return;
-    _openLayerAction(layer, action);
+    if (_s.sheetLevel == SheetLevel.peek || (_s.sheetFraction ?? 1) < 0.3) {
+      _session.setSheetLevel(SheetLevel.half);
+    }
   }
 
   void _openLayerAction(Layer layer, LayerMenuAction action) {
@@ -286,7 +290,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       case LayerMenuAction.effects:
         _session.openPanel(EditorPanel.effects);
       case LayerMenuAction.editText:
-        _editText(layer);
+        _session.openPanel(EditorPanel.editText);
       case LayerMenuAction.textAnimators:
         _session.openPanel(EditorPanel.animators);
       case LayerMenuAction.editShape:
@@ -350,54 +354,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     ref.read(pathEditCursorProvider.notifier).state = null;
   }
 
-  Future<void> _editText(Layer layer) async {
-    if (layer is! TextLayer) return;
-    final controller = ref.read(editorControllerProvider.notifier);
-    final textController = TextEditingController(text: layer.text);
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      isScrollControlled: true,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          16,
-          20,
-          16 + MediaQuery.of(sheetContext).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Texto',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AmColors.text,
-              ),
-            ),
-            const SizedBox(height: 10),
-            CupertinoTextField(
-              controller: textController,
-              autofocus: true,
-              maxLines: 3,
-              minLines: 1,
-              style: const TextStyle(fontSize: 17, color: AmColors.text),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AmColors.chip,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              onChanged: (v) => controller.editTextLayer(layer.id, text: v),
-              onSubmitted: (_) => Navigator.of(sheetContext).pop(),
-            ),
-          ],
-        ),
-      ),
-    );
-    textController.dispose();
-  }
 
   // ------------------------------------------------------- adicionar
 
@@ -656,6 +612,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         playback: _playback,
         onBack: _back,
       ),
+      EditorPanel.editText => TextPanel(
+        playback: _playback,
+        onAnimar: () => _session.openPanel(EditorPanel.animators),
+      ),
       EditorPanel.editShape => ShapePanel(
         playback: _playback,
         tool: s.shapeTool,
@@ -691,6 +651,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             EditorPanel.effects => layer.effectTimesUs,
             EditorPanel.colorFill => const <int>{},
             EditorPanel.animators => null,
+            EditorPanel.editText => null,
             EditorPanel.editShape => layer.moduleTimesUs,
             EditorPanel.editPoints =>
               (ref.watch(pathEditTargetProvider)?.forma ?? true)

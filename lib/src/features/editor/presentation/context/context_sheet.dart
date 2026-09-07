@@ -82,17 +82,37 @@ class ContextSheet extends StatelessWidget {
                       child: Row(
                         children: [
                           if (onBack != null)
-                            GestureDetector(
-                              key: const ValueKey('context-sheet-back'),
-                              behavior: HitTestBehavior.opaque,
-                              onTap: onBack,
-                              child: SizedBox(
-                                width: 28,
-                                height: handleHeight,
-                                child: Icon(
-                                  Icons.chevron_left,
-                                  size: 16,
-                                  color: t.text,
+                            // "Um botao de voltar proprio": todo painel tem
+                            // um Voltar escrito, sempre no mesmo lugar.
+                            Tooltip(
+                              message: 'Voltar às ferramentas da camada',
+                              child: GestureDetector(
+                                key: const ValueKey('painel-voltar'),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: onBack,
+                                child: SizedBox(
+                                  height: handleHeight,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.chevron_left,
+                                        size: 16,
+                                        color: t.text,
+                                      ),
+                                      Text(
+                                        'Voltar',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          height: 1.1,
+                                          fontWeight: FontWeight.w600,
+                                          color: t.text,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                  ),
                                 ),
                               ),
                             )

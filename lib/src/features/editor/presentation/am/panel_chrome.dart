@@ -124,7 +124,8 @@ class AmPanelChrome extends StatelessWidget {
   }
 }
 
-/// O TRILHO ESQUERDO: `← ◆ ⌇`, na mesma posicao em todo painel.
+/// O TRILHO ESQUERDO: `◆ ⌇`, na mesma posicao em todo painel. O Voltar
+/// mora no cabecalho do painel contextual (Fase 3).
 ///
 /// Tres itens, nao quatro: o `⋯` era um menu escondido, e o que ele abria
 /// virou botao visivel do proprio painel.
@@ -160,7 +161,6 @@ class AmLeftRail extends StatelessWidget {
       child: Column(
         children: [
           for (final button in <Widget>[
-            AmVoltar(onTap: onBack),
             Tooltip(
               message: temKfAqui
                   ? 'Remover keyframe neste instante'

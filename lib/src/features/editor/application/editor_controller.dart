@@ -5077,6 +5077,7 @@ class EditorController extends Notifier<VideoProject> {
     double? fontSize,
     Color? color,
     String? fontFamily,
+    bool? bold,
     bool clearFont = false,
   }) {
     final layer = _layer(id);
@@ -5088,6 +5089,7 @@ class EditorController extends Notifier<VideoProject> {
         fontSize: fontSize,
         color: color,
         fontFamily: fontFamily,
+        bold: bold,
         clearFont: clearFont,
       ),
     );

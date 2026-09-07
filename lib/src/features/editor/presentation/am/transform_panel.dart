@@ -13,6 +13,7 @@ import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
 import 'panel_chrome.dart';
+import '../context/parameter_row.dart';
 import 'property_keyframe_context.dart';
 
 export '../../application/ui/editor_session.dart'
@@ -21,6 +22,26 @@ export '../../application/ui/editor_session.dart'
 /// Painel "Movimentacao e transformacao": trilho esquerdo (voltar,
 /// keyframe, curva), controle central com navegacao de keyframes
 /// e sub-ferramentas a direita (posicao/rotacao/escala/skew/pivo).
+/// O losango de uma linha: estado da propriedade neste instante.
+KeyframeState _kf(
+  WidgetRef ref,
+  Layer layer,
+  LayerProp prop,
+  Duration t,
+  VoidCallback? onCurve,
+) {
+  final local = layer.localTime(t).inMicroseconds;
+  final times = keyframeTimesForProp(layer, prop);
+  return KeyframeState(
+    animated: times.isNotEmpty,
+    here: times.any((us) => (us - local).abs() < 8000),
+    onToggle: () => ref
+        .read(editorControllerProvider.notifier)
+        .toggleKeyframe(layer.id, t, prop),
+    onCurve: times.isNotEmpty ? onCurve : null,
+  );
+}
+
 class TransformPanel extends ConsumerStatefulWidget {
   const TransformPanel({
     super.key,
@@ -373,38 +394,18 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
 
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: amNumber(pos.dx),
-                label: 'X',
-                width: double.infinity,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: amNumber(pos.dy),
-                label: 'Y',
-                width: double.infinity,
-              ),
-            ),
-            if (layer.is3D) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: AmValueChip(
-                  compact: true,
-                  text: amNumber(z),
-                  label: 'Z',
-                  width: double.infinity,
-                ),
-              ),
-            ],
-          ],
+        ParameterPointRow(
+          label: 'Posição',
+          x: pos.dx,
+          y: pos.dy,
+          z: layer.is3D ? z : null,
+          onX: (v) => controller.editPosition(layer.id, t, Offset(v, pos.dy)),
+          onY: (v) => controller.editPosition(layer.id, t, Offset(pos.dx, v)),
+          onZ: layer.is3D
+              ? (v) => controller.editPositionZ(layer.id, t, v)
+              : null,
+          keyframe: _kf(ref, layer, LayerProp.position, t, null),
+          onReset: () => controller.resetProp(layer.id, LayerProp.position),
         ),
         const SizedBox(height: 4),
         Expanded(
@@ -513,27 +514,14 @@ class _PivotControl extends ConsumerWidget {
 
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: amNumber(pivot.dx),
-                label: 'Pivo X',
-                width: double.infinity,
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: amNumber(pivot.dy),
-                label: 'Pivo Y',
-                width: double.infinity,
-              ),
-            ),
-          ],
+        ParameterPointRow(
+          label: 'Pivô',
+          x: pivot.dx,
+          y: pivot.dy,
+          onX: (v) => controller.editPivot(layer.id, t, Offset(v, pivot.dy)),
+          onY: (v) => controller.editPivot(layer.id, t, Offset(pivot.dx, v)),
+          keyframe: _kf(ref, layer, LayerProp.pivot, t, null),
+          onReset: () => controller.editPivot(layer.id, t, Offset.zero),
         ),
         const SizedBox(height: 10),
         Expanded(
@@ -678,7 +666,19 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
                 size: size,
                 painter: _DialPainter(radius: radius),
               ),
-              Container(
+              GestureDetector(
+                key: const ValueKey('rotation-valor'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  final v = await showNumberInput(
+                    context,
+                    value: deg,
+                    unit: '°',
+                    decimals: 1,
+                  );
+                  if (v != null) controller.editRotation(layer.id, t, v);
+                },
+                child: Container(
                 width: 190,
                 height: 62,
                 alignment: Alignment.center,
@@ -696,6 +696,7 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
                     color: AmColors.accent,
                   ),
                 ),
+              ),
               ),
               Transform.translate(
                 offset: Offset(
@@ -879,77 +880,69 @@ class _ScaleControl extends ConsumerWidget {
     final sy = layer.scaleY.valueAt(local);
     final controller = ref.read(editorControllerProvider.notifier);
 
+    void aplicar(bool largura, double v) => linked
+        ? controller.editScaleUniform(layer.id, t, v / 100)
+        : largura
+        ? controller.editScaleX(layer.id, t, v / 100)
+        : controller.editScaleY(layer.id, t, v / 100);
+
     return Column(
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: amNumber(sx * 100),
+              child: ParameterRow(
                 label: 'Largura',
-                width: double.infinity,
+                value: sx * 100,
+                min: 1,
+                max: 2000,
+                unitsPerPixel: 0.6,
+                unit: '%',
+                accentCenter: true,
+                rulerKey: const ValueKey('scale-width-ruler'),
+                valueKey: const ValueKey('scale-width-valor'),
+                keyframe: _kf(ref, layer, LayerProp.scale, t, null),
+                onReset: () => controller.resetProp(layer.id, LayerProp.scale),
+                onChanged: (v) => aplicar(true, v),
               ),
             ),
-            GestureDetector(
-              onTap: onToggleLink,
-              child: Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.symmetric(horizontal: 5),
-                decoration: BoxDecoration(
-                  color: linked ? const Color(0xFFE9EDF2) : AmColors.chip,
-                  borderRadius: BorderRadius.circular(10),
+            Tooltip(
+              message: linked ? 'Proporção travada' : 'Proporção livre',
+              child: GestureDetector(
+                onTap: onToggleLink,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  margin: const EdgeInsets.only(left: 4),
+                  decoration: BoxDecoration(
+                    color: linked ? const Color(0xFFE9EDF2) : AmColors.chip,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.link,
+                    size: 20,
+                    color: linked ? const Color(0xFF12151A) : AmColors.muted,
+                  ),
                 ),
-                child: Icon(
-                  CupertinoIcons.link,
-                  size: 20,
-                  color: linked ? const Color(0xFF12151A) : AmColors.muted,
-                ),
-              ),
-            ),
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: amNumber(sy * 100),
-                label: 'Altura',
-                width: double.infinity,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        ...[
-          Expanded(
-            child: AmTickRuler(
-              value: sx * 100,
-              min: 1,
-              max: 2000,
-              unitsPerPixel: 0.6,
-              height: double.infinity,
-              key: const ValueKey('scale-width-ruler'),
-              onChanged: (v) => linked
-                  ? controller.editScaleUniform(layer.id, t, v / 100)
-                  : controller.editScaleX(layer.id, t, v / 100),
-            ),
+        Padding(
+          padding: const EdgeInsets.only(right: 36),
+          child: ParameterRow(
+            label: 'Altura',
+            value: sy * 100,
+            min: 1,
+            max: 2000,
+            unitsPerPixel: 0.6,
+            unit: '%',
+            rulerKey: const ValueKey('scale-height-ruler'),
+            valueKey: const ValueKey('scale-height-valor'),
+            onChanged: (v) => aplicar(false, v),
           ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: AmTickRuler(
-              value: sy * 100,
-              min: 1,
-              max: 2000,
-              unitsPerPixel: 0.6,
-              accentCenter: false,
-              height: double.infinity,
-              key: const ValueKey('scale-height-ruler'),
-              onChanged: (v) => linked
-                  ? controller.editScaleUniform(layer.id, t, v / 100)
-                  : controller.editScaleY(layer.id, t, v / 100),
-            ),
-          ),
-        ],
+        ),
+        const Spacer(),
       ],
     );
   }
@@ -971,51 +964,28 @@ class _SkewControl extends ConsumerWidget {
 
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: '${amNumber(kx, 2)}°',
-                label: 'X Skew',
-                width: double.infinity,
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: AmValueChip(
-                compact: true,
-                text: '${amNumber(ky, 2)}°',
-                label: 'Y Skew',
-                width: double.infinity,
-              ),
-            ),
-          ],
+        ParameterRow(
+          label: 'Inclinar X',
+          value: kx,
+          min: -80,
+          max: 80,
+          unitsPerPixel: 0.25,
+          unit: '°',
+          accentCenter: true,
+          keyframe: _kf(ref, layer, LayerProp.skew, t, null),
+          onReset: () => controller.resetProp(layer.id, LayerProp.skew),
+          onChanged: (v) => controller.editSkewX(layer.id, t, v),
         ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: AmTickRuler(
-            value: kx,
-            min: -80,
-            max: 80,
-            unitsPerPixel: 0.25,
-            height: double.infinity,
-            onChanged: (v) => controller.editSkewX(layer.id, t, v),
-          ),
+        ParameterRow(
+          label: 'Inclinar Y',
+          value: ky,
+          min: -80,
+          max: 80,
+          unitsPerPixel: 0.25,
+          unit: '°',
+          onChanged: (v) => controller.editSkewY(layer.id, t, v),
         ),
-        const SizedBox(height: 6),
-        Expanded(
-          child: AmTickRuler(
-            value: ky,
-            min: -80,
-            max: 80,
-            unitsPerPixel: 0.25,
-            accentCenter: false,
-            height: double.infinity,
-            onChanged: (v) => controller.editSkewY(layer.id, t, v),
-          ),
-        ),
+        const Spacer(),
       ],
     );
   }
@@ -1038,13 +1008,25 @@ class _OpacityControl extends ConsumerWidget {
 
     return Column(
       children: [
-        AmValueChip(
-          compact: true,
-          text: '${amNumber(op * 100, 0)}%',
+        ParameterRow(
           label: 'Opacidade',
-          width: 132,
+          value: op * 100,
+          min: 0,
+          max: 100,
+          unitsPerPixel: 0.35,
+          decimals: 0,
+          unit: '%',
+          valueKey: const ValueKey('opacidade-valor'),
+          keyframe: _kf(ref, layer, LayerProp.opacity, t, null),
+          onReset: () => controller.resetProp(layer.id, LayerProp.opacity),
+          onChanged: (v) => controller.editOpacity(
+            layer.id,
+            playback.time.value,
+            (v / 100).clamp(0.0, 1.0),
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        // A regua larga continua: arrasto grosso com o dedo inteiro.
         Expanded(
           child: AmTickRuler(
             value: op * 100,

@@ -31,6 +31,7 @@ enum EditorPanel {
   effects,
   curve,
   animators,
+  editText,
   editShape,
   editPoints,
 }

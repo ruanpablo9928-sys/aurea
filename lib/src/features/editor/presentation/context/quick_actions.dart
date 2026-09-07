@@ -346,16 +346,28 @@ class QuickActionsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AureaTokens.of(context);
+    // Row dentro de rolagem, nao ListView: sao poucas acoes, e todas
+    // montadas de uma vez sao achaveis (por teste e por leitor de tela).
     return SizedBox(
       height: height,
-      child: ListView.separated(
+      child: SingleChildScrollView(
         key: const ValueKey('quick-actions'),
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 10),
-        itemCount: actions.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 4),
-        itemBuilder: (context, i) {
-          final a = actions[i];
+        child: Row(
+          children: [
+            for (var i = 0; i < actions.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              _acao(context, t, actions[i]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _acao(BuildContext context, AureaTokens t, QuickAction a) {
+    {
           return Tooltip(
             message: a.label,
             child: GestureDetector(
@@ -397,9 +409,7 @@ class QuickActionsRow extends StatelessWidget {
               ),
             ),
           );
-        },
-      ),
-    );
+    }
   }
 }
 

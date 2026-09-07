@@ -1,6 +1,7 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/effect_preset_store.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
+import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/element3d.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/video_project.dart';
@@ -35,6 +36,8 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     seed(container.read(editorControllerProvider.notifier));
+    // Pro: as acoes rapidas Caminho e Tempo so existem no Pro.
+    container.read(proModeProvider.notifier).set(true);
     final observer = _NavigationObserver();
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -79,7 +82,7 @@ void main() {
   // rota), nao uma ficha de parametros. O teste dela vem logo abaixo.
   final cases = <(String, void Function(EditorController), String)>[
     ('cor da cena 3D', scene, 'Cor e\npreench.'),
-    ('cameras', scene, 'Cameras'),
+    ('cameras', scene, 'Câmeras'),
     ('Grid / Clonar', grid, 'Clonar'),
     ('Elemento 3D', element, 'Elemento\n3D'),
     ('cor do elemento 3D', element, 'Cor e\npreench.'),
@@ -122,9 +125,11 @@ void main() {
       for (var repeat = 0; repeat < 2; repeat++) {
         await tester.tap(find.text('abrir menu'));
         await tester.pumpAndSettle();
+        // Acao rapida e tile podem ter o mesmo rotulo (Volume): o primeiro
+        // serve — os dois abrem a mesma ficha.
         final target = find.text(button).evaluate().isNotEmpty
-            ? find.text(button)
-            : find.byTooltip(button);
+            ? find.text(button).first
+            : find.byTooltip(button).first;
         await tester.ensureVisible(target);
         await tester.tap(target);
         await tester.pumpAndSettle();
@@ -236,6 +241,7 @@ class _MenuHost extends ConsumerStatefulWidget {
 class _MenuHostState extends ConsumerState<_MenuHost>
     with SingleTickerProviderStateMixin {
   late final PlaybackController playback;
+  bool _dock = false;
 
   @override
   void initState() {
@@ -263,14 +269,18 @@ class _MenuHostState extends ConsumerState<_MenuHost>
           child: const Text('adicionar'),
         ),
         TextButton(
-          onPressed: () => showLayerMenu(
-            context,
-            ref,
-            ref.read(editorControllerProvider).layers.first,
-            playback,
-          ),
+          onPressed: () => setState(() => _dock = true),
           child: const Text('abrir menu'),
         ),
+        // O E2 real (LayerToolsDock), no lugar do menu modal antigo.
+        if (_dock)
+          Expanded(
+            child: LayerToolsDock(
+              layer: ref.watch(editorControllerProvider).layers.first,
+              playback: playback,
+              onAction: (_) {},
+            ),
+          ),
       ],
     ),
   );

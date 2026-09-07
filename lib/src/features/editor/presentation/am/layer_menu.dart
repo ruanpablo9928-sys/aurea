@@ -25,29 +25,21 @@ import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import '../../application/ui/pro_mode.dart';
 import '../context/layer_header.dart';
+import '../context/parameter_row.dart';
 import '../context/quick_actions.dart';
 import 'audio_sheet.dart';
-import 'beats_sheet.dart';
-import 'beat_pulse_sheet.dart';
 import '../../../../core/ui/snack.dart';
 import 'am_widgets.dart';
 import 'layer_look.dart';
-import 'cameras_sheet.dart';
 import 'caption_style_sheet.dart';
 import 'color_picker_sheet.dart';
 import 'curve_panel.dart';
-import 'decupagem_screen.dart';
-import 'font_sheet.dart';
 import 'gradient_fill_sheet.dart';
 import 'oficio_sheets.dart';
 import 'panel_chrome.dart';
 import 'path_edit_sheet.dart';
-import 'precomp_sheet.dart';
 import 'scene3d_sheet.dart';
 import 'scene3d_studio.dart';
-import 'speed_sheet.dart';
-import 'text_path_sheet.dart';
-import '../widgets/add_layer_sheet.dart' show showCaptionCreationSheet;
 
 /// Acao escolhida no menu da camada.
 enum LayerMenuAction {
@@ -64,473 +56,6 @@ enum LayerMenuAction {
   stroke,
 }
 
-/// Menu que abre ao tocar na barra da camada selecionada: fileira de
-/// utilidades (icones pequenos) + grade fixa de 7 secoes em 2 fileiras.
-Future<LayerMenuAction?> showLayerMenu(
-  BuildContext context,
-  WidgetRef ref,
-  Layer layer,
-  PlaybackController playback,
-) {
-  // Quem decide o que aparece na grade e o contrato das secoes, nao este
-  // widget: e assim que "no maximo sete" e "nada inerte" viram teste.
-  final secoes = secoesDe(layer);
-  final controller = ref.read(editorControllerProvider.notifier);
-  var menuFechado = false;
-
-  return showModalBottomSheet<LayerMenuAction>(
-    context: context,
-    backgroundColor: AmColors.panel,
-    // Sem isScrollControlled o modal para em 9/16 da tela; com a fileira
-    // de utilidades + duas fileiras de 68 px o conteudo passa disso em
-    // aparelho baixo e cortaria a segunda fileira. A Column com
-    // mainAxisSize.min continua abracando o conteudo (nao vira tela cheia).
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    // StatefulBuilder porque Mudo alterna SEM fechar o sheet e o icone
-    // precisa redesenhar no lugar.
-    builder: (_) => StatefulBuilder(
-      builder: (sheetContext, setSheetState) {
-        // So este menu pode ser fechado, uma unica vez. Um segundo pop
-        // consumiria a rota do editor (ou outro painel aberto depois).
-        bool fecharMenu([LayerMenuAction? action]) {
-          if (menuFechado || !sheetContext.mounted) return false;
-          final route = ModalRoute.of(sheetContext);
-          if (route is! PopupRoute || !route.isCurrent) return false;
-          menuFechado = true;
-          Navigator.of(sheetContext).pop(action);
-          return true;
-        }
-
-        // Fecha o modal e so DEPOIS abre o sheet: showParamSheet mora no
-        // Scaffold hospedeiro (paramSheetHostKey); aberto com o modal em
-        // pe ficaria atras da barreira.
-        void abrirDepois(void Function() abrir) {
-          if (!fecharMenu()) return;
-          Future.microtask(() {
-            if (context.mounted) abrir();
-          });
-        }
-
-        // `layer` e um snapshot: o estado de mudo e lido do controller a
-        // cada redesenho, senao o icone nao acompanha o toggle.
-        final mudo = controller.audioSpecOf(layer.id)?.muted ?? false;
-        final temSom = layer is AudioLayer || layer is VideoLayer;
-        final pai = ref
-            .read(editorControllerProvider)
-            .linkFor(layer.id, LayerProp.parent);
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 34,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  layer.name,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                // INSPETOR (spec barra-de-acoes §4, forma do Alight
-                // Motion): UMA fileira de UTILIDADES (icones pequenos:
-                // acoes rapidas e sheets que nao trocam a pagina do
-                // editor; so as que se aplicam ao tipo, com "Mais" fixo
-                // no fim) + no maximo 7 editores em 2 fileiras (3
-                // largos + 4). A grade conserva os lugares, mas um editor
-                // que nao se aplica ao tipo fica vazio — nenhum controle
-                // visivel pode ser inerte. Comandos estruturais
-                // (dividir/duplicar/agrupar/excluir) vivem na barra de
-                // acoes, nao aqui.
-                SizedBox(
-                  height: 40,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              // ORDEM: quem esta por cima de quem. Nao
-                              // fecha o menu, para dar para subir varias
-                              // vezes seguidas.
-                              _UtilIcon(
-                                icon: CupertinoIcons.arrow_up_to_line,
-                                label: 'P/ frente',
-                                onTap: () => controller.reorderLayer(layer.id, -1),
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.arrow_down_to_line,
-                                label: 'P/ tras',
-                                onTap: () => controller.reorderLayer(layer.id, 1),
-                              ),
-                              if (temSom) ...[
-                                _UtilIcon(
-                                  icon: CupertinoIcons.speedometer,
-                                  label: 'Velocidade',
-                                  onTap: () => abrirDepois(
-                                    () =>
-                                        showSpeedSheet(context, ref, layer.id),
-                                  ),
-                                ),
-                                _UtilIcon(
-                                  icon: CupertinoIcons.scissors,
-                                  label: 'Cortes',
-                                  onTap: () => abrirDepois(
-                                    () => openDecupagem(context, ref, layer.id),
-                                  ),
-                                ),
-                                // Mudo e toggle no lugar (nao abre nada):
-                                // nao ha metodo de mudo no controller, e
-                                // composto com updateAudioSpec + copyWith.
-                                _UtilIcon(
-                                  icon: mudo
-                                      ? CupertinoIcons.speaker_slash_fill
-                                      : CupertinoIcons.speaker_slash,
-                                  label: mudo ? 'Ativar som' : 'Mudo',
-                                  aceso: mudo,
-                                  onTap: () {
-                                    controller.updateAudioSpec(
-                                      layer.id,
-                                      (a) => a.copyWith(muted: !a.muted),
-                                    );
-                                    setSheetState(() {});
-                                  },
-                                ),
-                                _UtilIcon(
-                                  icon: CupertinoIcons.waveform,
-                                  label: 'Som',
-                                  onTap: () => abrirDepois(
-                                    () =>
-                                        showAudioSheet(context, ref, layer.id),
-                                  ),
-                                ),
-                                _UtilIcon(
-                                  icon: CupertinoIcons.metronome,
-                                  label: 'Batidas',
-                                  onTap: () => abrirDepois(
-                                    () =>
-                                        showBeatsSheet(context, ref, layer.id),
-                                  ),
-                                ),
-                              ],
-                              if (layer is VideoLayer)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.captions_bubble,
-                                  label: 'Legendar',
-                                  onTap: () {
-                                    Navigator.of(sheetContext).pop();
-                                    Future.microtask(() {
-                                      if (context.mounted) {
-                                        showCaptionCreationSheet(context, ref);
-                                      }
-                                    });
-                                  },
-                                ),
-                              if (layer is VideoLayer) ...[
-                                _UtilIcon(
-                                  icon: CupertinoIcons.crop,
-                                  label: 'Reenquadrar sozinho',
-                                  onTap: () async {
-                                    Navigator.of(sheetContext).pop();
-                                    if (!context.mounted) return;
-                                    AureaSnack.show(
-                                      context,
-                                      'Achando o assunto...',
-                                    );
-                                    final n = await controller.autoReframeLayer(
-                                      layer.id,
-                                    );
-                                    if (!context.mounted) return;
-                                    if (n == null) {
-                                      AureaSnack.show(
-                                        context,
-                                        'Nao consegui ler esse video',
-                                      );
-                                      return;
-                                    }
-                                    AureaSnack.show(
-                                      context,
-                                      'Reenquadrado seguindo o assunto',
-                                      actionLabel: 'Desfazer',
-                                      onAction: controller.undo,
-                                    );
-                                  },
-                                ),
-                                _UtilIcon(
-                                  icon: CupertinoIcons.hand_raised,
-                                  label: 'Estabilizar',
-                                  onTap: () async {
-                                    Navigator.of(sheetContext).pop();
-                                    if (!context.mounted) return;
-                                    AureaSnack.show(
-                                      context,
-                                      'Lendo o video para estabilizar...',
-                                    );
-                                    final n = await controller.stabilizeLayer(
-                                      layer.id,
-                                    );
-                                    if (!context.mounted) return;
-                                    if (n == null) {
-                                      AureaSnack.show(
-                                        context,
-                                        'Nao consegui ler esse video',
-                                      );
-                                      return;
-                                    }
-                                    AureaSnack.show(
-                                      context,
-                                      'Estabilizado com $n quadros de referencia',
-                                      actionLabel: 'Desfazer',
-                                      onAction: controller.undo,
-                                    );
-                                  },
-                                ),
-                              ],
-                              // 3D DA CAMADA e MOTION BLUR nesta fileira.
-                              // Mascara agora mora dentro de Mesclagem e
-                              // opacidade, sem criar uma oitava secao.
-                              // Tudo daqui em diante e ESTUDIO (fora do
-                              // nucleo).
-                              _UtilIcon(
-                                icon: layer.is3D
-                                    ? CupertinoIcons.cube_fill
-                                    : CupertinoIcons.cube,
-                                label: layer.is3D ? '3D ligado' : 'Ligar 3D',
-                                aceso: layer.is3D,
-                                onTap: () {
-                                  controller.toggle3D(layer.id);
-                                  setSheetState(() {});
-                                },
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.speedometer,
-                                label: 'Motion blur',
-                                aceso: ref
-                                    .read(editorControllerProvider)
-                                    .metaOf(layer.id)
-                                    .motionBlur,
-                                onTap: () {
-                                  controller.toggleLayerMotionBlurReal(
-                                    layer.id,
-                                  );
-                                  setSheetState(() {});
-                                },
-                              ),
-                              if (layer is! NullLayer &&
-                                  layer is! VideoLayer &&
-                                  layer is! ParticlesLayer &&
-                                  layer is! Element3DLayer)
-                                _UtilIcon(
-                                  icon: CupertinoIcons.cube,
-                                  label: 'Extrude 3D',
-                                  aceso:
-                                      ref
-                                          .read(editorControllerProvider)
-                                          .metaOf(layer.id)
-                                          .extrude >
-                                      0,
-                                  onTap: () => abrirDepois(
-                                    () => showExtrudeSheet(
-                                      context,
-                                      ref,
-                                      layer.id,
-                                    ),
-                                  ),
-                                ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.music_note_2,
-                                label: 'Pulsar na batida',
-                                onTap: () => abrirDepois(
-                                  () => showBeatPulseSheet(
-                                    context,
-                                    ref,
-                                    layer.id,
-                                  ),
-                                ),
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.repeat,
-                                label: 'Loop de keyframes',
-                                onTap: () => abrirDepois(
-                                  () => showLoopSheet(context, ref, layer.id),
-                                ),
-                              ),
-                              _UtilIcon(
-                                icon: CupertinoIcons.tag,
-                                label: 'Organizar (rotulo, solo, timida)',
-                                onTap: () => abrirDepois(
-                                  () =>
-                                      showOrganizeSheet(context, ref, layer.id),
-                                ),
-                              ),
-                              _UtilIcon(
-                                icon: pai != null
-                                    ? CupertinoIcons.link_circle_fill
-                                    : CupertinoIcons.link,
-                                label: pai != null
-                                    ? 'Soltar do pai'
-                                    : 'Vincular ao pai',
-                                aceso: pai != null,
-                                onTap: () {
-                                  if (pai != null) {
-                                    Navigator.of(sheetContext).pop();
-                                    controller.unlinkProperty(
-                                      layer.id,
-                                      LayerProp.parent,
-                                    );
-                                    return;
-                                  }
-                                  abrirDepois(
-                                    () => showParentSheet(
-                                      context,
-                                      ref,
-                                      layer,
-                                      playback.time.value,
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // OS COMANDOS QUE SOBRARAM DO MENU ESCONDIDO.
-                      // Cada um aqui e um icone visivel, nao um item de
-                      // lista dentro de um "Mais".
-                      if (layer is TextLayer) ...[
-                        _UtilIcon(
-                          icon: CupertinoIcons.textformat,
-                          label: 'Fonte',
-                          onTap: () => abrirDepois(
-                            () => showFontSheet(context, ref, layer.id),
-                          ),
-                        ),
-                        _UtilIcon(
-                          icon: CupertinoIcons.circle_grid_hex,
-                          label: 'Caminho',
-                          onTap: () => abrirDepois(
-                            () => showTextPathSheet(context, ref, layer.id),
-                          ),
-                        ),
-                        _UtilIcon(
-                          icon: CupertinoIcons.textformat_abc_dottedunderline,
-                          label: 'Animar',
-                          onTap: () =>
-                              Navigator.of(sheetContext)
-                                  .pop(LayerMenuAction.textAnimators),
-                        ),
-                      ],
-                      if (layer is Scene3DLayer) ...[
-                        _UtilIcon(
-                          icon: CupertinoIcons.videocam,
-                          label: 'Cameras',
-                          onTap: () => abrirDepois(
-                            () => showCamerasSheet(
-                              context,
-                              ref,
-                              layer.id,
-                              playback,
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (layer is GroupLayer) ...[
-                        _UtilIcon(
-                          icon: CupertinoIcons.timer,
-                          label: 'Tempo',
-                          onTap: () => abrirDepois(
-                            () => showPrecompSheet(
-                              context,
-                              ref,
-                              layer.id,
-                              playback,
-                            ),
-                          ),
-                        ),
-                        _UtilIcon(
-                          icon: CupertinoIcons.square_stack_3d_down_right,
-                          label: 'Desagrupar',
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            controller.ungroupLayer(layer.id);
-                          },
-                        ),
-                      ],
-                      _UtilIcon(
-                        icon: CupertinoIcons.delete_left,
-                        label: 'Excluir e\nfechar',
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          controller.rippleDeleteLayer(layer.id);
-                        },
-                      ),
-                      _UtilIcon(
-                        icon: CupertinoIcons.arrow_left_to_line,
-                        label: 'Fechar\nburacos',
-                        onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          if (controller.gapCount() == 0) {
-                            showReasonToast(
-                              context,
-                              'Nao ha buraco para fechar',
-                            );
-                            return;
-                          }
-                          controller.closeTimelineGaps();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // A GRADE, MONTADA A PARTIR DO CONTRATO.
-                //
-                // Antes cada tile carregava a propria condicao de
-                // aparecer, e contar as secoes era ler duzentas linhas de
-                // widget. Agora o contrato diz quais secoes o tipo tem, e
-                // a grade so desenha — nao ha como as duas listas
-                // discordarem, porque so existe uma.
-                ..._fileiras(
-                  secoes,
-                  (secao) => _tileDaSecao(
-                    secao,
-                    context: context,
-                    fecharCom: fecharMenu,
-                    ref: ref,
-                    layer: layer,
-                    playback: playback,
-                    abrirDepois: abrirDepois,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    ),
-  );
-}
-
-/// Selecionar revela ferramentas sem abrir um modal. O contrato e os comandos
-/// são os mesmos do menu completo; as utilidades continuam em Mais ações.
 class LayerToolsDock extends ConsumerWidget {
   const LayerToolsDock({
     super.key,
@@ -4114,47 +3639,6 @@ Future<void> showEffectPresetsSheet(
 /// rapida ou sheet que nao troca a pagina do editor. Nao entra na grade
 /// porque nao e editor de propriedade. Sem bolha, sem ripple: so o icone
 /// num alvo de 40 px; `aceso` sinaliza estado ligado (ex.: mudo ativo).
-class _UtilIcon extends StatelessWidget {
-  const _UtilIcon({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.aceso = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool aceso;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: label,
-      button: true,
-      child: Tooltip(
-        message: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: SizedBox(
-            width: 42,
-            height: 40,
-            child: Icon(
-              icon,
-              size: 20,
-              color: aceso ? AmColors.accent : AmColors.text,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Botao GRANDE da grade de secoes: superficie chip com cantos
-/// arredondados e SEM borda, icone em cima e rotulo embaixo, 68 px de
-/// altura para o dedo acertar sem mirar.
 class _MenuTile extends StatelessWidget {
   const _MenuTile({
     required this.icon,
@@ -4212,12 +3696,12 @@ const amBlendModes = <(String, BlendMode)>[
   ('Multiplicar', BlendMode.multiply),
   ('Color Burn', BlendMode.colorBurn),
   ('Clarear', BlendMode.lighten),
-  ('Screen', BlendMode.screen),
+  ('Tela', BlendMode.screen),
   ('Color Dodge', BlendMode.colorDodge),
   ('Adicionar', BlendMode.plus),
-  ('Overlay', BlendMode.overlay),
-  ('Soft Light', BlendMode.softLight),
-  ('Hard Light', BlendMode.hardLight),
+  ('Sobrepor', BlendMode.overlay),
+  ('Luz suave', BlendMode.softLight),
+  ('Luz forte', BlendMode.hardLight),
   ('Diferenca', BlendMode.difference),
   ('Exclusao', BlendMode.exclusion),
   ('Matiz', BlendMode.hue),
@@ -4226,17 +3710,33 @@ const amBlendModes = <(String, BlendMode)>[
   ('Luminosidade', BlendMode.luminosity),
 ];
 
-/// Uma opcao de mescla na fileira.
+/// OS SEIS MODOS DO SIMPLES (secao 2 do plano): o resto e Pro.
+const kBlendModesSimples = <BlendMode>{
+  BlendMode.srcOver,
+  BlendMode.multiply,
+  BlendMode.screen,
+  BlendMode.overlay,
+  BlendMode.plus,
+  BlendMode.softLight,
+};
+
+/// Uma opcao de mescla na fileira, com MINIATURA: dois discos, o de
+/// cima composto com o modo — ve-se o que o modo faz antes de tocar.
 class _BlendChip extends StatelessWidget {
   const _BlendChip({
+    super.key,
     required this.label,
     required this.aceso,
     required this.onTap,
+    this.mode,
   });
 
   final String label;
   final bool aceso;
   final VoidCallback onTap;
+
+  /// Modo nativo para a miniatura; null = modo Aurea (desenha o padrao).
+  final BlendMode? mode;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -4252,10 +3752,9 @@ class _BlendChip extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            CupertinoIcons.circle_lefthalf_fill,
-            size: 18,
-            color: aceso ? AmColors.accent : AmColors.muted,
+          CustomPaint(
+            size: const Size(34, 22),
+            painter: _MesclaMiniatura(mode ?? BlendMode.srcOver),
           ),
           const SizedBox(height: 4),
           Text(
@@ -4271,6 +3770,36 @@ class _BlendChip extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// A miniatura de um modo de mescla: disco laranja embaixo, disco azul
+/// em cima composto com o modo.
+class _MesclaMiniatura extends CustomPainter {
+  const _MesclaMiniatura(this.mode);
+
+  final BlendMode mode;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.height * 0.46;
+    canvas.saveLayer(Offset.zero & size, Paint());
+    canvas.drawCircle(
+      Offset(size.width * 0.38, size.height / 2),
+      r,
+      Paint()..color = const Color(0xFFFF8A3D),
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.62, size.height / 2),
+      r,
+      Paint()
+        ..color = const Color(0xFF3D9BFF)
+        ..blendMode = mode,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_MesclaMiniatura old) => old.mode != mode;
 }
 
 enum _BlendTab { opacity, blending, mask, matte }
@@ -4334,7 +3863,6 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
             children: [
               Column(
                 children: [
-                  AmVoltar(onTap: widget.onBack),
                   AmRailButton(
                     onTap: () {
                       if (tab == _BlendTab.opacity) {
@@ -4405,8 +3933,10 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
                         _BlendTab.opacity => _opacity(
                           controller,
                           id,
+                          layer,
                           opacity,
                           t,
+                          local,
                         ),
                         _BlendTab.blending => _blending(controller, id, layer),
                         _BlendTab.mask => _mask(
@@ -4435,17 +3965,39 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
     );
   }
 
-  Widget _opacity(EditorController c, String id, double value, Duration t) =>
+  Widget _opacity(
+    EditorController c,
+    String id,
+    Layer layer,
+    double value,
+    Duration t,
+    Duration local,
+  ) =>
       Padding(
-        padding: const EdgeInsets.fromLTRB(10, 12, 16, 10),
+        padding: const EdgeInsets.fromLTRB(2, 6, 10, 10),
         child: Column(
           children: [
-            AmValueChip(
-              text: amNumber(value * 100, 0),
+            ParameterRow(
               label: 'Opacidade',
-              width: 150,
+              value: value * 100,
+              min: 0,
+              max: 100,
+              unitsPerPixel: 0.35,
+              decimals: 0,
+              unit: '%',
+              valueKey: const ValueKey('opacidade-valor'),
+              keyframe: KeyframeState(
+                animated: layer.opacity.isAnimated,
+                here: layer.opacity.hasKeyframeAt(local),
+                onToggle: () => c.toggleKeyframe(id, t, LayerProp.opacity),
+                onCurve: layer.opacity.isAnimated
+                    ? () => widget.onOpenCurve(LayerProp.opacity)
+                    : null,
+              ),
+              onReset: () => c.resetProp(id, LayerProp.opacity),
+              onChanged: (v) => c.editOpacity(id, t, v / 100),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Expanded(
               child: AmTickRuler(
                 value: value * 100,
@@ -4460,7 +4012,9 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
         ),
       );
 
-  Widget _blending(EditorController c, String id, Layer layer) => Padding(
+  Widget _blending(EditorController c, String id, Layer layer) {
+    final pro = ref.watch(proModeProvider);
+    return Padding(
     padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
     child: Column(
       mainAxisSize: MainAxisSize.min,
@@ -4468,22 +4022,33 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
       children: [
         SizedBox(
           height: 68,
-          child: ListView(
+          // Row em rolagem (nao lista preguicosa): os chips sao poucos e
+          // todos montados ficam achaveis.
+          child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            child: Row(
             children: [
+              // SIMPLES: os seis modos mais usados. PRO: os 17 nativos e os
+              // 10 da Aurea, todos com miniatura.
               for (final (label, mode) in amBlendModes)
-                _BlendChip(
-                  label: label,
-                  aceso: layer.customBlend == null && layer.blendMode == mode,
-                  onTap: () => c.setBlendMode(id, mode),
-                ),
-              for (final extra in AureaBlend.values)
-                _BlendChip(
-                  label: aureaBlendLabel(extra),
-                  aceso: layer.customBlend == extra,
-                  onTap: () => c.setCustomBlend(id, extra),
-                ),
+                if (pro || kBlendModesSimples.contains(mode))
+                  _BlendChip(
+                    key: ValueKey('mescla-${mode.name}'),
+                    label: label,
+                    mode: mode,
+                    aceso: layer.customBlend == null && layer.blendMode == mode,
+                    onTap: () => c.setBlendMode(id, mode),
+                  ),
+              if (pro)
+                for (final extra in AureaBlend.values)
+                  _BlendChip(
+                    key: ValueKey('mescla-${extra.name}'),
+                    label: aureaBlendLabel(extra),
+                    aceso: layer.customBlend == extra,
+                    onTap: () => c.setCustomBlend(id, extra),
+                  ),
             ],
+            ),
           ),
         ),
         const SizedBox(height: 6),
@@ -4502,6 +4067,7 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
       ],
     ),
   );
+  }
 
   Widget _depth(_N4Depth current, ValueChanged<_N4Depth> set) => Row(
     children: [
@@ -5117,11 +4683,7 @@ class ColorFillPanel extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            children: [
-              AmVoltar(onTap: onBack),
-            ],
-          ),
+          const SizedBox(width: 6),
           Expanded(
             child: current == null
                 ? const Center(

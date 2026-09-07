@@ -46,17 +46,49 @@ import 'scene3d_studio_ux.dart';
 ///
 /// e a ferramenta SELECIONAR e o modo de navegacao: um dedo sempre gira,
 /// o toque sempre escolhe.
+/// Um Estudio de cada vez: o toque duplo no tile (ou dois chamadores
+/// no mesmo quadro) nao pode empilhar dois Estudios.
+bool _estudioAberto = false;
+
 Future<void> openScene3DStudio(
   BuildContext context,
   WidgetRef ref,
   String layerId,
 ) async {
-  await Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      fullscreenDialog: true,
-      builder: (_) => Scene3DStudio(layerId: layerId),
-    ),
-  );
+  if (_estudioAberto) return;
+  _estudioAberto = true;
+  try {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        // O proprio Estudio solta a trava ao sair da arvore (dispose):
+        // vale mesmo quando a rota e removida sem o push devolver.
+        builder: (_) => _TravaDoEstudio(child: Scene3DStudio(layerId: layerId)),
+      ),
+    );
+  } finally {
+    _estudioAberto = false;
+  }
+}
+
+class _TravaDoEstudio extends StatefulWidget {
+  const _TravaDoEstudio({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TravaDoEstudio> createState() => _TravaDoEstudioState();
+}
+
+class _TravaDoEstudioState extends State<_TravaDoEstudio> {
+  @override
+  void dispose() {
+    _estudioAberto = false;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class Scene3DStudio extends ConsumerStatefulWidget {

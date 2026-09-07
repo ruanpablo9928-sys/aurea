@@ -218,9 +218,6 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                 // Trilho esquerdo: voltar / inverter / menu.
                 Column(
                   children: [
-                    Flexible(
-                      child: AmVoltar(onTap: widget.onBack),
-                    ),
                     const Spacer(),
                     Flexible(
                       child: AmRailButton(
