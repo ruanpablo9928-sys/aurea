@@ -74,8 +74,17 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Mutacoes continuas (arrasto de slider/regua) dentro desta janela sao
   /// coalescidas num unico passo de undo.
+  DateTime? _gestoAberto;
+
   void _mutate(VideoProject next) {
     final now = DateTime.now();
+    // Um gesto que nunca fechou (o widget saiu da arvore no meio do
+    // arrasto) nao pode desligar o desfazer para sempre.
+    if (_agrupando &&
+        _gestoAberto != null &&
+        now.difference(_gestoAberto!) > const Duration(seconds: 20)) {
+      endGesture();
+    }
     // Dentro de um grupo, ninguem empilha: o snapshot foi tirado uma vez
     // no comeco, e desfazer volta o passo inteiro.
     if (!_agrupando &&
@@ -111,6 +120,47 @@ class EditorController extends Notifier<VideoProject> {
       _agrupando = false;
       _lastPush = DateTime.now();
     }
+  }
+
+  /// UM GESTO, UM PASSO DE DESFAZER.
+  ///
+  /// [runAsOneUndo] resolve o caso sincrono — trinta cortes num laco.
+  /// Um ARRASTO nao cabe nele: comeca num toque e acaba noutro, com
+  /// dezenas de atualizacoes entre os dois, cada uma passando pelo laco
+  /// de eventos. O que sobrava era a janela de 450 ms, e um dedo que
+  /// para meio segundo no meio do arrasto virava dois passos de
+  /// desfazer — arrastar uma alca de curva e depois desfazer devolvia
+  /// so metade do movimento.
+  ///
+  /// Quem abre e obrigado a fechar. Como isso depende de um widget que
+  /// pode sair da arvore no meio do gesto, [_mutate] fecha sozinho um
+  /// grupo esquecido: um gesto perdido nao pode desligar o desfazer
+  /// para o resto da sessao.
+  void beginGesture() {
+    if (_agrupando) return;
+    _undoStack.add(state);
+    if (_undoStack.length > 100) _undoStack.removeAt(0);
+    _redoStack.clear();
+    _agrupando = true;
+    _gestoAberto = DateTime.now();
+  }
+
+  void endGesture() {
+    if (!_agrupando) return;
+    _agrupando = false;
+    _gestoAberto = null;
+    _lastPush = DateTime.now();
+  }
+
+  /// O estado de antes do gesto, sem consumir o passo de desfazer.
+  /// Serve ao cancelamento: comecar a arrastar e desistir tem de voltar
+  /// exatamente ao ponto de partida.
+  void cancelGesture() {
+    if (!_agrupando) return;
+    _agrupando = false;
+    _gestoAberto = null;
+    _lastPush = DateTime.fromMillisecondsSinceEpoch(0);
+    if (_undoStack.isNotEmpty) state = _undoStack.removeLast();
   }
 
   void undo() {

@@ -335,6 +335,12 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                               ? _SpeedGraph(
                                   ease: ease,
                                   percorrido: percorrido,
+                                  // UM ARRASTO, UM DESFAZER. Sem isto,
+                                  // uma alca movida devagar virava
+                                  // varios passos, e desfazer devolvia
+                                  // so um pedaco do movimento.
+                                  onGestoInicio: controller.beginGesture,
+                                  onGestoFim: controller.endGesture,
                                   onBezierChanged: (e) =>
                                       controller.setSegmentEase(
                                         id,
@@ -348,6 +354,8 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                                   ease: ease,
                                   overshootEnabled: _overshoot,
                                   percorrido: percorrido,
+                                  onGestoInicio: controller.beginGesture,
+                                  onGestoFim: controller.endGesture,
                                   onBezierChanged: (e) =>
                                       controller.setSegmentEase(
                                         id,
@@ -751,18 +759,24 @@ Future<void> showTrackCurveSheet(
   if (paramSheetGeneration == myGen) onClosed?.call();
 }
 
-class _CurveGraph extends StatelessWidget {
+class _CurveGraph extends StatefulWidget {
   const _CurveGraph({
     super.key,
     required this.ease,
     required this.overshootEnabled,
     required this.onBezierChanged,
+    this.onGestoInicio,
+    this.onGestoFim,
     this.percorrido,
   });
 
   final Easing ease;
   final bool overshootEnabled;
   final ValueChanged<Easing> onBezierChanged;
+
+  /// Comeco e fim do ARRASTO, para o desfazer virar um passo so.
+  final VoidCallback? onGestoInicio;
+  final VoidCallback? onGestoFim;
 
   /// 0..1: onde o cabecote esta dentro do trecho. Nulo = esta fora.
   final double? percorrido;
@@ -781,21 +795,56 @@ class _CurveGraph extends StatelessWidget {
   );
 
   @override
+  State<_CurveGraph> createState() => _CurveGraphState();
+}
+
+class _CurveGraphState extends State<_CurveGraph> {
+  /// QUAL ALCA ESTA NA MAO — decidida uma vez, no toque.
+  ///
+  /// Este campo e a correcao do bug que os testadores descreveram como
+  /// "a curva salta". A alca era escolhida a CADA atualizacao do
+  /// arrasto, pela proximidade do dedo: bastava o dedo cruzar o meio do
+  /// grafico para o gesto largar a alca que estava movendo e agarrar a
+  /// outra. Pior, as posicoes usadas na comparacao vinham do quadro
+  /// ANTERIOR, entao o resultado dependia de o widget ter reconstruido
+  /// a tempo — o mesmo gesto dava resultados diferentes.
+  ///
+  /// Agora quem se decide e o toque. O resto do arrasto obedece.
+  int? _alca;
+
+  @override
   Widget build(BuildContext context) {
+    final ease = widget.ease;
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
-        final h1 = _toPlot(size, ease.x1, ease.y1);
-        final h2 = _toPlot(size, ease.x2, ease.y2);
+        final h1 = widget._toPlot(size, ease.x1, ease.y1);
+        final h2 = widget._toPlot(size, ease.x2, ease.y2);
+
+        void inicio(DragStartDetails d) {
+          final p = d.localPosition;
+          _alca = (p - h1).distanceSquared <= (p - h2).distanceSquared ? 1 : 2;
+          widget.onGestoInicio?.call();
+        }
 
         void drag(DragUpdateDetails d) {
-          final p = d.localPosition;
-          final near1 = (p - h1).distanceSquared < (p - h2).distanceSquared;
-          var (x, y) = _fromPlot(size, p);
-          if (!overshootEnabled) y = y.clamp(0.0, 1.0);
-          onBezierChanged(
-            near1 ? ease.copyWith(x1: x, y1: y) : ease.copyWith(x2: x, y2: y),
+          final alca = _alca;
+          if (alca == null) return;
+          var (x, y) = widget._fromPlot(size, d.localPosition);
+          if (!widget.overshootEnabled) y = y.clamp(0.0, 1.0);
+          // NENHUM GESTO PODE CORROMPER A CURVA. Um NaN aqui atravessa
+          // o projeto inteiro e reaparece como animacao que nao avalia.
+          if (x.isNaN || y.isNaN || !x.isFinite || !y.isFinite) return;
+          widget.onBezierChanged(
+            alca == 1
+                ? ease.copyWith(x1: x, y1: y)
+                : ease.copyWith(x2: x, y2: y),
           );
+        }
+
+        void fim() {
+          _alca = null;
+          widget.onGestoFim?.call();
         }
 
         final enabled = ease.type == EasingType.cubicBezier;
@@ -805,15 +854,21 @@ class _CurveGraph extends StatelessWidget {
         // gesto arrastava o sheet. Recognizer igual em no mais fundo
         // ganha a arena.
         return GestureDetector(
+          onVerticalDragStart: enabled ? inicio : null,
           onVerticalDragUpdate: enabled ? drag : null,
+          onVerticalDragEnd: enabled ? (_) => fim() : null,
+          onVerticalDragCancel: enabled ? fim : null,
+          onHorizontalDragStart: enabled ? inicio : null,
           onHorizontalDragUpdate: enabled ? drag : null,
+          onHorizontalDragEnd: enabled ? (_) => fim() : null,
+          onHorizontalDragCancel: enabled ? fim : null,
           child: CustomPaint(
             size: size,
             painter: _AmCurvePainter(
               ease: ease,
-              yMin: _yMin,
-              yMax: _yMax,
-              percorrido: percorrido,
+              yMin: _CurveGraph._yMin,
+              yMax: _CurveGraph._yMax,
+              percorrido: widget.percorrido,
             ),
           ),
         );
@@ -831,15 +886,19 @@ class _CurveGraph extends StatelessWidget {
 /// 1-x2. Arrastar um ponto na horizontal muda a influencia; na vertical,
 /// a velocidade. A curva de VALOR e reconstruida na hora — e a mesma
 /// bezier, entao trocar de grafico nunca perde nada.
-class _SpeedGraph extends StatelessWidget {
+class _SpeedGraph extends StatefulWidget {
   const _SpeedGraph({
     required this.ease,
     required this.onBezierChanged,
+    this.onGestoInicio,
+    this.onGestoFim,
     this.percorrido,
   });
 
   final Easing ease;
   final ValueChanged<Easing> onBezierChanged;
+  final VoidCallback? onGestoInicio;
+  final VoidCallback? onGestoFim;
   final double? percorrido;
 
   /// Velocidade maxima mostrada, em "vezes a velocidade media".
@@ -851,52 +910,85 @@ class _SpeedGraph extends StatelessWidget {
   static double _vFim(Easing e) => e.speedAt(1).clamp(0.0, _vMax);
 
   @override
+  State<_SpeedGraph> createState() => _SpeedGraphState();
+}
+
+class _SpeedGraphState extends State<_SpeedGraph> {
+  /// O mesmo de [_CurveGraphState._alca]: o ponto agarrado se decide no
+  /// toque, e nao a cada atualizacao do arrasto.
+  int? _ponto;
+
+  @override
   Widget build(BuildContext context) {
+    final ease = widget.ease;
     return LayoutBuilder(
       builder: (context, c) {
         final size = Size(c.maxWidth, c.maxHeight);
-        Offset plot(double x, double v) =>
-            Offset(x * size.width, size.height - v / _vMax * size.height);
+        Offset plot(double x, double v) => Offset(
+          x * size.width,
+          size.height - v / _SpeedGraph._vMax * size.height,
+        );
 
-        final pIni = plot(ease.x1, _vIni(ease));
-        final pFim = plot(ease.x2, _vFim(ease));
+        final pIni = plot(ease.x1, _SpeedGraph._vIni(ease));
+        final pFim = plot(ease.x2, _SpeedGraph._vFim(ease));
+
+        void inicio(DragStartDetails d) {
+          final p = d.localPosition;
+          _ponto =
+              (p - pIni).distanceSquared <= (p - pFim).distanceSquared ? 1 : 2;
+          widget.onGestoInicio?.call();
+        }
 
         void drag(DragUpdateDetails d) {
+          final ponto = _ponto;
+          if (ponto == null) return;
           final p = d.localPosition;
-          final pertoIni =
-              (p - pIni).distanceSquared <= (p - pFim).distanceSquared;
+          final pertoIni = ponto == 1;
           final x = (p.dx / size.width).clamp(0.02, 0.98);
-          final v = ((size.height - p.dy) / size.height * _vMax).clamp(
-            0.0,
-            _vMax,
-          );
+          final v =
+              ((size.height - p.dy) / size.height * _SpeedGraph._vMax).clamp(
+                0.0,
+                _SpeedGraph._vMax,
+              );
+          if (x.isNaN || v.isNaN || !x.isFinite || !v.isFinite) return;
           if (pertoIni) {
             // influencia = x1; velocidade inicial = y1/x1 -> y1 = v * x1.
             final x1 = math.min(x, ease.x2 - 0.02);
-            onBezierChanged(
+            widget.onBezierChanged(
               ease.copyWith(x1: x1, y1: (v * x1).clamp(-2.0, 2.0)),
             );
           } else {
             // influencia = 1-x2; velocidade final = (1-y2)/(1-x2).
             final x2 = math.max(x, ease.x1 + 0.02);
-            onBezierChanged(
+            widget.onBezierChanged(
               ease.copyWith(x2: x2, y2: (1 - v * (1 - x2)).clamp(-1.0, 3.0)),
             );
           }
         }
 
+        void fim() {
+          _ponto = null;
+          widget.onGestoFim?.call();
+        }
+
         final editavel = ease.type == EasingType.cubicBezier;
         return GestureDetector(
+          onVerticalDragStart: editavel ? inicio : null,
           onVerticalDragUpdate: editavel ? drag : null,
+          onVerticalDragEnd: editavel ? (_) => fim() : null,
+          onVerticalDragCancel: editavel ? fim : null,
+          onHorizontalDragStart: editavel ? inicio : null,
           onHorizontalDragUpdate: editavel ? drag : null,
+          onHorizontalDragEnd: editavel ? (_) => fim() : null,
+          onHorizontalDragCancel: editavel ? fim : null,
           child: CustomPaint(
             size: size,
             painter: _SpeedPainter(
               ease: ease,
-              vMax: _vMax,
+              vMax: _SpeedGraph._vMax,
               pIni: pIni,
               pFim: pFim,
-              percorrido: percorrido,
+              percorrido: widget.percorrido,
             ),
           ),
         );
