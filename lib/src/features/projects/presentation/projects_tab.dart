@@ -635,6 +635,11 @@ class ProjectsTab extends ConsumerWidget {
             onTap: () => showWhatsNewSheet(context),
           ),
           _Linha(
+            icon: CupertinoIcons.camera_viewfinder,
+            texto: 'PROXIMA ATT: Camera Tracker 3D',
+            onTap: () => showWhatsNewSheet(context),
+          ),
+          _Linha(
             icon: CupertinoIcons.exclamationmark_bubble,
             texto: 'Versao beta: achou um problema? Conte pra gente',
             onTap: () => showReportSheet(context),

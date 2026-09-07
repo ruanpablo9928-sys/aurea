@@ -70,6 +70,8 @@ Easing _asEasing(Map<String, dynamic> m) => Easing(
 
 Map<String, dynamic> _ad(AnimatedDouble a) => {
   'b': a.base,
+  // A expressao e texto: vai como veio. Ausente = sem expressao.
+  if (a.hasExpression) 'x': a.expression,
   if (a.keyframes.isNotEmpty)
     'k': [
       for (final k in a.keyframes)
@@ -107,6 +109,7 @@ AnimatedDouble _asAd(dynamic v) {
             when: LoopWhen.values[(loopMap['w'] as num).toInt()],
             count: (loopMap['n'] as num).toInt(),
           ),
+    m['x'] as String?,
   );
 }
 
@@ -328,7 +331,10 @@ AnimatedDouble _migrarTrilha(
         value: migrateParamValue(tipo, chave, k.value, versao),
         ease: k.ease,
       ),
-  ], t.loop);
+    // A migracao reconstroi a trilha para converter unidades; sem
+    // repassar a expressao aqui ela morria ao ABRIR o projeto — e so em
+    // trilhas com keyframe, que e o caso que ninguem testa a mao.
+  ], t.loop, t.expression);
 }
 
 EffectInstance _asEffect(Map<String, dynamic> m) {

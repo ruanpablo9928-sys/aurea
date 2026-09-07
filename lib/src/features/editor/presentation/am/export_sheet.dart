@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -106,8 +107,26 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
         ) async {
           setSheetState(() => busy = true);
           try {
-            final dir = await getApplicationDocumentsDirectory();
-            final out = Directory('${dir.path}/exports');
+            // ONDE SALVAR e a pessoa quem diz. Antes ia sempre para a
+            // pasta interna do app e a tela oferecia "copiar caminho" —
+            // num celular isso nao leva a lugar nenhum. O seletor de
+            // pasta nao existe em toda plataforma (iOS nao tem); sem
+            // ele, ou se a pessoa cancelar, fica a pasta de sempre.
+            String? escolhida;
+            try {
+              escolhida = await FilePicker.platform.getDirectoryPath(
+                dialogTitle: 'Onde salvar $label',
+              );
+            } catch (_) {
+              escolhida = null;
+            }
+            final Directory out;
+            if (escolhida != null && escolhida.isNotEmpty) {
+              out = Directory(escolhida);
+            } else {
+              final dir = await getApplicationDocumentsDirectory();
+              out = Directory('${dir.path}/exports');
+            }
             if (!out.existsSync()) out.createSync(recursive: true);
             final file = File('${out.path}/$name');
             await file.writeAsString(content);

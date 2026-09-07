@@ -33,8 +33,8 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  test('all 43 catalog entries have concrete offline instructions', () {
-    expect(effectSpecs.length, 43);
+  test('all 47 catalog entries have concrete offline instructions', () {
+    expect(effectSpecs.length, 47);
     expect(quickStartSteps.length, 6);
     for (final type in EffectType.values) {
       expect(effectHelp(type).length, greaterThan(65), reason: type.name);

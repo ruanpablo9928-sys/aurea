@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../projects/domain/project_presets.dart';
+import '../application/grafico_preferencia.dart';
 import '../application/settings_controller.dart';
 
 /// Aba Ajustes: listas agrupadas estilo iOS.
@@ -106,6 +107,12 @@ class SettingsTab extends ConsumerWidget {
           const SizedBox(height: 26),
           const _GroupHeader('Cena 3D'),
           const _Group(children: [_Motor3DRow()]),
+          // So no Android: no iPhone o Impeller e sempre Metal.
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: 26),
+            const _GroupHeader('Graficos'),
+            const _Group(children: [_GraficoRow()]),
+          ],
           const SizedBox(height: 26),
           const _GroupHeader('Geral'),
           _Group(
@@ -362,6 +369,56 @@ class _Motor3DRowState extends State<_Motor3DRow> {
                       'desenhando. Reabra o app depois de trocar.'
                 : 'Desenhando em CPU porque $aviso. Toque em Sempre GPU '
                       'para tentar de novo, e reabra o app.',
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppColors.muted,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// O interruptor Vulkan/OpenGL ES do Android, com a explicacao e o
+/// estado da migalha (ver [GraficoPreferencia]).
+class _GraficoRow extends StatefulWidget {
+  const _GraficoRow();
+
+  @override
+  State<_GraficoRow> createState() => _GraficoRowState();
+}
+
+class _GraficoRowState extends State<_GraficoRow> {
+  @override
+  Widget build(BuildContext context) {
+    final pref = GraficoPreferencia.instancia;
+    if (pref == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SwitchRow(
+          title: 'Desenhar com OpenGL ES',
+          subtitle: 'Para cores erradas no preview em alguns aparelhos',
+          value: pref.openGl,
+          onChanged: (v) async {
+            await pref.definirOpenGl(v);
+            if (mounted) setState(() {});
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          child: Text(
+            pref.caiu
+                ? 'O app nao voltou da ultima abertura em OpenGL ES, entao '
+                      'a opcao foi desligada sozinha. Este aparelho fica no '
+                      'Vulkan.'
+                : 'O Android desenha com Vulkan quando o aparelho diz que '
+                      'tem; em algumas GPUs Mali (MediaTek) e nele que as '
+                      'cores saem erradas, no preview e na exportacao. '
+                      'Ligue, reabra o app e compare. Se o app nao abrir, '
+                      'a opcao se desliga sozinha.',
             style: const TextStyle(
               fontSize: 12,
               height: 1.35,

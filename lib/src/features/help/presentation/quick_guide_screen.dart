@@ -167,6 +167,10 @@ const quickStartSteps = <(String, String)>[
 ];
 
 String effectHelp(EffectType type) => switch (type) {
+  EffectType.chromaKey => 'Tira o fundo verde (ou azul) e deixa transparente. Toque na cor para pegar a do seu fundo. Tolerância decide quanto some; suavidade amacia a borda; supressão tira o verde que ficou no cabelo e nos ombros.',
+  EffectType.lumaKey => 'Tira o fundo pelo brilho: preto para fumaça, fogo e luz; branco para tinta e papel. Escolha qual dos dois some em Remover.',
+  EffectType.colorKey => 'Tira uma cor chapada. Mais previsível que o Chroma Key quando o fundo é sólido — um estúdio, uma cor de marca.',
+  EffectType.findEdges => 'Desenha só os contornos. Traço escolhe claro-no-escuro ou o inverso; misturar traz a imagem de volta por baixo.',
   EffectType.gaussianBlur => 'Suaviza detalhes. Aumente o raio aos poucos; use o modo de borda para controlar as margens.',
   EffectType.lightGlow => 'Cria um halo nas áreas claras. Limite escolhe o que brilha; raio espalha; intensidade controla a luz. Experimente depois de Levels.',
   EffectType.glowVol => 'Bloom em várias escalas. Ajuste threshold e softness para isolar os realces, radius para espalhar e exposure para força. Glow Only mostra apenas o halo. Tonemapping modela a resposta tonal e Lens Dirt acrescenta modulação procedural; não carrega uma fotografia de lente.',

@@ -174,7 +174,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         _contagem[l.id] = dir
             .listSync()
             .whereType<File>()
-            .where((f) => f.path.endsWith('.jpg'))
+            .where((f) => f.path.endsWith('.png'))
             .length;
       }
 
@@ -467,7 +467,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
           ((source - extractedFrom).inMicroseconds * _engine!.fps / 1000000)
               .floor()
               .clamp(0, count - 1);
-      final file = File('${dir.path}/${idx.toString().padLeft(6, '0')}.jpg');
+      final file = File('${dir.path}/${idx.toString().padLeft(6, '0')}.png');
       if (!file.existsSync()) continue;
 
       _quadroAtual.remove(l.id)?.dispose();

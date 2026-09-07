@@ -40,7 +40,7 @@ void main() {
   group('Nomes e categorias em ingles', () {
     const categorias = {
       'Color', 'Light', 'Lens', 'Blur', 'Distort',
-      'Stylize', 'Glitch', 'Time', 'Generate', 'Utility',
+      'Stylize', 'Glitch', 'Time', 'Generate', 'Keying', 'Utility',
     };
 
     test('toda categoria esta na lista', () {

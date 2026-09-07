@@ -12,6 +12,7 @@ import 'src/features/editor/application/texture_cache.dart';
 import 'src/features/editor/presentation/widgets/custom_blend.dart';
 import 'src/features/editor/presentation/widgets/linear_light.dart';
 import 'src/features/editor/presentation/widgets/pixel_effect_engine.dart';
+import 'src/features/settings/application/grafico_preferencia.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,13 @@ Future<void> main() async {
   // uma sessao que nao voltou de um quadro em GPU desliga a GPU
   // nesta.
   await Motor3DPreferencia.carregar(prefs);
+  // A API de desenho no Android (Vulkan ou OpenGL ES) e lida pela
+  // MainActivity antes de o motor subir; aqui so se confirma, no
+  // primeiro quadro, que a sessao esta viva — e o que desarma a migalha.
+  final grafico = await GraficoPreferencia.carregar(prefs);
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => unawaited(grafico.confirmarVivo()),
+  );
   // O shader das mesclas proprias sobe uma vez, no comeco: compilar no
   // meio da edicao apareceria como engasgo no primeiro quadro.
   unawaited(CustomBlendBox.warmUp());

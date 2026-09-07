@@ -4,6 +4,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterShellArgs
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -13,6 +14,38 @@ import kotlin.concurrent.thread
 class MainActivity : FlutterActivity() {
 
     private val encoder = VideoEncoder()
+
+    /**
+     * A API DE DESENHO E ESCOLHIDA AQUI, antes de o motor subir.
+     *
+     * Por padrao o Impeller usa Vulkan onde o aparelho diz que tem. Em
+     * algumas GPUs Mali (MediaTek) e nele que o preview sai com cores
+     * erradas — e a exportacao, que captura pela mesma GPU, tambem. A
+     * pessoa liga "OpenGL ES" em Ajustes; a chave e a do
+     * shared_preferences (arquivo FlutterSharedPreferences, prefixo
+     * "flutter."), lida aqui porque o Dart ainda nao existe.
+     *
+     * A MIGALHA: gravamos "tentando" antes de subir em OpenGL; o Dart
+     * apaga no primeiro quadro. Se ainda estiver la na proxima abertura,
+     * a sessao anterior nao voltou — a escolha e desfeita sozinha, para
+     * a pessoa conseguir abrir o app e chegar em Ajustes.
+     */
+    override fun getFlutterShellArgs(): FlutterShellArgs {
+        val args = super.getFlutterShellArgs()
+        val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+        if (!prefs.getBoolean("flutter.grafico_opengl", false)) return args
+        if (prefs.getBoolean("flutter.grafico_tentando", false)) {
+            prefs.edit()
+                .putBoolean("flutter.grafico_opengl", false)
+                .putBoolean("flutter.grafico_caiu", true)
+                .putBoolean("flutter.grafico_tentando", false)
+                .commit()
+            return args
+        }
+        prefs.edit().putBoolean("flutter.grafico_tentando", true).commit()
+        args.add("--impeller-backend=opengles")
+        return args
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

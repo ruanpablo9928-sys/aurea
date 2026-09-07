@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' show BlendMode, Offset;
 
 import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -13,6 +14,7 @@ import '../../editor/domain/layer.dart';
 import '../../editor/domain/mask.dart';
 import '../../editor/domain/video_project.dart';
 import '../domain/export_settings.dart';
+import '../domain/video_color.dart';
 import 'platform_encoder.dart';
 
 /// EXPORTACAO DE VIDEO — as partes que nao dependem da tela.
@@ -178,9 +180,20 @@ class ExportEngine {
   // ------------------------------------------- quadros das camadas
 
   /// Extrai os quadros de UMA camada de video, ja no fps da composicao e
-  /// so o trecho usado. Devolve a pasta com `%06d.jpg`.
+  /// so o trecho usado. Devolve a pasta com `%06d.png`.
   ///
   /// Isto e DECODIFICACAO — nao precisa de codec GPL.
+  ///
+  /// POR QUE PNG, E COM A MATRIZ DITA. O JPEG que se usava guarda YCbCr,
+  /// e quem o abre (o decodificador do Flutter) converte para RGB
+  /// supondo a matriz do JFIF, a BT.601. Mas o video de celular e
+  /// BT.709 — e o FFmpeg, ao escalar de YUV para YUV, nao troca a
+  /// matriz. Todo quadro exportado era um 709 lido como 601: vermelhos
+  /// e verdes deslocados, enquanto o preview (o player do sistema)
+  /// decodifica certo. O PNG guarda RGB, que nao tem matriz para
+  /// adivinhar, e a conversao acontece aqui, uma vez, com a matriz que
+  /// o player usaria — a etiqueta do arquivo ou, sem etiqueta, o
+  /// tamanho (ver [CorDoVideo]). Video HDR passa por tonemap.
   Future<Directory> extractVideoFrames(
     VideoLayer layer, {
     void Function(double p)? onProgress,
@@ -193,33 +206,67 @@ class ExportEngine {
     final start = range.$1.inMicroseconds / 1000000.0;
     final dur = (range.$2 - range.$1).inMicroseconds / 1000000.0;
 
+    final cor = await corDoVideo(layer.sourcePath);
     // Escala para caber na composicao mantendo proporcao — quadro maior
     // que isso e memoria jogada fora.
-    final session = await FFmpegKit.executeWithArguments([
-      '-y',
-      '-ss',
-      start.toStringAsFixed(6),
-      '-t',
-      dur.toStringAsFixed(6),
-      '-i',
-      layer.sourcePath,
-      '-vf',
-      'fps=$fps,scale=$width:$height:force_original_aspect_ratio='
-          'decrease',
-      '-q:v',
-      '3',
-      '-start_number',
-      '0',
-      '${dir.path}/%06d.jpg',
-    ]);
-    if (!ReturnCode.isSuccess(await session.getReturnCode())) {
-      final log = await session.getAllLogsAsString();
-      throw ExportException(
-        'Falha ao ler o video "${layer.name}".\n${_tail(log)}',
-      );
+    final receitas = receitasDeExtracao(
+      cor,
+      fps: fps,
+      largura: width,
+      altura: height,
+    );
+    String ultimoLog = '';
+    for (final vf in receitas) {
+      final session = await FFmpegKit.executeWithArguments([
+        '-y',
+        '-ss',
+        start.toStringAsFixed(6),
+        '-t',
+        dur.toStringAsFixed(6),
+        '-i',
+        layer.sourcePath,
+        '-vf',
+        vf,
+        // PNG sem esforco de compressao: e um arquivo de passagem que
+        // vive minutos. O tempo vai na decodificacao, nao no zlib.
+        '-compression_level',
+        '1',
+        '-pred',
+        'none',
+        '-start_number',
+        '0',
+        '${dir.path}/%06d.png',
+      ]);
+      if (ReturnCode.isSuccess(await session.getReturnCode())) {
+        onProgress?.call(1);
+        return dir;
+      }
+      ultimoLog = (await session.getAllLogsAsString()) ?? '';
+      // Uma receita que falhou pode ter deixado quadros pela metade.
+      for (final f in dir.listSync()) {
+        if (f is File) f.deleteSync();
+      }
     }
-    onProgress?.call(1);
-    return dir;
+    throw ExportException(
+      'Falha ao ler o video "${layer.name}".\n${_tail(ultimoLog)}',
+    );
+  }
+
+  /// Pergunta ao ffprobe a cor do primeiro fluxo de video. Sem resposta,
+  /// so o tamanho decide — e ainda assim decide igual ao player.
+  Future<CorDoVideo> corDoVideo(String source) async {
+    try {
+      final info = await FFprobeKit.getMediaInformation(source);
+      final streams = info.getMediaInformation()?.getStreams() ?? [];
+      for (final st in streams) {
+        if (st.getType() != 'video') continue;
+        final props = st.getAllProperties() ?? const <dynamic, dynamic>{};
+        return CorDoVideo.deProps(props);
+      }
+    } catch (_) {
+      // Sem informacao, segue com o criterio de tamanho.
+    }
+    return const CorDoVideo.desconhecida(largura: 0, altura: 0);
   }
 
   /// Trecho bruto necessario. A escolha de quadro fica para a funcao pura

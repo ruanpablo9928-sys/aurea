@@ -1,4 +1,3 @@
-import 'package:aurea/src/features/editor/domain/expression_engine.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/domain/text_animator.dart';
 import 'package:flutter_test/flutter_test.dart';

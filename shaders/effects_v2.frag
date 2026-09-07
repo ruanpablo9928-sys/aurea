@@ -336,5 +336,84 @@ void main() {
     c=mix(c,c.gbr,clamp(p1.y*strength*.6,0.0,1.0));
     c*=1.0+(r-.5)*p1.z*strength;
   }
+
+  // ---------------------------------------------------------- KEYING
+  //
+  // Os tres recortes mexem no ALFA, e nao na cor: e o que faz o fundo
+  // sumir de verdade em vez de virar preto. Como este shader ja roda
+  // sobre a textura da camada, o resultado entra na composicao como
+  // qualquer outra transparencia — o que estiver atras aparece.
+
+  // 33 - CHROMA KEY. A distancia e medida no plano de CROMA, sem a
+  // luminancia: um fundo verde tem sombra, e sombra e a mesma cor mais
+  // escura. Medindo em RGB, a sombra escapa do recorte e fica a moldura
+  // escura em volta do assunto que denuncia recorte amador.
+  if(mode==33) {
+    vec3 k=uColor.rgb;
+    float ky=lum(k), cy=lum(c);
+    vec2 kc=vec2(k.b-ky,k.r-ky);
+    vec2 cc=vec2(c.b-cy,c.r-cy);
+    // A DIRECAO do croma, nao o tamanho. Um verde na sombra tem o mesmo
+    // matiz com croma menor: comparando vetores absolutos ele escapa e
+    // fica a moldura escura em volta do assunto. Comparando a direcao,
+    // sombra e luz do mesmo fundo caem juntas.
+    float sk=length(kc), sc=length(cc);
+    float d = sk<.01 ? 1.0 : length(cc/max(sc,.0001)-kc/sk)*.5;
+    // Guarda de saturacao: o cinza nao tem direcao — nunca e "verde".
+    d = mix(1.0, d, smoothstep(.0, .12, sc));
+    float t0=p0.x, t1=p0.x+max(.002,p0.y);
+    float keep=smoothstep(t0,t1,d);
+    // Difusao da borda: amolece so a faixa de transicao, sem comer o
+    // miolo do assunto.
+    keep=mix(keep,smoothstep(t0*.5,t1*1.5,d),clamp(p0.z,0.0,1.0));
+    a*=clamp(keep,0.0,1.0);
+    // SUPRESSAO DE VAZAMENTO: o verde que o fundo jogou no cabelo e nos
+    // ombros. Puxa o canal dominante da cor-chave para a media dos
+    // outros dois, na proporcao pedida.
+    float sup=clamp(p0.w,0.0,1.0);
+    if(sup>.001){
+      vec3 w=k/max(.0001,k.r+k.g+k.b);
+      float exc=dot(c,w)-dot(c,vec3(1.0/3.0));
+      c=mix(c,clamp(c-w*max(0.0,exc)*3.0,0.0,1.0),sup);
+    }
+  }
+
+  // 34 - LUMA KEY. Recorta pelo brilho. Serve para fundo preto (fumaca,
+  // fogo, luz) e para fundo branco (tinta, papel).
+  if(mode==34) {
+    float l=lum(c);
+    float t=p0.x, tol=max(.002,p0.y), f=max(.0,p0.z);
+    float keep = p0.w<.5
+      ? smoothstep(t,t+tol+f,l)
+      : 1.0-smoothstep(t-tol-f,t,l);
+    a*=clamp(keep,0.0,1.0);
+  }
+
+  // 35 - COLOR KEY. Distancia direta em RGB: mais simples e mais
+  // previsivel que o croma quando a cor a remover e chapada (um fundo
+  // solido de estudio, uma cor de marca).
+  if(mode==35) {
+    float d=distance(c,uColor.rgb);
+    a*=clamp(smoothstep(p0.x,p0.x+max(.002,p0.y),d),0.0,1.0);
+  }
+
+  // 36 - FIND EDGES. Sobel na luminancia, com os oito vizinhos.
+  if(mode==36) {
+    vec2 px=1.0/uSize;
+    float l00=lum(straight(src(uv+vec2(-px.x,-px.y))));
+    float l10=lum(straight(src(uv+vec2(0,-px.y))));
+    float l20=lum(straight(src(uv+vec2(px.x,-px.y))));
+    float l01=lum(straight(src(uv+vec2(-px.x,0))));
+    float l21=lum(straight(src(uv+vec2(px.x,0))));
+    float l02=lum(straight(src(uv+vec2(-px.x,px.y))));
+    float l12=lum(straight(src(uv+vec2(0,px.y))));
+    float l22=lum(straight(src(uv+vec2(px.x,px.y))));
+    float gx=(l20+2.0*l21+l22)-(l00+2.0*l01+l02);
+    float gy=(l02+2.0*l12+l22)-(l00+2.0*l10+l20);
+    float g=clamp(length(vec2(gx,gy)),0.0,1.0);
+    vec3 borda=p0.x>.5 ? vec3(1.0-g) : vec3(g);
+    c=mix(borda,c,clamp(p0.y,0.0,1.0));
+  }
+
   fragColor=premul(c,a);
 }

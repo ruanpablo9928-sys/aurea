@@ -152,7 +152,16 @@ void main() {
       // movimento re-renderizam a camada inteira em _buildLayers, e o
       // remapeamento de tempo mexe no relogio da camada. A lista e
       // explicita para que mover um efeito de lugar exija mexer aqui.
-      const foraDoSwitch = {'echo', 'forceMotionBlur', 'timeRemap'};
+      //
+      // E os RECORTES e o contorno vivem so no shader (pixelKernels):
+      // os parametros deles sao lidos pelo kernel, nao por `paramAt`
+      // neste switch, e nao ha versao em CPU de proposito — recorte
+      // por pixel na thread de UI e o que travava o app. O contrato
+      // shader<->ficha deles e cobrado em pixel_effect_engine_test.
+      const foraDoSwitch = {
+        'echo', 'forceMotionBlur', 'timeRemap',
+        'chromaKey', 'lumaKey', 'colorKey', 'findEdges',
+      };
 
       final mortos = <String>[];
       for (var i = 0; i < casos.length; i++) {

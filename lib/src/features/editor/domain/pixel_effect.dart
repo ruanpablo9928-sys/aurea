@@ -10,6 +10,22 @@ class PixelKernel {
 }
 
 const pixelKernels = <EffectType, PixelKernel>{
+  // RECORTE (keying). Os tres mexem no alfa: e o que faz o fundo sumir
+  // de verdade, e nao virar preto.
+  EffectType.chromaKey: PixelKernel(33, [
+    'tolerancia',
+    'suavidade',
+    'difusao',
+    'supressao',
+  ]),
+  EffectType.lumaKey: PixelKernel(34, [
+    'limiar',
+    'tolerancia',
+    'difusao',
+    'inverter',
+  ]),
+  EffectType.colorKey: PixelKernel(35, ['tolerancia', 'suavidade']),
+  EffectType.findEdges: PixelKernel(36, ['inverter', 'mistura']),
   EffectType.levels: PixelKernel(1, [
     'entradaMin',
     'entradaMax',

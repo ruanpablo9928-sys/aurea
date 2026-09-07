@@ -2130,6 +2130,18 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         continue;
       }
       switch (effect.type) {
+        // EFEITOS QUE SO EXISTEM NO SHADER. Recorte por pixel e contorno
+        // por vizinhanca nao tem versao em CPU que valha: seria um laco
+        // sobre dois milhoes de pixels por quadro, na thread de UI — o
+        // que trava o app. Sem o motor de pixel (aparelho sem suporte a
+        // shader como filtro) o efeito fica NEUTRO, e a ficha do efeito
+        // avisa que ele precisa da GPU.
+        case EffectType.chromaKey:
+        case EffectType.lumaKey:
+        case EffectType.colorKey:
+        case EffectType.findEdges:
+          break;
+
         case EffectType.gaussianBlur:
           // NIVEL 3: o raio e pixel (pensado em 1080p), a borda decide o
           // que existe fora da camada, e a qualidade escolhe entre a

@@ -38,10 +38,16 @@ jobs:
       - name: Dependencias
         run: flutter pub get
 
+      # SEM o Filament no beta. O preview 3D tem de mostrar o que a
+      # exportacao produz, e a exportacao desenha com o flutter_scene —
+      # a textura do Filament nao entra num toImage. Com AUREA_FILAMENT
+      # eram dois motores (preview num, exportacao noutro), e dois
+      # motores sao duas cores. O Filament continua atras da flag, no
+      # workflow de validacao do renderer.
       - name: Build iOS (sem assinatura)
         run: |
           set -o pipefail
-          flutter build ios --release --no-codesign --dart-define=AUREA_FILAMENT=true -v 2>&1 | tee build-ios.log
+          flutter build ios --release --no-codesign -v 2>&1 | tee build-ios.log
 
       - name: Guardar diagnostico da compilacao
         if: always()

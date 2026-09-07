@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/animation.dart';
+import 'expression_engine.dart';
 
 /// Tipo de easing do segmento (taxonomia oficial do Alight Motion).
 enum EasingType {
@@ -452,6 +453,7 @@ class AnimatedDouble {
     this.base, [
     List<Keyframe<double>>? keyframes,
     this.loop = LoopSpec.none,
+    this.expression,
   ]) : keyframes = List.unmodifiable(keyframes ?? const <Keyframe<double>>[]);
 
   final double base;
@@ -460,12 +462,65 @@ class AnimatedDouble {
   /// Loop dos keyframes (PR-X6).
   final LoopSpec loop;
 
+  /// A EXPRESSAO, quando ha. Roda por cima do valor dos keyframes: dentro
+  /// dela, `value` e o que a propriedade teria sem ela e `time` e o
+  /// tempo local em segundos — o mesmo contrato do After Effects.
+  ///
+  /// Mora AQUI, e nao no efeito, porque aqui vale para tudo que anima:
+  /// parametro de efeito, transformacao, animador de texto. Quem le
+  /// [valueAt] recebe a expressao aplicada sem saber que ela existe.
+  final String? expression;
+
   bool get isAnimated => keyframes.isNotEmpty;
+  bool get hasExpression =>
+      expression != null && expression!.trim().isNotEmpty;
 
   bool hasKeyframeAt(Duration t) =>
       keyframes.any((k) => (k.time - t).abs() < _epsilon);
 
+  /// O erro de compilacao da expressao, se houver. Nulo = boa, ou ausente.
+  ExpressionError? get expressionError =>
+      hasExpression ? _compilada(expression!).$2 : null;
+
+  /// O ultimo erro de EXECUCAO por texto de expressao: compila, mas
+  /// falha ao rodar. Fica fora do objeto (que e imutavel) para a
+  /// interface poder mostrar, em vez de a falha sumir calada.
+  static final Map<String, ExpressionError> runtimeErrors = {};
+
+  /// Compilada UMA vez por texto. `valueAt` roda por quadro e por
+  /// parametro; compilar ali seria o fim do preview. O teto evita que
+  /// uma expressao editada letra a letra encha a memoria de arvores.
+  static final Map<String, (CompiledExpression?, ExpressionError?)> _cache =
+      {};
+  static (CompiledExpression?, ExpressionError?) _compilada(String fonte) {
+    final pronta = _cache[fonte];
+    if (pronta != null) return pronta;
+    if (_cache.length >= 64) _cache.remove(_cache.keys.first);
+    return _cache[fonte] = CompiledExpression.tentar(fonte);
+  }
+
+  /// O valor com a expressao aplicada — o que todo consumidor le.
   double valueAt(Duration t) {
+    final raw = _rawAt(t);
+    if (!hasExpression) return raw;
+    final fonte = expression!;
+    final (prog, _) = _compilada(fonte);
+    if (prog == null) return raw;
+    final r = ExpressionEvaluator(
+      prog,
+      ExpressionContext(time: t.inMicroseconds / 1000000, value: raw),
+    ).avaliar();
+    if (!r.deuCerto) {
+      runtimeErrors[fonte] = r.erro!;
+      return raw;
+    }
+    runtimeErrors.remove(fonte);
+    final v = r.comoNumero(raw);
+    return v.isFinite ? v : raw;
+  }
+
+  /// O valor SO dos keyframes, sem a expressao.
+  double _rawAt(Duration t) {
     if (keyframes.isEmpty) return base;
     final first = keyframes.first;
     final last = keyframes.last;
@@ -532,11 +587,16 @@ class AnimatedDouble {
     return KeyframeSegment(a, b, f);
   }
 
-  AnimatedDouble withBase(double v) => AnimatedDouble(v, keyframes, loop);
+  AnimatedDouble withBase(double v) =>
+      AnimatedDouble(v, keyframes, loop, expression);
+
+  /// Poe, troca ou tira (com nulo) a expressao.
+  AnimatedDouble withExpression(String? fonte) =>
+      AnimatedDouble(base, keyframes, loop, fonte);
 
   /// Liga/desliga o loop dos keyframes (PR-X6).
   AnimatedDouble withLoop(LoopSpec spec) =>
-      AnimatedDouble(base, keyframes, spec);
+      AnimatedDouble(base, keyframes, spec, expression);
 
   AnimatedDouble withKeyframe(
     Duration t,
@@ -546,13 +606,16 @@ class AnimatedDouble {
     base,
     _insertSorted(keyframes, Keyframe(time: t, value: v, ease: ease)),
     loop,
+    expression,
   );
 
   AnimatedDouble withoutKeyframe(Duration t) {
     final rest = _removeAt(keyframes, t);
     // Removeu o ultimo keyframe: volta a ser estatico no valor atual.
-    if (rest.isEmpty) return AnimatedDouble(valueAt(t));
-    return AnimatedDouble(base, rest, loop);
+    // O valor CRU: tirar o ultimo keyframe nao pode assar a expressao
+    // dentro da base — ela continua viva, por cima.
+    if (rest.isEmpty) return AnimatedDouble(_rawAt(t), null, loop, expression);
+    return AnimatedDouble(base, rest, loop, expression);
   }
 
   /// Editar = keyframe automatico se a propriedade ja anima (comportamento AE).
@@ -571,12 +634,12 @@ class AnimatedDouble {
   AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(base, [
     for (final k in keyframes)
       if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
-  ], loop);
+  ], loop, expression);
 
   /// Aplica a curva a TODOS os segmentos ("Paste Curve to All Keyframes").
   AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(base, [
     for (final k in keyframes) k.copyWith(ease: ease),
-  ], loop);
+  ], loop, expression);
 
   /// INVERTER NO TEMPO (assistente PR-X7): espelha os keyframes dentro
   /// do proprio intervalo — o percurso passa a correr de tras para
@@ -589,7 +652,7 @@ class AnimatedDouble {
       for (final k in keyframes)
         Keyframe(time: first + (last - k.time), value: k.value, ease: k.ease),
     ]..sort((a, b) => a.time.compareTo(b.time));
-    return AnimatedDouble(base, flipped, loop);
+    return AnimatedDouble(base, flipped, loop, expression);
   }
 }
 

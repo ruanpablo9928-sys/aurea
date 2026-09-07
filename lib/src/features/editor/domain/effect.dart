@@ -53,6 +53,12 @@ enum EffectType {
   gradient4,
   liquidGlass,
   corrections,
+
+  // --- recorte (keying) e deteccao de borda ---
+  chromaKey,
+  lumaKey,
+  colorKey,
+  findEdges,
 }
 
 /// O tipo a partir do IDENTIFICADOR estavel.
@@ -1060,6 +1066,124 @@ const effectSpecs = <EffectType, EffectSpec>{
       'amostras': EffectParam('Amostras', 5.0, 2.0, 12.0),
     },
   ),
+  /// RECORTE POR CROMA — o fundo verde (ou azul) que vira transparencia.
+  ///
+  /// A distancia e medida no plano de croma, sem a luminancia: fundo
+  /// verde tem sombra, e sombra e a mesma cor mais escura. Medindo em
+  /// RGB a sombra escapa e sobra aquela moldura escura em volta do
+  /// assunto que denuncia recorte malfeito.
+  EffectType.chromaKey: EffectSpec(
+    id: 'chroma_key',
+    name: 'Chroma Key',
+    category: 'Keying',
+    synonyms: ['chroma', 'croma', 'fundo verde', 'green screen', 'recorte'],
+    cost: 2,
+    hasColor: true,
+    // Verde de estudio: o ponto de partida que acerta na maioria.
+    defaultColor: Color(0xFF00B140),
+    params: {
+      'tolerancia': EffectParam('Tolerancia', 0.18, 0.0, 1.0),
+      'suavidade': EffectParam('Suavidade', 0.12, 0.0, 1.0),
+      'difusao': EffectParam('Difusao da borda', 0.25, 0.0, 1.0),
+      'supressao': EffectParam('Supressao de vazamento', 0.5, 0.0, 1.0),
+    },
+    montar: ['tolerancia', 'suavidade', 'supressao'],
+    presets: [
+      EffectPronto('Verde de estudio', {
+        'tolerancia': 0.18,
+        'suavidade': 0.12,
+        'supressao': 0.55,
+      }, cor: Color(0xFF00B140)),
+      EffectPronto('Azul de estudio', {
+        'tolerancia': 0.20,
+        'suavidade': 0.14,
+        'supressao': 0.5,
+      }, cor: Color(0xFF0047BB)),
+      EffectPronto('Borda de cabelo', {
+        'tolerancia': 0.12,
+        'suavidade': 0.26,
+        'difusao': 0.6,
+        'supressao': 0.7,
+      }, cor: Color(0xFF00B140)),
+    ],
+  ),
+
+  /// RECORTE POR BRILHO. Fundo preto (fumaca, fogo, faisca) ou fundo
+  /// branco (tinta, papel). Inverter troca qual dos dois some.
+  EffectType.lumaKey: EffectSpec(
+    id: 'luma_key',
+    name: 'Luma Key',
+    category: 'Keying',
+    synonyms: ['luma', 'brilho', 'fundo preto', 'fumaca', 'recorte'],
+    cost: 1,
+    params: {
+      'limiar': EffectParam('Limiar', 0.12, 0.0, 1.0),
+      'tolerancia': EffectParam('Tolerancia', 0.10, 0.0, 1.0),
+      'difusao': EffectParam('Difusao', 0.06, 0.0, 1.0),
+      'inverter': EffectParam(
+        'Remover',
+        0.0,
+        0.0,
+        1.0,
+        kind: ParamKind.choice,
+        options: ['O escuro', 'O claro'],
+      ),
+    },
+    montar: ['limiar', 'tolerancia', 'inverter'],
+    presets: [
+      EffectPronto('Fundo preto', {'limiar': .10, 'tolerancia': .12}),
+      EffectPronto('Fundo branco', {
+        'limiar': .90,
+        'tolerancia': .12,
+        'inverter': 1,
+      }),
+    ],
+  ),
+
+  /// RECORTE POR COR CHAPADA. Distancia direta em RGB — mais previsivel
+  /// que o croma quando a cor a tirar e solida.
+  EffectType.colorKey: EffectSpec(
+    id: 'color_key',
+    name: 'Color Key',
+    category: 'Keying',
+    synonyms: ['cor', 'remover cor', 'recorte por cor'],
+    cost: 1,
+    hasColor: true,
+    defaultColor: Color(0xFF000000),
+    params: {
+      'tolerancia': EffectParam('Tolerancia', 0.15, 0.0, 1.0),
+      'suavidade': EffectParam('Suavidade', 0.08, 0.0, 1.0),
+    },
+    montar: ['tolerancia', 'suavidade'],
+  ),
+
+  /// CONTORNO. Sobel na luminancia; misturar traz a imagem de volta por
+  /// baixo do traco.
+  EffectType.findEdges: EffectSpec(
+    id: 'find_edges',
+    name: 'Find Edges',
+    category: 'Stylize',
+    synonyms: ['borda', 'contorno', 'edges', 'sobel', 'traco'],
+    cost: 2,
+    params: {
+      'inverter': EffectParam(
+        'Traco',
+        1.0,
+        0.0,
+        1.0,
+        kind: ParamKind.choice,
+        options: ['Claro no escuro', 'Escuro no claro'],
+      ),
+      'mistura': EffectParam('Misturar com o original', 0.0, 0.0, 1.0),
+    },
+    montar: ['inverter', 'mistura'],
+    presets: [
+      EffectPronto('Contorno', {'inverter': 1, 'mistura': 0}),
+      EffectPronto('Desenho', {'inverter': 1, 'mistura': .25}),
+      EffectPronto('Neon', {'inverter': 0, 'mistura': .15}),
+    ],
+  ),
+
   EffectType.posterize: EffectSpec(
     id: 'posterize',
     name: 'Posterize',
@@ -1780,6 +1904,7 @@ const effectCategories = <String>[
   'Glitch',
   'Time',
   'Generate',
+  'Keying',
   'Utility',
 ];
 
@@ -1795,6 +1920,7 @@ const _categoriaEmPortugues = <String, String>{
   'Glitch': 'glitch',
   'Time': 'tempo',
   'Generate': 'gerar textura',
+  'Keying': 'recorte chroma fundo verde transparencia',
   'Utility': 'utilitario',
 };
 

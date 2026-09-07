@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../domain/effect.dart';
 
 import '../../projects/application/projects_controller.dart';
 import '../application/editor_controller.dart';
@@ -704,6 +705,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         child: _DiagOverlay(playback: _playback),
                       ),
                     ),
+                  // RASCUNHO ENQUANTO TOCA. Tocando, a cena 3D desenha sem
+                  // bloom nem profundidade de campo e o glow usa menos
+                  // niveis — e o que cabe no intervalo entre quadros. A
+                  // pausa e a exportacao desenham inteiro. Sem este aviso,
+                  // "a exportacao saiu diferente do preview" e a conclusao
+                  // natural — e e o preview em movimento que esta
+                  // simplificado, nao a exportacao que esta errada.
+                  const Positioned(top: 6, right: 8, child: _RascunhoBadge()),
                 ],
               );
             },
@@ -1774,6 +1783,50 @@ class _PointsHeaderActions extends ConsumerWidget {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// "Rascunho" sobre o preview enquanto toca — so quando ha algo que o
+/// rascunho simplifica (cena 3D, glow), para nao virar ruido.
+class _RascunhoBadge extends ConsumerWidget {
+  const _RascunhoBadge();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final simplifica = ref.watch(
+      editorControllerProvider.select(
+        (p) => p.layers.any(
+          (l) =>
+              l is Scene3DLayer ||
+              l.effects.any(
+                (e) =>
+                    e.enabled &&
+                    (e.type == EffectType.lightGlow ||
+                        e.type == EffectType.glowVol),
+              ),
+        ),
+      ),
+    );
+    if (!simplifica) return const SizedBox.shrink();
+    return ValueListenableBuilder<bool>(
+      valueListenable: PlaybackController.tocandoAgora,
+      builder: (context, tocando, _) {
+        if (!tocando) return const SizedBox.shrink();
+        return IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xCC12151A),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text(
+              'Rascunho · pause para ver a qualidade final',
+              style: TextStyle(fontSize: 10.5, color: AmColors.muted),
+            ),
+          ),
         );
       },
     );
