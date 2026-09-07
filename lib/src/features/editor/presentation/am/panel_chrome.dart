@@ -160,17 +160,7 @@ class AmLeftRail extends StatelessWidget {
       child: Column(
         children: [
           for (final button in <Widget>[
-            Tooltip(
-              message: 'Voltar às ferramentas da camada',
-              child: AmRailButton(
-                onTap: onBack,
-                child: const Icon(
-                  CupertinoIcons.chevron_back,
-                  size: 24,
-                  color: AmColors.text,
-                ),
-              ),
-            ),
+            AmVoltar(onTap: onBack),
             Tooltip(
               message: temKfAqui
                   ? 'Remover keyframe neste instante'

@@ -625,7 +625,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             playheadColor: pinkPlayhead
                                 ? AmColors.pink
                                 : Colors.white,
-                            onTapLayer: _onTapLayer,
+                            // Num painel aberto, tocar na barra da camada
+                            // VOLTA as ferramentas — nao abre o menu por
+                            // cima. E a outra metade de "clicar na
+                            // timeline fecha a aba".
+                            onTapLayer: (l) {
+                              if (_mode != _Mode.main) {
+                                _back();
+                                return;
+                              }
+                              _onTapLayer(l);
+                            },
                             onScrub: _videos.scrub,
                             activeTimesUs: activeTimesUs,
                             onForeignKeyframe: _mode == _Mode.main
@@ -1452,6 +1462,21 @@ class _ActionBar extends ConsumerWidget {
                       controller.duplicateLayer(id);
                     }
                   },
+                ),
+                // ORDEM DAS CAMADAS: quem fica por cima de quem. O
+                // controlador ja sabia reordenar; faltava o botao — e sem
+                // botao "nao sei como mudar a ordem" era a resposta certa.
+                btn(
+                  icon: CupertinoIcons.arrow_up_to_line,
+                  enabled: n >= 1,
+                  reason: 'Selecione uma camada para trazer para frente',
+                  onTap: () => controller.reorderLayers(targets, -1),
+                ),
+                btn(
+                  icon: CupertinoIcons.arrow_down_to_line,
+                  enabled: n >= 1,
+                  reason: 'Selecione uma camada para enviar para tras',
+                  onTap: () => controller.reorderLayers(targets, 1),
                 ),
                 if (parenting)
                   btn(

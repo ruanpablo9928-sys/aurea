@@ -3105,6 +3105,44 @@ class EditorController extends Notifier<VideoProject> {
     _mutate(state.copyWith(layers: layers));
   }
 
+  /// Move VARIAS camadas juntas, |[delta]| degraus (negativo = para
+  /// frente, isto e, para o indice 0, que e o topo da pilha; positivo =
+  /// para tras). Andam como um BLOCO: a ordem entre elas se mantem e o
+  /// conjunto para quando a da ponta bate na borda. Uma mutacao so —
+  /// um undo desfaz o bloco inteiro.
+  void reorderLayers(Iterable<String> ids, int delta) {
+    if (delta == 0) return;
+    final layers = [...state.layers];
+    final alvo = ids.toSet();
+    final passo = delta.sign;
+    var mudou = false;
+    for (var k = 0; k < delta.abs(); k++) {
+      final indices = [
+        for (var i = 0; i < layers.length; i++)
+          if (alvo.contains(layers[i].id)) i,
+      ];
+      if (indices.isEmpty) return;
+      // Para frente, da mais alta para a mais baixa; para tras, ao
+      // contrario — assim cada uma encontra o lugar livre que a vizinha
+      // do bloco acabou de deixar.
+      final ordem = passo < 0 ? indices : indices.reversed.toList();
+      var mudouNoPasso = false;
+      for (final i in ordem) {
+        final v = i + passo;
+        if (v < 0 || v >= layers.length || alvo.contains(layers[v].id)) {
+          continue;
+        }
+        final tmp = layers[i];
+        layers[i] = layers[v];
+        layers[v] = tmp;
+        mudouNoPasso = true;
+      }
+      if (!mudouNoPasso) break;
+      mudou = true;
+    }
+    if (mudou) _mutate(state.copyWith(layers: layers));
+  }
+
   void selectNeighbor(int delta) {
     final id = ref.read(selectedLayerProvider);
     if (id == null || state.layers.isEmpty) return;

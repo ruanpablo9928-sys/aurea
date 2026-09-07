@@ -262,14 +262,7 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
             width: 56,
             child: Column(
               children: [
-                AmRailButton(
-                  onTap: widget.onBack,
-                  child: const Icon(
-                    CupertinoIcons.chevron_back,
-                    size: 24,
-                    color: AmColors.text,
-                  ),
-                ),
+                AmVoltar(onTap: widget.onBack),
                 _ModoBotao(
                   ativo: modo == PointsMode.move,
                   icon: CupertinoIcons.smallcircle_circle,

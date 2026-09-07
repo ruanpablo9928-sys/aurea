@@ -981,6 +981,31 @@ class _AmLayerRow extends ConsumerStatefulWidget {
 }
 
 class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
+  /// Quanto o dedo ja subiu ou desceu no arrasto vertical da barra
+  /// selecionada, em pixels; a cada linha inteira a camada troca de
+  /// degrau na pilha.
+  double _acumuladoVertical = 0;
+
+  /// SUBIR E DESCER NA PILHA PELA PROPRIA TIMELINE. "Ja que da para
+  /// selecionar, tem de dar para mover para cima ou para baixo": o
+  /// arrasto vertical na barra selecionada anda um degrau por linha, com
+  /// um toque de vibracao a cada degrau. A linha tem chave (o id), entao
+  /// o gesto continua na mesma barra depois que ela muda de lugar.
+  void _reordenarPorArrasto(double dy) {
+    _acumuladoVertical += dy;
+    final c = ref.read(editorControllerProvider.notifier);
+    while (_acumuladoVertical > kAmRowHeight / 2) {
+      c.reorderLayer(widget.layer.id, 1);
+      _acumuladoVertical -= kAmRowHeight;
+      HapticFeedback.selectionClick();
+    }
+    while (_acumuladoVertical < -kAmRowHeight / 2) {
+      c.reorderLayer(widget.layer.id, -1);
+      _acumuladoVertical += kAmRowHeight;
+      HapticFeedback.selectionClick();
+    }
+  }
+
   /// UM ARRASTO DE BARRA EM ANDAMENTO.
   ///
   /// Os tratadores de FIM do arrasto so existem enquanto a condicao do
@@ -1132,6 +1157,18 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // TOCAR NO VAZIO DA TIMELINE TIRA A SELECAO — e com ela fecha
+          // as ferramentas da camada e qualquer painel aberto. E a saida
+          // que o beta pediu: "clicar na timeline fecha essa aba".
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                ref.read(multiSelectProvider.notifier).state = const {};
+                ref.read(selectedLayerProvider.notifier).state = null;
+              },
+            ),
+          ),
           Positioned(
             left: left,
             top: 0,
@@ -1140,7 +1177,13 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
-                if (compact) return;
+                // No modo compacto (a timeline de um painel aberto) o
+                // toque na barra e a saida do painel: quem decide e o
+                // editor, pelo mesmo onTapLayer.
+                if (compact) {
+                  onTapLayer?.call(layer);
+                  return;
+                }
                 // Toque simples limpa a selecao multipla.
                 ref.read(multiSelectProvider.notifier).state = const {};
                 if (ref.read(selectedLayerProvider) == layer.id) {
@@ -1161,6 +1204,14 @@ class _AmLayerRowState extends ConsumerState<_AmLayerRow> {
                       ref.read(multiSelectProvider.notifier).state = set;
                       HapticFeedback.selectionClick();
                     },
+              // ARRASTO VERTICAL na barra selecionada: sobe ou desce a
+              // camada na pilha, um degrau por linha.
+              onVerticalDragStart: selected && !compact
+                  ? (_) => _acumuladoVertical = 0
+                  : null,
+              onVerticalDragUpdate: selected && !compact
+                  ? (d) => _reordenarPorArrasto(d.delta.dy)
+                  : null,
               onHorizontalDragStart: selected && !compact
                   ? (_) {
                       _comecarArrasto();

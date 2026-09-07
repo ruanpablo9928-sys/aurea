@@ -165,6 +165,19 @@ Future<LayerMenuAction?> showLayerMenu(
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: [
+                              // ORDEM: quem esta por cima de quem. Nao
+                              // fecha o menu, para dar para subir varias
+                              // vezes seguidas.
+                              _UtilIcon(
+                                icon: CupertinoIcons.arrow_up_to_line,
+                                label: 'P/ frente',
+                                onTap: () => controller.reorderLayer(layer.id, -1),
+                              ),
+                              _UtilIcon(
+                                icon: CupertinoIcons.arrow_down_to_line,
+                                label: 'P/ tras',
+                                onTap: () => controller.reorderLayer(layer.id, 1),
+                              ),
                               if (temSom) ...[
                                 _UtilIcon(
                                   icon: CupertinoIcons.speedometer,
@@ -4317,14 +4330,7 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
             children: [
               Column(
                 children: [
-                  AmRailButton(
-                    onTap: widget.onBack,
-                    child: const Icon(
-                      CupertinoIcons.chevron_back,
-                      size: 24,
-                      color: AmColors.text,
-                    ),
-                  ),
+                  AmVoltar(onTap: widget.onBack),
                   AmRailButton(
                     onTap: () {
                       if (tab == _BlendTab.opacity) {
@@ -4452,25 +4458,44 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
 
   Widget _blending(EditorController c, String id, Layer layer) => Padding(
     padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
-    child: SizedBox(
-      height: 68,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          for (final (label, mode) in amBlendModes)
-            _BlendChip(
-              label: label,
-              aceso: layer.customBlend == null && layer.blendMode == mode,
-              onTap: () => c.setBlendMode(id, mode),
-            ),
-          for (final extra in AureaBlend.values)
-            _BlendChip(
-              label: aureaBlendLabel(extra),
-              aceso: layer.customBlend == extra,
-              onTap: () => c.setCustomBlend(id, extra),
-            ),
-        ],
-      ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 68,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final (label, mode) in amBlendModes)
+                _BlendChip(
+                  label: label,
+                  aceso: layer.customBlend == null && layer.blendMode == mode,
+                  onTap: () => c.setBlendMode(id, mode),
+                ),
+              for (final extra in AureaBlend.values)
+                _BlendChip(
+                  label: aureaBlendLabel(extra),
+                  aceso: layer.customBlend == extra,
+                  onTap: () => c.setCustomBlend(id, extra),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        // A MESCLA AGE SOBRE O QUE ESTA POR BAIXO. Sem isto escrito, uma
+        // camada sozinha em Multiplicar (que some no preto) ou em Tela
+        // (que nao muda) vira "a mesclagem nao funciona" — o relato do
+        // beta. A conta esta certa; faltava dizer com o que ela conta.
+        const Text(
+          'A mescla age sobre as camadas por baixo desta. Sozinha sobre o '
+          'fundo, Multiplicar escurece e Tela nao muda nada: ponha uma '
+          'forma ou imagem atras (Enviar para tras) para ver o efeito.',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 11, height: 1.3, color: AmColors.muted),
+        ),
+      ],
     ),
   );
 
@@ -5090,14 +5115,7 @@ class ColorFillPanel extends ConsumerWidget {
         children: [
           Column(
             children: [
-              AmRailButton(
-                onTap: onBack,
-                child: const Icon(
-                  CupertinoIcons.chevron_back,
-                  size: 24,
-                  color: AmColors.text,
-                ),
-              ),
+              AmVoltar(onTap: onBack),
             ],
           ),
           Expanded(

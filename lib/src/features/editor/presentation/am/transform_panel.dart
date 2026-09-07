@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../domain/angulo.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
@@ -584,21 +585,79 @@ class _PivotControl extends ConsumerWidget {
   }
 }
 
-class _RotationControl extends ConsumerWidget {
+class _RotationControl extends ConsumerStatefulWidget {
   const _RotationControl({required this.layer, required this.playback});
 
   final Layer layer;
   final PlaybackController playback;
 
-  void _setFromPoint(WidgetRef ref, Offset localPos, Size size, Duration t) {
+  @override
+  ConsumerState<_RotationControl> createState() => _RotationControlState();
+}
+
+/// O DIAL E UM CONTADOR, NAO UM MOSTRADOR.
+///
+/// O dedo entrega, por atan2, um angulo entre -180 e 180. Antes esse
+/// angulo era ESCRITO na camada: ao cruzar o lado esquerdo do dial o
+/// valor saltava de 180 para -180, a animacao entre dois keyframes
+/// "voltava ate o zero" pelo caminho contrario, e nunca havia como
+/// passar de uma volta — o relato do beta, palavra por palavra.
+///
+/// Agora o valor da camada e o ACUMULADO dos giros do dedo desde o
+/// comeco do gesto (ver [deltaDeAngulo]): cruza o limite sem saltar e
+/// conta voltas (o mostrador diz "Nx"). Toque seco poe o angulo tocado
+/// na volta em que a camada ja esta. Os chips dao voltas inteiras e
+/// quartos sem precisar circular o dedo.
+class _RotationControlState extends ConsumerState<_RotationControl> {
+  double? _anguloDoDedo;
+  double _acumulado = 0;
+
+  double _angulo(Offset localPos, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final v = localPos - center;
-    final deg = math.atan2(v.dy, v.dx) * 180 / math.pi;
-    ref.read(editorControllerProvider.notifier).editRotation(layer.id, t, deg);
+    return math.atan2(v.dy, v.dx) * 180 / math.pi;
+  }
+
+  /// O dedo POUSOU (antes de o arrasto ser reconhecido): e daqui que o
+  /// giro conta, senao a folga de reconhecimento do gesto some do valor.
+  void _pousar(Offset pos, Size size, Duration local) {
+    _anguloDoDedo = _angulo(pos, size);
+    _acumulado = widget.layer.rotation.valueAt(local);
+  }
+
+  void _comecar(Offset pos, Size size, Duration local) {
+    if (_anguloDoDedo == null) _pousar(pos, size, local);
+    ref.read(editorControllerProvider.notifier).beginGesture();
+  }
+
+  void _arrastar(Offset pos, Size size, Duration t) {
+    final a = _angulo(pos, size);
+    final anterior = _anguloDoDedo;
+    _anguloDoDedo = a;
+    if (anterior == null) return;
+    _acumulado += deltaDeAngulo(anterior, a);
+    ref
+        .read(editorControllerProvider.notifier)
+        .editRotation(widget.layer.id, t, _acumulado);
+  }
+
+  void _terminar() {
+    _anguloDoDedo = null;
+    ref.read(editorControllerProvider.notifier).endGesture();
+  }
+
+  void _tocar(Offset pos, Size size, Duration t, double atual) {
+    final a = _angulo(pos, size);
+    final alvo = anguloMaisProximo(a, atual);
+    _anguloDoDedo = a;
+    _acumulado = alvo;
+    ref.read(editorControllerProvider.notifier).editRotation(widget.layer.id, t, alvo);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final layer = widget.layer;
+    final playback = widget.playback;
     final t = playback.time.value;
     final local = layer.localTime(t);
     final deg = layer.rotation.valueAt(local);
@@ -611,9 +670,14 @@ class _RotationControl extends ConsumerWidget {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final radius = math.min(size.width, size.height) / 2 - 16;
         return GestureDetector(
+          key: const ValueKey('rotation-dial'),
           behavior: HitTestBehavior.opaque,
-          onPanUpdate: (d) => _setFromPoint(ref, d.localPosition, size, t),
-          onTapDown: (d) => _setFromPoint(ref, d.localPosition, size, t),
+          onPanDown: (d) => _pousar(d.localPosition, size, local),
+          onPanStart: (d) => _comecar(d.localPosition, size, local),
+          onPanUpdate: (d) => _arrastar(d.localPosition, size, t),
+          onPanEnd: (_) => _terminar(),
+          onPanCancel: _terminar,
+          onTapDown: (d) => _tocar(d.localPosition, size, t, deg),
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -660,7 +724,48 @@ class _RotationControl extends ConsumerWidget {
       },
     );
 
-    if (!layer.is3D) return dial;
+    // VOLTAS E QUARTOS sem circular o dedo: e o que faz "gira duas
+    // vezes" caber em dois toques.
+    Widget volta(String rotulo, double delta, {String? chave}) => GestureDetector(
+      key: chave == null ? null : ValueKey(chave),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => controller.editRotation(layer.id, t, deg + delta),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: AmColors.chip,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          rotulo,
+          style: const TextStyle(fontSize: 12, color: AmColors.accent),
+        ),
+      ),
+    );
+    // FittedBox: em tela estreita a fileira encolhe em vez de estourar.
+    final voltas = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          volta('−1 volta', -360, chave: 'rotation-turn-minus'),
+          volta('−90°', -90),
+          volta('+90°', 90),
+          volta('+1 volta', 360, chave: 'rotation-turn-plus'),
+        ],
+      ),
+    );
+
+    if (!layer.is3D) {
+      return Column(
+        children: [
+          Expanded(child: dial),
+          const SizedBox(height: 6),
+          voltas,
+        ],
+      );
+    }
 
     // Camada 3D: alem do dial (eixo Z), reguas para girar em X e Y.
     final rx = layer.rotationX.valueAt(local);
@@ -668,6 +773,8 @@ class _RotationControl extends ConsumerWidget {
     return Column(
       children: [
         Expanded(child: dial),
+        const SizedBox(height: 4),
+        voltas,
         const SizedBox(height: 6),
         Row(
           children: [

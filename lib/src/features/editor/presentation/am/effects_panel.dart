@@ -437,14 +437,7 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
               SingleChildScrollView(
                 child: Column(
                   children: [
-                    AmRailButton(
-                      onTap: widget.onBack,
-                      child: const Icon(
-                        CupertinoIcons.chevron_back,
-                        size: 24,
-                        color: AmColors.text,
-                      ),
-                    ),
+                    AmVoltar(onTap: widget.onBack),
                     // Diamante do parametro selecionado, como nos outros
                     // paineis: apagado e inerte quando nada esta selecionado.
                     // Com o par 'x|y' em estado misto (so um eixo com

@@ -464,6 +464,38 @@ class AmRailButton extends StatelessWidget {
   }
 }
 
+/// VOLTAR, COM NOME. O chevron sozinho no trilho era um botao que o
+/// beta nao achava ("pediu um botao de voltar proprio"). O mesmo lugar,
+/// o mesmo tamanho — so que agora esta escrito.
+class AmVoltar extends StatelessWidget {
+  const AmVoltar({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => AmRailButton(
+    key: const ValueKey('painel-voltar'),
+    tooltip: 'Voltar às ferramentas da camada',
+    onTap: onTap,
+    // FittedBox: num trilho apertado (painel baixo) o par icone+rotulo
+    // encolhe em vez de estourar a coluna.
+    child: const FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.chevron_back, size: 22, color: AmColors.text),
+          SizedBox(height: 1),
+          Text(
+            'Voltar',
+            style: TextStyle(fontSize: 9.5, color: AmColors.text, height: 1.1),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Diamante com "+" (adicionar keyframe), como no trilho esquerdo.
 class AmDiamondAdd extends StatelessWidget {
   const AmDiamondAdd({super.key, this.active = false, this.filled = false});

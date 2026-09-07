@@ -219,14 +219,7 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                 Column(
                   children: [
                     Flexible(
-                      child: AmRailButton(
-                        onTap: widget.onBack,
-                        child: const Icon(
-                          CupertinoIcons.chevron_back,
-                          size: 24,
-                          color: AmColors.text,
-                        ),
-                      ),
+                      child: AmVoltar(onTap: widget.onBack),
                     ),
                     const Spacer(),
                     Flexible(
