@@ -121,6 +121,9 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
   /// palco: com ele o toque na tela vira ponto na composicao.
   Offset _stageOrigin = Offset.zero;
 
+  /// O tamanho da area do palco, para prender as alcas dentro dela.
+  Size _tamanhoDoPalco = Size.zero;
+
   /// A alca que o dedo pegou neste gesto (null = arrastar a camada).
   _Alca? _alca;
   Offset _dragStartPos = Offset.zero;
@@ -184,17 +187,46 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     if (tamanho.isEmpty) return null;
     final meia = Offset(tamanho.width / 2, tamanho.height / 2) * eff.scale.abs();
     final r = eff.rot * math.pi / 180;
+    final centro = _stageOrigin + eff.pos * _stageScale;
+
+    // AS DUAS ALCAS NUNCA ENCOSTAM UMA NA OUTRA.
+    //
+    // Elas ficam nos cantos de cima e de baixo da selecao. Num objeto
+    // pequeno — ou num palco baixo, que e o caso desde que a altura do
+    // preview passou a sair da proporcao da composicao — esses dois
+    // cantos caem a poucos pixels de distancia. Como quem procura a alca
+    // testa a de ESCALA primeiro, ela ganhava as duas, e girar deixava
+    // de existir: era o "a rotacao nao gira" do relato, agora por outro
+    // caminho. Um afastamento minimo em pixels DE TELA resolve, e nao
+    // mexe em objeto grande, onde os cantos ja estao longe.
+    const afastamentoMinimo = 30.0;
+    final meiaX = math.max(meia.dx * _stageScale, afastamentoMinimo);
+    final meiaY = math.max(meia.dy * _stageScale, afastamentoMinimo);
+
+    // AS ALCAS FICAM DENTRO DO PALCO, sempre.
+    //
+    // Um objeto maior que o quadro empurra o canto para fora da area
+    // visivel, e ali a alca nao existe para o dedo. Presas na borda, com
+    // margem para o circulo caber, continuam onde se espera.
+    final palco = Offset.zero & _tamanhoDoPalco;
+    Offset presa(Offset p) => palco.isEmpty
+        ? p
+        : Offset(
+            p.dx.clamp(palco.left + 22, palco.right - 22),
+            p.dy.clamp(palco.top + 22, palco.bottom - 22),
+          );
+
     Offset noPalco(Offset canto) {
       final girado = Offset(
         canto.dx * math.cos(r) - canto.dy * math.sin(r),
         canto.dx * math.sin(r) + canto.dy * math.cos(r),
       );
-      return _stageOrigin + (eff.pos + girado) * _stageScale;
+      return presa(centro + girado);
     }
 
     return (
-      escala: noPalco(Offset(meia.dx, meia.dy)),
-      giro: noPalco(Offset(meia.dx, -meia.dy)),
+      escala: noPalco(Offset(meiaX, meiaY)),
+      giro: noPalco(Offset(meiaX, -meiaY)),
       quadro: Rect.fromCenter(
         center: _stageOrigin + eff.pos * _stageScale,
         width: tamanho.width * eff.scale.abs() * _stageScale,
@@ -396,6 +428,10 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                 _stageOrigin = Offset(
                   (constraints.maxWidth - compW * scale) / 2,
                   (constraints.maxHeight - compH * scale) / 2,
+                );
+                _tamanhoDoPalco = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
                 );
                 return Center(
                   child: SizedBox(

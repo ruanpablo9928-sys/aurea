@@ -40,7 +40,6 @@ class AddToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AureaTokens.of(context);
     final principais = <(AddTarget, IconData, String, Color)>[
       (AddTarget.midia, CupertinoIcons.photo_on_rectangle, 'Mídia', layerKindColor(LayerKind.video)),
       (AddTarget.audio, CupertinoIcons.music_note, 'Áudio', layerKindColor(LayerKind.audio)),

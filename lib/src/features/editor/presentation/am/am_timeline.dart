@@ -27,6 +27,16 @@ import 'transition_sheet.dart';
 const double kAmRowHeight = 38;
 const double kAmBarHeight = 30;
 
+/// A TIRA DE BAIXO DA BARRA, so dos keyframes.
+///
+/// A barra tem duas faixas: o nome em cima, os keyframes embaixo. Antes
+/// dividiam a mesma linha, e numa camada animada os losangos cobriam o
+/// nome — o rotulo saia "◆ABIS◆O◆c◆a 3◆", que nao se le. A altura da
+/// barra NAO mudou de proposito: ela e o passo da linha do tempo, e
+/// mexer nela desalinha a coluna dos controles e estoura painel em tela
+/// pequena.
+const double kAmFaixaKeyframes = 12;
+
 /// TIMELINE MAGNETICA — ligada por padrao.
 ///
 /// Ligada: excluir fecha o buraco e o que vinha depois encosta. Sem
@@ -1727,7 +1737,13 @@ class _AmBarState extends ConsumerState<_AmBar> {
                   // estourar a linha (o projeto importado esta cheio deles).
                   child: ClipRect(
                     child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: width < 46 ? 3 : 12),
+                    padding: EdgeInsets.fromLTRB(
+                      width < 46 ? 3 : 12,
+                      0,
+                      width < 46 ? 3 : 12,
+                      // O espaco de baixo e dos keyframes.
+                      kAmFaixaKeyframes,
+                    ),
                     child: Row(
                       children: [
                         // ICONE DO TIPO na ponta: reconhecer sem ler.
@@ -2068,9 +2084,11 @@ class _AmBarState extends ConsumerState<_AmBar> {
                 final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
                 return Positioned(
                   left: left + x0 - 11,
-                  top: kAmBarHeight / 2 - 11,
+                  // NA TIRA DE BAIXO, nao no meio da barra: no meio eles
+                  // passavam por cima do nome da camada.
+                  top: kAmBarHeight - kAmFaixaKeyframes - 3,
                   width: largura,
-                  height: 22,
+                  height: kAmFaixaKeyframes + 3,
                   // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
                   // consegue tocar vira enigma: de quem e essa? So `onTap`
                   // — arrastar continua movendo o clipe, porque um

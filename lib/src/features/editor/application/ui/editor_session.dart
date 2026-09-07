@@ -55,6 +55,7 @@ class EditorSession {
     this.pointsItemId,
     this.previewExpanded = false,
     this.previewFraction = 0.401,
+    this.previewAjustado = false,
     this.sheetLevel = SheetLevel.half,
     this.sheetFraction,
     this.timelineExpanded = false,
@@ -83,6 +84,15 @@ class EditorSession {
   /// Altura do preview como fracao da altura da TELA (a alca entre o
   /// preview e o transporte muda isto). 0.30..0.60.
   final double previewFraction;
+
+  /// A pessoa ja mexeu na alca do preview?
+  ///
+  /// Enquanto NAO mexeu, a altura do preview vem da PROPORCAO DA
+  /// COMPOSICAO: e o que faz o quadro encostar nas duas laterais em vez
+  /// de boiar num vazio preto com tarjas em cima e embaixo. Depois que
+  /// mexeu, manda o que ela escolheu — a alca perderia o sentido se o
+  /// tamanho voltasse sozinho.
+  final bool previewAjustado;
 
   /// Nivel do painel contextual, e a fracao livre quando a alca foi
   /// arrastada para um ponto entre niveis.
@@ -116,6 +126,7 @@ class EditorSession {
     bool clearPointsItem = false,
     bool? previewExpanded,
     double? previewFraction,
+    bool? previewAjustado,
     SheetLevel? sheetLevel,
     double? sheetFraction,
     bool clearSheetFraction = false,
@@ -133,6 +144,7 @@ class EditorSession {
     pointsItemId: clearPointsItem ? null : (pointsItemId ?? this.pointsItemId),
     previewExpanded: previewExpanded ?? this.previewExpanded,
     previewFraction: previewFraction ?? this.previewFraction,
+    previewAjustado: previewAjustado ?? this.previewAjustado,
     sheetLevel: sheetLevel ?? this.sheetLevel,
     sheetFraction: clearSheetFraction
         ? null
@@ -248,8 +260,15 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
 
   void clearInOut() => state = state.copyWith(clearInOut: true);
 
-  void setPreviewFraction(double f) =>
-      state = state.copyWith(previewFraction: f.clamp(0.30, 0.60));
+  void setPreviewFraction(double f) => state = state.copyWith(
+    previewFraction: f.clamp(0.14, 0.60),
+    previewAjustado: true,
+  );
+
+  /// Volta a altura do preview a ser decidida pela proporcao da
+  /// composicao (o "Redefinir" da alca).
+  void soltarPreview() =>
+      state = state.copyWith(previewFraction: 0.401, previewAjustado: false);
 
   void setSheetLevel(SheetLevel level) =>
       state = state.copyWith(sheetLevel: level, clearSheetFraction: true);

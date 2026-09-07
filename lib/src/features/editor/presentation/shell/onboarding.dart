@@ -61,20 +61,43 @@ class _OnboardingCoachState extends State<OnboardingCoach> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            dicasDoEditor[_i],
-            style: const TextStyle(
-              fontSize: 12.5,
-              height: 1.35,
-              color: AmColors.text,
+          // O TEXTO NAO PODE ROUBAR O TOQUE.
+          //
+          // Um paragrafo ABSORVE o ponteiro (o Flutter precisa disso para
+          // selecao de texto). Como o cartao fica por cima do alto do
+          // palco, enquanto ele estava na tela nao dava para pegar nada
+          // ali — inclusive a alca de girar, que mora no canto de cima da
+          // selecao. O relato "a rotacao nao gira" tinha mais esta causa.
+          // Ignorando o ponteiro no texto, o cartao continua legivel e o
+          // palco continua tocavel; so os dois botoes respondem.
+          // O TEXTO CEDE ANTES DE ESTOURAR.
+          //
+          // O cartao agora vive na folha de baixo, cuja altura e dada
+          // pelo layout — e uma dica de tres linhas num aparelho baixo
+          // estourava a coluna. Flexivel com rolagem, ele encolhe em vez
+          // de vazar, e a dica continua inteira.
+          Flexible(
+            child: IgnorePointer(
+              child: SingleChildScrollView(
+                child: Text(
+                  dicasDoEditor[_i],
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: AmColors.text,
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              Text(
-                '${_i + 1}/${dicasDoEditor.length}',
-                style: const TextStyle(fontSize: 11, color: AmColors.muted),
+              IgnorePointer(
+                child: Text(
+                  '${_i + 1}/${dicasDoEditor.length}',
+                  style: const TextStyle(fontSize: 11, color: AmColors.muted),
+                ),
               ),
               const Spacer(),
               if (!ultima)

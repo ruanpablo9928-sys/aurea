@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -711,7 +713,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     // ficava aberta o tempo todo e comia meia tela de timeline sem
     // ninguem ter pedido. Ela e o segundo passo do "+", e o toque na
     // timeline fecha (ver AmTimeline: tocar no vazio fecha o adicionar).
-    final Widget? conteudo;
+    Widget? conteudo;
     String? titulo;
     String? trilha;
     if (panel != null) {
@@ -744,8 +746,36 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     } else {
       conteudo = const DicaDoPalco();
     }
+    // AS DICAS DE PRIMEIRO USO MORAM NA FOLHA, e nao por cima do palco.
+    //
+    // Como cartao flutuante elas cobriam o alto do preview — e o alto do
+    // preview e onde fica a alca de GIRAR. Enquanto as quatro dicas
+    // estavam na tela, girar era impossivel: o toque batia nos botoes do
+    // cartao. Ensinar a mexer no palco tapando o palco e o pior lugar
+    // possivel; embaixo, no lugar onde a ajuda ja vive, elas nao tapam
+    // nada.
+    //
+    // Elas ocupam o lugar da DICA DO PALCO — a linha "toque num objeto"
+    // que ja aparece quando nada esta selecionado. Assim que a pessoa
+    // seleciona alguma coisa, as ferramentas da camada voltam a mandar:
+    // ensinar e util ate o momento em que atrapalha.
+    final mostrandoDicas =
+        !_dicasVistas && !s.previewExpanded && conteudo is DicaDoPalco;
+    if (mostrandoDicas) {
+      conteudo = OnboardingCoach(
+        onFechar: () {
+          setState(() => _dicasVistas = true);
+          OnboardingPrefs.marcar(ref, true);
+        },
+      );
+    }
     // O estado vazio e a dica ocupam UMA linha; o resto e painel de verdade.
-    final folhaFina = panel == null && !s.adding && layer == null && targets.length < 2;
+    final folhaFina =
+        !mostrandoDicas &&
+        panel == null &&
+        !s.adding &&
+        layer == null &&
+        targets.length < 2;
 
     return AureaTheme(
       tokens: AureaTokens.dark,
@@ -761,14 +791,52 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final ws = EditorLayoutMetrics.workspace(constraints.maxHeight);
+                // A ALTURA DO PREVIEW SAI DA PROPORCAO DA COMPOSICAO.
+                //
+                // Antes era uma fracao fixa da tela (40%), o que dava um
+                // retangulo com a proporcao do APARELHO. Um projeto 16:9
+                // dentro dele encostava so nas laterais e deixava duas
+                // tarjas pretas — e como o fundo do palco tambem e preto,
+                // o que se via era um vazio enorme e nenhuma pista de
+                // onde a composicao comeca. Deduzindo a altura da
+                // proporcao, o quadro preenche a area inteira e o que
+                // sobra vai para a timeline, que estava vazia.
+                final proporcao = ref
+                    .watch(editorControllerProvider)
+                    .aspectRatio;
+                // O aspecto so pode ENCOLHER o preview, nunca aumentar.
+                //
+                // Encolher e o que resolve a queixa (composicao larga
+                // dentro de um retangulo alto = duas tarjas pretas).
+                // Aumentar seria pedir mais tela para um projeto
+                // vertical, e ai a timeline e o painel e que ficam sem
+                // espaco — num aparelho pequeno isso estoura o layout.
+                final fracaoDaComposicao =
+                    constraints.maxHeight <= 0 || proporcao <= 0
+                    ? s.previewFraction
+                    : math.min(
+                        s.previewFraction,
+                        (constraints.maxWidth / proporcao) /
+                            constraints.maxHeight,
+                      );
                 final m = EditorLayoutMetrics.solve(
                   totalHeight: constraints.maxHeight,
-                  previewFraction: s.previewFraction,
+                  previewFraction: s.previewAjustado
+                      ? s.previewFraction
+                      : fracaoDaComposicao,
                   // A dica e o estado vazio ocupam UMA linha; painel de
                   // verdade ocupa o nivel que a alca deixou.
+                  // A FOLHA FINA E A FAIXA DO CABECALHO MAIS UMA LINHA.
+                  //
+                  // Era 48 px fixos, o que dava certo enquanto o
+                  // cabecalho tinha 18. Com o cabecalho em 34 (o Voltar
+                  // ganhou tamanho de alvo), sobravam 14 px para o texto
+                  // e a dica saia cortada pela metade.
                   sheetFraction: folhaFina && ws > 0
-                      ? 48 / ws
-                      : s.effectiveSheetFraction,
+                      ? (ContextSheet.handleHeight + 30) / ws
+                      : (mostrandoDicas && ws > 0
+                            ? (ContextSheet.handleHeight + 108) / ws
+                            : s.effectiveSheetFraction),
                   previewExpanded: s.previewExpanded,
                   timelineExpanded: s.timelineExpanded,
                   sheetVisible: conteudo != null,
@@ -787,7 +855,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 final alca =                           PreviewResizeHandle(
                             expanded: false,
                             onExpand: _session.togglePreviewExpanded,
-                            onReset: () => _session.setPreviewFraction(0.401),
+                            onReset: _session.soltarPreview,
                             onDrag: (dy) => _session.setPreviewFraction(
                               s.previewFraction +
                                   (constraints.maxHeight <= 0
@@ -918,22 +986,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    // DICAS DE PRIMEIRO USO (Fase 6): quatro, uma vez, no
-                    // alto do preview — nunca sobre a timeline ou o painel.
-                    if (!_dicasVistas && !s.previewExpanded)
-                      Positioned(
-                        left: 12,
-                        // No tablet o cartao fica sobre o preview, nao
-                        // sobre o painel da direita.
-                        right: largo ? 380 + 12 : 12,
-                        top: AureaTokens.topBar + 8,
-                        child: OnboardingCoach(
-                          onFechar: () {
-                            setState(() => _dicasVistas = true);
-                            OnboardingPrefs.marcar(ref, true);
-                          },
                         ),
                       ),
                     if (ref.watch(debugOverlayProvider))

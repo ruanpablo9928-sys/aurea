@@ -3,7 +3,6 @@ import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/layer_meta.dart';
-import 'package:aurea/src/features/editor/presentation/context/context_sheet.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/preview_stage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,7 +30,12 @@ void main() {
   testWidgets('tablet/paisagem: acima de 700 pt o painel fica ao lado do preview', (tester) async {
     final c = await openEditor(tester, size: const Size(1024, 768));
     expect(find.byKey(const ValueKey('editor-largo')), findsOneWidget);
-    // Sem selecao o painel e so a linha de dica.
+    // Na primeira abertura o lugar da dica e das QUATRO DICAS de estreia:
+    // elas moram na folha, e nao mais por cima do palco (la cobriam a
+    // alca de girar). Depois de "Entendi", a linha de dica assume.
+    expect(find.byKey(const ValueKey('editor-dica')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('editor-dica-entendi')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('dica-palco')), findsOneWidget);
 
     final id = c.read(editorControllerProvider).layers.first.id;

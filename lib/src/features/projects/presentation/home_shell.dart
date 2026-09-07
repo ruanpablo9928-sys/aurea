@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../about/presentation/about_tab.dart';
+import '../../community/presentation/community_tab.dart';
 import '../../settings/presentation/settings_tab.dart';
 import '../../user/presentation/user_tab.dart';
 import 'projects_tab.dart';
@@ -24,6 +25,9 @@ class _HomeShellState extends State<HomeShell> {
 
   static const _tabs = [
     (CupertinoIcons.house, CupertinoIcons.house_fill, 'Inicio'),
+    // A COMUNIDADE FICA EM SEGUNDO, ao lado do Inicio: e para onde se
+    // vai depois de terminar um trabalho, e nao um canto de ajustes.
+    (CupertinoIcons.person_2, CupertinoIcons.person_2_fill, 'Comunidade'),
     (CupertinoIcons.slider_horizontal_3, CupertinoIcons.slider_horizontal_3, 'Ajustes'),
     (CupertinoIcons.person, CupertinoIcons.person_fill, 'Usuario'),
     (CupertinoIcons.info_circle, CupertinoIcons.info_circle_fill, 'Sobre'),
@@ -43,6 +47,7 @@ class _HomeShellState extends State<HomeShell> {
         index: _index,
         children: const [
           ProjectsTab(),
+          CommunityTab(),
           SettingsTab(),
           UserTab(),
           AboutTab(),

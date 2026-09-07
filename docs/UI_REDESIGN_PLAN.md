@@ -405,3 +405,20 @@ Pedido: "Blobtracker FUNCIONAL e CAMERA TRACKER 3D funcional igual ao do AE", se
 ### Como conferir
 
 `flutter analyze` limpo (fora dos pacotes de terceiros); `flutter test` verde — 1588 passando, 1 pulado. Quadros da cena em `test/mao_visual_dump.dart` (pintor de CPU; a sombra do sol só aparece no motor de GPU).
+
+---
+
+## 13. O que o emulador mostrou (2026-09-07, beta 54)
+
+Pedido: "use o emulador e verifique a UI... ache os erros e contras". Segue o que apareceu na tela, e a causa de cada um.
+
+| Sintoma | Causa | Correção |
+|---|---|---|
+| **"Isso não funciona"** (Canto/Suave no editor de pontos). | O botão exigia um ponto **selecionado**, e quem entra no editor não tem seleção. Pior: ele era o 4º de seis num trilho vertical, e num painel baixo os três de baixo ficavam fora da tela. | As três ações desceram para uma **fileira com nome** (Canto, Apagar, Fechar), sempre visível. Sem seleção elas agem no **último ponto** — o que a pessoa acabou de cravar. |
+| **Voltar "MUITO pequeno".** | Chevron de 16 com a palavra em corpo 10, os dois espremidos numa faixa de 18 px. Alvo de toque não existe em 18 px. | Faixa de 26, **só o símbolo**, chevron de 22 num alvo de 44 de largura. |
+| **Preview com tarjas pretas.** | A altura vinha de uma fração fixa da tela (40%), ou seja, a proporção do **aparelho**. Um projeto 2,39:1 dentro disso sobra preto em cima e embaixo — e como o fundo do palco também é preto, o que se vê é um vazio enorme. | A altura sai da **proporção da composição** (só para encolher, nunca para crescer). O quadro encosta nas duas laterais e o que sobra vai para a timeline. |
+| **Nome da camada ilegível** na timeline: "◆ABIS◆O◆c◆a 3◆". | Os losangos de keyframe eram desenhados no **meio da barra**, por cima do rótulo. | Os keyframes têm uma **tira própria** na base da barra; o nome fica na faixa de cima. |
+| **A rotação não gira** (de novo, por outro caminho). | Duas causas somadas: as duas alças caíam a poucos pixels uma da outra em objeto pequeno (e a de escala é testada primeiro), e o **cartão de dicas cobria o alto do palco** — que é exatamente onde mora a alça de girar. | Afastamento mínimo de 30 px entre as alças, alças presas dentro do palco, e as quatro dicas saíram de cima do palco: agora ocupam o lugar da dica na folha de baixo. |
+| **Faixa amarela de estouro** sobre o painel, em tela pequena. | Com o menu de adicionar cobrindo a timeline, sobrava uma tira de 12 px de timeline: nela não cabe nem a régua, e o conteúdo vazava 38 px. | Abaixo do mínimo útil, a timeline **cede o espaço inteiro** em vez de virar um risco quebrado. O painel de camada também cede a grade quando a folha é baixa demais. |
+
+Fica registrado o que **não** foi corrigido: o rótulo de uma marca da régua ainda pode aparecer atrás dos botões do canto (ímã, busca, I/O). A tentativa de pôr fundo sólido ali mexeu na estrutura do Stack e derrubou o arrasto de reordenar; o ganho não pagava o risco nesta rodada.

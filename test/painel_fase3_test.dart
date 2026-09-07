@@ -16,7 +16,7 @@ import 'editor_hierarchy_test.dart' show openEditor;
 /// - Transformar, Mesclagem e Texto em linhas de parametro; opacidade com
 ///   valor exato em 4 toques (criterio de aceite).
 /// - Mesclagem: 6 modos com miniatura no Simples, 27 no Pro.
-/// - Todo painel tem um Voltar escrito, no cabecalho.
+/// - Todo painel tem um Voltar no cabecalho, com alvo de toque.
 void main() {
   setUpAll(() async {
     for (final family in ['Aurea Motion Sans', 'Roboto']) {
@@ -129,7 +129,7 @@ void main() {
     expect(c.read(editorControllerProvider).layerById(id)!.scaleX.isAnimated, isTrue);
   });
 
-  testWidgets('todo painel tem um Voltar escrito, no cabecalho, e ele volta', (tester) async {
+  testWidgets('todo painel tem um Voltar no cabecalho, e ele volta', (tester) async {
     final c = await openEditor(tester);
     final id = c.read(editorControllerProvider).layers.first.id;
     c.read(selectedLayerProvider.notifier).state = id;
@@ -137,8 +137,15 @@ void main() {
     for (final tile in ['Mover e\ntransf.', 'Mesclar e\nopacidade', 'Cor e\npreench.', 'Efeitos']) {
       await tester.tap(find.text(tile));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('painel-voltar')), findsOneWidget, reason: tile);
-      expect(find.text('Voltar'), findsOneWidget, reason: tile);
+      final voltar = find.byKey(const ValueKey('painel-voltar'));
+      expect(voltar, findsOneWidget, reason: tile);
+      // SO O SIMBOLO, E COM TAMANHO DE ALVO. Antes era um chevron de 16
+      // com a palavra em corpo 10, os dois espremidos numa faixa de 18
+      // px — "MUITO pequena", nas palavras do beta. O que o teste segura
+      // agora e a area tocavel, que e o que faltava.
+      final caixa = tester.getSize(voltar);
+      expect(caixa.width, greaterThanOrEqualTo(44), reason: tile);
+      expect(caixa.height, greaterThanOrEqualTo(24), reason: tile);
       await tester.tap(find.byKey(const ValueKey('painel-voltar')));
       await tester.pumpAndSettle();
       expect(c.read(editorSessionProvider).panel, EditorPanel.none, reason: '$tile fechou');

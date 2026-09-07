@@ -192,16 +192,33 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
     if (no != null) _setCursor(caminho.vertices[no].p);
   }
 
-  void _toggleCanto() {
+  /// O ponto em que as acoes agem: o selecionado, ou — se nao ha
+  /// selecao — o ULTIMO ponto do caminho.
+  ///
+  /// Um testador relatou que Canto/Suave "nao funciona". Funcionava: so
+  /// estava desligado, porque chegar no editor de pontos nao seleciona
+  /// nada e quem acabou de cravar um ponto nao pensa "preciso
+  /// selecionar antes". O ultimo ponto e justamente o que a pessoa
+  /// acabou de por, entao e nele que ela espera mexer.
+  int? _pontoAlvo() {
+    final caminho = _caminho();
+    if (caminho == null || caminho.vertices.isEmpty) return null;
     final sel = ref.read(pathEditSelectedProvider);
-    if (sel == null) return;
-    _editar((c) => toggleCorner(c, sel));
+    if (sel != null && sel < caminho.vertices.length) return sel;
+    return caminho.vertices.length - 1;
+  }
+
+  void _toggleCanto() {
+    final alvo = _pontoAlvo();
+    if (alvo == null) return;
+    ref.read(pathEditSelectedProvider.notifier).state = alvo;
+    _editar((c) => toggleCorner(c, alvo));
   }
 
   void _apagar() {
-    final sel = ref.read(pathEditSelectedProvider);
-    if (sel == null) return;
-    _editar((c) => removeVertex(c, sel));
+    final alvo = _pontoAlvo();
+    if (alvo == null) return;
+    _editar((c) => removeVertex(c, alvo));
     ref.read(pathEditSelectedProvider.notifier).state = null;
   }
 
@@ -253,55 +270,48 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
     final n = caminho?.vertices.length ?? 0;
     final temSel = sel != null && sel < n;
 
+    final caminhoFechado = caminho?.closed ?? true;
+    final temPontos = n > 0;
+
     return ColoredBox(
       color: AmColors.panel,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // O TRILHO SO TEM OS TRES MODOS.
+          //
+          // Tinha seis botoes: tres modos e tres acoes, todos so com
+          // icone. Num painel baixo os tres de baixo ficavam FORA DA
+          // TELA — e um deles era o Canto/Suave que o testador disse que
+          // "nao funciona". Ele nem estava aparecendo por inteiro. As
+          // acoes desceram para uma fileira com nome, que cabe sempre.
           SizedBox(
-            width: 56,
+            width: 62,
             child: Column(
               children: [
                 _ModoBotao(
+                  chave: 'pontos-modo-mover',
                   ativo: modo == PointsMode.move,
                   icon: CupertinoIcons.smallcircle_circle,
+                  rotulo: 'Mover',
                   onTap: () => ref.read(pathEditModeProvider.notifier).state =
                       PointsMode.move,
                 ),
                 _ModoBotao(
+                  chave: 'pontos-modo-alca',
                   ativo: modo == PointsMode.handle,
                   icon: CupertinoIcons.arrow_up_right_diamond,
+                  rotulo: 'Alca',
                   onTap: () => ref.read(pathEditModeProvider.notifier).state =
                       PointsMode.handle,
                 ),
                 _ModoBotao(
+                  chave: 'pontos-modo-add',
                   ativo: modo == PointsMode.add,
                   icon: CupertinoIcons.plus_circle,
+                  rotulo: 'Novo',
                   onTap: () => ref.read(pathEditModeProvider.notifier).state =
                       PointsMode.add,
-                ),
-                // OS COMANDOS DO PONTO, VISIVEIS.
-                //
-                // Eram uma lista dentro de um tres pontinhos. Sao os tres
-                // que se usa o tempo todo ao desenhar, e cada um custava
-                // dois toques a mais por estar escondido. Sem ponto
-                // selecionado ficam esmaecidos, nao somem.
-                _ModoBotao(
-                  ativo: false,
-                  icon: CupertinoIcons.slider_horizontal_below_rectangle,
-                  onTap: temSel ? _toggleCanto : null,
-                ),
-                _ModoBotao(
-                  ativo: false,
-                  icon: CupertinoIcons.trash,
-                  onTap: temSel ? _apagar : null,
-                ),
-                _ModoBotao(
-                  ativo: false,
-                  icon: (caminho?.closed ?? true)
-                      ? CupertinoIcons.lock_open
-                      : CupertinoIcons.lock,
-                  onTap: _fecharAbrir,
                 ),
               ],
             ),
@@ -322,7 +332,8 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
                         temSel
                             ? 'Deslize para puxar a alca do ponto ${sel + 1}.'
                             : 'Selecione um ponto antes de puxar a alca.',
-                      PointsMode.add => 'Deslize aqui para posicionar o proximo ponto, depois toque aqui para crava-lo.',
+                      PointsMode.add =>
+                        'Deslize aqui para posicionar o proximo ponto, depois toque aqui para crava-lo.',
                     },
                     style: const TextStyle(
                       fontSize: 12.5,
@@ -342,6 +353,46 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  // AS ACOES DO PONTO, COM NOME E SEMPRE VISIVEIS.
+                  //
+                  // Sem selecao elas agem no ULTIMO ponto — o que a
+                  // pessoa acabou de cravar. Ficar desligado por falta de
+                  // selecao e o que fazia o botao parecer quebrado.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _AcaoDoPonto(
+                          chave: 'pontos-canto',
+                          icon: CupertinoIcons.arrow_turn_up_right,
+                          rotulo: temSel && caminho!.vertices[sel].corner
+                              ? 'Suavizar'
+                              : 'Canto',
+                          onTap: temPontos ? _toggleCanto : null,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _AcaoDoPonto(
+                          chave: 'pontos-apagar',
+                          icon: CupertinoIcons.trash,
+                          rotulo: 'Apagar',
+                          onTap: temPontos ? _apagar : null,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _AcaoDoPonto(
+                          chave: 'pontos-fechar',
+                          icon: caminhoFechado
+                              ? CupertinoIcons.lock_open
+                              : CupertinoIcons.lock,
+                          rotulo: caminhoFechado ? 'Abrir' : 'Fechar',
+                          onTap: temPontos ? _fecharAbrir : null,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -350,34 +401,107 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
       ),
     );
   }
-
 }
 
-class _ModoBotao extends StatelessWidget {
-  const _ModoBotao({
-    required this.ativo,
+/// Uma acao do ponto: icone e NOME, num alvo de 44 pt.
+class _AcaoDoPonto extends StatelessWidget {
+  const _AcaoDoPonto({
+    required this.chave,
     required this.icon,
+    required this.rotulo,
     required this.onTap,
   });
 
-  final bool ativo;
+  final String chave;
   final IconData icon;
+  final String rotulo;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return AmRailButton(
+    final ligado = onTap != null;
+    return GestureDetector(
+      key: ValueKey(chave),
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      selected: ativo,
-      child: Icon(
-        icon,
-        size: 22,
-        color: ativo ? AmColors.accent : AmColors.text,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: AmColors.chip,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: ligado ? AmColors.text : AmColors.muted,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  rotulo,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: ligado ? AmColors.text : AmColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
+class _ModoBotao extends StatelessWidget {
+  const _ModoBotao({
+    required this.chave,
+    required this.ativo,
+    required this.icon,
+    required this.rotulo,
+    required this.onTap,
+  });
+
+  final String chave;
+  final bool ativo;
+  final IconData icon;
+  final String rotulo;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = ativo ? AmColors.accent : AmColors.text;
+    return AmRailButton(
+      key: ValueKey(chave),
+      onTap: onTap,
+      selected: ativo,
+      // O NOME EMBAIXO DO ICONE. Tres icones parecidos num trilho
+      // estreito ("bolinha", "diamante", "mais") nao dizem qual e qual;
+      // com o nome, ninguem precisa descobrir por tentativa.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 21, color: cor),
+            const SizedBox(height: 1),
+            Text(
+              rotulo,
+              style: TextStyle(fontSize: 9.5, height: 1.1, color: cor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// O trackpad: cantos marcados, e um ⊹ no meio como lembrete.
 class _TrackpadPainter extends CustomPainter {

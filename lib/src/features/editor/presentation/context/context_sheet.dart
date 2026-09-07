@@ -36,7 +36,14 @@ class ContextSheet extends StatelessWidget {
   final VoidCallback? onBack;
   final Widget? trailing;
 
-  static const double handleHeight = 18;
+  /// A FAIXA DO CABECALHO DA FOLHA.
+  ///
+  /// Eram 18 px, e dentro deles cabia um chevron de 16 com a palavra
+  /// "Voltar" em corpo 10 — que e o que o beta chamou de "MUITO
+  /// pequena". Um alvo de toque nao existe em 18 px: o dedo cobre a
+  /// faixa inteira e ainda pega a alca de arrastar. Em 34 cabe um
+  /// simbolo de 26 com folga, e a folha perde 16 px uma vez so.
+  static const double handleHeight = 26;
 
   @override
   Widget build(BuildContext context) {
@@ -82,8 +89,14 @@ class ContextSheet extends StatelessWidget {
                       child: Row(
                         children: [
                           if (onBack != null)
-                            // "Um botao de voltar proprio": todo painel tem
-                            // um Voltar escrito, sempre no mesmo lugar.
+                            // VOLTAR SO COM O SIMBOLO, E GRANDE.
+                            //
+                            // A palavra ao lado do chevron obrigava os
+                            // dois a encolher para caber na faixa, e o
+                            // resultado era um alvo que ninguem acerta.
+                            // Um chevron de 26 num quadrado de 44 e
+                            // maior que o par inteiro era antes, e o
+                            // gesto de voltar ja e conhecido.
                             Tooltip(
                               message: 'Voltar às ferramentas da camada',
                               child: GestureDetector(
@@ -91,27 +104,12 @@ class ContextSheet extends StatelessWidget {
                                 behavior: HitTestBehavior.opaque,
                                 onTap: onBack,
                                 child: SizedBox(
+                                  width: 44,
                                   height: handleHeight,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        Icons.chevron_left,
-                                        size: 16,
-                                        color: t.text,
-                                      ),
-                                      Text(
-                                        'Voltar',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          height: 1.1,
-                                          fontWeight: FontWeight.w600,
-                                          color: t.text,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
+                                  child: Icon(
+                                    Icons.chevron_left,
+                                    size: 22,
+                                    color: t.text,
                                   ),
                                 ),
                               ),

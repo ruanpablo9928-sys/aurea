@@ -97,13 +97,17 @@ void main() {
       expect(m.topBar, 0);
     });
 
-    test('a fracao do preview e presa entre 30% e 60% da tela', () {
+    test('a fracao do preview e presa entre 14% e 60% da tela', () {
+      // O PISO E 14%, e nao 30%. Um projeto cinemascope (2,39:1) pede
+      // 19% da altura para encostar nas duas laterais; preso em 30%, ele
+      // ganhava duas tarjas pretas — a queixa do beta. Quem cuida do
+      // minimo util e previewMin, em pixels, logo abaixo.
       final baixo = EditorLayoutMetrics.solve(
         totalHeight: 932,
         previewFraction: 0.05,
         sheetFraction: 0.22,
       );
-      expect(baixo.preview, closeTo(932 * 0.30, 0.01));
+      expect(baixo.preview, closeTo(932 * 0.14, 0.01));
       final alto = EditorLayoutMetrics.solve(
         totalHeight: 932,
         previewFraction: 0.95,
@@ -200,7 +204,7 @@ void main() {
       n.setPreviewFraction(0.9);
       expect(c.read(editorSessionProvider).previewFraction, 0.60);
       n.setPreviewFraction(0.1);
-      expect(c.read(editorSessionProvider).previewFraction, 0.30);
+      expect(c.read(editorSessionProvider).previewFraction, 0.14);
     });
   });
 

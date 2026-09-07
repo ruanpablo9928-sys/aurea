@@ -87,6 +87,29 @@ class LayerToolsDock extends ConsumerWidget {
       color: AmColors.panel,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          // FOLHA BAIXA DEMAIS PARA A GRADE.
+          //
+          // O cabecalho e a fileira de acoes rapidas somam 104 px. Numa
+          // tela pequena, com a folha no nivel mais baixo, sobra menos
+          // que isso — e o Column estourava por 38 px, deixando a faixa
+          // amarela de estouro por cima do painel. Aqui a grade cede: o
+          // cabecalho e as acoes rapidas sao o que se usa primeiro, e as
+          // categorias voltam assim que a folha sobe.
+          if (constraints.maxHeight < 116) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LayerHeader(
+                    layer: layer,
+                    onMore: () => showAllActionsSheet(context, acoes),
+                  ),
+                  QuickActionsRow(actions: acoes),
+                ],
+              ),
+            );
+          }
           final sobra = constraints.maxHeight - 44 - 60 - 12;
           final tileHeight = (sobra / 2).clamp(44.0, 64.0);
           return Column(

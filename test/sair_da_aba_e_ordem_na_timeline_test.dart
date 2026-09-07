@@ -8,7 +8,7 @@ import 'editor_hierarchy_test.dart' show openEditor;
 
 /// OS PEDIDOS DO BETA SOBRE A TIMELINE E AS ABAS:
 ///
-/// - "um botao de voltar proprio": todo painel tem um Voltar escrito;
+/// - "um botao de voltar proprio": todo painel tem um Voltar no cabecalho;
 /// - "clicar na timeline fecha essa e qualquer outra aba": tocar na
 ///   barra da camada com um painel aberto volta as ferramentas, e tocar
 ///   no vazio da timeline tira a selecao (fecha tudo);
@@ -24,7 +24,7 @@ void main() {
     }
   });
 
-  testWidgets('o painel tem um Voltar escrito, e ele volta', (tester) async {
+  testWidgets('o painel tem um Voltar com alvo de toque, e ele volta', (tester) async {
     final c = await openEditor(tester);
     final id = c.read(editorControllerProvider).layers.first.id;
     c.read(selectedLayerProvider.notifier).state = id;
@@ -35,7 +35,6 @@ void main() {
 
     final voltar = find.byKey(const ValueKey('painel-voltar'));
     expect(voltar, findsOneWidget);
-    expect(find.text('Voltar'), findsOneWidget);
     await tester.tap(voltar);
     await tester.pumpAndSettle();
     expect(find.text('Girar'), findsNothing, reason: 'o painel fechou');
@@ -85,9 +84,15 @@ void main() {
 
     final linha = tester.getRect(find.byKey(ValueKey(deBaixo)));
     final pegada = Offset(linha.left + 30, linha.top + kAmBarHeight / 2);
-    // Uma linha inteira para cima, devagar (varios passos, como um dedo).
+    // UMA LINHA E MEIA para cima, devagar (varios passos, como um dedo).
+    //
+    // Uma linha exata nao basta e nunca bastou: o reconhecedor de arrasto
+    // so entra depois da folga de 18 px, e o degrau da pilha so troca
+    // depois de meia linha ACEITA. Um gesto de 38 px fica na divisa, e o
+    // teste passava ou nao conforme o arredondamento do layout. Quem
+    // arrasta com o dedo anda bem mais que isso.
     final dedo = await tester.startGesture(pegada);
-    for (var i = 1; i <= 6; i++) {
+    for (var i = 1; i <= 9; i++) {
       await dedo.moveBy(const Offset(0, -kAmRowHeight / 6));
       await tester.pump(const Duration(milliseconds: 16));
     }
@@ -101,7 +106,7 @@ void main() {
     final dedo2 = await tester.startGesture(
       Offset(linhaNova.left + 30, linhaNova.top + kAmBarHeight / 2),
     );
-    for (var i = 1; i <= 6; i++) {
+    for (var i = 1; i <= 9; i++) {
       await dedo2.moveBy(const Offset(0, kAmRowHeight / 6));
       await tester.pump(const Duration(milliseconds: 16));
     }
