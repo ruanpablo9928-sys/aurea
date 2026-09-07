@@ -557,3 +557,47 @@ class _CurveIconPainter extends CustomPainter {
 /// Formata numero no padrao pt-BR com decimais fixos (200,0 / 0,00).
 String amNumber(double v, [int decimals = 1]) =>
     v.toStringAsFixed(decimals).replaceAll('.', ',');
+
+/// O TRES-PONTINHOS QUE NAO ESCONDE UM MODO.
+///
+/// Menu escondido guarda ACAO sem problema: copiar, colar, resetar
+/// acontecem quando se toca e acabam ali. MODO e outra coisa — ele muda
+/// o que TODA interacao seguinte faz. Auto-key ligado transforma cada
+/// ajuste num keyframe novo; overshoot ligado deixa a curva passar de
+/// 0..1. Quem esquece um deles ligado nao tem como perceber olhando a
+/// tela, e passa a culpar o aplicativo por fazer coisas sozinho.
+///
+/// Entao o botao carrega o estado: aceso e com um ponto quando ha modo
+/// ligado. A funcao continua no menu; o que sai do esconderijo e o
+/// ESTADO dela.
+class AmMenuIcon extends StatelessWidget {
+  const AmMenuIcon({super.key, required this.ativo});
+
+  /// Ha algum modo ligado dentro deste menu?
+  final bool ativo;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    clipBehavior: Clip.none,
+    alignment: Alignment.center,
+    children: [
+      Icon(
+        CupertinoIcons.ellipsis,
+        color: ativo ? AmColors.accent : AmColors.text,
+      ),
+      if (ativo)
+        Positioned(
+          right: -1,
+          top: -1,
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AmColors.accent,
+            ),
+          ),
+        ),
+    ],
+  );
+}

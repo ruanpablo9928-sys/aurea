@@ -1,14 +1,11 @@
-import 'dart:ui' as ui;
 
 import 'package:aurea/src/features/editor/domain/effect.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
-import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/application/video_layer_manager.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/preview_stage.dart';
 import 'package:flutter/material.dart' hide Easing;
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -12,6 +12,19 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - build/**
+    # COPIA DE TRABALHO, nao codigo do aplicativo. Trinta megabytes de
+    # fonte de terceiro que ninguem compila (o pubspec aponta para
+    # packages/, nao para ca) e que sozinha respondia por 3.099 dos
+    # 3.110 problemas do projeto — com ela dentro, `flutter analyze` nao
+    # servia para nada.
+    - tmp/**
+    # As SUITES DOS PACOTES VENDORIZADOS. Elas importam `package:test`,
+    # que nao e dependencia deste aplicativo, e nunca sao compiladas
+    # aqui — sozinhas produziam 1.423 "erros" que nao existem. O `lib/`
+    # deles continua sob analise, porque e la que estao os nossos
+    # remendos.
+    - packages/*/test/**
+    - packages/*/example/**
     - android/**
     - ios/**
     - web/**

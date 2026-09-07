@@ -267,11 +267,10 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                     ),
                     Flexible(
                       child: PopupMenuButton<String>(
-                        tooltip: 'Opções da curva',
-                        icon: const Icon(
-                          CupertinoIcons.ellipsis,
-                          color: AmColors.text,
-                        ),
+                        tooltip: _overshoot
+                            ? 'Opções da curva · overshoot ligado'
+                            : 'Opções da curva',
+                        icon: AmMenuIcon(ativo: _overshoot),
                         color: AmColors.panelHigh,
                         itemBuilder: (_) => [
                           const PopupMenuItem(

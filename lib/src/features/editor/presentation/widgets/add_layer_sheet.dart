@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
@@ -83,7 +84,17 @@ Future<void> showAddLayerSheet(
               ),
               const SizedBox(height: 10),
               SizedBox(
-                height: 270,
+                // A FOLHA NAO PODE COBRIR A LINHA DO TEMPO.
+                //
+                // A altura fixa de 270 nasceu de um aparelho grande. Numa
+                // tela baixa a folha passava de 40% dela, e o que fica
+                // atras — a timeline — e justamente o que a pessoa esta
+                // olhando quando escolhe onde inserir a camada. A grade
+                // encolhe antes de a folha invadir.
+                height: math.min(
+                  270.0,
+                  MediaQuery.sizeOf(context).height * 0.31,
+                ),
                 child: AddLayerPanel(
                   onClose: () => Navigator.of(sheetContext).pop(),
                   playhead: playhead,

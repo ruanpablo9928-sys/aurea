@@ -68,6 +68,7 @@ void main() {
         final cru = await imagem.toByteData(
           format: ui.ImageByteFormat.rawRgba,
         );
+        final bytesCrus = cru?.lengthInBytes ?? 0;
         relogioCru.stop();
         imagem.dispose();
 
@@ -86,6 +87,7 @@ void main() {
           '${velho.toStringAsFixed(0)} ms/quadro  |  '
           'cru ${novo.toStringAsFixed(0)} ms/quadro  |  '
           '10 min a 30 fps: ${min(velho)} min -> ${min(novo)} min  |  '
+          'quadro cru ${(bytesCrus / 1024 / 1024).toStringAsFixed(1)} MB  |  '
           'disco: ${(png.lengthInBytes * quadros / 1024 / 1024 / 1024).toStringAsFixed(1)} GB -> 0',
         );
       }

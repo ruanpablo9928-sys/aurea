@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:aurea/src/features/editor/domain/camera3d.dart';
-import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/projects/domain/flor_template.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -66,8 +65,8 @@ void main() {
 
     test('toda tomada tem profundidade de campo ligada', () {
       for (final c in get3) {
-        expect(c.dof?.enabled, isTrue, reason: '${c.name} sem foco');
-        expect(c.dof!.highlightGain.valueAt(t(0)), greaterThan(0),
+        expect(c.dof.enabled, isTrue, reason: '${c.name} sem foco');
+        expect(c.dof.highlightGain.valueAt(t(0)), greaterThan(0),
             reason: 'sem ganho de realce o fundo desfocado vira borrao '
                 'cinza em vez de bola de luz');
       }

@@ -43,16 +43,20 @@ void main() {
               '(AmTickRuler), nunca por slider: $culpados');
     });
 
-    test('o editor de curvas nao tem mais menu escondido', () {
+    test('o overshoot nao fica ligado em segredo', () {
       final f = File(
           'lib/src/features/editor/presentation/am/curve_panel.dart');
       final codigo = _semComentarios(f);
-      expect(codigo.contains('_showMenu'), isFalse);
-      // Os quatro comandos que o documento nomeia, agora como botoes.
-      for (final rotulo in ["'Copiar'", "'Colar'", "'Em todos'",
-        "'Overshoot'"]) {
+      // Os comandos continuam existindo; o que a trava cobra e o ESTADO
+      // do modo ficar a vista, e nao a ausencia do menu. Ver a nota no
+      // teste do auto-key, logo abaixo.
+      for (final rotulo in ['Copiar curva', 'Colar curva',
+        'Aplicar em todos os segmentos', 'Overshoot']) {
         expect(codigo, contains(rotulo), reason: rotulo);
       }
+      expect(codigo, contains('AmMenuIcon(ativo: _overshoot)'),
+          reason: 'o botao do menu tem de mostrar que o overshoot esta '
+              'ligado');
     });
 
     test('o Modulo Grade nao mora mais dentro do Mais', () {
@@ -74,26 +78,54 @@ void main() {
       expect(codigo.contains('CupertinoIcons.ellipsis'), isFalse);
     });
 
-    test('o painel de transformacao nao tem mais menu escondido', () {
+    // A REGRA MUDOU AQUI, e vale dizer por que.
+    //
+    // A 10.1.1 pedia ZERO menus de tres pontinhos no aplicativo: toda
+    // funcao tinha de ter botao proprio. O painel de transformacao foi
+    // redesenhado depois, e a fileira de keyframe que ocupava 48 px no
+    // topo deu lugar a um menu com quatro itens — foi assim que as abas
+    // passaram a caber sem rolagem, que era a queixa dos testadores.
+    //
+    // O que a regra protegia continua protegido, e e mais preciso do que
+    // "nenhum tres-pontinhos": menu escondido pode guardar ACAO (copiar,
+    // resetar — acontece e acaba), mas nao pode guardar MODO. Modo muda
+    // o que TODA interacao seguinte faz: auto-key ligado transforma cada
+    // ajuste em keyframe; overshoot ligado deixa a curva passar de 0..1.
+    // Quem esquece um deles ligado nao percebe olhando a tela, e passa a
+    // achar que o aplicativo faz coisas sozinho.
+    //
+    // Entao a trava agora cobra o ESTADO a vista, e nao a ausencia do
+    // menu.
+    test('o auto-key nao fica ligado em segredo', () {
       final f = File(
           'lib/src/features/editor/presentation/am/transform_panel.dart');
       final codigo = _semComentarios(f);
       expect(codigo.contains('_menuMais'), isFalse);
-      expect(codigo, contains("rotulo: 'Resetar'"));
+      expect(codigo, contains('AmMenuIcon(ativo:'),
+          reason: 'o botao do menu tem de mostrar que ha modo ligado');
+      expect(codigo, contains('ref.watch(autoKeyframeProvider)'),
+          reason: 'sem watch, o icone nao reage quando o modo muda');
     });
 
-    test('nenhum menu de tres pontinhos restou no aplicativo', () {
-      // A tarefa de aceite do 10.1.3: percorrer as dez secoes e contar
-      // quantos tres pontinhos sobraram. O resultado tem de ser zero.
+    test('so dois menus escondidos no aplicativo, e os dois com estado', () {
+      // A conta continua sendo feita — o que mudou e o resultado
+      // aceitavel. Dois paineis tem menu: transformacao e curva. Os dois
+      // guardam modo, e os dois mostram o estado pelo AmMenuIcon. Um
+      // terceiro aparecendo aqui e regressao, e o teste diz qual e.
+      const permitidos = {
+        'transform_panel.dart',
+        'curve_panel.dart',
+        // O proprio icone que mostra o estado.
+        'am_widgets.dart',
+      };
       final culpados = <String>[];
       for (final f in _fontes()) {
-        if (_semComentarios(f).contains('CupertinoIcons.ellipsis')) {
-          culpados.add(f.path);
-        }
+        if (!_semComentarios(f).contains('CupertinoIcons.ellipsis')) continue;
+        final nome = f.path.split(RegExp(r'[/\\]')).last;
+        if (!permitidos.contains(nome)) culpados.add(f.path);
       }
       expect(culpados, isEmpty,
-          reason: 'funcao nenhuma pode existir so dentro de menu '
-              'escondido: $culpados');
+          reason: 'menu escondido novo, sem estado a vista: $culpados');
     });
 
     test('nenhuma gaveta no aplicativo', () {

@@ -1,4 +1,3 @@
-import 'dart:ui';
 
 import 'package:aurea/src/features/editor/domain/scene3d.dart';
 import 'package:aurea/src/features/projects/domain/malha_codigo.dart';

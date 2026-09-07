@@ -1,7 +1,6 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
-import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/presentation/am/curve_panel.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';

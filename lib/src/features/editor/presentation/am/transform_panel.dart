@@ -63,9 +63,13 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
     EditorController controller,
     String id,
     Layer layer,
-  ) => PopupMenuButton<String>(
-    tooltip: 'Opções de transformação',
-    icon: const Icon(CupertinoIcons.ellipsis, color: AmColors.text),
+  ) {
+    final autoKey = ref.watch(autoKeyframeProvider);
+    return PopupMenuButton<String>(
+      tooltip: autoKey
+          ? 'Opções de transformação · auto-key ligado'
+          : 'Opções de transformação',
+      icon: AmMenuIcon(ativo: autoKey),
     color: AmColors.panelHigh,
     itemBuilder: (_) => [
       CheckedPopupMenuItem(
@@ -99,7 +103,8 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
         }
       }
     },
-  );
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
