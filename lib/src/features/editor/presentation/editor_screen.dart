@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -760,6 +759,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           onKeyframe: () {
                             if (layer != null) _toggleKeyframe(layer, s);
                           },
+                          onAdd: s.adding ? null : () => _openAdd(),
                         ),
                         if (!s.previewExpanded) ...[
                           RepaintBoundary(
@@ -819,38 +819,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               child: const Icon(
                                 Icons.fullscreen_exit,
                                 color: AmColors.text,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    // O FAB "+": um ponto de entrada so, sempre no mesmo
-                    // canto, quando nada esta selecionado.
-                    if (s.panel == EditorPanel.none &&
-                        !s.previewExpanded &&
-                        layer == null &&
-                        multi.isEmpty)
-                      Positioned(
-                        right: 16,
-                        bottom: m.sheet + 12,
-                        child: Tooltip(
-                          message: 'Adicionar camada',
-                          child: Material(
-                            color: AmColors.action,
-                            shape: const CircleBorder(),
-                            elevation: 3,
-                            child: InkWell(
-                              key: const ValueKey('editor-fab'),
-                              customBorder: const CircleBorder(),
-                              onTap: () => _openAdd(),
-                              child: const SizedBox(
-                                width: 52,
-                                height: 52,
-                                child: Icon(
-                                  CupertinoIcons.plus,
-                                  color: AmColors.onAction,
-                                  size: 28,
-                                ),
                               ),
                             ),
                           ),

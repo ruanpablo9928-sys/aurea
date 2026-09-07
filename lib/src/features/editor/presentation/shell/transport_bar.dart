@@ -20,7 +20,12 @@ class EditorTransportBar extends ConsumerWidget {
     required this.onKeyframe,
     required this.keyframeHere,
     required this.keyframeEnabled,
+    this.onAdd,
   });
+
+  /// O "+" unico do editor (adicionar camada). Mora aqui, no fim do
+  /// transporte, para nunca cobrir uma linha da timeline.
+  final VoidCallback? onAdd;
 
   final PlaybackController playback;
 
@@ -118,8 +123,9 @@ class EditorTransportBar extends ConsumerWidget {
                 child: Center(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: RichText(
-                      text: TextSpan(
+                    // Text.rich (nao RichText): herda a fonte do tema.
+                    child: Text.rich(
+                      TextSpan(
                         style: TextStyle(
                           fontSize: 14,
                           color: t.text,
@@ -184,6 +190,35 @@ class EditorTransportBar extends ConsumerWidget {
               );
             },
           ),
+          // O "+": um ponto de entrada so, sempre no mesmo lugar.
+          if (onAdd != null)
+            Tooltip(
+              message: 'Adicionar camada',
+              child: GestureDetector(
+                key: const ValueKey('editor-fab'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onAdd,
+                child: SizedBox(
+                  width: AureaTokens.minTap,
+                  height: AureaTokens.minTap,
+                  child: Center(
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: t.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        CupertinoIcons.plus,
+                        size: 22,
+                        color: t.onAccent,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(width: 4),
         ],
       ),

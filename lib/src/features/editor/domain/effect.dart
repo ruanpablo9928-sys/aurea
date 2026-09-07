@@ -395,6 +395,12 @@ const effectSpecs = <EffectType, EffectSpec>{
     synonyms: ['tonalizar', 'tint', 'colorir'],
     params: {'strength': EffectParam('Forca', 0.5, 0.0, 1.0)},
     hasColor: true,
+    montar: ['strength'],
+    presets: [
+      EffectPronto('Leve', {'strength': 0.25}),
+      EffectPronto('Medio', {'strength': 0.5}),
+      EffectPronto('Forte', {'strength': 0.85}),
+    ],
   ),
   // Glow com pirâmide de 3 niveis, aberracao RGB e tonalizacao opcional
   // (aproximacao do Glow Volumetrico; conservacao plena exige linear).
@@ -517,6 +523,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
     },
     hasColor: true,
+    montar: ['radius', 'exposure', 'threshold'],
+    presets: [
+      EffectPronto('Suave', {'radius': 0.03, 'exposure': 0.6, 'threshold': 1.2}),
+      EffectPronto('Medio', {'radius': 0.05, 'exposure': 1.0, 'threshold': 1.0}),
+      EffectPronto('Intenso', {'radius': 0.09, 'exposure': 1.8, 'threshold': 0.8}),
+    ],
   ),
   // Tremor de camera: aleatorio e REPETIVEL, com fase integrada — animar
   // a frequencia acelera de verdade, sem salto.
@@ -671,6 +683,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'rgb': EffectParam('Separacao RGB', 0.5, 0.0, 1.0),
       'semente': EffectParam('Semente', 0.0, 0.0, 100.0, kind: ParamKind.seed),
     },
+    montar: ['quantidade', 'velocidade', 'rgb'],
+    presets: [
+      EffectPronto('Sutil', {'quantidade': 0.4, 'velocidade': 0.6, 'rgb': 0.3}),
+      EffectPronto('Medio', {'quantidade': 1.0, 'velocidade': 1.0, 'rgb': 0.5}),
+      EffectPronto('Caotico', {'quantidade': 2.0, 'velocidade': 4.0, 'rgb': 1.0}),
+    ],
   ),
   EffectType.rgbSplit: EffectSpec(
     id: 'rgb_split',
@@ -713,6 +731,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'decaimento': EffectParam('Decaimento', 0.55, 0.1, 0.95),
       'matiz': EffectParam('Matiz/copia', 0.0, 0.0, 120.0),
     },
+    montar: ['ecos', 'intervalo', 'decaimento'],
+    presets: [
+      EffectPronto('Curto', {'ecos': 2, 'intervalo': 0.05, 'decaimento': 0.5}),
+      EffectPronto('Medio', {'ecos': 3, 'intervalo': 0.08, 'decaimento': 0.55}),
+      EffectPronto('Longo', {'ecos': 6, 'intervalo': 0.14, 'decaimento': 0.75}),
+    ],
   ),
   // Eco ESPACIAL (AUREA-2 §2 item 28): repeticao no espaco com
   // transformacao progressiva por copia.
@@ -731,6 +755,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'decaimento': EffectParam('Decaimento', 0.7, 0.1, 1.0),
       'matiz': EffectParam('Matiz/copia', 0.0, 0.0, 120.0),
     },
+    montar: ['copias', 'dx', 'decaimento'],
+    presets: [
+      EffectPronto('Poucas', {'copias': 3, 'dx': 30, 'decaimento': 0.6}),
+      EffectPronto('Medio', {'copias': 5, 'dx': 40, 'decaimento': 0.7}),
+      EffectPronto('Muitas', {'copias': 10, 'dx': 60, 'decaimento': 0.85}),
+    ],
   ),
   // Aberracao cromatica RADIAL (item 14): cresce do centro para a
   // borda, como lente real — diferente do RGB Split.
@@ -747,6 +777,12 @@ const effectSpecs = <EffectType, EffectSpec>{
     ],
     cost: 2,
     params: {'quantidade': EffectParam('Quantidade', 0.3, 0.0, 1.0)},
+    montar: ['quantidade'],
+    presets: [
+      EffectPronto('Leve', {'quantidade': 0.15}),
+      EffectPronto('Medio', {'quantidade': 0.3}),
+      EffectPronto('Forte', {'quantidade': 0.7}),
+    ],
   ),
 
   // ------------------------- catalogo, lote 1 -------------------------
@@ -800,6 +836,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'sombras': EffectParam('Levantar sombras', 0.0, 0.0, 1.0),
       'altas': EffectParam('Baixar altas', 0.0, 0.0, 1.0),
     },
+    montar: ['contraste', 'brilho'],
+    presets: [
+      EffectPronto('Suave', {'contraste': 0.15, 'brilho': 0.0}),
+      EffectPronto('Medio', {'contraste': 0.35, 'brilho': 0.0}),
+      EffectPronto('Forte', {'contraste': 0.6, 'brilho': 0.05}),
+    ],
   ),
   EffectType.vibrance: EffectSpec(
     id: 'vibrance',
@@ -813,6 +855,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       // deixar o rosto laranja.
       'protecaoPele': EffectParam('Protecao de pele', 0.6, 0.0, 1.0),
     },
+    montar: ['vibracao', 'saturacao'],
+    presets: [
+      EffectPronto('Leve', {'vibracao': 0.25, 'saturacao': 0.0}),
+      EffectPronto('Medio', {'vibracao': 0.5, 'saturacao': 0.1}),
+      EffectPronto('Forte', {'vibracao': 0.9, 'saturacao': 0.25}),
+    ],
   ),
   EffectType.whiteBalance: EffectSpec(
     id: 'white_balance',
@@ -830,6 +878,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'temperatura': EffectParam('Temperatura', 0.0, -1.0, 1.0),
       'matiz': EffectParam('Matiz', 0.0, -1.0, 1.0),
     },
+    montar: ['temperatura', 'matiz'],
+    presets: [
+      EffectPronto('Quente', {'temperatura': 0.35, 'matiz': 0.0}),
+      EffectPronto('Neutro', {'temperatura': 0.0, 'matiz': 0.0}),
+      EffectPronto('Frio', {'temperatura': -0.35, 'matiz': 0.0}),
+    ],
   ),
   EffectType.colorWheels: EffectSpec(
     id: 'color_wheels',
@@ -844,6 +898,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'altasG': EffectParam('Altas G', 0.0, -0.5, 0.5),
       'altasB': EffectParam('Altas B', 0.0, -0.5, 0.5),
     },
+    montar: ['sombrasB', 'altasR'],
+    presets: [
+      EffectPronto('Teal e laranja', {'sombrasB': 0.15, 'altasR': 0.12}),
+      EffectPronto('Neutro', {'sombrasB': 0.0, 'altasR': 0.0}),
+      EffectPronto('Frio', {'sombrasB': 0.25, 'altasR': -0.1}),
+    ],
   ),
   // O efeito mais subestimado da lista: fogo, fumaca, faisca e vazamento
   // de luz vem todos em video com fundo preto.
@@ -864,6 +924,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'limiar': EffectParam('Limiar', 0.0, 0.0, 1.0),
       'suavidade': EffectParam('Suavidade', 0.5, 0.0, 1.0),
     },
+    montar: ['limiar', 'suavidade'],
+    presets: [
+      EffectPronto('Leve', {'limiar': 0.05, 'suavidade': 0.6}),
+      EffectPronto('Medio', {'limiar': 0.15, 'suavidade': 0.5}),
+      EffectPronto('Forte', {'limiar': 0.35, 'suavidade': 0.3}),
+    ],
   ),
   EffectType.vignette: EffectSpec(
     id: 'vignette',
@@ -924,6 +990,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
       'angulo': EffectParam('Angulo', 0.0, -180.0, 180.0),
     },
+    montar: ['comprimento', 'angulo'],
+    presets: [
+      EffectPronto('Leve', {'comprimento': 8, 'angulo': 0}),
+      EffectPronto('Medio', {'comprimento': 20, 'angulo': 0}),
+      EffectPronto('Forte', {'comprimento': 60, 'angulo': 0}),
+    ],
   ),
   EffectType.radialBlur: EffectSpec(
     id: 'radial_blur',
@@ -943,6 +1015,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
       'amostras': EffectParam('Amostras', 6.0, 2.0, 16.0),
     },
+    montar: ['quantidade', 'modo'],
+    presets: [
+      EffectPronto('Leve', {'quantidade': 0.12}),
+      EffectPronto('Medio', {'quantidade': 0.3}),
+      EffectPronto('Forte', {'quantidade': 0.7}),
+    ],
   ),
   EffectType.lightRays: EffectSpec(
     id: 'light_rays',
@@ -980,6 +1058,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
     },
     hasColor: true,
+    montar: ['comprimento', 'intensidade'],
+    presets: [
+      EffectPronto('Suave', {'comprimento': 0.25, 'intensidade': 0.4}),
+      EffectPronto('Medio', {'comprimento': 0.4, 'intensidade': 0.7}),
+      EffectPronto('Intenso', {'comprimento': 0.7, 'intensidade': 1.4}),
+    ],
   ),
   EffectType.mosaic: EffectSpec(
     id: 'mosaic',
@@ -987,6 +1071,12 @@ const effectSpecs = <EffectType, EffectSpec>{
     category: 'Stylize',
     synonyms: ['mosaico', 'mosaic', 'pixelate', 'pixel', 'censura'],
     params: {'blocos': EffectParam('Blocos', 24.0, 3.0, 160.0)},
+    montar: ['blocos'],
+    presets: [
+      EffectPronto('Fino', {'blocos': 60}),
+      EffectPronto('Medio', {'blocos': 24}),
+      EffectPronto('Grosso', {'blocos': 8}),
+    ],
   ),
   EffectType.filmGrain: EffectSpec(
     id: 'film_grain',
@@ -999,6 +1089,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'tamanho': EffectParam('Tamanho', 1.5, 0.5, 6.0),
       'semente': EffectParam('Semente', 1.0, 0.0, 100.0, kind: ParamKind.seed),
     },
+    montar: ['intensidade', 'tamanho'],
+    presets: [
+      EffectPronto('Leve', {'intensidade': 0.12, 'tamanho': 1.0}),
+      EffectPronto('Medio', {'intensidade': 0.25, 'tamanho': 1.5}),
+      EffectPronto('Forte', {'intensidade': 0.5, 'tamanho': 2.5}),
+    ],
   ),
   EffectType.fractalNoise: EffectSpec(
     id: 'fractal_noise',
@@ -1024,6 +1120,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'semente': EffectParam('Semente', 3.0, 0.0, 100.0, kind: ParamKind.seed),
     },
     hasColor: true,
+    montar: ['escala', 'complexidade', 'opacidade'],
+    presets: [
+      EffectPronto('Suave', {'escala': 0.4, 'complexidade': 2, 'opacidade': 0.4}),
+      EffectPronto('Medio', {'escala': 0.25, 'complexidade': 3, 'opacidade': 0.6}),
+      EffectPronto('Denso', {'escala': 0.12, 'complexidade': 5, 'opacidade': 0.8}),
+    ],
   ),
   EffectType.digitalDamage: EffectSpec(
     id: 'digital_damage',
@@ -1053,6 +1155,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'intervalo': EffectParam('Intervalo', 0.4, 0.05, 2.0),
       'semente': EffectParam('Semente', 5.0, 0.0, 100.0, kind: ParamKind.seed),
     },
+    montar: ['blocos', 'deslocamento', 'intervalo'],
+    presets: [
+      EffectPronto('Sutil', {'blocos': 3, 'deslocamento': 0.08, 'intervalo': 0.8}),
+      EffectPronto('Medio', {'blocos': 6, 'deslocamento': 0.15, 'intervalo': 0.4}),
+      EffectPronto('Pesado', {'blocos': 14, 'deslocamento': 0.4, 'intervalo': 0.15}),
+    ],
   ),
   EffectType.zoomWarp: EffectSpec(
     id: 'zoom_warp',
@@ -1065,6 +1173,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'rastro': EffectParam('Rastro', 0.3, 0.0, 1.0),
       'amostras': EffectParam('Amostras', 5.0, 2.0, 12.0),
     },
+    montar: ['quantidade', 'rastro'],
+    presets: [
+      EffectPronto('Leve', {'quantidade': 0.1, 'rastro': 0.2}),
+      EffectPronto('Medio', {'quantidade': 0.2, 'rastro': 0.3}),
+      EffectPronto('Forte', {'quantidade': 0.5, 'rastro': 0.6}),
+    ],
   ),
   /// RECORTE POR CROMA — o fundo verde (ou azul) que vira transparencia.
   ///
@@ -1132,6 +1246,7 @@ const effectSpecs = <EffectType, EffectSpec>{
     montar: ['limiar', 'tolerancia', 'inverter'],
     presets: [
       EffectPronto('Fundo preto', {'limiar': .10, 'tolerancia': .12}),
+      EffectPronto('Sombras', {'limiar': .22, 'tolerancia': .2, 'difusao': .1}),
       EffectPronto('Fundo branco', {
         'limiar': .90,
         'tolerancia': .12,
@@ -1155,6 +1270,11 @@ const effectSpecs = <EffectType, EffectSpec>{
       'suavidade': EffectParam('Suavidade', 0.08, 0.0, 1.0),
     },
     montar: ['tolerancia', 'suavidade'],
+    presets: [
+      EffectPronto('Verde', {'tolerancia': .15, 'suavidade': .08}, cor: Color(0xFF1FD41F)),
+      EffectPronto('Azul', {'tolerancia': .15, 'suavidade': .08}, cor: Color(0xFF1F5FD4)),
+      EffectPronto('Preciso', {'tolerancia': .06, 'suavidade': .04}),
+    ],
   ),
 
   /// CONTORNO. Sobel na luminancia; misturar traz a imagem de volta por
@@ -1190,6 +1310,12 @@ const effectSpecs = <EffectType, EffectSpec>{
     category: 'Stylize',
     synonyms: ['posterizar', 'posterize', 'niveis', 'cartoon'],
     params: {'niveis': EffectParam('Niveis', 6.0, 2.0, 32.0)},
+    montar: ['niveis'],
+    presets: [
+      EffectPronto('Suave', {'niveis': 12}),
+      EffectPronto('Medio', {'niveis': 6}),
+      EffectPronto('Forte', {'niveis': 3}),
+    ],
   ),
 
   // ------------------------------------------------------- lote 2
@@ -1214,6 +1340,12 @@ const effectSpecs = <EffectType, EffectSpec>{
     ],
     cost: 1,
     params: {'tempo': EffectParam('Tempo (s)', 0.0, 0.0, 60.0)},
+    montar: ['tempo'],
+    presets: [
+      EffectPronto('Inicio', {'tempo': 0}),
+      EffectPronto('Meio', {'tempo': 2}),
+      EffectPronto('Fim', {'tempo': 5}),
+    ],
   ),
 
   EffectType.pixelSort: EffectSpec(
@@ -1329,6 +1461,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'start_variation': EffectParam('Start Variation', 0.15, 0.0, 1.0),
       'thickness': EffectParam('Thickness', 1.1, 0.0, 4.0),
     },
+    montar: ['threshold', 'sort_angle', 'blend_with_original'],
+    presets: [
+      EffectPronto('Sutil', {'threshold': 0.6, 'sort_angle': 0, 'blend_with_original': 0.5}),
+      EffectPronto('Medio', {'threshold': 0.3, 'sort_angle': 0, 'blend_with_original': 0.0}),
+      EffectPronto('Extremo', {'threshold': 0.1, 'sort_angle': 90, 'blend_with_original': 0.0}),
+    ],
   ),
 
   /// RASTREADOR DE BLOBS: os marcadores de rastreio como elemento
@@ -1466,6 +1604,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
       'seed': EffectParam('Seed', 0.0, 0.0, 999.0, kind: ParamKind.seed),
     },
+    montar: ['threshold', 'sensitivity', 'max_blobs'],
+    presets: [
+      EffectPronto('Poucos', {'threshold': 50, 'sensitivity': 40, 'max_blobs': 5}),
+      EffectPronto('Medio', {'threshold': 35, 'sensitivity': 50, 'max_blobs': 20}),
+      EffectPronto('Muitos', {'threshold': 20, 'sensitivity': 70, 'max_blobs': 60}),
+    ],
   ),
 
   EffectType.turbulentDisplace: EffectSpec(
@@ -1489,6 +1633,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'evolucao': EffectParam('Evolucao', 0.0, -3600.0, 3600.0),
       'semente': EffectParam('Semente', 1.0, 1.0, 999.0, kind: ParamKind.seed),
     },
+    montar: ['quantidade', 'tamanho', 'complexidade'],
+    presets: [
+      EffectPronto('Leve', {'quantidade': 15, 'tamanho': 80, 'complexidade': 2}),
+      EffectPronto('Medio', {'quantidade': 40, 'tamanho': 60, 'complexidade': 2}),
+      EffectPronto('Forte', {'quantidade': 120, 'tamanho': 40, 'complexidade': 4}),
+    ],
   ),
 
   /// MASCARA DE NITIDEZ de verdade: original + quantidade * (original -
@@ -1510,6 +1660,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'raio': EffectParam('Raio', 3.0, 0.5, 40.0, relative: true),
       'limiar': EffectParam('Limiar', 0.0, 0.0, 1.0),
     },
+    montar: ['quantidade', 'raio'],
+    presets: [
+      EffectPronto('Leve', {'quantidade': 0.4, 'raio': 2}),
+      EffectPronto('Medio', {'quantidade': 0.8, 'raio': 3}),
+      EffectPronto('Forte', {'quantidade': 1.8, 'raio': 6}),
+    ],
   ),
 
   EffectType.motionTile: EffectSpec(
@@ -1566,6 +1722,12 @@ const effectSpecs = <EffectType, EffectSpec>{
         kind: ParamKind.toggle,
       ),
     },
+    montar: ['tile_width', 'tile_height', 'output_width'],
+    presets: [
+      EffectPronto('Ladrilho 2x2', {'tile_width': 50, 'tile_height': 50}),
+      EffectPronto('Ladrilho 3x3', {'tile_width': 33.3, 'tile_height': 33.3}),
+      EffectPronto('Espelhado', {'tile_width': 50, 'tile_height': 50, 'mirror_edges': 1}),
+    ],
   ),
 
   EffectType.bend: EffectSpec(
@@ -1593,6 +1755,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'curvatura': EffectParam('Curvatura', 1.0, 0.2, 4.0),
       'ancora': EffectParam('Ancora', 0.5, 0.0, 1.0),
     },
+    montar: ['quantidade', 'curvatura'],
+    presets: [
+      EffectPronto('Leve', {'quantidade': 15, 'curvatura': 1}),
+      EffectPronto('Medio', {'quantidade': 40, 'curvatura': 1}),
+      EffectPronto('Forte', {'quantidade': 120, 'curvatura': 2}),
+    ],
   ),
 
   /// CC SEMEAR (CC Scatterize): quebra a imagem em graos e espalha.
@@ -1618,6 +1786,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'gravidade': EffectParam('Gravidade', 0.0, -1.0, 1.0),
       'semente': EffectParam('Semente', 3.0, 1.0, 999.0, kind: ParamKind.seed),
     },
+    montar: ['dispersao', 'grao'],
+    presets: [
+      EffectPronto('Leve', {'dispersao': 20, 'grao': 16}),
+      EffectPronto('Medio', {'dispersao': 60, 'grao': 24}),
+      EffectPronto('Forte', {'dispersao': 180, 'grao': 40}),
+    ],
   ),
 
   /// CC SPLIT: a imagem se abre em duas metades a partir de dois pontos.
@@ -1633,6 +1807,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'centro': EffectParam('Centro', 0.5, 0.0, 1.0),
       'suavidade': EffectParam('Suavidade', 0.0, 0.0, 1.0),
     },
+    montar: ['divisao', 'angulo'],
+    presets: [
+      EffectPronto('Leve', {'divisao': 15}),
+      EffectPronto('Medio', {'divisao': 40}),
+      EffectPronto('Forte', {'divisao': 120}),
+    ],
   ),
 
   EffectType.vhs: EffectSpec(
@@ -1650,6 +1830,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'desbotar': EffectParam('Desbotar', 0.4, 0.0, 1.0),
       'semente': EffectParam('Semente', 5.0, 1.0, 999.0, kind: ParamKind.seed),
     },
+    montar: ['intensidade', 'linhas', 'ruido'],
+    presets: [
+      EffectPronto('Leve', {'intensidade': 0.3, 'linhas': 0.3, 'ruido': 0.15}),
+      EffectPronto('Medio', {'intensidade': 0.6, 'linhas': 0.5, 'ruido': 0.3}),
+      EffectPronto('Forte', {'intensidade': 1.0, 'linhas': 0.8, 'ruido': 0.6}),
+    ],
   ),
 
   EffectType.filmDamage: EffectSpec(
@@ -1677,6 +1863,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'salto': EffectParam('Salto de quadro', 0.25, 0.0, 1.0),
       'semente': EffectParam('Semente', 11.0, 1.0, 999.0, kind: ParamKind.seed),
     },
+    montar: ['poeira', 'riscos', 'cintilacao'],
+    presets: [
+      EffectPronto('Leve', {'poeira': 0.2, 'riscos': 0.15, 'cintilacao': 0.15}),
+      EffectPronto('Medio', {'poeira': 0.5, 'riscos': 0.4, 'cintilacao': 0.35}),
+      EffectPronto('Forte', {'poeira': 0.9, 'riscos': 0.8, 'cintilacao': 0.6}),
+    ],
   ),
 
   EffectType.glitchify: EffectSpec(
@@ -1708,6 +1900,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'ruidoLinha': EffectParam('Linhas de erro', 0.4, 0.0, 1.0),
       'semente': EffectParam('Semente', 13.0, 1.0, 999.0, kind: ParamKind.seed),
     },
+    montar: ['intensidade', 'blocos', 'deslocamento'],
+    presets: [
+      EffectPronto('Sutil', {'intensidade': 0.3, 'blocos': 4, 'deslocamento': 20}),
+      EffectPronto('Medio', {'intensidade': 0.6, 'blocos': 8, 'deslocamento': 60}),
+      EffectPronto('Caotico', {'intensidade': 1.0, 'blocos': 20, 'deslocamento': 200}),
+    ],
   ),
 
   EffectType.flicker: EffectSpec(
@@ -1737,6 +1935,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
       'seed': EffectParam('Seed', 0.0, 0.0, 100.0, kind: ParamKind.seed),
     },
+    montar: ['amount', 'frequency'],
+    presets: [
+      EffectPronto('Suave', {'amount': 0.3, 'frequency': 6}),
+      EffectPronto('Medio', {'amount': 0.6, 'frequency': 12}),
+      EffectPronto('Forte', {'amount': 1.0, 'frequency': 30}),
+    ],
   ),
 
   EffectType.gradient4: EffectSpec(
@@ -1766,6 +1970,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       ),
       'angle': EffectParam('Giro', 0.0, -180.0, 180.0),
     },
+    montar: ['opacity', 'angle'],
+    presets: [
+      EffectPronto('Suave', {'opacity': 0.5, 'angle': 0}),
+      EffectPronto('Medio', {'opacity': 1.0, 'angle': 0}),
+      EffectPronto('Diagonal', {'opacity': 1.0, 'angle': 45}),
+    ],
   ),
 
   EffectType.liquidGlass: EffectSpec(
@@ -1857,6 +2067,12 @@ const effectSpecs = <EffectType, EffectSpec>{
       'saturacao': EffectParam('Saturacao', 0.0, -1.0, 1.0),
       'gama': EffectParam('Gama', 1.0, 0.3, 3.0),
     },
+    montar: ['exposicao', 'contraste', 'saturacao'],
+    presets: [
+      EffectPronto('Suave', {'exposicao': 0.2, 'contraste': 0.1, 'saturacao': 0.1}),
+      EffectPronto('Medio', {'exposicao': 0.4, 'contraste': 0.25, 'saturacao': 0.2}),
+      EffectPronto('Forte', {'exposicao': 0.8, 'contraste': 0.5, 'saturacao': 0.4}),
+    ],
   ),
 
   EffectType.forceMotionBlur: EffectSpec(
@@ -1887,6 +2103,12 @@ const effectSpecs = <EffectType, EffectSpec>{
         options: ['Off', 'On', 'Only'],
       ),
     },
+    montar: ['samples', 'shutter_angle'],
+    presets: [
+      EffectPronto('Leve', {'samples': 8, 'shutter_angle': 90}),
+      EffectPronto('Medio', {'samples': 16, 'shutter_angle': 180}),
+      EffectPronto('Forte', {'samples': 32, 'shutter_angle': 360}),
+    ],
   ),
 };
 
@@ -1907,6 +2129,22 @@ const effectCategories = <String>[
   'Keying',
   'Utility',
 ];
+
+/// O ROTULO da categoria, em portugues, para a galeria (Fase 4).
+String categoriaDoEfeito(String categoria) => switch (categoria) {
+  'Color' => 'Cor',
+  'Light' => 'Luz',
+  'Lens' => 'Lente',
+  'Blur' => 'Desfoque',
+  'Distort' => 'Distorcer',
+  'Stylize' => 'Estilizar',
+  'Glitch' => 'Glitch',
+  'Time' => 'Tempo',
+  'Generate' => 'Gerar',
+  'Keying' => 'Recorte',
+  'Utility' => 'Utilitário',
+  _ => categoria,
+};
 
 /// A categoria escrita em portugues, para a busca aceitar os dois
 /// idiomas: quem digita "cor" acha os efeitos de Color.

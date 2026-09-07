@@ -253,7 +253,13 @@ void main() {
     await tester.tap(find.text('Ir'));
     await tester.pumpAndSettle();
     // 1.5 s a 30 fps: 00:01:15.
-    expect(find.textContaining('00:01:15'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('transport-timecode')),
+        matching: find.textContaining('00:01:15'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('o ◆ do transporte crava e tira o keyframe da propriedade ativa', (tester) async {

@@ -1272,7 +1272,17 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           ? _buildLayer(project, layer, t, resolveLinks, rig: rig)
           : _buildLayer(project, layer, ti, resolveLinks, rig: rig);
       // Media corrente: todas as amostras com o mesmo peso.
-      copias.add(Opacity(opacity: 1 / (i + 1), child: amostra));
+      // A amostra ja vem como Positioned: a opacidade entra por dentro
+      // de um Positioned.fill (Opacity direto dentro do Stack quebrava o
+      // ParentData e derrubava o preview com Force Motion Blur).
+      copias.add(
+        Positioned.fill(
+          child: Opacity(
+            opacity: 1 / (i + 1),
+            child: Stack(clipBehavior: Clip.none, children: [amostra]),
+          ),
+        ),
+      );
     }
     return Stack(clipBehavior: Clip.none, children: copias);
   }
@@ -1343,7 +1353,17 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       final amostra = ti < Duration.zero
           ? nitida
           : _buildLayer(project, layer, ti, resolveLinks, rig: rig);
-      copias.add(Opacity(opacity: 1 / (i + 1), child: amostra));
+      // A amostra ja vem como Positioned: a opacidade entra por dentro
+      // de um Positioned.fill (Opacity direto dentro do Stack quebrava o
+      // ParentData e derrubava o preview com Force Motion Blur).
+      copias.add(
+        Positioned.fill(
+          child: Opacity(
+            opacity: 1 / (i + 1),
+            child: Stack(clipBehavior: Clip.none, children: [amostra]),
+          ),
+        ),
+      );
     }
     return Stack(clipBehavior: Clip.none, children: copias);
   }

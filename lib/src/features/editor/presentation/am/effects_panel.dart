@@ -15,6 +15,8 @@ import 'color_picker_sheet.dart';
 import 'am_widgets.dart';
 import 'curve_panel.dart';
 import '../../application/effect_preset_store.dart';
+import '../../application/ui/pro_mode.dart';
+import '../context/effects/effect_gallery.dart';
 import '../../../help/presentation/quick_guide_screen.dart';
 
 /// Painel "Efeitos": LISTA VERTICAL de blocos colapsaveis, um por efeito.
@@ -133,266 +135,6 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   /// CATALOGO (PR-C4): o gargalo de quem tem muitos efeitos nao e ter —
   /// e ACHAR. Busca com sinonimos, chips por categoria com contador,
   /// presets de fabrica, e aplicacao em dois toques.
-  Future<void> _addEffect(BuildContext context, String layerId) async {
-    final controller = ref.read(editorControllerProvider.notifier);
-    final search = TextEditingController();
-    var query = '';
-    String? category;
-    var showPresets = false;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      isScrollControlled: true,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.62,
-      ),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          final results = query.isNotEmpty
-              ? searchEffects(query)
-              : (category == null
-                    ? effectSpecs.keys.toList()
-                    : effectsInCategory(category!));
-
-          return SafeArea(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                14,
-                16,
-                10 + MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Efeitos',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AmColors.text,
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () =>
-                            setSheetState(() => showPresets = !showPresets),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: showPresets
-                                ? AmColors.accentDim
-                                : AmColors.chip,
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: const Text(
-                            'Presets',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AmColors.accent,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  CupertinoTextField(
-                    controller: search,
-                    placeholder: 'buscar (glow, rgb split, pixelate...)',
-                    placeholderStyle: const TextStyle(
-                      fontSize: 13,
-                      color: AmColors.muted,
-                    ),
-                    style: const TextStyle(fontSize: 14, color: AmColors.text),
-                    prefix: const Padding(
-                      padding: EdgeInsets.only(left: 10),
-                      child: Icon(
-                        CupertinoIcons.search,
-                        size: 16,
-                        color: AmColors.muted,
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AmColors.chip,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    onChanged: (v) => setSheetState(() {
-                      query = v;
-                      showPresets = false;
-                    }),
-                  ),
-                  const SizedBox(height: 10),
-                  if (!showPresets && query.isEmpty)
-                    SizedBox(
-                      height: 34,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          for (final c in [null, ...effectCategories])
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: GestureDetector(
-                                onTap: () => setSheetState(() => category = c),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: category == c
-                                        ? AmColors.accentDim
-                                        : AmColors.chip,
-                                    borderRadius: BorderRadius.circular(9),
-                                  ),
-                                  child: Text(
-                                    c == null
-                                        ? 'Todos ${effectSpecs.length}'
-                                        : '$c ${effectsInCategory(c).length}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AmColors.accent,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: showPresets
-                        // PREGUICOSO: `ListView(children:)` constroi
-                        // TUDO de uma vez. Com `builder`, so o visivel
-                        // (mais uma margem) existe.
-                        ? ListView.builder(
-                            itemCount: factoryPresets().length,
-                            itemBuilder: (context, i) {
-                              final p = factoryPresets()[i];
-                              return ListTile(
-                                leading: const Icon(
-                                  CupertinoIcons.square_stack_3d_down_right,
-                                  color: AmColors.accent,
-                                  size: 20,
-                                ),
-                                title: Text(
-                                  p.name,
-                                  style: const TextStyle(
-                                    color: AmColors.text,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  '${p.category} · '
-                                  '${p.effects.length} efeito(s)',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AmColors.muted,
-                                  ),
-                                ),
-                                onTap: () {
-                                  controller.applyPreset(
-                                    layerId,
-                                    p,
-                                    at: widget.playback.time.value,
-                                  );
-                                  Navigator.of(sheetContext).pop();
-                                },
-                              );
-                            },
-                          )
-                        // ESTADO VAZIO com aparencia propria, e a lista
-                        // preguicosa: trinta e oito ListTile construidos
-                        // de uma vez e trabalho jogado fora, porque so
-                        // meia duzia cabe na tela.
-                        : results.isEmpty
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.search,
-                                    size: 30,
-                                    color: AmColors.muted,
-                                  ),
-                                  SizedBox(height: 10),
-                                  Text(
-                                    'Nada encontrado. '
-                                    'Tente "glow", "rgb", "pixel" '
-                                    'ou "shake".',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      height: 1.4,
-                                      color: AmColors.muted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: results.length,
-                            itemBuilder: (context, i) {
-                              final type = results[i];
-                              final spec = effectSpecs[type]!;
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(
-                                  CupertinoIcons.wand_stars,
-                                  color: AmColors.accent,
-                                  size: 20,
-                                ),
-                                title: Text(
-                                  spec.name,
-                                  style: const TextStyle(
-                                    color: AmColors.text,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  '${spec.category}'
-                                  '${spec.cost > 1 ? ' · custo ${spec.cost}' : ''}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AmColors.muted,
-                                  ),
-                                ),
-                                onTap: () {
-                                  controller.addEffect(layerId, type);
-                                  Navigator.of(sheetContext).pop();
-                                },
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    search.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -403,6 +145,7 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
       return const ColoredBox(color: AmColors.panel);
     }
     final controller = ref.read(editorControllerProvider.notifier);
+    final pro = ref.watch(proModeProvider);
 
     return ColoredBox(
       color: AmColors.panel,
@@ -539,7 +282,7 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                           ),
                       const SizedBox(height: 8),
                       GestureDetector(
-                        onTap: () => _addEffect(context, id),
+                        onTap: () => showEffectGallery(context, ref, id, widget.playback),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           alignment: Alignment.center,
@@ -643,6 +386,20 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                         ),
                         onRemove: () =>
                             controller.removeEffect(id, layer.effects[i].id),
+                        pro: pro,
+                        onAssar: () {
+                          controller.bakeEffectToKeyframes(
+                            id,
+                            layer.effects[i].id,
+                            project.fps,
+                          );
+                          AureaSnack.show(
+                            context,
+                            'Movimento assado em keyframes',
+                            actionLabel: 'Desfazer',
+                            onAction: controller.undo,
+                          );
+                        },
                       ),
                   ],
                 ),
@@ -678,7 +435,14 @@ class _EffectCard extends StatelessWidget {
     required this.onToggleEnabled,
     required this.onDepth,
     required this.onPronto,
+    required this.pro,
+    required this.onAssar,
   });
+
+  /// SIMPLES mostra Pronto e Ajustar; PRO acrescenta Avancado, salvar
+  /// preset e assar em keyframes (secao 2 do plano).
+  final bool pro;
+  final VoidCallback onAssar;
 
   /// Posicao na lista: e o que a alca de arrastar entrega ao reordenar.
   final int index;
@@ -945,18 +709,29 @@ class _EffectCard extends StatelessWidget {
                     icone: CupertinoIcons.arrow_counterclockwise,
                     onTap: onResetar,
                   ),
-                  _ComandoDoEfeito(
-                    rotulo: 'Salvar preset',
-                    icone: CupertinoIcons.square_stack_3d_down_right,
-                    onTap: onSalvarPreset,
-                  ),
+                  if (pro)
+                    _ComandoDoEfeito(
+                      key: const ValueKey('efeito-salvar-preset'),
+                      rotulo: 'Salvar preset',
+                      icone: CupertinoIcons.square_stack_3d_down_right,
+                      onTap: onSalvarPreset,
+                    ),
+                  // ASSAR: o movimento procedural (Tremor, Flicker...) vira
+                  // keyframes reais e o efeito sai da pilha.
+                  if (pro && effect.spec.procedural)
+                    _ComandoDoEfeito(
+                      key: const ValueKey('efeito-assar'),
+                      rotulo: 'Assar em keyframes',
+                      icone: CupertinoIcons.flame,
+                      onTap: onAssar,
+                    ),
                 ],
               ),
               const SizedBox(height: 8),
               if (effect.spec.temProfundidades) ...[
                 _ProntoRow(effect: effect, onPronto: onPronto),
                 const SizedBox(height: 8),
-                _CaminhoRow(depth: effect.depth, onDepth: onDepth),
+                _CaminhoRow(depth: effect.depth, onDepth: onDepth, pro: pro),
                 if (effect.depth != EffectDepth.pronto)
                   const SizedBox(height: 10),
               ],
@@ -1655,10 +1430,17 @@ class _ProntoRow extends StatelessWidget {
 /// esses nomes. Tocar na profundidade em que ja se esta volta ao pronto,
 /// e nada do que foi feito se perde no caminho.
 class _CaminhoRow extends StatelessWidget {
-  const _CaminhoRow({required this.depth, required this.onDepth});
+  const _CaminhoRow({
+    required this.depth,
+    required this.onDepth,
+    this.pro = true,
+  });
 
   final EffectDepth depth;
   final ValueChanged<EffectDepth> onDepth;
+
+  /// Simples: so "Ajustar"; a ficha inteira e Pro.
+  final bool pro;
 
   @override
   Widget build(BuildContext context) {
@@ -1694,8 +1476,10 @@ class _CaminhoRow extends StatelessWidget {
     return Row(
       children: [
         botao('Ajustar', EffectDepth.montar),
-        const SizedBox(width: 8),
-        botao('Avancado', EffectDepth.avancado),
+        if (pro) ...[
+          const SizedBox(width: 8),
+          botao('Avancado', EffectDepth.avancado),
+        ],
       ],
     );
   }
@@ -1704,6 +1488,7 @@ class _CaminhoRow extends StatelessWidget {
 /// UM COMANDO VISIVEL do cartao do efeito. Chip preenchido, sem contorno.
 class _ComandoDoEfeito extends StatelessWidget {
   const _ComandoDoEfeito({
+    super.key,
     required this.rotulo,
     required this.icone,
     required this.onTap,
