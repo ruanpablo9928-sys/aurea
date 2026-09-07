@@ -10,7 +10,11 @@ class AppSettings {
     this.defaultResolution = 1080,
     this.saveToGallery = true,
     this.hapticFeedback = true,
+    this.themeMode = 'escuro',
   });
+
+  /// 'escuro' | 'claro' | 'sistema' (Fase 6).
+  final String themeMode;
 
   /// Valores padrao usados ao criar um projeto novo.
   final String defaultAspectKey;
@@ -28,6 +32,7 @@ class AppSettings {
     int? defaultResolution,
     bool? saveToGallery,
     bool? hapticFeedback,
+    String? themeMode,
   }) {
     return AppSettings(
       defaultAspectKey: defaultAspectKey ?? this.defaultAspectKey,
@@ -35,6 +40,7 @@ class AppSettings {
       defaultResolution: defaultResolution ?? this.defaultResolution,
       saveToGallery: saveToGallery ?? this.saveToGallery,
       hapticFeedback: hapticFeedback ?? this.hapticFeedback,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 }
@@ -45,6 +51,7 @@ class SettingsController extends Notifier<AppSettings> {
   static const _kResolution = 'settings.defaultResolution';
   static const _kSaveToGallery = 'settings.saveToGallery';
   static const _kHaptics = 'settings.haptics';
+  static const _kTema = 'settings.tema';
 
   @override
   AppSettings build() {
@@ -55,7 +62,13 @@ class SettingsController extends Notifier<AppSettings> {
       defaultResolution: prefs.getInt(_kResolution) ?? 1080,
       saveToGallery: prefs.getBool(_kSaveToGallery) ?? true,
       hapticFeedback: prefs.getBool(_kHaptics) ?? true,
+      themeMode: prefs.getString(_kTema) ?? 'escuro',
     );
+  }
+
+  void setThemeMode(String modo) {
+    state = state.copyWith(themeMode: modo);
+    ref.read(sharedPreferencesProvider).setString(_kTema, modo);
   }
 
   void setDefaultAspect(String key) {

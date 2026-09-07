@@ -566,7 +566,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                         width: w,
                         height: h,
                         child: ColoredBox(
-                          color: Colors.black,
+                          color: project.backgroundColor,
                           child: DitherLayer(
                             time: _time.value,
                             child: CompositionView(

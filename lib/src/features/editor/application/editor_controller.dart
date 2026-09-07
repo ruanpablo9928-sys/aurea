@@ -200,6 +200,21 @@ class EditorController extends Notifier<VideoProject> {
 
   void renameProject(String name) => _mutate(state.copyWith(name: name));
 
+  /// A COMPOSICAO (⚙ Projeto, Fase 6): proporcao, resolucao e fps.
+  void setComposition({double? aspectRatio, int? resolutionHeight, int? fps}) {
+    _mutate(
+      state.copyWith(
+        aspectRatio: aspectRatio,
+        resolutionHeight: resolutionHeight,
+        fps: fps,
+      ),
+    );
+  }
+
+  /// Cor de fundo da composicao (Q9).
+  void setBackgroundColor(Color color) =>
+      _mutate(state.copyWith(backgroundColor: color));
+
   Offset get _center => Offset(state.outputWidth / 2, state.outputHeight / 2);
 
   // ---------------------------------------------------------------- camadas

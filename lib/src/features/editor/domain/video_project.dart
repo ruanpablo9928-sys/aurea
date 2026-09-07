@@ -111,6 +111,7 @@ class VideoProject {
     List<Duration>? beats,
     this.bpm,
     this.lottieMode = false,
+    this.backgroundColor = const Color(0xFF000000),
   }) : id = id ?? const Uuid().v4(),
        layers = List.unmodifiable(layers ?? const <Layer>[]),
        links = List.unmodifiable(links ?? const <PropertyLink>[]),
@@ -131,6 +132,11 @@ class VideoProject {
   final double aspectRatio;
   final int fps;
   final int resolutionHeight;
+
+  /// COR DE FUNDO da composicao (decisao Q9 do redesign). Preto por
+  /// padrao, como sempre foi; o preview e a exportacao pintam esta cor
+  /// atras das camadas.
+  final Color backgroundColor;
 
   final List<Layer> layers;
 
@@ -321,6 +327,7 @@ class VideoProject {
     List<Duration>? beats,
     double? bpm,
     bool? lottieMode,
+    Color? backgroundColor,
   }) {
     return VideoProject(
       id: id,
@@ -343,6 +350,7 @@ class VideoProject {
       beats: beats ?? this.beats,
       bpm: bpm ?? this.bpm,
       lottieMode: lottieMode ?? this.lottieMode,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
     );
   }
 }

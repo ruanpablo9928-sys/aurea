@@ -2549,6 +2549,7 @@ Map<String, dynamic> projectToJson(VideoProject p) => {
   'aspect': p.aspectRatio,
   'fps': p.fps,
   'resH': p.resolutionHeight,
+  if (p.backgroundColor.toARGB32() != 0xFF000000) 'bg': _col(p.backgroundColor),
   if (p.meta.isNotEmpty)
     'meta': {
       for (final e in p.meta.entries)
@@ -2653,6 +2654,7 @@ VideoProject projectFromJson(Map<String, dynamic> m) => VideoProject(
   aspectRatio: (m['aspect'] as num).toDouble(),
   fps: (m['fps'] as num).toInt(),
   resolutionHeight: (m['resH'] as num).toInt(),
+  backgroundColor: m['bg'] == null ? const Color(0xFF000000) : _asCol(m['bg']),
   layers: [
     for (final l in (m['layers'] as List))
       layerFromJson(l as Map<String, dynamic>),

@@ -96,6 +96,23 @@ class SettingsTab extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 26),
+          const _GroupHeader('Aparencia'),
+          _Group(
+            children: [
+              _SegmentedRow<String>(
+                label: 'Tema',
+                values: const ['escuro', 'claro', 'sistema'],
+                selected: settings.themeMode,
+                labelOf: (m) => switch (m) {
+                  'claro' => 'Claro',
+                  'sistema' => 'Sistema',
+                  _ => 'Escuro',
+                },
+                onChanged: controller.setThemeMode,
+              ),
+            ],
+          ),
+          const SizedBox(height: 26),
           const _GroupHeader('Exportacao'),
           _Group(
             children: [
@@ -158,7 +175,7 @@ class _GroupHeader extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, bottom: 8),
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           letterSpacing: 0.6,
           fontWeight: FontWeight.w500,
@@ -328,7 +345,7 @@ class _TapRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               CupertinoIcons.chevron_right,
               size: 16,
               color: AppColors.muted,
@@ -380,7 +397,7 @@ class _Motor3DRowState extends State<_Motor3DRow> {
                       'desenhando. Reabra o app depois de trocar.'
                 : 'Desenhando em CPU porque $aviso. Toque em Sempre GPU '
                       'para tentar de novo, e reabra o app.',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.35,
               color: AppColors.muted,
@@ -430,7 +447,7 @@ class _GraficoRowState extends State<_GraficoRow> {
                       'cores saem erradas, no preview e na exportacao. '
                       'Ligue, reabra o app e compare. Se o app nao abrir, '
                       'a opcao se desliga sozinha.',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.35,
               color: AppColors.muted,
@@ -476,7 +493,7 @@ class _Qualidade3DRowState extends State<_Qualidade3DRow> {
               'desce um degrau (sombra, MSAA, escala, textura, LOD) antes '
               'de o app travar; sobe de volta quando sobra folga. Agora: '
               '${qualidade3dRotulo(nivel)}.',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 height: 1.35,
                 color: AppColors.muted,

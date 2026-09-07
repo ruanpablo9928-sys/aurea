@@ -32,6 +32,8 @@ import 'am/shape_panel.dart';
 import 'am/text_animators_panel.dart';
 import 'am/transform_panel.dart';
 import 'context/add_toolbar.dart';
+import 'shell/onboarding.dart';
+import '../../help/presentation/quick_guide_screen.dart';
 import 'context/categories/text_panel.dart';
 import 'context/context_sheet.dart';
 import 'context/layer_header.dart';
@@ -64,6 +66,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     with SingleTickerProviderStateMixin {
   late final PlaybackController _playback;
   final VideoLayerManager _videos = VideoLayerManager();
+
+  /// Dicas de primeiro uso ja vistas neste aparelho (Fase 6).
+  late bool _dicasVistas = OnboardingPrefs.vistas(ref);
   final GlobalKey<PointsPanelState> _pointsKey = GlobalKey<PointsPanelState>();
   AddTab? _addTab;
 
@@ -397,6 +402,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       case AddTarget.objeto:
       case AddTarget.icone:
         _openAdd(AddTab.objeto);
+      case AddTarget.ajuda:
+        _playback.pause();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const QuickGuideScreen(initialQuery: ''),
+          ),
+        );
       case AddTarget.texto:
         _playback.pause();
         controller.addTextLayer(t);
@@ -844,6 +856,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               ),
                             ),
                           ),
+                        ),
+                      ),
+                    // DICAS DE PRIMEIRO USO (Fase 6): quatro, uma vez, no
+                    // alto do preview — nunca sobre a timeline ou o painel.
+                    if (!_dicasVistas && !s.previewExpanded)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        top: AureaTokens.topBar + 8,
+                        child: OnboardingCoach(
+                          onFechar: () {
+                            setState(() => _dicasVistas = true);
+                            OnboardingPrefs.marcar(ref, true);
+                          },
                         ),
                       ),
                     if (ref.watch(debugOverlayProvider))

@@ -45,7 +45,7 @@ class AboutTab extends StatelessWidget {
                 color: AppColors.lime.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text(
+              child: Text(
                 'Versao $_appVersion',
                 style: TextStyle(
                   fontSize: 12,
@@ -82,7 +82,7 @@ class AboutTab extends StatelessWidget {
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     CupertinoIcons.book,
                     color: AppColors.lime,
                   ),
@@ -97,7 +97,7 @@ class AboutTab extends StatelessWidget {
                     ),
                   ),
                 ),
-                const ListTile(
+                ListTile(
                   leading: Icon(
                     CupertinoIcons.bolt,
                     color: AppColors.lime,
@@ -114,17 +114,17 @@ class AboutTab extends StatelessWidget {
                   child: Divider(color: AppColors.hairline),
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     CupertinoIcons.exclamationmark_bubble,
                     color: AppColors.lime,
                     size: 21,
                   ),
                   title: const Text('Reportar erro ou sugerir'),
-                  subtitle: const Text(
+                  subtitle: Text(
                     'Vai direto para o criador',
                     style: TextStyle(fontSize: 12, color: AppColors.muted),
                   ),
-                  trailing: const Icon(
+                  trailing: Icon(
                     CupertinoIcons.chevron_right,
                     size: 16,
                     color: AppColors.muted,
@@ -136,18 +136,18 @@ class AboutTab extends StatelessWidget {
                   child: Divider(color: AppColors.hairline),
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     CupertinoIcons.person_crop_circle,
                     color: AppColors.lime,
                     size: 21,
                   ),
                   title: const Text('Criador'),
-                  subtitle: const Text(
+                  subtitle: Text(
                     '${AureaAutor.nome}  ·  @${AureaAutor.instagram}  ·  '
                     'TikTok @${AureaAutor.tiktok}',
                     style: TextStyle(fontSize: 12, color: AppColors.muted),
                   ),
-                  trailing: const Icon(
+                  trailing: Icon(
                     CupertinoIcons.chevron_right,
                     size: 16,
                     color: AppColors.muted,
@@ -159,13 +159,13 @@ class AboutTab extends StatelessWidget {
                   child: Divider(color: AppColors.hairline),
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     CupertinoIcons.doc_text,
                     color: AppColors.lime,
                     size: 21,
                   ),
                   title: const Text('Licencas de codigo aberto'),
-                  trailing: const Icon(
+                  trailing: Icon(
                     CupertinoIcons.chevron_right,
                     size: 16,
                     color: AppColors.muted,

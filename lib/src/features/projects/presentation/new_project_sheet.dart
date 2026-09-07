@@ -95,12 +95,12 @@ class _NewProjectSheetState extends ConsumerState<_NewProjectSheet> {
               autofocus: true,
               placeholder: 'Nome do projeto',
               textCapitalization: TextCapitalization.sentences,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 17,
                 letterSpacing: -0.2,
                 color: AppColors.onDark,
               ),
-              placeholderStyle: const TextStyle(
+              placeholderStyle: TextStyle(
                 fontSize: 17,
                 letterSpacing: -0.2,
                 color: AppColors.muted,
@@ -173,7 +173,7 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
         letterSpacing: 0.6,
         fontWeight: FontWeight.w500,
@@ -226,7 +226,7 @@ class _AspectCard extends StatelessWidget {
             ),
             Text(
               option.hint,
-              style: const TextStyle(fontSize: 9, color: AppColors.muted),
+              style: TextStyle(fontSize: 9, color: AppColors.muted),
             ),
           ],
         ),

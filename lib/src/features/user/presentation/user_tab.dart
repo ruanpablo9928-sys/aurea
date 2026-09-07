@@ -29,7 +29,7 @@ class UserTab extends ConsumerWidget {
               controller: nameController,
               placeholder: 'Nome',
               textCapitalization: TextCapitalization.words,
-              style: const TextStyle(color: AppColors.onDark, fontSize: 16),
+              style: TextStyle(color: AppColors.onDark, fontSize: 16),
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -42,7 +42,7 @@ class UserTab extends ConsumerWidget {
               controller: emailController,
               placeholder: 'E-mail (opcional)',
               keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(color: AppColors.onDark, fontSize: 16),
+              style: TextStyle(color: AppColors.onDark, fontSize: 16),
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -93,7 +93,7 @@ class UserTab extends ConsumerWidget {
                   height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [AppColors.lime, AppColors.violet],
@@ -109,14 +109,14 @@ class UserTab extends ConsumerWidget {
                     child: Container(
                       width: 90,
                       height: 90,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.background,
                       ),
                       alignment: Alignment.center,
                       child: Text(
                         profile.initial,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.5,
@@ -142,7 +142,7 @@ class UserTab extends ConsumerWidget {
                   color: AppColors.surfaceHigh,
                   borderRadius: BorderRadius.circular(20),
                   onPressed: () => _editProfile(context, ref),
-                  child: const Text(
+                  child: Text(
                     'Editar perfil',
                     style: TextStyle(
                       fontSize: 15,
@@ -184,7 +184,7 @@ class UserTab extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                const Icon(CupertinoIcons.cloud,
+                Icon(CupertinoIcons.cloud,
                     color: AppColors.muted, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
@@ -227,7 +227,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.4,

@@ -530,7 +530,7 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
               ),
             )
           else
-            const AspectRatio(
+            AspectRatio(
               aspectRatio: 16 / 9,
               child: ColoredBox(
                 color: Color(0xFF0B0E14),
@@ -549,7 +549,7 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
                 Expanded(
                   child: Text(
                     _status,
-                    style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                    style: TextStyle(fontSize: 13, color: AppColors.muted),
                   ),
                 ),
                 if (_rodando)

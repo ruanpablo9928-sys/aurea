@@ -292,7 +292,11 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                           child: SizedBox(
                             width: compW,
                             height: compH,
-                            child: Stack(
+                            // O FUNDO DA COMPOSICAO (⚙ Projeto): a cor
+                            // escolhida, atras de todas as camadas.
+                            child: ColoredBox(
+                              color: project.backgroundColor,
+                              child: Stack(
                               clipBehavior: Clip.none,
                               children: [
                                 // Automatic dithering is only a live GPU pass
@@ -391,6 +395,7 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                                   ),
                                 ),
                               ],
+                            ), // fechado-bg
                             ),
                           ),
                         ),

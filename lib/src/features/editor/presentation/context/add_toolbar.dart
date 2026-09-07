@@ -17,6 +17,7 @@ enum AddTarget {
   marcas,
   batidas,
   autoEdit,
+  ajuda,
 }
 
 /// E1 — NADA SELECIONADO: a barra de ADICIONAR (Blurrr/CapCut).
@@ -56,6 +57,7 @@ class AddToolbar extends StatelessWidget {
       (AddTarget.marcas, CupertinoIcons.bookmark, 'Marcas'),
       (AddTarget.batidas, CupertinoIcons.metronome, 'Batidas'),
       (AddTarget.autoEdit, CupertinoIcons.sparkles, 'AutoEdit'),
+      (AddTarget.ajuda, CupertinoIcons.question_circle, 'Ajuda'),
     ];
     return LayoutBuilder(
       builder: (context, c) {
@@ -64,13 +66,44 @@ class AddToolbar extends StatelessWidget {
         return ListView(
           padding: EdgeInsets.zero,
           children: [
+            // ESTADO VAZIO com chamada (criterio 13): "+ Adicione uma midia".
             if (empty && !compacto)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-                child: Text(
-                  'Comece adicionando uma mídia, um texto ou uma forma.',
-                  key: const ValueKey('estado-vazio'),
-                  style: TextStyle(fontSize: 12.5, color: t.muted),
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Comece adicionando uma mídia, um texto ou uma forma.',
+                        key: const ValueKey('estado-vazio'),
+                        style: TextStyle(fontSize: 12.5, color: t.muted),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      key: const ValueKey('estado-vazio-cta'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onTarget(AddTarget.midia),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: t.accent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '+ Adicione uma mídia',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: t.onAccent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             SizedBox(

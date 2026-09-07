@@ -14,6 +14,8 @@ import '../../../export/presentation/export_video_screen.dart';
 import '../../domain/lottie_export.dart';
 import '../../domain/template_pack.dart';
 import 'am_colors.dart';
+import '../../application/ui/pro_mode.dart';
+import '../../domain/layer.dart';
 import 'am_widgets.dart';
 
 /// Uma linha de opcoes: rotulo a esquerda, pastilhas a direita.
@@ -82,9 +84,9 @@ class _Escolha extends StatelessWidget {
 /// Lottie, nao MP4.
 Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
   final controller = ref.read(editorControllerProvider.notifier);
-  // NUCLEO: exportar MP4, uma resolucao, uma qualidade — o botao e so.
-  // Tamanho, codec, taxa, Lottie, SVG e template sao estudio.
-  const completo = true;
+  // SIMPLES: tres presets (1080p, 720p, 4K) e o video sai em dois toques.
+  // PRO: tamanho, codec, taxa, PNG, Lottie, SVG, template e SRT.
+  final completo = ref.read(proModeProvider);
   String? status;
   var busy = false;
   var ajustes = const ExportSettings();
@@ -99,6 +101,24 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
         final issues = validateForLottie(project);
         final blocking = issues.where((i) => i.blocking).toList();
         final warnings = issues.where((i) => !i.blocking).toList();
+
+        // RENDERIZAR: fecha a folha e abre a tela de exportacao com os
+        // ajustes dados (um preset ou os ajustes finos).
+        void renderizar(ExportSettings s) {
+          closeParamSheet(sheetContext);
+          Future.microtask(() {
+            if (!context.mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                fullscreenDialog: true,
+                builder: (_) => ExportVideoScreen(
+                  quality: s.quality,
+                  settings: s,
+                ),
+              ),
+            );
+          });
+        }
 
         Future<void> writeFile(
           String name,
@@ -162,43 +182,129 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                 ),
                 const SizedBox(height: 10),
 
-                // VIDEO: a composicao inteira, renderizada quadro a
-                // quadro na resolucao do projeto e codificada em MP4.
-                SizedBox(
-                  width: double.infinity,
-                  child: CupertinoButton(
-                    color: AmColors.accent,
-                    borderRadius: BorderRadius.circular(12),
-                    onPressed: busy
-                        ? null
-                        : () {
-                            closeParamSheet(sheetContext);
-                            Future.microtask(() {
-                              if (!context.mounted) return;
-                              Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  fullscreenDialog: true,
-                                  builder: (_) => ExportVideoScreen(
-                                    quality: ajustes.quality,
-                                    settings: ajustes,
+                // EXPORTAR EM DOIS TOQUES (criterio 10): um preset e o
+                // video sai — MP4, na taxa do projeto.
+                Row(
+                  children: [
+                    for (final (rotulo, tamanho) in const [
+                      ('1080p', ExportSize.p1080),
+                      ('720p', ExportSize.p720),
+                      ('4K', ExportSize.p2160),
+                    ]) ...[
+                      Expanded(
+                        child: GestureDetector(
+                          key: ValueKey('export-preset-$rotulo'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: busy
+                              ? null
+                              : () => renderizar(
+                                  ajustes.copyWith(
+                                    size: tamanho,
+                                    format: ExportFormat.mp4,
+                                    clearFps: true,
                                   ),
                                 ),
-                              );
-                            });
-                          },
-                    child: const Text(
-                      'Exportar video (MP4)',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0B0E12),
+                          child: Container(
+                            height: 64,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: rotulo == '1080p'
+                                  ? AmColors.action
+                                  : AmColors.chip,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  rotulo,
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: rotulo == '1080p'
+                                        ? AmColors.onAction
+                                        : AmColors.text,
+                                  ),
+                                ),
+                                Text(
+                                  'MP4 · ${project.fps} fps',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: rotulo == '1080p'
+                                        ? AmColors.onAction.withValues(alpha: .8)
+                                        : AmColors.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (rotulo != '4K') const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (!completo)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 6),
+                    child: Text(
+                      'Codec, taxa, PNG, Lottie, SVG e template ficam no modo Pro.',
+                      style: TextStyle(fontSize: 11.5, color: AmColors.muted),
+                    ),
+                  ),
+                if (completo)
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      key: const ValueKey('export-renderizar'),
+                      color: AmColors.accent,
+                      borderRadius: BorderRadius.circular(12),
+                      onPressed: busy ? null : () => renderizar(ajustes),
+                      child: const Text(
+                        'Renderizar com os ajustes abaixo',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0B0E12),
+                        ),
                       ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 10),
 
                 if (completo) ...[
+                  // LEGENDAS (.srt): uma por camada de legenda (Pro).
+                  for (final legenda in project.layers.whereType<CaptionLayer>())
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: CupertinoButton(
+                          key: ValueKey('export-srt-${legenda.id}'),
+                          color: AmColors.chip,
+                          borderRadius: BorderRadius.circular(12),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          onPressed: busy
+                              ? null
+                              : () {
+                                  final srt = controller.exportCaptionsSrt(legenda.id);
+                                  if (srt == null) return;
+                                  final nome = legenda.name
+                                      .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_');
+                                  writeFile('$nome.srt', srt, 'legendas (.srt)');
+                                },
+                          child: Text(
+                            'Legendas (.srt) · ${legenda.name}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AmColors.text,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   _Escolha(
                     rotulo: 'Formato',
                     opcoes: [

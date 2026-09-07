@@ -503,7 +503,7 @@ class ProjectsTab extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
           if (projects.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(20, 6, 20, 6),
               child: Text(
                 'Seus projetos aparecem aqui, com a miniatura do que voce fez.',
@@ -677,7 +677,7 @@ class _TituloSecao extends StatelessWidget {
           if (detalhe != null)
             Text(
               detalhe!,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
         ],
       ),
@@ -742,7 +742,7 @@ class _Pilula extends StatelessWidget {
             const SizedBox(width: 7),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 letterSpacing: -0.1,
@@ -801,7 +801,7 @@ class _CartaoProjeto extends StatelessWidget {
                 width: 156,
                 height: 118,
                 child: t == null
-                    ? const ColoredBox(
+                    ? ColoredBox(
                         color: AppColors.surfaceHigh,
                         child: Center(
                           child: Icon(
@@ -824,7 +824,7 @@ class _CartaoProjeto extends StatelessWidget {
               project.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 letterSpacing: -0.1,
@@ -836,7 +836,7 @@ class _CartaoProjeto extends StatelessWidget {
               _specs,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+              style: TextStyle(fontSize: 11.5, color: AppColors.muted),
             ),
           ],
         ),
@@ -882,7 +882,7 @@ class _CartaoModelo extends StatelessWidget {
               titulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 letterSpacing: -0.1,
@@ -894,7 +894,7 @@ class _CartaoModelo extends StatelessWidget {
               detalhe,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+              style: TextStyle(fontSize: 11.5, color: AppColors.muted),
             ),
           ],
         ),
@@ -925,10 +925,10 @@ class _Linha extends StatelessWidget {
             Expanded(
               child: Text(
                 texto,
-                style: const TextStyle(fontSize: 14, color: AppColors.onDark),
+                style: TextStyle(fontSize: 14, color: AppColors.onDark),
               ),
             ),
-            const Icon(
+            Icon(
               CupertinoIcons.chevron_right,
               size: 15,
               color: AppColors.muted,

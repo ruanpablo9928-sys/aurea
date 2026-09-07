@@ -1,27 +1,47 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../features/help/presentation/quick_guide_screen.dart';
+import '../../../projects/domain/project_presets.dart';
 import '../../application/editor_controller.dart';
 import '../../application/freehand_session.dart';
 import '../../application/preview_stats.dart';
+import '../../application/ui/pro_mode.dart';
+import '../../domain/layer_meta.dart';
+import '../am/am_colors.dart';
+import '../am/color_picker_sheet.dart';
 import '../am/scene3d_studio_ux.dart'
-    show LinhaDoEstudio, SecaoDoEstudio, folhaDoEstudio;
+    show LinhaDoEstudio, SecaoDoEstudio, folhaDoEstudio, pedirNome;
 import 'layer_actions.dart';
+import 'onboarding.dart';
 
-/// ⚙ PROJETO — o lugar das configuracoes (os tres apps de referencia).
+/// ⚙ PROJETO (Fase 6) — o lugar das configuracoes, como nos tres apps
+/// de referencia.
 ///
-/// Fase 1: nome, o que o projeto e (proporcao, resolucao, fps), a casca
-/// de cebola do preview e o diagnostico. Proporcao/resolucao/fps
-/// editaveis, fundo, guias, motion blur e template chegam na Fase 6.
+/// Simples: nome, proporcao, resolucao, fps, fundo, casca de cebola,
+/// ajuda. Pro acrescenta guias, motion blur da composicao, paleta,
+/// propriedades expostas e o diagnostico.
 Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
   return folhaDoEstudio<void>(
     context,
     titulo: 'Projeto',
-    alturaFator: 0.7,
+    alturaFator: 0.82,
     builder: (ctx, setSheet) {
       final p = ref.read(editorControllerProvider);
+      final c = ref.read(editorControllerProvider.notifier);
+      final pro = ref.read(proModeProvider);
       final onion = ref.read(onionSkinProvider);
       final diag = ref.read(debugOverlayProvider);
+      void atualiza() {
+        if (ctx.mounted) setSheet(() {});
+      }
+
+      final proporcaoAtual = ProjectPresets.aspects
+          .where((a) => (a.ratio - p.aspectRatio).abs() < 0.01)
+          .map((a) => a.key)
+          .firstOrNull;
+
       return ListView(
         shrinkWrap: true,
         children: [
@@ -33,16 +53,71 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
             chevron: true,
             onTap: () async {
               await renomearProjeto(context, ref);
-              if (ctx.mounted) setSheet(() {});
+              atualiza();
             },
           ),
           const SecaoDoEstudio('Composicao'),
+          _Chips<String>(
+            chave: 'projeto-proporcao',
+            rotulo: 'Proporção',
+            opcoes: [for (final a in ProjectPresets.aspects) a.key],
+            rotuloDe: (k) => k,
+            selecionado: proporcaoAtual,
+            onEscolher: (k) {
+              c.setComposition(
+                aspectRatio: ProjectPresets.aspectByKey(k).ratio,
+              );
+              atualiza();
+            },
+          ),
+          _Chips<int>(
+            chave: 'projeto-resolucao',
+            rotulo: 'Resolução',
+            opcoes: ProjectPresets.resolutions,
+            rotuloDe: ProjectPresets.resolutionLabel,
+            selecionado: p.resolutionHeight,
+            onEscolher: (r) {
+              c.setComposition(resolutionHeight: r);
+              atualiza();
+            },
+          ),
+          _Chips<int>(
+            chave: 'projeto-fps',
+            rotulo: 'Quadros',
+            opcoes: ProjectPresets.fpsOptions,
+            rotuloDe: (f) => '$f',
+            selecionado: p.fps,
+            onEscolher: (f) {
+              c.setComposition(fps: f);
+              atualiza();
+            },
+          ),
           LinhaDoEstudio(
-            icone: CupertinoIcons.rectangle,
-            titulo: 'Tamanho',
+            key: const ValueKey('projeto-fundo'),
+            icone: CupertinoIcons.square_fill,
+            titulo: 'Fundo da composição',
             subtitulo:
-                '${p.outputWidth} × ${p.outputHeight} · ${p.fps} fps · '
+                '${p.outputWidth} × ${p.outputHeight} · '
                 '${(p.duration.inMilliseconds / 1000).toStringAsFixed(1)} s',
+            trailing: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: p.backgroundColor,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white24),
+              ),
+            ),
+            onTap: () async {
+              final cor = await showColorPicker(
+                context,
+                initial: p.backgroundColor,
+                withAlpha: false,
+                onChanged: c.setBackgroundColor,
+              );
+              if (cor != null) c.setBackgroundColor(cor);
+              atualiza();
+            },
           ),
           const SecaoDoEstudio('Preview'),
           LinhaDoEstudio(
@@ -58,23 +133,297 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
             ),
             onTap: () {
               ref.read(onionSkinProvider.notifier).state = (onion + 1) % 3;
-              setSheet(() {});
+              atualiza();
             },
+          ),
+          if (pro) ...[
+            const SecaoDoEstudio('Guias'),
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-areas-seguras'),
+              icone: CupertinoIcons.rectangle_dock,
+              titulo: 'Áreas seguras',
+              subtitulo: 'Margens de titulo e acao no preview',
+              ligado: p.guides.showSafeAreas,
+              onTap: () {
+                c.setGuides(
+                  p.guides.copyWith(showSafeAreas: !p.guides.showSafeAreas),
+                );
+                atualiza();
+              },
+            ),
+            _Chips<int>(
+              chave: 'projeto-colunas',
+              rotulo: 'Colunas',
+              opcoes: const [0, 2, 3, 4, 6, 12],
+              rotuloDe: (n) => n == 0 ? 'Sem' : '$n',
+              selecionado: p.guides.columns,
+              onEscolher: (n) {
+                c.setGuides(p.guides.copyWith(columns: n));
+                atualiza();
+              },
+            ),
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-guia-vertical'),
+              icone: CupertinoIcons.line_horizontal_3,
+              titulo: 'Adicionar guia vertical',
+              subtitulo:
+                  '${p.guides.vertical.length} vertical, ${p.guides.horizontal.length} horizontal',
+              onTap: () {
+                c.addGuide(x: p.outputWidth / 2);
+                atualiza();
+              },
+            ),
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-guia-horizontal'),
+              icone: CupertinoIcons.line_horizontal_3,
+              titulo: 'Adicionar guia horizontal',
+              onTap: () {
+                c.addGuide(y: p.outputHeight / 2);
+                atualiza();
+              },
+            ),
+            if (p.guides.vertical.isNotEmpty || p.guides.horizontal.isNotEmpty)
+              LinhaDoEstudio(
+                key: const ValueKey('projeto-guias-limpar'),
+                icone: CupertinoIcons.clear,
+                titulo: 'Limpar guias',
+                perigo: true,
+                onTap: () {
+                  c.setGuides(
+                    p.guides.copyWith(vertical: const [], horizontal: const []),
+                  );
+                  atualiza();
+                },
+              ),
+            const SecaoDoEstudio('Motion blur da composição'),
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-motion-blur'),
+              icone: CupertinoIcons.speedometer,
+              titulo: 'Motion blur',
+              subtitulo: p.motionBlur.enabled
+                  ? 'Obturador ${p.motionBlur.shutterAngle.round()}° · ${p.motionBlur.samples} amostras'
+                  : 'Desligado (as camadas com motion blur so borram com isto ligado)',
+              ligado: p.motionBlur.enabled,
+              onTap: () {
+                c.setMotionBlur(
+                  p.motionBlur.copyWith(enabled: !p.motionBlur.enabled),
+                );
+                atualiza();
+              },
+            ),
+            if (p.motionBlur.enabled) ...[
+              _Chips<int>(
+                chave: 'projeto-obturador',
+                rotulo: 'Obturador',
+                opcoes: const [90, 180, 270, 360],
+                rotuloDe: (a) => '$a°',
+                selecionado: p.motionBlur.shutterAngle.round(),
+                onEscolher: (a) {
+                  c.setMotionBlur(
+                    p.motionBlur.copyWith(shutterAngle: a.toDouble()),
+                  );
+                  atualiza();
+                },
+              ),
+              _Chips<int>(
+                chave: 'projeto-amostras',
+                rotulo: 'Amostras',
+                opcoes: const [8, 16, 32],
+                rotuloDe: (n) => '$n',
+                selecionado: p.motionBlur.samples,
+                onEscolher: (n) {
+                  c.setMotionBlur(p.motionBlur.copyWith(samples: n));
+                  atualiza();
+                },
+              ),
+            ],
+            const SecaoDoEstudio('Paleta do projeto'),
+            for (final e in p.palette.entries.entries)
+              LinhaDoEstudio(
+                key: ValueKey('projeto-paleta-${e.key}'),
+                titulo: e.key,
+                subtitulo: 'Toque para trocar a cor · segure para tirar',
+                trailing: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: e.value,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                ),
+                onTap: () async {
+                  final cor = await showColorPicker(
+                    context,
+                    initial: e.value,
+                    onChanged: (cor) => c.setPaletteColor(e.key, cor),
+                  );
+                  if (cor != null) c.setPaletteColor(e.key, cor);
+                  atualiza();
+                },
+              ),
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-paleta-adicionar'),
+              icone: CupertinoIcons.add_circled,
+              titulo: 'Adicionar cor à paleta',
+              onTap: () async {
+                final nome = await pedirNome(
+                  context,
+                  titulo: 'Nome da cor',
+                  atual: 'Cor ${p.palette.entries.length + 1}',
+                );
+                if (nome == null || nome.trim().isEmpty) return;
+                if (!context.mounted) return;
+                final cor = await showColorPicker(
+                  context,
+                  initial: AmColors.action,
+                );
+                if (cor != null) c.setPaletteColor(nome.trim(), cor);
+                atualiza();
+              },
+            ),
+            const SecaoDoEstudio('Propriedades expostas (template)'),
+            if (p.exposed.isEmpty)
+              const LinhaDoEstudio(
+                icone: CupertinoIcons.slider_horizontal_3,
+                titulo: 'Nenhuma propriedade exposta',
+                subtitulo:
+                    'Exponha um parametro pelo toque longo no nome dele (em breve) '
+                    'para quem usar este projeto como template.',
+              ),
+            for (final ex in p.exposed)
+              LinhaDoEstudio(
+                key: ValueKey('projeto-exposta-${ex.id}'),
+                icone: CupertinoIcons.slider_horizontal_3,
+                titulo: ex.label,
+                subtitulo: '${ex.group} · ${ex.property}',
+                trailing: const Icon(
+                  CupertinoIcons.minus_circle,
+                  size: 18,
+                  color: AmColors.pink,
+                ),
+                onTap: () {
+                  c.unexposeProperty(ex.id);
+                  atualiza();
+                },
+              ),
+          ],
+          const SecaoDoEstudio('Ajuda'),
+          LinhaDoEstudio(
+            key: const ValueKey('projeto-ajuda'),
+            icone: CupertinoIcons.question_circle,
+            titulo: 'Como usar o editor',
+            subtitulo: 'Guia rapido, com busca',
+            chevron: true,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const QuickGuideScreen(initialQuery: ''),
+              ),
+            ),
           ),
           LinhaDoEstudio(
-            key: const ValueKey('projeto-diagnostico'),
-            icone: CupertinoIcons.waveform_path_ecg,
-            titulo: 'Diagnostico na tela',
-            subtitulo: 'Marcha, composicoes por segundo, memoria e o motor 3D.',
-            ligado: diag,
-            onTap: () {
-              ref.read(debugOverlayProvider.notifier).state = !diag;
-              setSheet(() {});
+            key: const ValueKey('projeto-dicas'),
+            icone: CupertinoIcons.lightbulb,
+            titulo: 'Ver as dicas de novo',
+            subtitulo: 'As quatro dicas de primeiro uso voltam ao abrir o editor',
+            onTap: () async {
+              await OnboardingPrefs.marcar(ref, false);
+              if (ctx.mounted) Navigator.of(ctx).pop();
             },
           ),
+          if (pro)
+            LinhaDoEstudio(
+              key: const ValueKey('projeto-diagnostico'),
+              icone: CupertinoIcons.waveform_path_ecg,
+              titulo: 'Diagnostico na tela',
+              subtitulo: 'Marcha, composicoes por segundo, memoria e o motor 3D.',
+              ligado: diag,
+              onTap: () {
+                ref.read(debugOverlayProvider.notifier).state = !diag;
+                atualiza();
+              },
+            ),
           const SizedBox(height: 12),
         ],
       );
     },
+  );
+}
+
+/// Uma linha de chips: rotulo a esquerda, opcoes a direita.
+class _Chips<T> extends StatelessWidget {
+  const _Chips({
+    required this.chave,
+    required this.rotulo,
+    required this.opcoes,
+    required this.rotuloDe,
+    required this.selecionado,
+    required this.onEscolher,
+  });
+
+  final String chave;
+  final String rotulo;
+  final List<T> opcoes;
+  final String Function(T) rotuloDe;
+  final T? selecionado;
+  final ValueChanged<T> onEscolher;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 84,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: Text(
+              rotulo,
+              style: const TextStyle(fontSize: 13, color: AmColors.muted),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final o in opcoes)
+                GestureDetector(
+                  key: ValueKey('$chave-${rotuloDe(o)}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onEscolher(o),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: o == selecionado
+                          ? AmColors.actionDim
+                          : AmColors.chip,
+                      borderRadius: BorderRadius.circular(9),
+                      border: o == selecionado
+                          ? Border.all(color: AmColors.action)
+                          : null,
+                    ),
+                    child: Text(
+                      rotuloDe(o),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: o == selecionado
+                            ? AmColors.action
+                            : AmColors.text,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }
