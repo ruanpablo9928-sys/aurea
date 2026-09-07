@@ -24,6 +24,7 @@ import '../domain/abyss_cinematic_template.dart';
 import '../domain/colina_tv_template.dart';
 import '../domain/deriva_template.dart';
 import '../domain/flor_template.dart';
+import '../domain/prisma_template.dart';
 import '../application/modelos_empacotados.dart';
 import '../domain/monolito_template.dart';
 import '../domain/notes_motion_template.dart';
@@ -559,6 +560,13 @@ class ProjectsTab extends ConsumerWidget {
                     detalhe: '10 s · três tomadas · câmera na mão',
                     onTap: () =>
                         _abrirModelo(context, ref, buildFlorTemplate()),
+                  ),
+                  _CartaoModelo(
+                    imagem: 'assets/templates/prisma.jpg',
+                    titulo: 'PRISMA · Dezessete segundos em loop',
+                    detalhe: '17 s · seis cenas 3D · loop abstrato',
+                    onTap: () =>
+                        _abrirModelo(context, ref, buildPrismaTemplate()),
                   ),
                   _CartaoModelo(
                     imagem: 'assets/templates/deriva.jpg',
