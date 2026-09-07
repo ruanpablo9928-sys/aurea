@@ -241,10 +241,27 @@ ResultadoDaModeracao moderarApelido(String apelido) {
   return ResultadoDaModeracao.liberado;
 }
 
+/// Ha ofensa NO NOME de quem assina?
+///
+/// Separado de [moderarApelido] de proposito. Aquele decide quem pode
+/// CRIAR uma conta, e por isso tambem recusa nome reservado, tamanho e
+/// caractere estranho. Este decide o que APARECE no mural, e ali as
+/// regras de criacao nao valem: os avisos oficiais sao assinados
+/// "Aurea" — o nome que a criacao recusa justamente para ninguem se
+/// passar por eles. Misturar os dois fazia o mural esconder os proprios
+/// avisos.
+bool _nomeOfensivo(String autor) {
+  final normal = normalizarParaFiltro(autor);
+  for (final raiz in _raizesBloqueadas) {
+    if (normal.contains(normalizarParaFiltro(raiz))) return true;
+  }
+  return false;
+}
+
 /// O FILTRO NA HORA DE MOSTRAR.
 ///
 /// O de cima protege quem escreve daqui. Este protege quem le: o feed
 /// vem de fora, e um dia vai vir com coisa que nao passou por este app.
 /// Post reprovado nao aparece, e ninguem precisa saber que ele existiu.
 bool podeMostrar(String texto, String autor) =>
-    !moderarTexto(texto).bloqueia && !moderarApelido(autor).bloqueia;
+    !moderarTexto(texto).bloqueia && !_nomeOfensivo(autor);

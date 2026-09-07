@@ -122,6 +122,12 @@ void main() {
       expect(podeMostrar('post normal do mural', 'Ana'), isTrue);
       expect(podeMostrar('vai tomar no cu', 'Ana'), isFalse);
       expect(podeMostrar('post normal', 'vai se foder'), isFalse);
+      // MAS NOME RESERVADO CONTINUA APARECENDO. "Aurea" e recusado na
+      // CRIACAO de conta, para ninguem se passar pela equipe — e e
+      // exatamente com esse nome que os avisos oficiais chegam. Misturar
+      // as duas regras fazia o mural esconder os proprios avisos.
+      expect(moderarApelido('Aurea').bloqueia, isTrue);
+      expect(podeMostrar('Beta 55 no ar', 'Aurea'), isTrue);
     });
   });
 }
