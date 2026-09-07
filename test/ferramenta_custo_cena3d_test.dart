@@ -10,6 +10,7 @@ import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/scene3d_painter.dart';
 import 'package:aurea/src/features/projects/application/modelos_empacotados.dart';
 import 'package:aurea/src/features/projects/domain/deriva_template.dart';
+import 'package:aurea/src/features/projects/domain/flor_template.dart';
 import 'package:aurea/src/features/projects/domain/monolito_template.dart';
 
 /// FERRAMENTA DE MESA: quanto custa um quadro da cena 3D no PINTOR EM
@@ -74,6 +75,8 @@ void main() {
     final modelos = await carregarMonolitoModelosDe('assets/models/monolito');
     await medir('MONOLITO sem modelos', buildMonolitoTemplate());
     await medir('MONOLITO com modelos', buildMonolitoTemplate(modelos: modelos));
+    await medir('FLOR             ', buildFlorTemplate());
+    await medir('FLOR tocando     ', buildFlorTemplate(), rascunho: true);
     // O MESMO, EM RASCUNHO — que e como o preview desenha enquanto toca.
     await medir(
       'DERIVA tocando   ',

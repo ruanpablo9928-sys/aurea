@@ -143,7 +143,27 @@ class PrimitivaCodigo {
   int add(Vec3 p, Vec3 n, Offset? uv) {
     positions.add([p.x, p.y, p.z]);
     normals.add([n.x, n.y, n.z]);
-    if (uv != null) uvs.add([uv.dx, uv.dy]);
+    // UV E TUDO OU NADA DENTRO DE UMA PRIMITIVA.
+    //
+    // Quem desenha le `uv[i]` para cada posicao. Uma lista de uv mais
+    // curta que a de posicoes nao da erro aqui: da RangeError la na
+    // frente, dentro do motor, longe de quem montou a malha. E facil
+    // cair nisso sem perceber — basta duas partes da mesma cena
+    // compartilharem o material e so uma delas passar uv (foi o que
+    // aconteceu entre o caule e as sepalas da FLOR).
+    //
+    // Entao a lista se mantem alinhada por construcao: quem chega sem
+    // uv depois de alguem com uv ganha (0,0), e quem chega com uv
+    // depois de gente sem uv faz o preenchimento do que ficou para
+    // tras. Primitiva onde NINGUEM passou uv continua sem a chave.
+    if (uv != null) {
+      while (uvs.length < positions.length - 1) {
+        uvs.add(const [0.0, 0.0]);
+      }
+      uvs.add([uv.dx, uv.dy]);
+    } else if (uvs.isNotEmpty) {
+      uvs.add(const [0.0, 0.0]);
+    }
     return positions.length - 1;
   }
 }

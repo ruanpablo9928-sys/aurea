@@ -23,6 +23,7 @@ import '../domain/alight_xml_import.dart';
 import '../domain/abyss_cinematic_template.dart';
 import '../domain/colina_tv_template.dart';
 import '../domain/deriva_template.dart';
+import '../domain/flor_template.dart';
 import '../application/modelos_empacotados.dart';
 import '../domain/monolito_template.dart';
 import '../domain/notes_motion_template.dart';
@@ -551,6 +552,13 @@ class ProjectsTab extends ConsumerWidget {
                     titulo: 'CAMPO · A árvore da manhã',
                     detalhe: '25 s · cinco tomadas · cenário 3D editável',
                     onTap: () => _openCampo(context, ref),
+                  ),
+                  _CartaoModelo(
+                    imagem: 'assets/templates/flor.png',
+                    titulo: 'FLOR · Dez segundos de manhã',
+                    detalhe: '10 s · três tomadas · câmera na mão',
+                    onTap: () =>
+                        _abrirModelo(context, ref, buildFlorTemplate()),
                   ),
                   _CartaoModelo(
                     imagem: 'assets/templates/deriva.jpg',
