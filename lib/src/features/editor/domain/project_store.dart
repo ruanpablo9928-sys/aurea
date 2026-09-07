@@ -1800,6 +1800,7 @@ Map<String, dynamic> _camera(Camera3D c) => {
   'film': c.filmWidth,
   'ortho': c.orthographic,
   'auto': c.autoOrient.index,
+  if (c.lookAtNodeId != null) 'olhar': c.lookAtNodeId,
   'dof': {
     'on': c.dof.enabled,
     'focus': _ad(c.dof.focusDistance),
@@ -1839,6 +1840,7 @@ Camera3D _asCamera(Map<String, dynamic> m) {
     filmWidth: (m['film'] as num).toDouble(),
     orthographic: m['ortho'] as bool? ?? false,
     autoOrient: AutoOrient.values[(m['auto'] as num?)?.toInt() ?? 0],
+    lookAtNodeId: m['olhar'] as String?,
     dof: DepthOfField(
       enabled: d['on'] as bool? ?? false,
       focusDistance: _asAd(d['focus']),

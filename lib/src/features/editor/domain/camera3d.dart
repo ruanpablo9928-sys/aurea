@@ -323,6 +323,7 @@ class Camera3D {
     this.orthographic = false,
     DepthOfField? dof,
     this.autoOrient = AutoOrient.off,
+    this.lookAtNodeId,
   }) : id = id ?? const Uuid().v4(),
        posX = posX ?? AnimatedDouble(0),
        posY = posY ?? AnimatedDouble(0),
@@ -366,6 +367,11 @@ class Camera3D {
   final bool orthographic;
   final DepthOfField dof;
   final AutoOrient autoOrient;
+
+  /// OLHAR PARA: o no que a camera acompanha. Com ele, o ponto de
+  /// interesse deixa de ser o `poi` gravado e passa a ser a posicao do no
+  /// em cada instante — a camera segue o objeto sozinha, sem keyframe.
+  final String? lookAtNodeId;
 
   Vec3 positionAt(Duration t) =>
       Vec3(posX.valueAt(t), posY.valueAt(t), posZ.valueAt(t));
@@ -480,6 +486,8 @@ class Camera3D {
     bool? orthographic,
     DepthOfField? dof,
     AutoOrient? autoOrient,
+    String? lookAtNodeId,
+    bool clearLookAt = false,
   }) => Camera3D(
     id: id,
     name: name ?? this.name,
@@ -501,6 +509,7 @@ class Camera3D {
     orthographic: orthographic ?? this.orthographic,
     dof: dof ?? this.dof,
     autoOrient: autoOrient ?? this.autoOrient,
+    lookAtNodeId: clearLookAt ? null : (lookAtNodeId ?? this.lookAtNodeId),
   );
 }
 

@@ -32,10 +32,12 @@ import 'model_animation_screen.dart';
 Future<void> showScene3DSheet(
   BuildContext context,
   WidgetRef ref,
-  String layerId,
-) async {
-  var tab = 0;
-  String? selectedNode;
+  String layerId, {
+  int abaInicial = 0,
+  String? noInicial,
+}) async {
+  var tab = abaInicial;
+  String? selectedNode = noInicial;
 
   await showParamSheet(
     context,

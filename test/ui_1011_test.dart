@@ -118,6 +118,20 @@ void main() {
         // O proprio icone que mostra o estado.
         'am_widgets.dart',
       };
+      // O ESTUDIO 3D tem o terceiro (a barra "Cena | Camera | menu" da
+      // missao de 2026-09-07). Ele nao usa o icone cru: usa o AmMenuIcon,
+      // aceso quando ha modo ligado (avancado, grade, auto-key), e tudo
+      // o que abre por ele tambem se alcanca pela tela — a cena pela
+      // acao rapida, as vistas pelo menu da camera, os comandos pelo
+      // modo avancado. E o que este teste confere abaixo.
+      final estudio = File(
+          'lib/src/features/editor/presentation/am/scene3d_studio.dart');
+      final codigoEstudio = _semComentarios(estudio);
+      expect(codigoEstudio.contains('CupertinoIcons.ellipsis'), isFalse,
+          reason: 'o Estudio usa o AmMenuIcon, que carrega o estado');
+      expect(codigoEstudio.contains('AmMenuIcon(ativo:'), isTrue);
+      expect(codigoEstudio.contains("ValueKey('estudio-cena')"), isTrue,
+          reason: 'a cena (hierarquia) tem acao rapida fora do menu');
       final culpados = <String>[];
       for (final f in _fontes()) {
         if (!_semComentarios(f).contains('CupertinoIcons.ellipsis')) continue;

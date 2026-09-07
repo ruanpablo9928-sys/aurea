@@ -2331,7 +2331,20 @@ class Scene3DLayer extends Layer {
     Duration local, {
     NodeTransform external = NodeTransform.identity,
   }) {
-    final base = resolveCamera(allCameras, shots, local, camera);
+    final resolvida = resolveCamera(allCameras, shots, local, camera);
+
+    // OLHAR PARA: a camera em uso acompanha um no da cena — o alvo e a
+    // posicao dele neste instante, e nao o ponto de interesse gravado.
+    Camera3D ativa = camera;
+    final tomadaId = shotAt(shots, local)?.cameraId;
+    for (final c in allCameras) {
+      if (c.id == tomadaId) ativa = c;
+    }
+    final alvoId = ativa.lookAtNodeId;
+    final alvo = alvoId == null ? null : scene.nodeById(alvoId);
+    final base = alvo == null
+        ? resolvida
+        : resolvida.comAlvo(resolveNodeTransform(scene, alvo, local).position);
 
     // Pai DENTRO da cena (nulo 3D), se houver.
     final pid = scene.cameraParentId;

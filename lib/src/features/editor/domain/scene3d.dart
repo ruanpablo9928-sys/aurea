@@ -431,6 +431,40 @@ class SceneNode {
        rotZ = rotZ ?? AnimatedDouble(0),
        scale = scale ?? AnimatedDouble(1);
 
+  /// Uma copia com id novo — o mesmo objeto, ao lado do original.
+  SceneNode duplicado({String? nome}) => SceneNode(
+    name: nome ?? '$name copia',
+    kind: kind,
+    material: material,
+    x: x,
+    y: y,
+    z: z,
+    rotX: rotX,
+    rotY: rotY,
+    rotZ: rotZ,
+    scale: scale,
+    size: size,
+    visible: visible,
+    instances: instances,
+    mesh: mesh,
+    outline: outline,
+    extrudeDepth: extrudeDepth,
+    parentId: parentId,
+    isNull: isNull,
+    locked: locked,
+    colorTag: colorTag,
+    lod: lod,
+    mediumMesh: mediumMesh,
+    lowMesh: lowMesh,
+    subdivisions: subdivisions,
+    credit: credit,
+    modelSource: modelSource,
+    animationClip: animationClip,
+    modelAsset: modelAsset,
+    modelMotion: modelMotion,
+    useModelMaterials: useModelMaterials,
+  );
+
   final String id;
   final String name;
   final Element3DKind kind;
@@ -888,6 +922,19 @@ class RenderCamera {
     this.near = 1,
     this.far = 100000,
   });
+
+  /// A mesma camera olhando para [alvo].
+  RenderCamera comAlvo(Vec3 alvo) => RenderCamera(
+    position: position,
+    target: alvo,
+    up: up,
+    focalLength: focalLength,
+    filmWidth: filmWidth,
+    orthographic: orthographic,
+    orthoScale: orthoScale,
+    near: near,
+    far: far,
+  );
 
   final Vec3 position;
   final Vec3 target;

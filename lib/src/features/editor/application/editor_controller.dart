@@ -1671,6 +1671,100 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// SALVAR VISTA: guarda o enquadramento atual com nome.
+  // -------------------------------------------- estudio: atalhos de UX
+
+  /// Duplica um no ao lado do original (id novo) e devolve o id novo.
+  String duplicateSceneNode(String layerId, String nodeId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return '';
+    final node = layer.scene.nodeById(nodeId);
+    if (node == null) return '';
+    final copia = node.duplicado();
+    final nodes = [...layer.scene.nodes];
+    final i = nodes.indexWhere((n) => n.id == nodeId);
+    nodes.insert(i + 1, copia);
+    _replace(layer.withScene(layer.scene.copyWith(nodes: nodes)));
+    return copia.id;
+  }
+
+  void renameSceneNode(String layerId, String nodeId, String name) =>
+      updateSceneNode(layerId, nodeId, (n) => n.copyWith(name: name));
+
+  void setSceneNodeVisible(String layerId, String nodeId, bool visible) =>
+      updateSceneNode(layerId, nodeId, (n) => n.copyWith(visible: visible));
+
+  Camera3D? _cameraDaCena(Scene3DLayer layer, String cameraId) {
+    for (final c in layer.allCameras) {
+      if (c.id == cameraId) return c;
+    }
+    return null;
+  }
+
+  void renameSceneCamera(String layerId, String cameraId, String name) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final cam = _cameraDaCena(layer, cameraId);
+    if (cam == null) return;
+    updateSceneCameraById(layerId, cam.copyWith(name: name));
+  }
+
+  /// Duplica uma camera (id novo, mesmo enquadramento) e devolve o id.
+  String duplicateSceneCamera(String layerId, String cameraId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return '';
+    final cam = _cameraDaCena(layer, cameraId);
+    if (cam == null) return '';
+    final copia = Camera3D(
+      name: '${cam.name} copia',
+      kind: cam.kind,
+      posX: cam.posX,
+      posY: cam.posY,
+      posZ: cam.posZ,
+      poiX: cam.poiX,
+      poiY: cam.poiY,
+      poiZ: cam.poiZ,
+      orientX: cam.orientX,
+      orientY: cam.orientY,
+      orientZ: cam.orientZ,
+      rotX: cam.rotX,
+      rotY: cam.rotY,
+      rotZ: cam.rotZ,
+      focalLength: cam.focalLength,
+      filmWidth: cam.filmWidth,
+      orthographic: cam.orthographic,
+      dof: cam.dof,
+      autoOrient: cam.autoOrient,
+      lookAtNodeId: cam.lookAtNodeId,
+    );
+    _replace(layer.copyScene(extraCameras: [...layer.extraCameras, copia]));
+    return copia.id;
+  }
+
+  /// A camera passa a OLHAR PARA um no (ou para nenhum, com null).
+  void setCameraLookAt(String layerId, String cameraId, String? nodeId) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final cam = _cameraDaCena(layer, cameraId);
+    if (cam == null) return;
+    updateSceneCameraById(
+      layerId,
+      cam.copyWith(lookAtNodeId: nodeId, clearLookAt: nodeId == null),
+    );
+  }
+
+  /// AGRUPAR: um nulo novo vira pai dos nos escolhidos. Devolve o id do
+  /// nulo (o grupo), ja selecionavel.
+  String groupSceneNodes(String layerId, Iterable<String> nodeIds) {
+    final ids = nodeIds.toSet();
+    if (ids.isEmpty) return '';
+    final nulo = addSceneNull(layerId);
+    if (nulo.isEmpty) return '';
+    for (final id in ids) {
+      setSceneNodeParent(layerId, id, nulo);
+    }
+    return nulo;
+  }
+
   void saveSceneView(String layerId, String name, RenderCamera cam) {
     updateScene3D(
       layerId,
