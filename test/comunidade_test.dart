@@ -5,6 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// A COMUNIDADE: o que precisa aguentar sem quebrar.
 ///
+/// Desde que o mural virou publico, LER TAMBEM FILTRA: um texto que nao
+/// passaria na publicacao tambem nao aparece quando chega de fora. Por
+/// isso os textos daqui sao frases de verdade, e nao "a", "b", "c" — o
+/// filtro recusaria os tres por serem curtos demais.
+///
 /// O feed vem de fora, escrito a mao por quem publica. Um arquivo assim
 /// SEMPRE tem um item errado um dia — data em outro formato, campo que
 /// falta, alguem que colou uma virgula a mais. O que nao pode acontecer e
@@ -12,15 +17,15 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ler o feed', () {
     test('le a lista dentro de posts e a lista direta', () {
-      const dentro = '{"posts":[{"id":"1","autor":"Ana","texto":"oi",'
+      const dentro = '{"posts":[{"id":"1","autor":"Ana","texto":"post de teste",'
           '"quando":"2026-09-01T10:00:00Z"}]}';
-      const direta = '[{"id":"1","autor":"Ana","texto":"oi",'
+      const direta = '[{"id":"1","autor":"Ana","texto":"post de teste",'
           '"quando":"2026-09-01T10:00:00Z"}]';
       for (final fonte in [dentro, direta]) {
         final posts = lerFeed(fonte);
         expect(posts.length, 1);
         expect(posts.single.autor, 'Ana');
-        expect(posts.single.texto, 'oi');
+        expect(posts.single.texto, 'post de teste');
       }
     });
 
@@ -28,9 +33,9 @@ void main() {
       final posts = lerFeed(
         jsonEncode({
           'posts': [
-            {'id': 'velho', 'texto': 'a', 'quando': '2026-01-01T00:00:00Z'},
-            {'id': 'novo', 'texto': 'b', 'quando': '2026-09-01T00:00:00Z'},
-            {'id': 'meio', 'texto': 'c', 'quando': '2026-05-01T00:00:00Z'},
+            {'id': 'velho', 'texto': 'o mais antigo do mural', 'quando': '2026-01-01T00:00:00Z'},
+            {'id': 'novo', 'texto': 'o mais recente do mural', 'quando': '2026-09-01T00:00:00Z'},
+            {'id': 'meio', 'texto': 'o do meio do mural', 'quando': '2026-05-01T00:00:00Z'},
           ],
         }),
       );

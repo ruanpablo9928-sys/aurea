@@ -7,28 +7,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/snack.dart';
 import '../../about/presentation/report_sheet.dart' show AureaAutor;
-import '../../user/application/user_profile_controller.dart';
 import '../application/comunidade_service.dart';
+import '../application/conta_da_comunidade.dart';
+import '../domain/moderacao.dart';
 import '../domain/post_da_comunidade.dart';
 
-/// A ABA COMUNIDADE.
+/// A ABA COMUNIDADE — o mural do beta.
 ///
-/// O que ela e: o mural do beta. Quem esta testando mostra o que fez,
-/// quem instalou o app ve. Nada de curtida, seguidor ou notificacao —
-/// isso e infraestrutura social que so faz sentido depois que ha gente
+/// Tres coisas fazem um mural publico funcionar, e as tres estao aqui:
+/// uma CONTA (quem assina), um FILTRO (o que entra) e MIDIA (o que se
+/// mostra num app de video). Nada de curtida, seguidor ou notificacao:
+/// isso e infraestrutura social, e so faz sentido depois que ha gente
 /// postando.
-///
-/// O que ela NAO esconde: publicar passa por uma revisao. O app le o
-/// feed publico direto do repositorio do projeto (funciona para todo
-/// mundo, sem conta e sem segredo embutido), mas escrever nele exigiria
-/// uma chave de escrita dentro do APK — que na pratica e uma chave
-/// publica. Entao o post fica gravado aqui na hora, marcado, e vai para
-/// publicacao pelo mesmo caminho dos relatos de bug. A tela diz isso em
-/// vez de fingir que ja esta no ar.
 class CommunityTab extends ConsumerStatefulWidget {
   const CommunityTab({super.key});
 
@@ -58,13 +53,28 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     });
   }
 
+  /// Sem conta nao se publica — e a conta se cria em um passo, aqui
+  /// mesmo, em vez de mandar a pessoa procurar outra aba.
+  Future<bool> _garantirConta() async {
+    if (ref.read(contaDaComunidadeProvider) != null) return true;
+    final criou = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _FolhaDaConta(),
+    );
+    return criou == true && ref.read(contaDaComunidadeProvider) != null;
+  }
+
   Future<void> _compor() async {
-    final perfil = ref.read(userProfileProvider);
+    if (!await _garantirConta()) return;
+    if (!mounted) return;
+    final conta = ref.read(contaDaComunidadeProvider)!;
     final post = await showModalBottomSheet<PostDaComunidade>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _Compositor(autor: perfil.name),
+      builder: (_) => _Compositor(conta: conta),
     );
     if (post == null) return;
     await _s.publicar(post);
@@ -88,8 +98,12 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     if (post.imagem != null && post.imagemLocal) {
       corpo
         ..writeln()
-        ..writeln('A imagem esta no aparelho: ${post.imagem}');
-      corpo.writeln('(anexe o arquivo ao e-mail)');
+        ..writeln(
+          post.temVideo
+              ? 'O vídeo está no aparelho: ${post.imagem}'
+              : 'A imagem está no aparelho: ${post.imagem}',
+        )
+        ..writeln('(anexe o arquivo ao e-mail)');
     }
     final uri = Uri(
       scheme: 'mailto',
@@ -113,8 +127,7 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
       if (!mounted) return;
       AureaSnack.show(
         context,
-        'Sem app de e-mail. Copiei o post — mande para '
-        '${AureaAutor.email}',
+        'Sem app de e-mail. Copiei o post — mande para ${AureaAutor.email}',
         duration: const Duration(seconds: 6),
       );
       return;
@@ -129,6 +142,7 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
 
   @override
   Widget build(BuildContext context) {
+    final conta = ref.watch(contaDaComunidadeProvider);
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
@@ -156,13 +170,26 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
               'outros estão fazendo.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
+            _LinhaDaConta(
+              conta: conta,
+              onTocar: () async {
+                await showModalBottomSheet<bool>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const _FolhaDaConta(),
+                );
+                if (mounted) setState(() {});
+              },
+            ),
+            const SizedBox(height: 14),
 
             if (_s.ultimoErro != null) ...[
               _Aviso(
                 icone: CupertinoIcons.wifi_slash,
-                texto: '${_s.ultimoErro} '
-                    'O que já tinha sido lido continua aqui.',
+                texto:
+                    '${_s.ultimoErro} O que já tinha sido lido continua aqui.',
               ),
               const SizedBox(height: 14),
             ],
@@ -193,6 +220,92 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
   }
 }
 
+/// A LINHA DA CONTA, no alto: quem voce e neste mural.
+class _LinhaDaConta extends StatelessWidget {
+  const _LinhaDaConta({required this.conta, required this.onTocar});
+
+  final ContaDaComunidade? conta;
+  final VoidCallback onTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = conta;
+    return GestureDetector(
+      key: const ValueKey('comunidade-conta'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTocar,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            _Avatar(nome: c?.apelido ?? '?', arquivo: c?.avatar, raio: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    c?.apelido ?? 'Criar minha conta',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    c == null
+                        ? 'Um apelido e uma foto. É com isso que você assina.'
+                        : 'É assim que você assina no mural.',
+                    style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              c == null ? CupertinoIcons.plus_circle : CupertinoIcons.pencil,
+              size: 18,
+              color: AppColors.lime,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.nome, this.arquivo, this.raio = 15});
+
+  final String nome;
+  final String? arquivo;
+  final double raio;
+
+  @override
+  Widget build(BuildContext context) {
+    final f = arquivo;
+    if (f != null && File(f).existsSync()) {
+      return CircleAvatar(radius: raio, backgroundImage: FileImage(File(f)));
+    }
+    return CircleAvatar(
+      radius: raio,
+      backgroundColor: AppColors.violet,
+      child: Text(
+        nome.trim().isEmpty ? 'A' : nome.trim()[0].toUpperCase(),
+        style: TextStyle(
+          fontSize: raio * 0.85,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
 class _BotaoPublicar extends StatelessWidget {
   const _BotaoPublicar({required this.onTap});
   final VoidCallback onTap;
@@ -209,19 +322,17 @@ class _BotaoPublicar extends StatelessWidget {
         color: AppColors.lime,
         borderRadius: BorderRadius.circular(22),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(CupertinoIcons.plus, size: 17, color: Color(0xFF0B0E12)),
-          const SizedBox(width: 6),
+          Icon(CupertinoIcons.plus, size: 17, color: Color(0xFF0B0E12)),
+          SizedBox(width: 6),
           Text(
             'Publicar',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: AppColors.modoClaro
-                  ? const Color(0xFF0B0E12)
-                  : const Color(0xFF0B0E12),
+              color: Color(0xFF0B0E12),
             ),
           ),
         ],
@@ -253,20 +364,7 @@ class _Cartao extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 15,
-                  backgroundColor: AppColors.violet,
-                  child: Text(
-                    post.autor.trim().isEmpty
-                        ? 'A'
-                        : post.autor.trim()[0].toUpperCase(),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+                _Avatar(nome: post.autor),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -307,7 +405,7 @@ class _Cartao extends StatelessWidget {
               ),
             ),
           ),
-          if (post.imagem != null) _Imagem(post: post),
+          if (post.imagem != null) _Midia(post: post),
           if (post.etiquetas.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -394,50 +492,170 @@ class _Cartao extends StatelessWidget {
   }
 }
 
-class _Imagem extends StatelessWidget {
-  const _Imagem({required this.post});
+/// A MIDIA DO POST: imagem direto, video com play.
+///
+/// O video so carrega quando alguem toca. Um mural com dez videos que se
+/// inicializam sozinhos ocupa dez decodificadores e trava o aparelho —
+/// e ninguem assiste dez videos de uma vez.
+class _Midia extends StatefulWidget {
+  const _Midia({required this.post});
   final PostDaComunidade post;
 
   @override
+  State<_Midia> createState() => _MidiaState();
+}
+
+class _MidiaState extends State<_Midia> {
+  VideoPlayerController? _player;
+  bool _preparando = false;
+
+  @override
+  void dispose() {
+    _player?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _tocar() async {
+    final endereco = widget.post.imagem;
+    if (endereco == null || _preparando) return;
+    if (_player != null) {
+      setState(() {
+        _player!.value.isPlaying ? _player!.pause() : _player!.play();
+      });
+      return;
+    }
+    setState(() => _preparando = true);
+    try {
+      final c = widget.post.imagemLocal
+          ? VideoPlayerController.file(File(endereco))
+          : VideoPlayerController.networkUrl(Uri.parse(endereco));
+      await c.initialize();
+      await c.setLooping(true);
+      await c.play();
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() {
+        _player = c;
+        _preparando = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _preparando = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final post = widget.post;
     final erro = Container(
       height: 120,
       color: AppColors.surfaceHigh,
       alignment: Alignment.center,
-      child: Icon(
-        CupertinoIcons.photo,
-        color: AppColors.muted,
-        size: 28,
-      ),
+      child: Icon(CupertinoIcons.photo, color: AppColors.muted, size: 28),
     );
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 320),
-      child: SizedBox(
-        width: double.infinity,
-        child: post.imagemLocal
-            ? Image.file(
-                File(post.imagem!),
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => erro,
-              )
-            : Image.network(
-                post.imagem!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => erro,
-                loadingBuilder: (_, filho, progresso) => progresso == null
-                    ? filho
-                    : SizedBox(
-                        height: 120,
-                        child: Center(
-                          child: CupertinoActivityIndicator(
-                            color: AppColors.muted,
+
+    if (!post.temVideo) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 320),
+        child: SizedBox(
+          width: double.infinity,
+          child: post.imagemLocal
+              ? Image.file(
+                  File(post.imagem!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => erro,
+                )
+              : Image.network(
+                  post.imagem!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => erro,
+                  loadingBuilder: (_, filho, progresso) => progresso == null
+                      ? filho
+                      : SizedBox(
+                          height: 120,
+                          child: Center(
+                            child: CupertinoActivityIndicator(
+                              color: AppColors.muted,
+                            ),
                           ),
                         ),
-                      ),
+                ),
+        ),
+      );
+    }
+
+    final p = _player;
+    return GestureDetector(
+      key: ValueKey('post-video-${post.id}'),
+      onTap: _tocar,
+      child: AspectRatio(
+        aspectRatio: p != null && p.value.isInitialized
+            ? p.value.aspectRatio
+            : 16 / 9,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (p != null && p.value.isInitialized)
+              VideoPlayer(p)
+            else
+              ColoredBox(color: AppColors.surfaceHigh),
+            if (p == null || !p.value.isPlaying)
+              Center(
+                child: Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: .55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: _preparando
+                      ? const Center(
+                          child: CupertinoActivityIndicator(
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          CupertinoIcons.play_fill,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                ),
               ),
+            if (post.duracaoDaMidia != null)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: .6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _emMinutos(post.duracaoDaMidia!),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+String _emMinutos(Duration d) {
+  final m = d.inMinutes;
+  final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+  return '$m:$s';
 }
 
 class _Selo extends StatelessWidget {
@@ -521,21 +739,28 @@ class _AcaoDoCartao extends StatelessWidget {
 }
 
 class _Aviso extends StatelessWidget {
-  const _Aviso({required this.icone, required this.texto});
+  const _Aviso({required this.icone, required this.texto, this.alerta = false});
   final IconData icone;
   final String texto;
+  final bool alerta;
 
   @override
   Widget build(BuildContext context) => Container(
     key: const ValueKey('comunidade-aviso'),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: AppColors.surface,
+      color: alerta
+          ? const Color(0xFFFF6B6B).withValues(alpha: .12)
+          : AppColors.surface,
       borderRadius: BorderRadius.circular(12),
     ),
     child: Row(
       children: [
-        Icon(icone, size: 17, color: AppColors.muted),
+        Icon(
+          icone,
+          size: 17,
+          color: alerta ? const Color(0xFFFF6B6B) : AppColors.muted,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -543,7 +768,7 @@ class _Aviso extends StatelessWidget {
             style: TextStyle(
               fontSize: 12.5,
               height: 1.35,
-              color: AppColors.muted,
+              color: alerta ? const Color(0xFFFF8A8A) : AppColors.muted,
             ),
           ),
         ),
@@ -580,21 +805,175 @@ class _Vazio extends StatelessWidget {
           'Seja quem começa. Toque em Publicar e mostre o que você fez '
           'no Aurea.',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            height: 1.4,
-            color: AppColors.muted,
-          ),
+          style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
         ),
       ],
     ),
   );
 }
 
-/// O COMPOSITOR: texto, uma imagem e etiquetas. Nada mais.
+// ------------------------------------------------------------- a conta
+
+class _FolhaDaConta extends ConsumerStatefulWidget {
+  const _FolhaDaConta();
+
+  @override
+  ConsumerState<_FolhaDaConta> createState() => _FolhaDaContaState();
+}
+
+class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
+  late final TextEditingController _apelido;
+  String? _avatar;
+  String? _erro;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = ref.read(contaDaComunidadeProvider);
+    _apelido = TextEditingController(text: c?.apelido ?? '');
+    _avatar = c?.avatar;
+  }
+
+  @override
+  void dispose() {
+    _apelido.dispose();
+    super.dispose();
+  }
+
+  Future<void> _escolherFoto() async {
+    try {
+      final x = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+      );
+      if (x == null) return;
+      setState(() => _avatar = x.path);
+    } catch (_) {
+      if (!mounted) return;
+      AureaSnack.show(context, 'Não consegui abrir a galeria');
+    }
+  }
+
+  void _salvar() {
+    final n = ref.read(contaDaComunidadeProvider.notifier);
+    final existe = ref.read(contaDaComunidadeProvider) != null;
+    final erro = existe
+        ? n.atualizar(apelido: _apelido.text, avatar: _avatar)
+        : n.criar(_apelido.text, avatar: _avatar);
+    if (erro != null) {
+      setState(() => _erro = erro);
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final conta = ref.watch(contaDaComunidadeProvider);
+    return _Folha(
+      titulo: conta == null ? 'Criar minha conta' : 'Minha conta',
+      subtitulo: conta == null
+          ? 'É uma conta local: sem senha e sem e-mail. Serve para o '
+                'mural saber quem falou.'
+          : 'Trocar o apelido não muda os posts que você já publicou.',
+      filhos: [
+        Row(
+          children: [
+            GestureDetector(
+              key: const ValueKey('conta-foto'),
+              onTap: _escolherFoto,
+              child: Stack(
+                alignment: Alignment.bottomRight,
+                children: [
+                  _Avatar(
+                    nome: _apelido.text,
+                    arquivo: _avatar,
+                    raio: 30,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: AppColors.lime,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.camera_fill,
+                      size: 12,
+                      color: Color(0xFF0B0E12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('conta-apelido'),
+                controller: _apelido,
+                maxLength: 20,
+                autofocus: conta == null,
+                onChanged: (_) => setState(() => _erro = null),
+                style: TextStyle(fontSize: 15, color: AppColors.onDark),
+                decoration: InputDecoration(
+                  hintText: 'Seu apelido no mural',
+                  hintStyle: TextStyle(color: AppColors.muted),
+                  counterText: '',
+                  filled: true,
+                  fillColor: AppColors.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_erro != null) ...[
+          const SizedBox(height: 10),
+          _Aviso(
+            icone: CupertinoIcons.exclamationmark_triangle,
+            texto: _erro!,
+            alerta: true,
+          ),
+        ],
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            if (conta != null)
+              Expanded(
+                child: _AcaoDoCartao(
+                  chave: 'conta-sair',
+                  icone: CupertinoIcons.person_badge_minus,
+                  rotulo: 'Apagar conta',
+                  onTap: () {
+                    ref.read(contaDaComunidadeProvider.notifier).sair();
+                    Navigator.of(context).pop(false);
+                  },
+                ),
+              ),
+            if (conta != null) const SizedBox(width: 8),
+            Expanded(
+              child: _AcaoDoCartao(
+                chave: 'conta-salvar',
+                icone: CupertinoIcons.check_mark,
+                rotulo: conta == null ? 'Criar conta' : 'Salvar',
+                destaque: true,
+                onTap: _salvar,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------- o compositor
+
 class _Compositor extends StatefulWidget {
-  const _Compositor({required this.autor});
-  final String autor;
+  const _Compositor({required this.conta});
+  final ContaDaComunidade conta;
 
   @override
   State<_Compositor> createState() => _CompositorState();
@@ -603,7 +982,11 @@ class _Compositor extends StatefulWidget {
 class _CompositorState extends State<_Compositor> {
   final _texto = TextEditingController();
   final _etiquetas = TextEditingController();
-  String? _imagem;
+  String? _midia;
+  TipoDeMidia _tipo = TipoDeMidia.imagem;
+  Duration? _duracao;
+  String? _erro;
+  bool _apenasAviso = false;
 
   @override
   void dispose() {
@@ -619,27 +1002,82 @@ class _CompositorState extends State<_Compositor> {
         maxWidth: 1600,
       );
       if (x == null) return;
-      setState(() => _imagem = x.path);
+      setState(() {
+        _midia = x.path;
+        _tipo = TipoDeMidia.imagem;
+        _duracao = null;
+      });
     } catch (_) {
       if (!mounted) return;
-      AureaSnack.show(context, 'Nao consegui abrir a galeria');
+      AureaSnack.show(context, 'Não consegui abrir a galeria');
+    }
+  }
+
+  Future<void> _escolherVideo() async {
+    try {
+      final x = await ImagePicker().pickVideo(source: ImageSource.gallery);
+      if (x == null) return;
+      // A DURACAO SE LE ANTES DE ANEXAR, e nao na hora de mostrar: e ela
+      // que decide se o video cabe no mural, e recusar depois de a pessoa
+      // ja ter publicado seria pior.
+      Duration? duracao;
+      try {
+        final c = VideoPlayerController.file(File(x.path));
+        await c.initialize();
+        duracao = c.value.duration;
+        await c.dispose();
+      } catch (_) {}
+      if (duracao != null && duracao.inSeconds > 120) {
+        if (!mounted) return;
+        setState(
+          () => _erro = 'Vídeo de até 2 minutos no mural. '
+              'Corte o trecho que interessa e anexe de novo.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _midia = x.path;
+        _tipo = TipoDeMidia.video;
+        _duracao = duracao;
+        _erro = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      AureaSnack.show(context, 'Não consegui abrir a galeria');
     }
   }
 
   void _pronto() {
-    final texto = _texto.text.trim();
-    if (texto.isEmpty) {
-      AureaSnack.show(context, 'Escreva alguma coisa antes de publicar');
+    final veredito = moderarTexto(_texto.text);
+    // BLOQUEIO E AVISO SAO COISAS DIFERENTES na tela: um impede, o outro
+    // so recomenda. Tratar os dois igual faria a pessoa achar que o app
+    // travou por causa de uma letra repetida — e insistir num aviso e um
+    // direito dela: quem quer escrever em caixa alta, escreve.
+    if (veredito.bloqueia) {
+      setState(() {
+        _erro = veredito.motivo;
+        _apenasAviso = false;
+      });
+      return;
+    }
+    if (veredito.veredito == Veredito.ajustar && !_apenasAviso) {
+      setState(() {
+        _erro = veredito.motivo;
+        _apenasAviso = true;
+      });
       return;
     }
     Navigator.of(context).pop(
       PostDaComunidade(
         id: const Uuid().v4(),
-        autor: widget.autor,
-        texto: texto,
+        autor: widget.conta.apelido,
+        texto: _texto.text.trim(),
         quando: DateTime.now(),
-        imagem: _imagem,
-        imagemLocal: _imagem != null,
+        imagem: _midia,
+        imagemLocal: _midia != null,
+        tipoDeMidia: _tipo,
+        duracaoDaMidia: _duracao,
         etiquetas: [
           for (final e in _etiquetas.text.split(RegExp(r'[,\s]+')))
             if (e.trim().isNotEmpty) e.trim().replaceAll('#', ''),
@@ -648,6 +1086,152 @@ class _CompositorState extends State<_Compositor> {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Folha(
+      titulo: 'Publicar no mural',
+      subtitulo: 'Assinado como ${widget.conta.apelido}.',
+      filhos: [
+        TextField(
+          key: const ValueKey('comunidade-texto'),
+          controller: _texto,
+          maxLines: 5,
+          minLines: 3,
+          autofocus: true,
+          onChanged: (_) => setState(() => _erro = null),
+          style: TextStyle(fontSize: 14, color: AppColors.onDark),
+          decoration: InputDecoration(
+            hintText: 'O que você fez no Aurea?',
+            hintStyle: TextStyle(color: AppColors.muted),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          key: const ValueKey('comunidade-etiquetas'),
+          controller: _etiquetas,
+          style: TextStyle(fontSize: 13, color: AppColors.onDark),
+          decoration: InputDecoration(
+            hintText: 'etiquetas: motion, 3d, tutorial',
+            hintStyle: TextStyle(color: AppColors.muted),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        if (_erro != null) ...[
+          const SizedBox(height: 10),
+          _Aviso(
+            icone: _apenasAviso
+                ? CupertinoIcons.info_circle
+                : CupertinoIcons.exclamationmark_triangle,
+            texto: _apenasAviso ? '$_erro Toque de novo para publicar assim.'
+                : _erro!,
+            alerta: !_apenasAviso,
+          ),
+        ],
+        if (_midia != null) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (_tipo == TipoDeMidia.imagem)
+                  Image.file(
+                    File(_midia!),
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  )
+                else
+                  Container(
+                    height: 140,
+                    width: double.infinity,
+                    color: AppColors.surfaceHigh,
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.play_rectangle_fill,
+                          size: 30,
+                          color: AppColors.muted,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _duracao == null
+                              ? 'Vídeo anexado'
+                              : 'Vídeo · ${_emMinutos(_duracao!)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _AcaoDoCartao(
+                chave: 'comunidade-imagem',
+                icone: CupertinoIcons.photo,
+                rotulo: 'Imagem',
+                onTap: _escolherImagem,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AcaoDoCartao(
+                chave: 'comunidade-video',
+                icone: CupertinoIcons.videocam,
+                rotulo: 'Vídeo',
+                onTap: _escolherVideo,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AcaoDoCartao(
+                chave: 'comunidade-guardar',
+                icone: CupertinoIcons.check_mark,
+                rotulo: 'Pronto',
+                destaque: true,
+                onTap: _pronto,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A casca das folhas desta aba: alca, titulo, subtitulo e o conteudo.
+class _Folha extends StatelessWidget {
+  const _Folha({
+    required this.titulo,
+    required this.subtitulo,
+    required this.filhos,
+  });
+
+  final String titulo;
+  final String subtitulo;
+  final List<Widget> filhos;
 
   @override
   Widget build(BuildContext context) {
@@ -662,105 +1246,39 @@ class _CompositorState extends State<_Compositor> {
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
         child: SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.muted.withValues(alpha: .45),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Publicar no mural',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.onDark,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                'Assinado como ${widget.autor} — troque o nome na aba '
-                'Usuário.',
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                key: const ValueKey('comunidade-texto'),
-                controller: _texto,
-                maxLines: 5,
-                minLines: 3,
-                autofocus: true,
-                style: TextStyle(fontSize: 14, color: AppColors.onDark),
-                decoration: InputDecoration(
-                  hintText: 'O que você fez no Aurea?',
-                  hintStyle: TextStyle(color: AppColors.muted),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                key: const ValueKey('comunidade-etiquetas'),
-                controller: _etiquetas,
-                style: TextStyle(fontSize: 13, color: AppColors.onDark),
-                decoration: InputDecoration(
-                  hintText: 'etiquetas: motion, 3d, tutorial',
-                  hintStyle: TextStyle(color: AppColors.muted),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              if (_imagem != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.file(
-                    File(_imagem!),
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              if (_imagem != null) const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _AcaoDoCartao(
-                      chave: 'comunidade-imagem',
-                      icone: CupertinoIcons.photo,
-                      rotulo: _imagem == null ? 'Anexar imagem' : 'Trocar',
-                      onTap: _escolherImagem,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.muted.withValues(alpha: .45),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _AcaoDoCartao(
-                      chave: 'comunidade-guardar',
-                      icone: CupertinoIcons.check_mark,
-                      rotulo: 'Pronto',
-                      destaque: true,
-                      onTap: _pronto,
-                    ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  titulo,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onDark,
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitulo,
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+                const SizedBox(height: 14),
+                ...filhos,
+              ],
+            ),
           ),
         ),
       ),

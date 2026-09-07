@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'moderacao.dart';
+
 /// UM POST DA COMUNIDADE.
 ///
 /// O que a comunidade de um app de edicao precisa carregar e pouco: quem
@@ -14,6 +16,8 @@ class PostDaComunidade {
     required this.quando,
     this.imagem,
     this.imagemLocal = false,
+    this.tipoDeMidia = TipoDeMidia.imagem,
+    this.duracaoDaMidia,
     this.link,
     this.etiquetas = const [],
     this.estado = EstadoDoPost.publicado,
@@ -28,6 +32,18 @@ class PostDaComunidade {
   /// arquivo quando e um post ainda nao publicado.
   final String? imagem;
   final bool imagemLocal;
+
+  /// Imagem ou video. O campo do endereco continua sendo [imagem] para
+  /// que um feed escrito antes disto continue valendo: la, tudo era
+  /// imagem, e e isso que o padrao diz.
+  final TipoDeMidia tipoDeMidia;
+
+  /// Duracao do video, quando se sabe. Mostrada no canto da miniatura —
+  /// e o que decide se alguem toca no play.
+  final Duration? duracaoDaMidia;
+
+  bool get temVideo =>
+      imagem != null && tipoDeMidia == TipoDeMidia.video;
 
   /// Link opcional (um video publicado, um perfil).
   final String? link;
@@ -59,6 +75,8 @@ class PostDaComunidade {
     'quando': quando.toUtc().toIso8601String(),
     if (imagem != null) 'imagem': imagem,
     if (imagemLocal) 'imagemLocal': true,
+    if (tipoDeMidia != TipoDeMidia.imagem) 'midia': tipoDeMidia.name,
+    if (duracaoDaMidia != null) 'duracao': duracaoDaMidia!.inMilliseconds,
     if (link != null) 'link': link,
     if (etiquetas.isNotEmpty) 'etiquetas': etiquetas,
     if (estado != EstadoDoPost.publicado) 'estado': estado.name,
@@ -84,6 +102,13 @@ class PostDaComunidade {
       quando: quando,
       imagem: m['imagem'] as String?,
       imagemLocal: m['imagemLocal'] == true,
+      tipoDeMidia: TipoDeMidia.values.firstWhere(
+        (t) => t.name == m['midia'],
+        orElse: () => TipoDeMidia.imagem,
+      ),
+      duracaoDaMidia: m['duracao'] is num
+          ? Duration(milliseconds: (m['duracao'] as num).toInt())
+          : null,
       link: m['link'] as String?,
       etiquetas: [
         for (final e in (m['etiquetas'] as List? ?? const [])) '$e',
@@ -102,11 +127,20 @@ class PostDaComunidade {
     quando: quando,
     imagem: imagem,
     imagemLocal: imagemLocal,
+    tipoDeMidia: tipoDeMidia,
+    duracaoDaMidia: duracaoDaMidia,
     link: link,
     etiquetas: etiquetas,
     estado: estado ?? this.estado,
   );
 }
+
+/// O que esta anexado ao post.
+///
+/// Um post carrega NO MAXIMO UMA midia. Nao e limitacao tecnica: um
+/// mural de trabalho e sobre mostrar UMA coisa bem feita, e uma galeria
+/// dentro do cartao rouba a leitura do que a pessoa escreveu.
+enum TipoDeMidia { imagem, video }
 
 enum EstadoDoPost {
   /// Esta no feed que todo mundo ve.
@@ -133,7 +167,15 @@ List<PostDaComunidade> lerFeed(String fonte) {
     final posts = <PostDaComunidade>[];
     for (final item in lista) {
       final p = PostDaComunidade.deJson(item);
-      if (p != null) posts.add(p);
+      if (p == null) continue;
+      // O FILTRO TAMBEM VALE PARA O QUE CHEGA.
+      //
+      // O de antes de publicar protege o mural de quem escreve daqui.
+      // Este protege quem le: o feed vem de fora, e um dia vem com coisa
+      // que nao passou por este app. Post reprovado nao aparece, e
+      // ninguem precisa saber que ele existiu.
+      if (!podeMostrar(p.texto, p.autor)) continue;
+      posts.add(p);
     }
     // O mais novo primeiro: e a ordem que uma comunidade tem.
     posts.sort((a, b) => b.quando.compareTo(a.quando));
