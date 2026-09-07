@@ -282,11 +282,20 @@ class _EffectThumbnailState extends State<EffectThumbnail> {
             height: lado,
             child: ColoredBox(
               color: const Color(0xFF12151A),
-              child: CompositionView(
-                time: _tempo!,
-                videos: _videos!,
-                selectedId: null,
-                exporting: true,
+              // A composicao tem o tamanho da cartela (240 px); o FittedBox
+              // encolhe para o tile sem cortar.
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: 240,
+                  height: 240,
+                  child: CompositionView(
+                    time: _tempo!,
+                    videos: _videos!,
+                    selectedId: null,
+                    exporting: true,
+                  ),
+                ),
               ),
             ),
           ),
