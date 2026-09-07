@@ -23,6 +23,9 @@ import '../../domain/mask.dart';
 import '../../domain/shape.dart';
 import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
+import '../../application/ui/pro_mode.dart';
+import '../context/layer_header.dart';
+import '../context/quick_actions.dart';
 import 'audio_sheet.dart';
 import 'beats_sheet.dart';
 import 'beat_pulse_sheet.dart';
@@ -534,70 +537,71 @@ class LayerToolsDock extends ConsumerWidget {
     required this.layer,
     required this.playback,
     required this.onAction,
-    required this.onMore,
+    this.onAnimarTexto,
   });
 
   final Layer layer;
   final PlaybackController playback;
   final ValueChanged<LayerMenuAction> onAction;
-  final VoidCallback onMore;
+  final VoidCallback? onAnimarTexto;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => ColoredBox(
-    color: AmColors.panel,
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final tileHeight = ((constraints.maxHeight - 48) / 2).clamp(48.0, 68.0);
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pro = ref.watch(proModeProvider);
+    // Observa o projeto: mudo, vinculo e 3D mudam o rotulo das acoes.
+    ref.watch(editorControllerProvider);
+    final acoes = quickActionsFor(
+      context,
+      ref,
+      layer,
+      playback,
+      pro: pro,
+      onAnimarTexto: onAnimarTexto ?? () => onAction(LayerMenuAction.textAnimators),
+    );
+    return ColoredBox(
+      color: AmColors.panel,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final sobra = constraints.maxHeight - 44 - 60 - 12;
+          final tileHeight = (sobra / 2).clamp(44.0, 64.0);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Ferramentas da camada',
-                      style: TextStyle(color: AmColors.muted, fontSize: 12),
-                    ),
-                  ),
-                  TextButton(
-                    key: const ValueKey('layer-more-actions'),
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(48, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: onMore,
-                    child: const Text(
-                      'Mais ações',
-                      style: TextStyle(color: AmColors.accent, fontSize: 12),
-                    ),
-                  ),
-                ],
+              LayerHeader(
+                layer: layer,
+                onMore: () => showAllActionsSheet(context, acoes),
               ),
-              ..._fileiras(
-                secoesDe(layer),
-                (section) => _tileDaSecao(
-                  section,
-                  context: context,
-                  ref: ref,
-                  layer: layer,
-                  playback: playback,
-                  fecharCom: onAction,
-                  abrirDepois: (open) {
-                    playback.pause();
-                    open();
-                  },
+              QuickActionsRow(actions: acoes),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _fileiras(
+                      secoesDe(layer),
+                      (section) => _tileDaSecao(
+                        section,
+                        context: context,
+                        ref: ref,
+                        layer: layer,
+                        playback: playback,
+                        fecharCom: onAction,
+                        abrirDepois: (open) {
+                          playback.pause();
+                          open();
+                        },
+                      ),
+                      tileHeight: tileHeight,
+                    ),
+                  ),
                 ),
-                tileHeight: tileHeight,
               ),
             ],
-          ),
-        );
-      },
-    ),
-  );
+          );
+        },
+      ),
+    );
+  }
 }
 
 /// UM TILE DA GRADE: icone, rotulo e o que ele abre.

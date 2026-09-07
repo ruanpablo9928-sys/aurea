@@ -441,6 +441,13 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// RENOMEAR EM LOTE com numeracao automatica (PR-X26).
+  /// Renomeia UMA camada com o nome exato (sem numeracao).
+  void renameLayer(String id, String name) {
+    final layer = _layer(id);
+    if (layer == null || layer.name == name) return;
+    _replace(layer.copyLayer(name: name));
+  }
+
   void renameLayers(Iterable<String> ids, String pattern) {
     var n = 1;
     final byId = {for (final id in ids) id};

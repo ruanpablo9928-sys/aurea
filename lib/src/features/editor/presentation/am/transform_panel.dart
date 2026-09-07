@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
+import '../../application/ui/editor_session.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/angulo.dart';
 import '../../domain/layer.dart';
@@ -14,16 +15,8 @@ import 'am_widgets.dart';
 import 'panel_chrome.dart';
 import 'property_keyframe_context.dart';
 
-enum TransformTool { position, rotation, scale, skew, pivot, opacity }
-
-LayerProp propOfTool(TransformTool tool) => switch (tool) {
-  TransformTool.position => LayerProp.position,
-  TransformTool.rotation => LayerProp.rotation,
-  TransformTool.scale => LayerProp.scale,
-  TransformTool.skew => LayerProp.skew,
-  TransformTool.pivot => LayerProp.pivot,
-  TransformTool.opacity => LayerProp.opacity,
-};
+export '../../application/ui/editor_session.dart'
+    show TransformTool, propOfTool;
 
 /// Painel "Movimentacao e transformacao": trilho esquerdo (voltar,
 /// keyframe, curva), controle central com navegacao de keyframes

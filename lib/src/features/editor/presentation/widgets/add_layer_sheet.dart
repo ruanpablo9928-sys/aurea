@@ -763,22 +763,32 @@ enum _AbaAdd { forma, midia, audio, objeto, modelo }
 /// Audio · Objeto · Modelo) e um trilho vertical a direita com os MODOS
 /// de criar (Desenho livre · Desenho vetorial · Texto) — desenho e texto
 /// nao sao itens de escolher, sao jeitos de comecar.
+/// A aba em que o menu de adicionar abre (o E1 aponta para uma delas).
+enum AddTab { forma, midia, audio, objeto }
+
 class AddLayerPanel extends ConsumerStatefulWidget {
   const AddLayerPanel({
     super.key,
     required this.onClose,
     required this.playhead,
+    this.initialTab,
   });
 
   final VoidCallback onClose;
   final Duration playhead;
+  final AddTab? initialTab;
 
   @override
   ConsumerState<AddLayerPanel> createState() => _AddMenuAmState();
 }
 
 class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
-  _AbaAdd _aba = _AbaAdd.forma;
+  late _AbaAdd _aba = switch (widget.initialTab) {
+    AddTab.midia => _AbaAdd.midia,
+    AddTab.audio => _AbaAdd.audio,
+    AddTab.objeto => _AbaAdd.objeto,
+    AddTab.forma || null => _AbaAdd.forma,
+  };
   int _pagina = 0;
   final _pager = PageController();
 
@@ -840,27 +850,23 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // OS MODOS DE COMECAR (desenho, texto, legendas) e o Fechar numa
+          // faixa horizontal em cima: cabem em qualquer altura de painel
+          // e o Fechar nunca sai da tela.
+          _trilho(),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _abas(),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _abas(),
-                      Expanded(
-                        child: _abaVisivel == _AbaAdd.midia
-                            ? _conteudo()
-                            : SingleChildScrollView(
-                                padding: const EdgeInsets.all(6),
-                                child: _conteudo(),
-                              ),
-                      ),
-                    ],
-                  ),
+                  child: _abaVisivel == _AbaAdd.midia
+                      ? _conteudo()
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.all(6),
+                          child: _conteudo(),
+                        ),
                 ),
-                _trilho(),
               ],
             ),
           ),
@@ -981,20 +987,25 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Column(
+          child: Container(
+            margin: const EdgeInsets.only(right: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: AmColors.chip,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 22, color: AmColors.text),
-                const SizedBox(height: 3),
+                Icon(icon, size: 16, color: AmColors.text),
+                const SizedBox(width: 6),
                 Text(
                   label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 9,
-                    height: 1.15,
-                    color: AmColors.muted,
+                    fontSize: 10.5,
+                    height: 1.05,
+                    color: AmColors.text,
                   ),
                 ),
               ],
@@ -1002,11 +1013,15 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
           ),
         );
     return SizedBox(
-      width: 52,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      height: 40,
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
+              child: Row(
+                children: [
             item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
               _fecha();
               ref.read(freehandRequestProvider.notifier).state = true;
@@ -1034,12 +1049,18 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
               final host = context;
               showCaptionCreationSheet(host, ref);
             }),
-            Tooltip(
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 4, 8, 4),
+            child: Tooltip(
               message: 'Fechar adicionar',
               child: item(CupertinoIcons.xmark, 'Fechar', _fecha),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

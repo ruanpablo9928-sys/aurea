@@ -17,7 +17,6 @@ import '../../application/proxy_service.dart';
 import 'am_colors.dart';
 import 'layer_look.dart';
 import 'clip_preview_painters.dart';
-import 'freeze_sheet.dart';
 import 'transition_sheet.dart';
 
 // Mais baixas do que eram (46/38): num celular, tres camadas ja
@@ -470,67 +469,8 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                       ),
                     ),
                   ),
-                // Corte e CONGELAR moram no cabecote: os dois usam o
-                // instante que ja esta sob a mao, sem abrir nova secao.
-                if (widget.singleLayerId == null)
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _PlayheadAction(
-                            label: 'Dividir no cabecote',
-                            icon: CupertinoIcons.scissors,
-                            onTap: () {
-                              final id = ref.read(selectedLayerProvider);
-                              if (id == null) return;
-                              ref
-                                  .read(editorControllerProvider.notifier)
-                                  .splitLayer(id, widget.playback.time.value);
-                              HapticFeedback.selectionClick();
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          _PlayheadAction(
-                            label: 'Congelar aqui',
-                            icon: CupertinoIcons.pause_fill,
-                            onTap: () {
-                              final id = ref.read(selectedLayerProvider);
-                              if (id == null) return;
-                              final ok = ref
-                                  .read(editorControllerProvider.notifier)
-                                  .freezeFrame(id, widget.playback.time.value);
-                              if (ok) {
-                                AureaSnack.show(
-                                  context,
-                                  'Quadro congelado por 1 segundo',
-                                );
-                                HapticFeedback.selectionClick();
-                              } else {
-                                AureaSnack.show(
-                                  context,
-                                  'Selecione um video e leve o cabecote para dentro dele',
-                                );
-                              }
-                            },
-                            onLongPress: () {
-                              final id = ref.read(selectedLayerProvider);
-                              if (id != null) {
-                                showFreezeSheet(
-                                  context,
-                                  ref,
-                                  id,
-                                  widget.playback.time.value,
-                                );
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                // Dividir e Congelar moram nas acoes rapidas da camada (E2);
+                // nada flutua sobre as linhas da timeline (Fase 2).
                 // Pilulas fixas a esquerda (olho + miniatura), uma por linha.
                 Positioned(
                   left: 0,
@@ -561,41 +501,6 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       ),
     );
   }
-}
-
-class _PlayheadAction extends StatelessWidget {
-  const _PlayheadAction({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: label,
-    button: true,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: AmColors.panelHigh,
-          shape: BoxShape.circle,
-          border: Border.all(color: AmColors.hairline),
-        ),
-        child: Icon(icon, size: 17, color: AmColors.text),
-      ),
-    ),
-  );
 }
 
 /// Pilula fixa: olho + miniatura da camada.

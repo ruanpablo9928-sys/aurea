@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
+import '../../application/ui/editor_session.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
@@ -17,7 +18,7 @@ import 'oficio_sheets.dart' show showLayerStylesSheet;
 import 'panel_chrome.dart';
 
 /// As sub-abas do "Editar forma".
-enum ShapeTool { size, corners, points, angle, rotation, stroke, draw, nodes }
+export '../../application/ui/editor_session.dart' show ShapeTool;
 
 /// EDITAR FORMA (o "Edit Shape" do Alight Motion): o painel de baixo
 /// com o trilho esquerdo (voltar, diamante, curva) e sub-abas pelos
