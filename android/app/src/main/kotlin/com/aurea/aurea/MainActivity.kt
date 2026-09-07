@@ -1,10 +1,11 @@
 package com.aurea.aurea
 
+import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.android.FlutterShellArgs
+import io.flutter.embedding.engine.FlutterShellArgs
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -32,7 +33,7 @@ class MainActivity : FlutterActivity() {
      */
     override fun getFlutterShellArgs(): FlutterShellArgs {
         val args = super.getFlutterShellArgs()
-        val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("flutter.grafico_opengl", false)) return args
         if (prefs.getBoolean("flutter.grafico_tentando", false)) {
             prefs.edit()
