@@ -1,6 +1,7 @@
 import AVFoundation
 import Flutter
 import UIKit
+import os
 
 /// CODIFICADOR DE VIDEO DA PLATAFORMA (iOS).
 ///
@@ -48,6 +49,22 @@ final class VideoEncoderPlugin: NSObject {
     private func handle(_ call: FlutterMethodCall) throws -> Any? {
         let args = call.arguments as? [String: Any] ?? [:]
         switch call.method {
+        // MEMORIA E TERMICO: o que o controlador de qualidade 3D le a
+        // cada dois segundos para descer a escada antes do jetsam.
+        // `os_proc_available_memory` e quanto o processo ainda pode
+        // alocar — o numero que o iOS usa para decidir matar.
+        case "memoria":
+            var disponivel: Int64 = -1
+            if #available(iOS 13.0, *) {
+                disponivel = Int64(os_proc_available_memory())
+            }
+            return [
+                "total": Int64(ProcessInfo.processInfo.physicalMemory),
+                "disponivel": disponivel,
+                "baixa": false,
+            ] as [String: Any]
+        case "termico":
+            return ProcessInfo.processInfo.thermalState.rawValue
         case "available":
             return true
 

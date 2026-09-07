@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/gear.dart';
+import '../domain/orcamento_render.dart';
 
 /// Overlay de diagnostico do preview (specs motor-de-preview §7 e
 /// arquitetura-de-marchas §9): sem numeros, todo "travou" vira
@@ -21,6 +22,12 @@ abstract final class PreviewStats {
   /// frames so ve a reproducao, e a travada de arrasto acontece parado.
   static final ValueNotifier<int> jankFrames = ValueNotifier(0);
   static final ValueNotifier<double> worstFrameMs = ValueNotifier(0);
+
+  /// Memoria residente do processo, em MB (a sonda do controlador 3D le).
+  static final ValueNotifier<int> rssMb = ValueNotifier(0);
+
+  /// O que o motor 3D desenhou por ultimo (nulo = sem cena 3D em GPU).
+  static final ValueNotifier<Estatisticas3D?> cena3d = ValueNotifier(null);
   static bool _timingsHooked = false;
 
   static void hookTimings() {
@@ -266,4 +273,64 @@ abstract final class FrameLog {
       report.value = analyzeIntervals(_intervals, driftMs: _driftMs);
     }
   }
+}
+
+/// O QUE A CENA 3D CUSTOU NO ULTIMO QUADRO, para o overlay e o relatorio.
+///
+/// Chamadas e triangulos sao os que o motor mandou desenhar; o tamanho e
+/// o do alvo de render depois da escala da receita.
+class Estatisticas3D {
+  const Estatisticas3D({
+    required this.motor,
+    required this.nivel,
+    required this.triangulos,
+    required this.chamadas,
+    required this.texturas,
+    required this.tilesDeSombra,
+    required this.larguraPx,
+    required this.alturaPx,
+    required this.escala,
+  });
+
+  final String motor;
+  final Qualidade3D nivel;
+  final int triangulos;
+  final int chamadas;
+  final int texturas;
+  final int tilesDeSombra;
+  final int larguraPx;
+  final int alturaPx;
+  final double escala;
+
+  @override
+  bool operator ==(Object other) =>
+      other is Estatisticas3D &&
+      other.motor == motor &&
+      other.nivel == nivel &&
+      other.triangulos == triangulos &&
+      other.chamadas == chamadas &&
+      other.texturas == texturas &&
+      other.tilesDeSombra == tilesDeSombra &&
+      other.larguraPx == larguraPx &&
+      other.alturaPx == alturaPx &&
+      other.escala == escala;
+
+  @override
+  int get hashCode => Object.hash(
+    motor,
+    nivel,
+    triangulos,
+    chamadas,
+    texturas,
+    tilesDeSombra,
+    larguraPx,
+    alturaPx,
+    escala,
+  );
+
+  @override
+  String toString() =>
+      '$motor ${qualidade3dRotulo(nivel)} · $triangulos tri · $chamadas chamadas · '
+      '$texturas tex · $tilesDeSombra sombras · ${larguraPx}x$alturaPx '
+      '(${(escala * 100).round()}%)';
 }

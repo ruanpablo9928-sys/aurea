@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../editor/application/motor3d_modo.dart';
+import '../../editor/application/qualidade3d_controller.dart';
+import '../../editor/domain/orcamento_render.dart';
+import 'estresse3d_screen.dart';
 import '../../editor/application/proxy_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../../../core/ui/snack.dart';
@@ -106,7 +109,15 @@ class SettingsTab extends ConsumerWidget {
           ),
           const SizedBox(height: 26),
           const _GroupHeader('Cena 3D'),
-          const _Group(children: [_Motor3DRow()]),
+          const _Group(
+            children: [
+              _Motor3DRow(),
+              _GroupDivider(),
+              _Qualidade3DRow(),
+              _GroupDivider(),
+              _EstresseRow(),
+            ],
+          ),
           // So no Android: no iPhone o Impeller e sempre Metal.
           if (Platform.isAndroid) ...[
             const SizedBox(height: 26),
@@ -429,4 +440,64 @@ class _GraficoRowState extends State<_GraficoRow> {
       ],
     );
   }
+}
+
+/// O teto de qualidade da cena 3D (ver [ControladorDeQualidade3D]).
+class _Qualidade3DRow extends StatefulWidget {
+  const _Qualidade3DRow();
+
+  @override
+  State<_Qualidade3DRow> createState() => _Qualidade3DRowState();
+}
+
+class _Qualidade3DRowState extends State<_Qualidade3DRow> {
+  @override
+  Widget build(BuildContext context) {
+    final c = ControladorDeQualidade3D.instancia;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SegmentedRow<TetoDeQualidade3D>(
+          label: 'Qualidade 3D',
+          values: TetoDeQualidade3D.values,
+          selected: c.teto,
+          labelOf: tetoDeQualidade3dRotulo,
+          onChanged: (t) async {
+            await c.definirTeto(t);
+            if (mounted) setState(() {});
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          child: ValueListenableBuilder<Qualidade3D>(
+            valueListenable: c.nivel,
+            builder: (context, nivel, _) => Text(
+              'Automatica escolhe pelo orcamento de memoria do aparelho e '
+              'desce um degrau (sombra, MSAA, escala, textura, LOD) antes '
+              'de o app travar; sobe de volta quando sobra folga. Agora: '
+              '${qualidade3dRotulo(nivel)}.',
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: AppColors.muted,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EstresseRow extends StatelessWidget {
+  const _EstresseRow();
+
+  @override
+  Widget build(BuildContext context) => _TapRow(
+    title: 'Teste de estresse do motor 3D',
+    subtitle: 'Nove cenas pesadas, com relatorio para enviar',
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const Estresse3DScreen()),
+    ),
+  );
 }

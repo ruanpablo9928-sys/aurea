@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'element3d.dart';
+import 'lod3d.dart';
 
 /// IMPORTAR .GLB.
 ///
@@ -326,10 +327,15 @@ GlbResult _parseDocument(
   );
 }
 
-Element3DMesh _lod(Element3DMesh mesh, int stride) => Element3DMesh(
-  mesh.verts,
-  [for (var i = 0; i < mesh.faces.length; i += stride) mesh.faces[i]],
-);
+/// Os LODs por agrupamento de vertices (ver lod3d.dart). O de antes
+/// descartava uma face a cada [stride] e furava a malha; agora [stride]
+/// so diz qual dos dois LODs se quer. Calculados uma vez por malha.
+final _lodsDe = Expando<({Element3DMesh medio, Element3DMesh baixo})>();
+
+Element3DMesh _lod(Element3DMesh mesh, int stride) {
+  final lods = _lodsDe[mesh] ??= gerarLods(mesh);
+  return stride >= 4 ? lods.baixo : lods.medio;
+}
 
 List<double> _identidade() => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 

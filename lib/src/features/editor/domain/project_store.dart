@@ -25,6 +25,7 @@ import 'text_anim.dart';
 import 'text_path.dart';
 import 'text_animator.dart';
 import 'video_project.dart';
+import 'lod3d.dart';
 
 /// Serializacao JSON do projeto inteiro (persistencia em disco).
 /// Regra: toda propriedade animavel vira {b: base, k: [keyframes]};
@@ -1375,10 +1376,14 @@ Element3DMesh? _asMeshBlob(Object? raw) {
   }
 }
 
-Element3DMesh _meshLod(Element3DMesh mesh, int stride) => Element3DMesh(
-  mesh.verts,
-  [for (var i = 0; i < mesh.faces.length; i += stride) mesh.faces[i]],
-);
+/// Os LODs por agrupamento de vertices (ver lod3d.dart), uma vez por
+/// malha; [stride] so diz qual dos dois se quer.
+final _lodsDe = Expando<({Element3DMesh medio, Element3DMesh baixo})>();
+
+Element3DMesh _meshLod(Element3DMesh mesh, int stride) {
+  final lods = _lodsDe[mesh] ??= gerarLods(mesh);
+  return stride >= 4 ? lods.baixo : lods.medio;
+}
 
 Map<String, dynamic> _panorama(Panorama3D p) => {
   'preset': p.preset.name,

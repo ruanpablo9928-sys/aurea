@@ -71,6 +71,33 @@ class MainActivity : FlutterActivity() {
 
     private fun handle(method: String, call: io.flutter.plugin.common.MethodCall): Any? =
         when (method) {
+            // MEMORIA E TERMICO: o que o controlador de qualidade 3D le a
+            // cada dois segundos para descer a escada antes de o sistema
+            // matar o app.
+            "memoria" -> {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val info = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(info)
+                mapOf(
+                    "total" to info.totalMem,
+                    "disponivel" to info.availMem,
+                    "baixa" to info.lowMemory
+                )
+            }
+            "termico" -> {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                    when (pm.currentThermalStatus) {
+                        android.os.PowerManager.THERMAL_STATUS_NONE,
+                        android.os.PowerManager.THERMAL_STATUS_LIGHT -> 0
+                        android.os.PowerManager.THERMAL_STATUS_MODERATE -> 1
+                        android.os.PowerManager.THERMAL_STATUS_SEVERE -> 2
+                        else -> 3
+                    }
+                } else {
+                    0
+                }
+            }
             "available" -> true
 
             "freeBytes" -> {

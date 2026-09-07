@@ -8,9 +8,13 @@ import 'package:vector_math/vector_math.dart' as vm;
 
 import '../domain/camera3d.dart';
 import '../domain/element3d.dart';
+import '../domain/geometria_gpu.dart';
+import '../domain/orcamento_render.dart';
 import '../domain/scene3d.dart';
 import '../domain/preview_quality.dart';
 import 'motor3d_modo.dart';
+import 'preview_stats.dart';
+import 'qualidade3d_controller.dart';
 import 'texture_cache.dart';
 
 /// O MOTOR 3D EM GPU.
@@ -25,11 +29,17 @@ import 'texture_cache.dart';
 ///
 /// O que fica do lado de ca: a geometria dos nos vira `MeshGeometry`
 /// (uma primitiva por material), a transformacao de cada no vira a
-/// matriz local, as texturas do `TextureCache` sobem para a GPU uma vez,
-/// as luzes viram componentes, o ambiente vira ceu procedural ou mapa
-/// equiretangular. Tudo e cacheado por assinatura: um quadro novo so
-/// mexe nas matrizes; geometria e material so sao reconstruidos quando
-/// o que os descreve muda.
+/// matriz local, as texturas sobem para a GPU uma vez, as luzes viram
+/// componentes, o ambiente vira ceu procedural ou mapa equiretangular.
+/// Tudo e cacheado por assinatura: um quadro novo so mexe nas matrizes;
+/// geometria e material so sao reconstruidos quando o que os descreve
+/// muda.
+///
+/// A RECEITA DE QUALIDADE ([ReceitaDeQualidade]) entra em tudo que custa
+/// memoria ou tempo de GPU: resolucao e numero de sombras, MSAA, bloom,
+/// profundidade de campo, teto de textura, LOD e escala do alvo. Quem
+/// escolhe a receita e o [ControladorDeQualidade3D], pelo orcamento do
+/// aparelho e pelos sinais de pressao — este arquivo so obedece.
 ///
 /// Quando o Flutter GPU nao esta disponivel (aparelho sem suporte, ou
 /// os testes, que rodam em Skia) [Scene3DGpu.pronto] nunca vira true e
@@ -111,26 +121,63 @@ class Scene3DGpu {
   final Map<String, _NoGpu> _nos = {};
   final Map<String, fs.Texture2D> _texturas = {};
   final Map<String, Future<void>> _texturasACaminho = {};
-  final Map<String, List<void Function(fs.Texture2D)>> _esperandoTextura = {};
   final List<fs.Node> _luzes = [];
+
+  /// Um objeto de luz do motor por luz da cena (nulo para as que nao
+  /// viram objeto, como a ambiente), na ordem de `scene.lights`.
+  final List<Object?> _luzObjetos = [];
+  String? _assinaturaLuzes;
   String? _chaveAmbiente;
   int _epocaAmbiente = 0;
   bool _descartado = false;
-  List<Light3D>? _ultimasLuzes;
-  List<double> _ultimasIntensidades = const [];
+
+  ReceitaDeQualidade _receita = ReceitaDeQualidade.alta;
+  int _capDasTexturas = ReceitaDeQualidade.alta.texturaMax;
+  fs.AntiAliasingMode? _aaAplicado;
+  Scene3D? _ultimaCena;
+  Duration _ultimoT = Duration.zero;
+  Scene3D? _cenaRegistrada;
+  ui.Size _areaRegistrada = ui.Size.zero;
+  bool _dofPedido = false;
+  int _tilesDeSombra = 0;
+  ui.Size _ultimoAlvo = ui.Size.zero;
+  double _ultimaEscala = 1;
+
+  /// A receita em vigor neste motor.
+  ReceitaDeQualidade get receita => _receita;
+
+  /// Os objetos de luz do motor, para os testes provarem que uma
+  /// intensidade animada NAO recria a luz (e o mapa de sombra dela).
+  @visibleForTesting
+  List<Object?> get luzesDoMotor => List.unmodifiable(_luzObjetos);
 
   /// Sincroniza a cena da GPU com [scene] no instante [t].
   ///
   /// Devolve na hora com o que ja esta pronto. Texturas e o ambiente por
   /// imagem chegam depois, em segundo plano, e chamam [onMudou] para o
   /// quadro ser redesenhado.
+  ///
+  /// [receita] e o nivel de qualidade; sem ela vale a do controlador.
   void sincronizar(
     Scene3D scene,
     Duration t, {
     VoidCallback? onMudou,
     bool rascunho = false,
+    ReceitaDeQualidade? receita,
   }) {
     if (_descartado) return;
+    final nova = receita ?? ControladorDeQualidade3D.instancia.receita;
+    if (nova.nivel != _receita.nivel) {
+      _receita = nova;
+      // Sombras e MSAA mudam com o nivel: as luzes sao refeitas.
+      _assinaturaLuzes = null;
+    }
+    _ultimaCena = scene;
+    _ultimoT = t;
+    _aplicarAntialias();
+    if (_capDasTexturas != _receita.texturaMax) {
+      _retrocarregarTexturas(onMudou);
+    }
     _sincronizarNos(scene, t, onMudou);
     _sincronizarLuzes(scene, t);
     _sincronizarAmbiente(scene, t, onMudou);
@@ -161,13 +208,17 @@ class Scene3DGpu {
   }
 
   /// Profundidade de campo do motor a partir da da camera do dominio.
+  ///
+  /// A receita manda: abaixo de "media" a profundidade de campo nao
+  /// entra — sao dois alvos a mais por quadro.
   void configurarProfundidadeDeCampo(
     Camera3D camera,
     Duration t, {
     bool rascunho = false,
   }) {
     final dof = camera.dof;
-    final ligada = dof.enabled && !rascunho;
+    _dofPedido = dof.enabled;
+    final ligada = dof.enabled && !rascunho && _receita.dof;
     cena.depthOfField.enabled = ligada;
     if (!ligada) return;
     final focal = camera.focalLength.valueAt(t);
@@ -180,6 +231,13 @@ class Scene3DGpu {
   }
 
   /// Desenha a cena em [canvas], dentro de [area].
+  ///
+  /// No preview a escala do alvo e a menor entre a do rascunho (720 no
+  /// lado maior enquanto toca), a da receita e o teto de 1080/1440. Na
+  /// EXPORTACAO a resolucao e a da composicao, salvo quando nem a
+  /// receita de emergencia cabe na memoria — ai a escala desce ate
+  /// caber, e o quadro e ampliado de volta: um quadro menos nitido vale
+  /// mais que um app morto no meio da exportacao.
   void desenhar(
     ui.Canvas canvas,
     ui.Rect area,
@@ -188,13 +246,85 @@ class Scene3DGpu {
     bool exporting = false,
   }) {
     if (!pronto) return;
-    cena.renderScale = scenePreviewScale(
+    _registrarSeMudou(area.size);
+    final controlador = ControladorDeQualidade3D.instancia;
+    double escala;
+    if (exporting) {
+      final ex = controlador.paraExportacao(area.width, area.height);
+      if (ex.nivel != _receita.nivel) {
+        _receita = ReceitaDeQualidade.de(ex.nivel);
+        _assinaturaLuzes = null;
+        final cena3d = _ultimaCena;
+        if (cena3d != null) {
+          _aplicarAntialias();
+          _sincronizarLuzes(cena3d, _ultimoT);
+          _sincronizarPos(cena3d, false);
+        }
+      }
+      escala = ex.escala;
+    } else {
+      escala = math.min(
+        scenePreviewScale(
+          area.width,
+          area.height,
+          interacting: rascunho,
+          exporting: false,
+        ),
+        escalaDoPreview(area.width, area.height, _receita),
+      );
+    }
+    cena.renderScale = escala;
+    _ultimoAlvo = area.size;
+    _ultimaEscala = escala;
+    cena.render(camera, canvas, viewport: area, pixelRatio: 1.0);
+    _publicarEstatisticas();
+  }
+
+  /// Conta a cena para o controlador quando a cena (ou a area) muda.
+  void _registrarSeMudou(ui.Size area) {
+    final cena3d = _ultimaCena;
+    if (cena3d == null || area.isEmpty) return;
+    final mudouArea =
+        (area.width - _areaRegistrada.width).abs() > 2 ||
+        (area.height - _areaRegistrada.height).abs() > 2;
+    if (identical(cena3d, _cenaRegistrada) && !mudouArea) return;
+    _cenaRegistrada = cena3d;
+    _areaRegistrada = area;
+    ControladorDeQualidade3D.instancia.registrarCena(
+      PerfilDaCena.de(cena3d, lod: _receita.lod).comDof(_dofPedido),
       area.width,
       area.height,
-      interacting: rascunho,
-      exporting: exporting,
     );
-    cena.render(camera, canvas, viewport: area, pixelRatio: 1.0);
+  }
+
+  void _publicarEstatisticas() {
+    var tri = 0;
+    var chamadas = 0;
+    for (final n in _nos.values) {
+      tri += n.triangulos;
+      chamadas += n.geometrias.length;
+    }
+    final e = Estatisticas3D(
+      motor: 'GPU',
+      nivel: _receita.nivel,
+      triangulos: tri,
+      chamadas: chamadas,
+      texturas: _texturas.length,
+      tilesDeSombra: _tilesDeSombra,
+      larguraPx: (_ultimoAlvo.width * _ultimaEscala).round(),
+      alturaPx: (_ultimoAlvo.height * _ultimaEscala).round(),
+      escala: _ultimaEscala,
+    );
+    if (PreviewStats.cena3d.value != e) PreviewStats.cena3d.value = e;
+  }
+
+  void _aplicarAntialias() {
+    final modo = _receita.msaa
+        ? fs.AntiAliasingMode.auto
+        : fs.AntiAliasingMode.fxaa;
+    if (_aaAplicado == modo) return;
+    _aaAplicado = modo;
+    cena.antiAliasingMode = modo;
   }
 
   void descartar() {
@@ -208,8 +338,8 @@ class Scene3DGpu {
       cena.remove(l);
     }
     _luzes.clear();
+    _luzObjetos.clear();
     _texturas.clear();
-    _esperandoTextura.clear();
     _texturasACaminho.clear();
     cena.environment = null;
     cena.skyEnvironment = null;
@@ -242,9 +372,8 @@ class Scene3DGpu {
         _nos.remove(id)!.remover(cena);
       }
     }
-    final usadas = {for (final n in _nos.values) ...n.texturas};
+    final usadas = {for (final n in _nos.values) ...n.aplicadores.keys};
     _texturas.removeWhere((path, _) => !usadas.contains(path));
-    _esperandoTextura.removeWhere((path, _) => !usadas.contains(path));
   }
 
   /// A malha do no neste instante: vertices, faces, normais e UVs por
@@ -271,7 +400,15 @@ class Scene3DGpu {
             '${node.useModelMaterials ? 'a' : _assinaturaMaterial(node.material)}',
       );
     }
-    final mesh = node.mesh ?? element3DMesh(node.kind);
+    // O LOD: a escolha do no, e no automatico a da receita. A assinatura
+    // leva a identidade da malha, entao trocar de LOD refaz o no.
+    final escolhida = switch (node.lod) {
+      MeshLod3D.low => node.lowMesh ?? node.mediumMesh ?? node.mesh,
+      MeshLod3D.medium => node.mediumMesh ?? node.mesh,
+      MeshLod3D.high => node.mesh,
+      MeshLod3D.auto => _lodPelaReceita(node),
+    };
+    final mesh = escolhida ?? element3DMesh(node.kind);
     return _MalhaFonte(
       malha: mesh,
       normais: null,
@@ -281,6 +418,13 @@ class Scene3DGpu {
           'p${node.kind.index}:${identityHashCode(mesh)}:${node.instances.isNotEmpty}:${_assinaturaMaterial(node.material)}',
     );
   }
+
+  Element3DMesh? _lodPelaReceita(SceneNode node) => switch (_receita.lod) {
+    MeshLod3D.high => node.mesh,
+    MeshLod3D.medium => node.mediumMesh ?? node.mesh,
+    MeshLod3D.low => node.lowMesh ?? node.mediumMesh ?? node.mesh,
+    MeshLod3D.auto => lodAutomatico(node, false),
+  };
 
   static String _assinaturaMaterial(Material3D m) =>
       '${m.baseColor.toARGB32()}:${m.metallic}:${m.roughness}:${m.emissive}:'
@@ -293,118 +437,55 @@ class Scene3DGpu {
     VoidCallback? onMudou, {
     _NoGpu? existente,
   }) {
-    // Faces agrupadas por material: uma primitiva (uma chamada) por grupo.
-    final grupos = <Material3D, _Grupo>{};
-    final materiaisDoGrupo = <Material3D, Material3D>{};
-    final malha = fonte.malha;
-    final lisa =
-        fonte.normais != null &&
-        fonte.normais!.length == malha.verts.length &&
-        fonte.normais!.every((n) => n != null);
-    final caixa = _Caixa.de(malha);
-
-    for (var f = 0; f < malha.faces.length; f++) {
-      final face = malha.faces[f];
-      if (face.length < 3) continue;
-      final material = fonte.materiais[f];
-      final chave = material;
-      final grupo = grupos[chave] ??= _Grupo();
-      materiaisDoGrupo[chave] = material;
-
-      // Normal da face (Newell): decide o lado e serve as faces planas.
-      var nx = 0.0, ny = 0.0, nz = 0.0;
-      for (var i = 0; i < face.length; i++) {
-        final a = malha.verts[face[i]],
-            b = malha.verts[face[(i + 1) % face.length]];
-        nx += (a[1] - b[1]) * (a[2] + b[2]);
-        ny += (a[2] - b[2]) * (a[0] + b[0]);
-        nz += (a[0] - b[0]) * (a[1] + b[1]);
-      }
-      final len = math.sqrt(nx * nx + ny * ny + nz * nz);
-      if (len < 1e-12) continue;
-      nx /= len;
-      ny /= len;
-      nz /= len;
-
-      for (var i = 1; i < face.length - 1; i++) {
-        var ia = face[0], ib = face[i], ic = face[i + 1];
-        // O motor descarta a face de costas pela ordem dos vertices; a
-        // normal manda: se a ordem discorda dela, inverte.
-        final a = malha.verts[ia], b = malha.verts[ib], c = malha.verts[ic];
-        final ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-        final vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-        final wx = uy * vz - uz * vy,
-            wy = uz * vx - ux * vz,
-            wz = ux * vy - uy * vx;
-        if (wx * nx + wy * ny + wz * nz < 0) {
-          final tmp = ib;
-          ib = ic;
-          ic = tmp;
-        }
-        for (final v in [ia, ib, ic]) {
-          final p = malha.verts[v];
-          if (lisa) {
-            final idx = grupo.mapa[v] ??= grupo.adicionar(
-              p,
-              _xyz(fonte.normais![v]!),
-              _uvDe(fonte, v, p, nx, ny, nz, caixa),
-            );
-            grupo.indices.add(idx);
-          } else {
-            grupo.indices.add(
-              grupo.adicionar(p, [
-                nx,
-                ny,
-                nz,
-              ], _uvDe(fonte, v, p, nx, ny, nz, caixa)),
-            );
-          }
-        }
-      }
-    }
+    // Faces agrupadas por material, em buffers tipados: uma primitiva
+    // (uma chamada) por grupo. Ver geometria_gpu.dart.
+    final grupos = montarGruposGpu(
+      malha: fonte.malha,
+      materiais: fonte.materiais,
+      normais: fonte.normais,
+      uvs: fonte.uvs,
+    );
 
     final no = existente ?? _NoGpu(fonte.assinatura, fs.Node(name: node.name));
     no.ultimaMalha = fonte.malha;
     final instanciado = node.instances.isNotEmpty;
+    var triangulos = 0;
     for (final e in grupos.entries) {
       final g = e.value;
+      triangulos += g.triangulos;
       final antiga = no.geometrias[e.key];
-      if (g.indices.isEmpty && antiga == null) continue;
+      if (g.indices == 0 && antiga == null) continue;
       if (antiga != null) {
-        final positions = Float32List.fromList(g.positions);
-        final normals = Float32List.fromList(g.normals);
-        final uvs = Float32List.fromList(g.uvs);
-        if (listEquals(no.indices[e.key], g.indices) &&
+        final positions = g.positions;
+        if (listEquals(no.indices[e.key], g.indexList) &&
             no.tamanhos[e.key] == positions.length) {
           antiga.updatePositions(positions);
-          antiga.updateNormals(normals);
-          antiga.updateTexCoords(uvs);
+          antiga.updateNormals(g.normals);
+          antiga.updateTexCoords(g.texCoords);
         } else {
           antiga.rebuild(
             positions: positions,
-            normals: normals,
-            texCoords: uvs,
-            indices: g.indices,
+            normals: g.normals,
+            texCoords: g.texCoords,
+            indices: g.indexList,
           );
-          no.indices[e.key] = g.indices;
+          no.indices[e.key] = g.indexList;
           no.tamanhos[e.key] = positions.length;
         }
         continue;
       }
-      final material = _materialGpu(materiaisDoGrupo[e.key]!, onMudou);
-      final path = materiaisDoGrupo[e.key]!.imagePath;
-      if (path != null && path.isNotEmpty) no.texturas.add(path);
+      final material = _materialGpu(e.key, onMudou, no);
       final geometria = fs.MeshGeometry.fromArrays(
         storage: fonte.dinamica
             ? fs.GeometryStorage.updatable
             : fs.GeometryStorage.fixed,
-        positions: Float32List.fromList(g.positions),
-        normals: Float32List.fromList(g.normals),
-        texCoords: Float32List.fromList(g.uvs),
-        indices: g.indices,
+        positions: g.positions,
+        normals: g.normals,
+        texCoords: g.texCoords,
+        indices: g.indexList,
       );
       no.geometrias[e.key] = geometria;
-      no.indices[e.key] = g.indices;
+      no.indices[e.key] = g.indexList;
       no.tamanhos[e.key] = g.positions.length;
       if (instanciado) {
         final im = fs.InstancedMesh(geometry: geometria, material: material);
@@ -423,41 +504,14 @@ class Scene3DGpu {
         );
       }
     }
+    no.triangulos = triangulos;
     if (existente == null) cena.add(no.no);
     return no;
   }
 
-  static List<double> _xyz(Vec3 v) => [v.x, v.y, v.z];
-
-  /// UV do vertice: a do modelo quando existe; senao a projecao planar
-  /// pelo eixo dominante da face, normalizada pela caixa da malha — a
-  /// mesma regra do pintor em CPU, para a imagem cair no mesmo lugar.
-  static List<double> _uvDe(
-    _MalhaFonte fonte,
-    int v,
-    List<double> p,
-    double nx,
-    double ny,
-    double nz,
-    _Caixa caixa,
-  ) {
-    final uv = fonte.uvs;
-    if (uv != null && v < uv.length && uv[v] != null) {
-      return [uv[v]!.dx, uv[v]!.dy];
-    }
-    final ax = nx.abs(), ay = ny.abs(), az = nz.abs();
-    if (ax >= ay && ax >= az) {
-      return [caixa.faixa(p[2], 2), caixa.faixa(p[1], 1)];
-    }
-    if (ay >= ax && ay >= az) {
-      return [caixa.faixa(p[0], 0), caixa.faixa(p[2], 2)];
-    }
-    return [caixa.faixa(p[0], 0), caixa.faixa(p[1], 1)];
-  }
-
   // ------------------------------------------------------- materiais
 
-  fs.Material _materialGpu(Material3D m, VoidCallback? onMudou) {
+  fs.Material _materialGpu(Material3D m, VoidCallback? onMudou, _NoGpu no) {
     final cor = _linear(m.baseColor);
     final opacidade = (m.baseColor.a * m.opacity).clamp(0.0, 1.0);
     final fator = vm.Vector4(cor.x, cor.y, cor.z, opacidade);
@@ -466,7 +520,7 @@ class Scene3DGpu {
       u.baseColorFactor = fator;
       u.doubleSided = m.doubleSided;
       if (opacidade < .999) u.alphaMode = fs.AlphaMode.blend;
-      _ligarTextura(m.imagePath, onMudou, (tex) => u.baseColorTexture = tex);
+      _ligarTextura(m.imagePath, onMudou, no, (tex) => u.baseColorTexture = tex);
       return u;
     }
     final p = fs.PhysicallyBasedMaterial();
@@ -486,53 +540,60 @@ class Scene3DGpu {
       _ => opacidade < .999 ? fs.AlphaMode.blend : fs.AlphaMode.opaque,
     };
     p.alphaCutoff = m.alphaCutoff;
-    _ligarTextura(m.imagePath, onMudou, (tex) => p.baseColorTexture = tex);
+    _ligarTextura(m.imagePath, onMudou, no, (tex) => p.baseColorTexture = tex);
     return p;
   }
 
   /// A textura de [path] sobe para a GPU uma vez; quem precisa dela
   /// recebe pelo [aplicar] — agora, se ja esta la, ou quando chegar.
+  ///
+  /// O [aplicar] fica guardado no no: quando a receita troca o teto de
+  /// textura, a textura sobe de novo no tamanho novo e e reaplicada em
+  /// todos os materiais que a usam, sem refazer geometria.
   void _ligarTextura(
     String? path,
     VoidCallback? onMudou,
+    _NoGpu no,
     void Function(fs.Texture2D) aplicar,
   ) {
     if (path == null || path.isEmpty) return;
+    (no.aplicadores[path] ??= []).add(aplicar);
     final pronta = _texturas[path];
     if (pronta != null) {
       aplicar(pronta);
       return;
     }
-    (_esperandoTextura[path] ??= []).add(aplicar);
+    _subirTextura(path, onMudou);
+  }
+
+  bool _alguemUsa(String path) =>
+      _nos.values.any((n) => n.aplicadores.containsKey(path));
+
+  void _subirTextura(String path, VoidCallback? onMudou) {
     if (_texturasACaminho.containsKey(path)) return;
+    final teto = _receita.texturaMax;
     final upload = _uploads.then((_) async {
       try {
-        if (_descartado || !_esperandoTextura.containsKey(path)) return;
-        var imagem = TextureCache.instance.imageFor(path);
-        if (imagem == null) {
-          await TextureCache.instance.prepare(path);
-          imagem = TextureCache.instance.imageFor(path);
-        }
+        if (_descartado || !_alguemUsa(path)) return;
+        final imagem = await _decodificarComTeto(path, teto);
         if (imagem == null || _descartado) return;
-        // A decode eviction must not invalidate an upload that is in flight.
-        final owned = imagem.clone();
         late final fs.Texture2D tex;
         try {
-          tex = await fs.Texture2D.fromImage(owned);
+          tex = await fs.Texture2D.fromImage(imagem);
         } finally {
-          owned.dispose();
+          imagem.dispose();
         }
-        if (_descartado || !_esperandoTextura.containsKey(path)) return;
+        if (_descartado || !_alguemUsa(path)) return;
         _texturas[path] = tex;
-        final fila = _esperandoTextura.remove(path) ?? const [];
-        for (final f in fila) {
-          f(tex);
+        for (final n in _nos.values) {
+          for (final f in n.aplicadores[path] ?? const <void Function(fs.Texture2D)>[]) {
+            f(tex);
+          }
         }
         onMudou?.call();
       } catch (e) {
         debugPrint('Textura 3D nao subiu para a GPU ($path): $e');
       } finally {
-        _esperandoTextura.remove(path);
         _texturasACaminho.remove(path);
       }
     });
@@ -540,100 +601,203 @@ class Scene3DGpu {
     _texturasACaminho[path] = upload;
   }
 
+  /// A imagem de [path] com no maximo [teto] pixels no lado maior.
+  ///
+  /// Em 1024 (o teto do TextureCache) a decodificacao e reaproveitada;
+  /// nos outros tetos decodifica direto no tamanho pedido — uma textura
+  /// de 4096 decodificada inteira e 64 MB antes de qualquer GPU.
+  Future<ui.Image?> _decodificarComTeto(String path, int teto) async {
+    if (teto == 1024) {
+      var imagem = TextureCache.instance.imageFor(path);
+      if (imagem == null) {
+        await TextureCache.instance.prepare(path);
+        imagem = TextureCache.instance.imageFor(path);
+      }
+      // A decode eviction must not invalidate an upload that is in flight.
+      return imagem?.clone();
+    }
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
+    ui.Codec? codec;
+    try {
+      final bytes = path.startsWith('data:')
+          ? UriData.parse(path).contentAsBytes()
+          : await File(path).readAsBytes();
+      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final escala = math.min(
+        1.0,
+        teto / math.max(descriptor.width, descriptor.height),
+      );
+      codec = await descriptor.instantiateCodec(
+        targetWidth: math.max(1, (descriptor.width * escala).round()),
+        targetHeight: math.max(1, (descriptor.height * escala).round()),
+      );
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } catch (_) {
+      return null;
+    } finally {
+      codec?.dispose();
+      descriptor?.dispose();
+      buffer?.dispose();
+    }
+  }
+
+  /// O teto de textura mudou: tudo sobe de novo no tamanho novo.
+  void _retrocarregarTexturas(VoidCallback? onMudou) {
+    _capDasTexturas = _receita.texturaMax;
+    final caminhos = _texturas.keys.toList();
+    _texturas.clear();
+    for (final p in caminhos) {
+      _subirTextura(p, onMudou);
+    }
+  }
+
   // ------------------------------------------------------------ luzes
 
+  /// O que muda a ESTRUTURA das luzes (e pede objetos novos). A
+  /// intensidade fica de fora de proposito: animada, ela muda a cada
+  /// quadro, e refazer a luz a cada quadro refazia o cache de sombra
+  /// dela junto — era um atlas de sombra novo por quadro.
+  /// O lado do tile de sombra para o alvo do ultimo quadro (a receita,
+  /// limitada pelo que o alvo aproveita — ver [sombraEfetiva]).
+  int get _ladoDaSombra {
+    final maior = (math.max(_ultimoAlvo.width, _ultimoAlvo.height) * _ultimaEscala).round();
+    return sombraEfetiva(_receita, maior);
+  }
+
+  String _assinaturaDasLuzes(Scene3D scene) {
+    final b = StringBuffer('${_receita.nivel.index}:$_ladoDaSombra;');
+    for (final l in scene.lights) {
+      b.write(
+        '${l.kind.index}:${l.castsShadow}:${l.color.toARGB32()}:'
+        '${l.direction.x},${l.direction.y},${l.direction.z}:'
+        '${l.position.x},${l.position.y},${l.position.z}:'
+        '${l.range}:${l.coneDegrees}:${l.softness};',
+      );
+    }
+    return b.toString();
+  }
+
   void _sincronizarLuzes(Scene3D scene, Duration t) {
-    final intensidades = [for (final l in scene.lights) l.intensity.valueAt(t)];
-    if (listEquals(_ultimasLuzes, scene.lights) &&
-        listEquals(_ultimasIntensidades, intensidades)) {
+    final assinatura = _assinaturaDasLuzes(scene);
+    if (assinatura == _assinaturaLuzes &&
+        _luzObjetos.length == scene.lights.length) {
+      _atualizarIntensidades(scene, t);
       return;
     }
-    _ultimasLuzes = scene.lights;
-    _ultimasIntensidades = intensidades;
+    _assinaturaLuzes = assinatura;
     for (final l in _luzes) {
       cena.remove(l);
     }
     _luzes.clear();
+    _luzObjetos.clear();
+    _tilesDeSombra = 0;
+
+    // A principal e a primeira direcional que faz sombra (ou a primeira
+    // direcional): so ela tem cascatas; as outras entram como componentes.
     fs.DirectionalLight? principal;
-    var principalForca = 0.0;
+    var spotsComSombra = 0;
+    final ladoDaSombra = math.max(256, _ladoDaSombra);
     for (final l in scene.lights) {
-      final i = l.intensity.valueAt(t);
-      if (i <= 0) continue;
+      final i = math.max(0.0, l.intensity.valueAt(t));
       final cor = _linear3(l.color);
       switch (l.kind) {
         case Light3DKind.directional:
+          final sombra = l.castsShadow && _receita.sombras;
           final d = fs.DirectionalLight(
             direction: _v(l.direction).normalized(),
             color: cor,
             intensity: i * 2.6,
-            castsShadow: l.castsShadow,
+            castsShadow: sombra && i > 0,
             shadowSoftness: 3 + l.softness.clamp(0.0, 1.0) * 14,
             shadowMaxDistance: 5000,
-            // Duas cascatas de 1024: quatro vezes menos memoria de GPU
-            // que 3 x 2048, e num celular a diferenca nao se ve.
-            shadowCascadeCount: 2,
-            shadowMapResolution: 1024,
+            shadowCascadeCount: math.max(1, _receita.cascatas),
+            shadowMapResolution: ladoDaSombra,
             shadowDepthBias: 0.8,
             shadowNormalBias: 0.8,
             shadowFadeRange: 400,
           );
-          // Uma luz direcional e a principal (a que faz sombra); as
-          // outras entram como componentes.
-          if (principal == null || (l.castsShadow && i > principalForca)) {
+          if (principal == null || (sombra && !principal.castsShadow)) {
             if (principal != null) {
               _luzes.add(_noDeLuz(fs.DirectionalLightComponent(principal)));
             }
             principal = d;
-            principalForca = i;
           } else {
             _luzes.add(_noDeLuz(fs.DirectionalLightComponent(d)));
           }
+          _luzObjetos.add(d);
         case Light3DKind.point:
           final alcance = l.range <= 0 ? 1200.0 : l.range;
-          _luzes.add(
-            _noDeLuz(
-              fs.PointLightComponent(
-                fs.PointLight(
-                  color: cor,
-                  // O dominio atenua (1 - d/alcance)^2; o motor, 1/d^2. Igualar
-                  // no meio do alcance: I = i * alcance^2 / 16.
-                  intensity: i * alcance * alcance / 16,
-                  range: alcance,
-                ),
-              ),
-              posicao: l.position,
-            ),
+          final p = fs.PointLight(
+            color: cor,
+            // O dominio atenua (1 - d/alcance)^2; o motor, 1/d^2. Igualar
+            // no meio do alcance: I = i * alcance^2 / 16.
+            intensity: i * alcance * alcance / 16,
+            range: alcance,
           );
+          _luzes.add(_noDeLuz(fs.PointLightComponent(p), posicao: l.position));
+          _luzObjetos.add(p);
         case Light3DKind.spot:
           final alcance = l.range <= 0 ? 1200.0 : l.range;
           final externo = l.coneDegrees.clamp(1.0, 179.0) * math.pi / 360;
-          _luzes.add(
-            _noDeLuz(
-              fs.SpotLightComponent(
-                fs.SpotLight(
-                  color: cor,
-                  intensity: i * alcance * alcance / 16,
-                  range: alcance,
-                  direction: _v(l.direction).normalized(),
-                  innerConeAngle:
-                      externo * (1 - l.softness.clamp(0.0, 1.0) * .9),
-                  outerConeAngle: externo,
-                  castsShadow: l.castsShadow,
-                  shadowMapResolution: 512,
-                  shadowSoftness: 2 + l.softness * 6,
-                ),
-              ),
-              posicao: l.position,
-            ),
+          // SOMBRA DE SPOT E CARA: cada uma e um tile inteiro no atlas.
+          // A receita diz quantas cabem; as outras iluminam sem sombra.
+          final sombra =
+              l.castsShadow &&
+              _receita.sombras &&
+              spotsComSombra < _receita.sombrasSpotMax;
+          if (sombra) spotsComSombra++;
+          final s = fs.SpotLight(
+            color: cor,
+            intensity: i * alcance * alcance / 16,
+            range: alcance,
+            direction: _v(l.direction).normalized(),
+            innerConeAngle: externo * (1 - l.softness.clamp(0.0, 1.0) * .9),
+            outerConeAngle: externo,
+            castsShadow: sombra && i > 0,
+            shadowMapResolution: math.min(512, ladoDaSombra),
+            shadowSoftness: 2 + l.softness * 6,
           );
+          _luzes.add(_noDeLuz(fs.SpotLightComponent(s), posicao: l.position));
+          _luzObjetos.add(s);
         case Light3DKind.ambient:
           // Entra no ambiente (ver _sincronizarAmbiente).
-          break;
+          _luzObjetos.add(null);
       }
     }
     cena.directionalLight = principal;
+    if (principal != null && principal.castsShadow) {
+      _tilesDeSombra += principal.shadowCascadeCount;
+    }
+    _tilesDeSombra += spotsComSombra;
     for (final n in _luzes) {
       cena.add(n);
+    }
+  }
+
+  /// So o que muda por quadro: a intensidade — e a sombra de quem
+  /// apagou, que nao precisa ser desenhada.
+  void _atualizarIntensidades(Scene3D scene, Duration t) {
+    for (var k = 0; k < scene.lights.length; k++) {
+      final l = scene.lights[k];
+      final o = _luzObjetos[k];
+      final i = math.max(0.0, l.intensity.valueAt(t));
+      switch (o) {
+        case fs.DirectionalLight d:
+          d.intensity = i * 2.6;
+          d.castsShadow = l.castsShadow && _receita.sombras && i > 0;
+        case fs.PointLight p:
+          final alcance = l.range <= 0 ? 1200.0 : l.range;
+          p.intensity = i * alcance * alcance / 16;
+        case fs.SpotLight s:
+          final alcance = l.range <= 0 ? 1200.0 : l.range;
+          s.intensity = i * alcance * alcance / 16;
+          if (i <= 0) s.castsShadow = false;
+        default:
+          break;
+      }
     }
   }
 
@@ -752,9 +916,10 @@ class Scene3DGpu {
     }
     // O bloom monta uma cadeia de mips do tamanho da tela a cada
     // quadro. Enquanto toca, isso e memoria e banda de GPU trocadas por
-    // um brilho que ninguem esta olhando parado.
+    // um brilho que ninguem esta olhando parado — e abaixo de "media" a
+    // receita o tira de vez.
     cena.postProcess.bloom
-      ..enabled = emissivo && !rascunho
+      ..enabled = emissivo && !rascunho && _receita.bloom
       ..threshold = 1.0
       ..intensity = .45
       ..scatter = .7;
@@ -785,7 +950,10 @@ class _NoGpu {
   final Map<Material3D, fs.MeshGeometry> geometrias = {};
   final Map<Material3D, List<int>> indices = {};
   final Map<Material3D, int> tamanhos = {};
-  final Set<String> texturas = {};
+
+  /// Por caminho de textura, quem a recebe (os materiais deste no).
+  final Map<String, List<void Function(fs.Texture2D)>> aplicadores = {};
+  int triangulos = 0;
   Element3DMesh? ultimaMalha;
   List<Vec3>? _ultimasInstancias;
   double? _ultimoTamanho;
@@ -844,43 +1012,4 @@ class _MalhaFonte {
   final List<Material3D> materiais;
   final String assinatura;
   final bool dinamica;
-}
-
-class _Grupo {
-  final positions = <double>[];
-  final normals = <double>[];
-  final uvs = <double>[];
-  final indices = <int>[];
-  final mapa = <int, int>{};
-
-  int adicionar(List<double> p, List<double> n, List<double> uv) {
-    positions.addAll([p[0], p[1], p[2]]);
-    normals.addAll([n[0], n[1], n[2]]);
-    uvs.addAll([uv[0], uv[1]]);
-    return positions.length ~/ 3 - 1;
-  }
-}
-
-class _Caixa {
-  _Caixa(this.lo, this.hi);
-
-  final List<double> lo;
-  final List<double> hi;
-
-  static _Caixa de(Element3DMesh m) {
-    final lo = [double.infinity, double.infinity, double.infinity];
-    final hi = [-double.infinity, -double.infinity, -double.infinity];
-    for (final v in m.verts) {
-      for (var i = 0; i < 3; i++) {
-        if (v[i] < lo[i]) lo[i] = v[i];
-        if (v[i] > hi[i]) hi[i] = v[i];
-      }
-    }
-    return _Caixa(lo, hi);
-  }
-
-  double faixa(double v, int eixo) {
-    final d = hi[eixo] - lo[eixo];
-    return d <= 1e-9 ? 0.5 : (v - lo[eixo]) / d;
-  }
 }

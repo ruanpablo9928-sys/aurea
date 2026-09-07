@@ -1,7 +1,10 @@
 import 'package:flutter/widgets.dart';
 
 import '../../application/motor3d_modo.dart';
+import '../../application/preview_stats.dart';
+import '../../application/qualidade3d_controller.dart';
 import '../../application/scene3d_gpu.dart';
+import '../../domain/orcamento_render.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/scene3d.dart';
 import 'scene3d_painter.dart';
@@ -64,6 +67,9 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
   @override
   void initState() {
     super.initState();
+    // Uma cena 3D na tela liga as sondas do controlador de qualidade
+    // (tempo de quadro, memoria, termico).
+    ControladorDeQualidade3D.instancia.entrou();
     if (!_wantsFilament) _prepareLegacy();
   }
 
@@ -105,6 +111,8 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
   @override
   void dispose() {
     if (_marcado) MarcaGpuViva.saiu();
+    ControladorDeQualidade3D.instancia.saiu();
+    if (_gpu != null) PreviewStats.cena3d.value = null;
     _gpu?.descartar();
     super.dispose();
   }
@@ -168,28 +176,38 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
       );
     }
     final gpu = _gpu ??= Scene3DGpu();
-    gpu.sincronizar(
-      widget.scene,
-      widget.time,
-      rascunho: widget.rascunho,
-      onMudou: () {
-        if (mounted) setState(() {});
+    final controlador = ControladorDeQualidade3D.instancia;
+    // A RECEITA DE QUALIDADE muda por fora (orcamento, tempo de quadro,
+    // memoria, termico): ouvir o nivel e o que faz a troca valer no
+    // quadro seguinte, sem esperar a cena mudar.
+    return ValueListenableBuilder<Qualidade3D>(
+      valueListenable: controlador.nivel,
+      builder: (context, _, _) {
+        gpu.sincronizar(
+          widget.scene,
+          widget.time,
+          rascunho: widget.rascunho,
+          receita: controlador.receita,
+          onMudou: () {
+            if (mounted) setState(() {});
+          },
+        );
+        gpu.configurarProfundidadeDeCampo(
+          widget.camera,
+          widget.time,
+          rascunho: widget.rascunho || widget.view != SceneView.camera,
+        );
+        return CustomPaint(
+          painter: _PintorGpu(
+            gpu,
+            widget.renderCamera,
+            widget.scene.background,
+            widget.rascunho,
+            widget.exporting,
+          ),
+          size: Size.infinite,
+        );
       },
-    );
-    gpu.configurarProfundidadeDeCampo(
-      widget.camera,
-      widget.time,
-      rascunho: widget.rascunho || widget.view != SceneView.camera,
-    );
-    return CustomPaint(
-      painter: _PintorGpu(
-        gpu,
-        widget.renderCamera,
-        widget.scene.background,
-        widget.rascunho,
-        widget.exporting,
-      ),
-      size: Size.infinite,
     );
   }
 }

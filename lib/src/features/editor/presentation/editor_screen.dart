@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../application/qualidade3d_controller.dart';
+import '../domain/orcamento_render.dart';
 import '../domain/effect.dart';
 
 import '../../projects/application/projects_controller.dart';
@@ -1282,7 +1284,11 @@ class _DiagOverlay extends ConsumerWidget {
     );
     // Liga o contador de travadas de interface junto com o overlay.
     PreviewStats.hookTimings();
-    return ValueListenableBuilder<GearDecision?>(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ValueListenableBuilder<GearDecision?>(
       valueListenable: PreviewStats.gear,
       builder: (context, gear, _) => ValueListenableBuilder<int>(
         valueListenable: PreviewStats.compsPerSec,
@@ -1340,6 +1346,10 @@ class _DiagOverlay extends ConsumerWidget {
           ),
         ),
       ),
+    ),
+        const SizedBox(height: 4),
+        const _Diag3D(),
+      ],
     );
   }
 }
@@ -1785,6 +1795,62 @@ class _PointsHeaderActions extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// O MOTOR 3D NO OVERLAY: nivel, pressao, a estimativa de GPU contra o
+/// orcamento, memoria do processo e o que o ultimo quadro desenhou. E a
+/// leitura que separa "a cena e pesada" de "o app vai cair".
+class _Diag3D extends StatelessWidget {
+  const _Diag3D();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ControladorDeQualidade3D.instancia;
+    return ValueListenableBuilder<Estatisticas3D?>(
+      valueListenable: PreviewStats.cena3d,
+      builder: (context, e, _) => ValueListenableBuilder<Qualidade3D>(
+        valueListenable: c.nivel,
+        builder: (context, nivel, _) => ValueListenableBuilder<NivelDePressao>(
+          valueListenable: c.pressao,
+          builder: (context, pressao, _) => ValueListenableBuilder<int>(
+            valueListenable: PreviewStats.rssMb,
+            builder: (context, rss, _) {
+              if (e == null && c.cenasNaTela == 0) return const SizedBox.shrink();
+              final est = c.estimativa.value;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC12151A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AmColors.hairline),
+                ),
+                child: Text(
+                  '── 3D ──\n'
+                  'nivel ${qualidade3dRotulo(nivel)} · pressao '
+                  '${nivelDePressaoRotulo(pressao)} · ${c.motivo.value}\n'
+                  'GPU estimada ${bytesLegiveis(est.total)} de '
+                  '${bytesLegiveis(c.orcamentoBytes)} '
+                  '(alvos ${bytesLegiveis(est.alvosDeRender)} · sombras '
+                  '${bytesLegiveis(est.sombras)} · tex ${bytesLegiveis(est.texturas)} · '
+                  'geo ${bytesLegiveis(est.geometria)})\n'
+                  'RSS $rss MB · disponivel '
+                  '${c.disponivelBytes >= 0 ? bytesLegiveis(c.disponivelBytes) : '?'} · '
+                  'termico ${c.termico}\n'
+                  '${e ?? 'sem quadro em GPU'}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AmColors.accent,
+                    height: 1.4,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }
