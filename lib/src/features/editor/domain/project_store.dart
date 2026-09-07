@@ -717,6 +717,17 @@ Map<String, dynamic> _selector(TextSelector s) => switch (s) {
     'lock': w.lockDimensions,
     'seed': w.randomSeed,
   },
+  ExpressionSelector e => {
+    'kind': 'expr',
+    'id': e.id,
+    'mode': e.mode.index,
+    'basedOn': e.basedOn.index,
+    // O TEXTO da expressao, como a pessoa escreveu. Guardar a arvore
+    // compilada seria menor e seria errado: quem abre o projeto amanha
+    // tem de poder LER e editar o que escreveu.
+    'src': e.source,
+    'amount': _ad(e.amount),
+  },
   // Seletor escalonado nao e serializado aqui: ele nasce da
   // compilacao da animacao do catalogo, que ja e salva em 'anims'.
   StaggerSelector g => {
@@ -772,6 +783,13 @@ TextSelector _asSelector(Map<String, dynamic> m) => switch (m['kind']) {
     spatialPhase: _asAd(m['sph']),
     lockDimensions: m['lock'] as bool,
     randomSeed: (m['seed'] as num).toInt(),
+  ),
+  'expr' => ExpressionSelector(
+    id: m['id'] as String,
+    mode: SelectorMode.values[(m['mode'] as num).toInt()],
+    basedOn: SelectorBasedOn.values[(m['basedOn'] as num).toInt()],
+    source: m['src'] as String? ?? '',
+    amount: _asAd(m['amount']),
   ),
   'stagger' => StaggerSelector(
     id: m['id'] as String,

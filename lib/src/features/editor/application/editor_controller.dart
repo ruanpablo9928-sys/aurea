@@ -4741,6 +4741,7 @@ class EditorController extends Notifier<VideoProject> {
       return switch (s) {
         RangeSelector r => r.copyWith(mode: next),
         WigglySelector w => w.copyWith(mode: next),
+        ExpressionSelector e => e.copyWith(mode: next),
         // O seletor escalonado vem compilado do catalogo: seu modo nao
         // e editado a mao.
         StaggerSelector _ => s,

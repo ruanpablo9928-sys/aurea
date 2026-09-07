@@ -4,6 +4,7 @@ import 'package:characters/characters.dart';
 import 'package:flutter/animation.dart';
 import 'package:uuid/uuid.dart';
 
+import 'expression_engine.dart';
 import 'keyframe.dart';
 
 /// Motor de animadores de texto (PR-T1/PR-T3 da spec AM2-motor-de-texto):
@@ -70,7 +71,13 @@ sealed class TextSelector {
   final SelectorBasedOn basedOn;
 
   /// Cobertura da unidade [i] entre [n] unidades no tempo local [t].
-  double coverageAt(int i, int n, Duration t);
+  ///
+  /// [selectorValue] e a cobertura que os seletores ANTERIORES ja
+  /// produziram para esta unidade, em 0..1. Range e Wiggly ignoram —
+  /// nao dependem de quem veio antes. O seletor de expressao usa: e o
+  /// `selectorValue` do After Effects, e e por ele que se escreve
+  /// "pegue o que ja tem e faca outra coisa".
+  double coverageAt(int i, int n, Duration t, {double selectorValue = 0});
 }
 
 /// Bezier cubica 1D (remapeia cobertura por easeHigh/easeLow).
@@ -160,7 +167,7 @@ class RangeSelector extends TextSelector {
   final bool holdBeyond;
 
   @override
-  double coverageAt(int i, int n, Duration t) {
+  double coverageAt(int i, int n, Duration t, {double selectorValue = 0}) {
     if (n <= 0) return 0;
     final effectiveOrder =
         randomizeOrder ? SelectorOrder.random : order;
@@ -320,7 +327,7 @@ class WigglySelector extends TextSelector {
   final int randomSeed;
 
   @override
-  double coverageAt(int i, int n, Duration t) {
+  double coverageAt(int i, int n, Duration t, {double selectorValue = 0}) {
     final seconds = t.inMicroseconds / 1e6;
     final corr = (correlation.valueAt(t) / 100).clamp(0.0, 1.0);
     final u = i * (1 - corr) + spatialPhase.valueAt(t) / 360;
@@ -364,6 +371,83 @@ class WigglySelector extends TextSelector {
   }
 }
 
+/// SELETOR DE EXPRESSAO — a cobertura sai de uma conta, por unidade.
+///
+/// O terceiro tipo de seletor, e o que abre o teto: Range diz "desta
+/// letra ate aquela", Wiggly diz "sacuda", e este diz o que a pessoa
+/// souber escrever. Roda uma vez por unidade e por quadro, com
+/// `textIndex`, `textTotal` e `selectorValue` no alcance — o mesmo
+/// vocabulario do After Effects.
+///
+/// A expressao e COMPILADA UMA VEZ, na construcao. Cem letras a 30
+/// quadros sao tres mil avaliacoes por segundo de filme; reanalisar o
+/// texto em cada uma seria o fim do preview.
+///
+/// EXPRESSAO ERRADA NAO QUEBRA NADA: devolve cobertura zero, que e o
+/// neutro, e guarda o erro em [erro] para a interface mostrar com
+/// linha, coluna e trecho. Some do quadro, aparece no editor.
+class ExpressionSelector extends TextSelector {
+  ExpressionSelector({
+    super.id,
+    super.mode,
+    super.basedOn,
+    required this.source,
+    AnimatedDouble? amount,
+  }) : amount = amount ?? AnimatedDouble(100);
+
+  /// O texto da expressao, como a pessoa escreveu.
+  final String source;
+
+  /// Quanto da conta entra, em %.
+  final AnimatedDouble amount;
+
+  late final (CompiledExpression?, ExpressionError?) _compilada =
+      CompiledExpression.tentar(source);
+
+  /// O erro de compilacao, quando ha. Nulo = a expressao esta boa.
+  ExpressionError? get erro => _compilada.$2;
+
+  /// O ultimo erro de AVALIACAO (a expressao compila, mas falha ao
+  /// rodar — um nome que so existe em certos contextos, por exemplo).
+  ExpressionError? erroDeExecucao;
+
+  @override
+  double coverageAt(int i, int n, Duration t, {double selectorValue = 0}) {
+    final prog = _compilada.$1;
+    if (prog == null) return 0;
+    final r = ExpressionEvaluator(
+      prog,
+      ExpressionContext(
+        time: t.inMicroseconds / 1000000,
+        textIndex: i,
+        textTotal: n,
+        // O After Effects fala em 0..100; a cobertura aqui e 0..1.
+        selectorValue: selectorValue * 100,
+        value: selectorValue * 100,
+      ),
+    ).avaliar();
+    if (!r.deuCerto) {
+      erroDeExecucao = r.erro;
+      return 0;
+    }
+    erroDeExecucao = null;
+    return r.comoNumero() / 100 * (amount.valueAt(t) / 100);
+  }
+
+  ExpressionSelector copyWith({
+    SelectorMode? mode,
+    SelectorBasedOn? basedOn,
+    String? source,
+    AnimatedDouble? amount,
+  }) => ExpressionSelector(
+    id: id,
+    mode: mode ?? this.mode,
+    basedOn: basedOn ?? this.basedOn,
+    source: source ?? this.source,
+    amount: amount ?? this.amount,
+  );
+}
+
 /// Combina as coberturas dos seletores (§4.6): o PRIMEIRO define a base,
 /// seja qual for o modo dele (desvio consciente do AE).
 double combinedCoverage(
@@ -375,7 +459,7 @@ double combinedCoverage(
 }) {
   return combinedCoverageWith(
     selectors,
-    (s) => s.coverageAt(i, n, t),
+    (s, acumulado) => s.coverageAt(i, n, t, selectorValue: acumulado),
     allowOvershoot: allowOvershoot,
   );
 }
@@ -384,13 +468,15 @@ double combinedCoverage(
 /// quando cada um tem uma base diferente: caractere vs palavra vs linha).
 double combinedCoverageWith(
   List<TextSelector> selectors,
-  double Function(TextSelector) coverageOf, {
+  double Function(TextSelector selector, double acumulado) coverageOf, {
   bool allowOvershoot = false,
 }) {
   if (selectors.isEmpty) return 0;
-  var acc = coverageOf(selectors.first);
+  var acc = coverageOf(selectors.first, 0);
   for (var k = 1; k < selectors.length; k++) {
-    final c = coverageOf(selectors[k]);
+    // O acumulado ATE AQUI vai para o seletor: e o que o seletor de
+    // expressao le como `selectorValue`.
+    final c = coverageOf(selectors[k], acc);
     acc = switch (selectors[k].mode) {
       SelectorMode.add => acc + c,
       SelectorMode.subtract => acc - c,
@@ -517,10 +603,10 @@ class TextUnits {
   }) {
     return combinedCoverageWith(
       selectors,
-      (s) {
+      (s, acumulado) {
         final (idx, count) = indexFor(i, s.basedOn);
         if (idx < 0 || count <= 0) return 0;
-        return s.coverageAt(idx, count, t);
+        return s.coverageAt(idx, count, t, selectorValue: acumulado);
       },
       allowOvershoot: allowOvershoot,
     );
@@ -801,7 +887,7 @@ class StaggerSelector extends TextSelector {
   final LoopShape loopShape;
 
   @override
-  double coverageAt(int i, int n, Duration t) {
+  double coverageAt(int i, int n, Duration t, {double selectorValue = 0}) {
     if (n <= 0) return 0;
     final idx = orderMapIndex(selectorOrderFor(order), i, n, seed);
     final t0us = start.inMicroseconds + stagger.inMicroseconds * idx;
