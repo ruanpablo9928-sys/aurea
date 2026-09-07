@@ -297,3 +297,27 @@ Mais: nenhum modal cobre o preview (regra medida continua), inventário conferid
 **Q11 · Tablet/landscape.** Entra na Fase 7 (D e E laterais) ou fica fora desta rodada? Não há aparelho de teste tablet; seria só por tamanho de janela nos testes.
 
 **Q12 · Ordem de entrega.** As fases 1–3 deixam o editor antigo vivo atrás de um flag até o painel contextual novo cobrir tudo; só então o antigo é apagado. Prefere assim (sem regressão no beta) ou trocar de uma vez ao fim da Fase 1?
+
+---
+
+## 9. Decisões (aprovação de 2026-09-07: "faz tudo que está pedindo no doc e me entrega o app")
+
+O desempate é o prompt. Onde o prompt e uma regra do projeto conflitam, a regra é revogada ou reinterpretada abaixo, e o teste que a codifica é ajustado na fase correspondente.
+
+| Q | Decisão |
+|---|---|
+| Q1 | Toggle **Simples/Pro** volta, na top bar, persistido (`editor.pro`). Padrão Simples para instalação nova; Pro para quem já tinha projeto salvo. Pro só acrescenta. |
+| Q2 | `ParameterRow.number` = `[◆][nome][régua de arrasto][valor tocável → teclado]`. A régua é o slider; a regra "sem `Slider(`" fica (protege contra sliders pequenos). |
+| Q3 | Cabeçalho E2 = Duplicar · Excluir · **Mais** (botão com rótulo, ícone de grade, abre a lista completa de ações com rótulo). Não usa `ellipsis`; tudo que está em "Mais" também existe na linha de ações rápidas. |
+| Q4 | Painel contextual com alça: 22% · 40% · até 60% do espaço útil; o preview encolhe junto mas nunca some (mínimo 96 px). O teto de 40% das folhas antigas deixa de valer quando elas são substituídas. |
+| Q5 | Tokens: acento **lima** `#B8FF3D` (ação, Exportar, FAB, chips ativos), **teal** para keyframe/curva/playhead de contexto, **violeta** para seleção e grupo, 12 cores por tipo mantidas. |
+| Q6 | Tema claro **entra**: tokens com paleta clara, `AppTheme.light`, seletor em Ajustes (Sistema / Escuro / Claro). O palco continua escuro nos dois temas. |
+| Q7 | Fase 8 **entra** depois da 7 (dados/ofício, 3 pontos, voz/EQ). `Bone`/`TubeLimb` sem UI. |
+| Q8 | **Empacotamento visual**: pedaços do mesmo vídeo sem sobreposição no tempo dividem a mesma linha; "Juntar" visível na junção. |
+| Q9 | **Autorizado** `backgroundColor` em `VideoProject` (serializado; ausente = como hoje). |
+| Q10 | Estúdio 3D e Edit Points continuam em tela cheia, abertos por Propriedades do elemento. |
+| Q11 | Tablet/paisagem entra na Fase 7 por tamanho de janela (D e E laterais acima de 700 pt de largura). |
+| Q12 | Reescrita **no lugar**, fase a fase, sem editor duplicado: cada fase termina compilando e com a suíte verde; os painéis antigos vivem dentro do painel contextual novo até serem substituídos na Fase 3. |
+
+Entrega: APK (`--split-per-abi`) e IPA (tag `ipa-*`) ao fim, com versão nova.
+
