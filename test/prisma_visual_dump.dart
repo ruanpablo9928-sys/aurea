@@ -10,7 +10,6 @@ import 'dart:ui' as ui;
 import 'package:aurea/src/features/editor/application/texture_cache.dart';
 import 'package:aurea/src/features/editor/domain/camera3d.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
-import 'package:aurea/src/features/editor/domain/scene3d.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/scene3d_painter.dart';
 import 'package:aurea/src/features/projects/domain/prisma_template.dart';
 import 'package:flutter/material.dart';
