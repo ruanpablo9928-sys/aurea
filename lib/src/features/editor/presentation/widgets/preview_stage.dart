@@ -450,6 +450,56 @@ class _BandClipper extends CustomClipper<Rect> {
 
 /// GRAO DE FILME: ruido puro por (semente, posicao, tempo) — nada
 /// acumula, entao o frame 200 e igual direto ou depois de reproduzir.
+/// O AZULEJO DE GRAO, montado uma vez.
+///
+/// O pintor de grao desenhava um `drawRect` POR CELULA, a cada quadro:
+/// num preview de 390x700 com celula de 3 px isso da trinta mil chamadas
+/// de desenho por quadro, por camada. Medido em
+/// `test/ferramenta_custo_preview_test.dart`, custava 3,6 ms por camada
+/// — mais do que compor QUARENTA camadas sem efeito.
+///
+/// Grao e ruido, e ruido nao precisa ser redesenhado celula a celula
+/// toda vez. Aqui ele vira um azulejo pequeno, montado uma vez por
+/// (semente, celula, intensidade) e guardado. O quadro so repete o
+/// azulejo com um deslocamento — e o deslocamento por quadro que faz o
+/// grao ferver como grao de filme, sem redesenhar nada.
+class _GrainTile {
+  _GrainTile._();
+
+  static const int lado = 192;
+  static final Map<String, ui.Image> _cache = {};
+
+  static ui.Image para(int seed, double step, double amount) {
+    final chave = '$seed|${step.toStringAsFixed(2)}|'
+        '${amount.toStringAsFixed(3)}';
+    final pronto = _cache[chave];
+    if (pronto != null) return pronto;
+
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    final paint = Paint();
+    for (var y = 0.0; y < lado; y += step) {
+      for (var x = 0.0; x < lado; x += step) {
+        final n = fxHash01(seed, 0, (x * 7919 + y * 104729).toInt());
+        final v = (n - 0.5) * amount;
+        paint.color = v > 0
+            ? Color.fromRGBO(255, 255, 255, (v * 1.6).clamp(0.0, 1.0))
+            : Color.fromRGBO(0, 0, 0, (-v * 1.6).clamp(0.0, 1.0));
+        canvas.drawRect(Rect.fromLTWH(x, y, step, step), paint);
+      }
+    }
+    final img = rec.endRecording().toImageSync(lado, lado);
+    // Poucas combinacoes vivem ao mesmo tempo; o teto evita que uma
+    // intensidade animada encha a memoria de azulejos.
+    if (_cache.length >= 8) {
+      final velha = _cache.remove(_cache.keys.first);
+      velha?.dispose();
+    }
+    _cache[chave] = img;
+    return img;
+  }
+}
+
 class _GrainPainter extends CustomPainter {
   const _GrainPainter({
     required this.amount,
@@ -465,32 +515,26 @@ class _GrainPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size canvasSize) {
+    if (canvasSize.isEmpty) return;
     final step = size.clamp(0.5, 6.0) * 3;
     final frame = time.inMilliseconds ~/ 33;
-    final paint = Paint();
-    for (var y = 0.0; y < canvasSize.height; y += step) {
-      for (var x = 0.0; x < canvasSize.width; x += step) {
-        final n = fxHash01(seed, frame, (x * 7919 + y * 104729).toInt());
-        final v = (n - 0.5) * amount;
-        paint.color = Color.fromRGBO(
-          128,
-          128,
-          128,
-          (v.abs() * 2).clamp(0.0, 1.0),
-        );
-        if (v > 0) {
-          paint.color = Color.fromRGBO(
-            255,
-            255,
-            255,
-            (v * 1.6).clamp(0.0, 1.0),
-          );
-        } else {
-          paint.color = Color.fromRGBO(0, 0, 0, (-v * 1.6).clamp(0.0, 1.0));
-        }
-        canvas.drawRect(Rect.fromLTWH(x, y, step, step), paint);
-      }
-    }
+    final azulejo = _GrainTile.para(seed, step, amount);
+    // O DESLOCAMENTO E A ANIMACAO. Dois primos diferentes nos dois
+    // eixos: o padrao nunca volta ao mesmo lugar dentro de um plano, e
+    // o olho le movimento e nao repeticao.
+    final dx = (frame * 37 % _GrainTile.lado).toDouble();
+    final dy = (frame * 53 % _GrainTile.lado).toDouble();
+    final m = Matrix4.identity()..translateByDouble(dx, dy, 0, 1);
+    canvas.drawRect(
+      Offset.zero & canvasSize,
+      Paint()
+        ..shader = ui.ImageShader(
+          azulejo,
+          TileMode.repeated,
+          TileMode.repeated,
+          m.storage,
+        ),
+    );
   }
 
   @override
@@ -756,6 +800,21 @@ class CompositionView extends ConsumerStatefulWidget {
 }
 
 class _CompositionViewState extends ConsumerState<CompositionView> {
+  /// PREVIEW EM RASCUNHO: o dedo esta no comando agora.
+  ///
+  /// Medido em `test/ferramenta_custo_preview_test.dart`, o glow e o
+  /// deep glow custam ~3 ms POR CAMADA por quadro num desktop — tres a
+  /// quatro vezes mais num celular. Cada nivel da piramide deles e uma
+  /// camada de desfoque com alvo de render proprio; e trabalho legitimo,
+  /// e nao desperdicio como era o grao.
+  ///
+  /// Entao aqui nao se corta trabalho inutil: escolhe-se o que mostrar
+  /// ENQUANTO SE INTERAGE. Tocando, a piramide vai a dois niveis; parado,
+  /// volta inteira. Exportando, nunca — la a qualidade e o unico
+  /// criterio. E a mesma regra do 3D em rascunho, e a mesma razao: um
+  /// preview que engasga nao serve para animar nada.
+  bool get _rascunho =>
+      !widget.exporting && PlaybackController.tocandoAgora.value;
   final _gate = _CompositionGate();
 
   ValueListenable<Duration> get time => widget.time;
@@ -768,7 +827,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
 
-    return ValueListenableBuilder<Duration>(
+    // O RASCUNHO PRECISA DE QUEM O ESCUTE. Sem este ouvinte, a
+    // qualidade cheia so voltaria no proximo quadro — e ao pausar nao ha
+    // proximo quadro, entao o preview ficaria parado no rascunho.
+    return ValueListenableBuilder<bool>(
+      valueListenable: PlaybackController.tocandoAgora,
+      builder: (context, _, _) => ValueListenableBuilder<Duration>(
       valueListenable: time,
       builder: (context, t, _) {
         if (exporting) {
@@ -808,6 +872,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
         PreviewStats.tick(kids.length);
         return Stack(clipBehavior: Clip.none, children: kids);
       },
+      ),
     );
   }
 
@@ -2128,7 +2193,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             final niveis = effect
                 .paramAt('piramide', local)
                 .round()
-                .clamp(1, 5);
+                .clamp(1, _rascunho ? 2 : 5);
             final multR = effect.paramAt('mult_r', local).clamp(0.0, 2.0);
             final multG = effect.paramAt('mult_g', local).clamp(0.0, 2.0);
             final multB = effect.paramAt('mult_b', local).clamp(0.0, 2.0);
@@ -2543,7 +2608,9 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                 .paramAt('quality', local)
                 .round()
                 .clamp(0, 2);
-            final niveis = bloomLevels(quality);
+            final niveis = _rascunho
+                ? math.min(2, bloomLevels(quality))
+                : bloomLevels(quality);
             final pesos = bloomWeights(niveis);
             final sigmas = bloomSigmas(raioPx, niveis);
 
