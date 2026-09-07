@@ -131,17 +131,14 @@ class VideoEncoder {
      */
     fun encodeFrameRgba(bytes: ByteArray, w: Int, h: Int) {
         if (w == width && h == height) {
-            val pixels = argb!!
-            var p = 0
-            for (i in pixels.indices) {
-                // RGBA (Flutter) -> ARGB (o que argbToNv12 le).
-                val r = bytes[p].toInt() and 0xff
-                val g = bytes[p + 1].toInt() and 0xff
-                val b = bytes[p + 2].toInt() and 0xff
-                pixels[i] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
-                p += 4
-            }
-            encodeYuvFromArgb()
+            // UMA PASSADA, e nao duas. A versao anterior copiava RGBA
+            // para um IntArray de ARGB (dois milhoes de iteracoes num
+            // quadro 1080x1920) so para o passo seguinte percorrer o
+            // mesmo array de novo. Isso e trabalho por quadro, na CPU,
+            // no aparelho — e o array intermediario ainda custava oito
+            // megabytes vivos o tempo todo.
+            rgbaToNv12(bytes, yuv!!, width, height)
+            queueYuv()
             return
         }
         // TAMANHO DIFERENTE DO CONFIGURADO. Acontece so na sobra: a
@@ -198,8 +195,13 @@ class VideoEncoder {
 
     /** Converte o quadro que esta em [argb] e o entrega ao codificador. */
     private fun encodeYuvFromArgb() {
-        val c = codec ?: throw IllegalStateException("Codificador nao iniciado")
         argbToNv12(argb!!, yuv!!, width, height)
+        queueYuv()
+    }
+
+    /** Entrega ao codificador o quadro que ja esta em [yuv]. */
+    private fun queueYuv() {
+        val c = codec ?: throw IllegalStateException("Codificador nao iniciado")
 
         // Enfileira o quadro.
         var queued = false
@@ -316,6 +318,37 @@ class VideoEncoder {
          * A conversao roda por quadro, entao e escrita para nao alocar
          * nada e percorrer a imagem uma vez so.
          */
+        /**
+         * RGBA (como o Flutter entrega) -> NV12, direto.
+         *
+         * Mesma matriz e mesma faixa de [argbToNv12] — o que muda e nao
+         * precisar de um IntArray no meio do caminho.
+         */
+        fun rgbaToNv12(rgba: ByteArray, out: ByteArray, w: Int, h: Int) {
+            val frameSize = w * h
+            var yIndex = 0
+            var uvIndex = frameSize
+            var p = 0
+            for (j in 0 until h) {
+                for (i in 0 until w) {
+                    val r = rgba[p].toInt() and 0xff
+                    val g = rgba[p + 1].toInt() and 0xff
+                    val b = rgba[p + 2].toInt() and 0xff
+                    p += 4
+
+                    val y = ((47 * r + 157 * g + 16 * b + 128) shr 8) + 16
+                    out[yIndex++] = clamp(y)
+
+                    if (j and 1 == 0 && i and 1 == 0) {
+                        val u = ((-26 * r - 87 * g + 113 * b + 128) shr 8) + 128
+                        val v = ((113 * r - 102 * g - 11 * b + 128) shr 8) + 128
+                        out[uvIndex++] = clamp(u)
+                        out[uvIndex++] = clamp(v)
+                    }
+                }
+            }
+        }
+
         fun argbToNv12(argb: IntArray, out: ByteArray, w: Int, h: Int) {
             val frameSize = w * h
             var yIndex = 0

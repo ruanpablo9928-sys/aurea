@@ -54,3 +54,4 @@ app.*.map.json
 /tmp/thermion-source/
 /tmp/thermion-dart/
 /tmp/thermion-*.tar.gz
+android/.kotlin/
