@@ -130,10 +130,6 @@ class _RastreioState extends State<_Rastreio> {
 
   @override
   Widget build(BuildContext context) {
-    final projeto = widget.ref.read(editorControllerProvider);
-    final camada = projeto.layerById(widget.layerId);
-    if (camada == null) return const SizedBox.shrink();
-
     return SafeArea(
       child: ListenableBuilder(
         listenable: Listenable.merge([
@@ -142,6 +138,16 @@ class _RastreioState extends State<_Rastreio> {
           BlobTrackService.instance.revision,
         ]),
         builder: (context, _) {
+          // O PROJETO E LIDO AQUI DENTRO, e nao no `build` de fora.
+          //
+          // "Procurar objetos" cria o efeito de rastreio na camada
+          // quando ele nao existe. Lido de fora, o efeito recem-criado
+          // ficava invisivel para esta folha ate ela ser reaberta — e a
+          // pessoa via "0 objetos" logo depois de analisar.
+          final projeto = widget.ref.read(editorControllerProvider);
+          final camada = projeto.layerById(widget.layerId);
+          if (camada == null) return const SizedBox.shrink();
+
           final solucao = CameraTrackService.instance.dataFor(widget.layerId);
           final efeitoId = () {
             for (final e in camada.effects) {
