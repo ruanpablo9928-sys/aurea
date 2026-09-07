@@ -905,7 +905,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     if (!_dicasVistas && !s.previewExpanded)
                       Positioned(
                         left: 12,
-                        right: 12,
+                        // No tablet o cartao fica sobre o preview, nao
+                        // sobre o painel da direita.
+                        right: largo ? 380 + 12 : 12,
                         top: AureaTokens.topBar + 8,
                         child: OnboardingCoach(
                           onFechar: () {
