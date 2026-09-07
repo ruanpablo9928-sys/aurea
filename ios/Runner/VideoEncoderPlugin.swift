@@ -51,6 +51,12 @@ final class VideoEncoderPlugin: NSObject {
         case "available":
             return true
 
+        case "freeBytes":
+            let path = args["path"] as! String
+            let attrs = try? FileManager.default
+                .attributesOfFileSystem(forPath: path)
+            return (attrs?[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
+
         case "start":
             try start(
                 path: args["path"] as! String,
@@ -60,6 +66,14 @@ final class VideoEncoderPlugin: NSObject {
                 bitrate: args["bitrate"] as! Int,
                 hevc: (args["hevc"] as? Bool) ?? false
             )
+            return true
+
+        case "frameRgba":
+            let dados = args["bytes"] as! FlutterStandardTypedData
+            try encode(
+                rgba: dados.data,
+                w: args["width"] as! Int,
+                h: args["height"] as! Int)
             return true
 
         case "frame":
@@ -135,11 +149,25 @@ final class VideoEncoderPlugin: NSObject {
         if !usaHevc {
             compressao[AVVideoProfileLevelKey] = AVVideoProfileLevelH264HighAutoLevel
         }
+        // AS ETIQUETAS DE COR, explicitas.
+        //
+        // Sem AVVideoColorProperties o arquivo sai com a etiqueta que o
+        // AVFoundation escolher, e a conversao RGB->YUV acontece por uma
+        // matriz que ninguem declarou. O resultado e a queixa classica:
+        // o video nao bate com o preview. Aqui esta dito, e casa com o
+        // que o Android faz e com o que ExportColor documenta no Dart:
+        // BT.709 nas primarias, na transferencia e na matriz.
+        let cor: [String: Any] = [
+            AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+            AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+            AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+        ]
         let settings: [String: Any] = [
             AVVideoCodecKey: usaHevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
             AVVideoCompressionPropertiesKey: compressao,
+            AVVideoColorPropertiesKey: cor,
         ]
         let inp = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         inp.expectsMediaDataInRealTime = false
@@ -166,6 +194,126 @@ final class VideoEncoderPlugin: NSObject {
         input = inp
         adaptor = ad
         frameIndex = 0
+    }
+
+    /// CODIFICA UM QUADRO VINDO DA MEMORIA - o caminho normal.
+    ///
+    /// Os bytes chegam como RGBA de 8 bits, direto do Flutter. Antes o
+    /// quadro vinha como PNG no disco: comprimir com zlib de um lado da
+    /// ponte para descomprimir do outro, e guardar o filme inteiro em
+    /// disco no meio. Nao havia motivo de imagem para isso - era so o
+    /// jeito de os pixels chegarem ate aqui.
+    private func encode(rgba: Data, w: Int, h: Int) throws {
+        guard let adaptor = adaptor, let input = input else {
+            throw NSError(domain: "aurea", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey:
+                                        "Codificador nao iniciado"])
+        }
+        guard rgba.count >= w * h * 4 else {
+            throw NSError(domain: "aurea", code: 6,
+                          userInfo: [NSLocalizedDescriptionKey:
+                                        "Quadro incompleto"])
+        }
+        while !input.isReadyForMoreMediaData {
+            Thread.sleep(forTimeInterval: 0.004)
+        }
+        guard let pool = adaptor.pixelBufferPool else {
+            throw NSError(domain: "aurea", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey:
+                                        "Sem pool de buffers"])
+        }
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
+        guard let buffer = pixelBuffer else {
+            throw NSError(domain: "aurea", code: 5,
+                          userInfo: [NSLocalizedDescriptionKey:
+                                        "Sem buffer de pixel"])
+        }
+
+        marcarCor(buffer)
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+
+        if w == width, h == height, let base = CVPixelBufferGetBaseAddress(buffer) {
+            // CAMINHO RAPIDO: copia linha a linha trocando R e B. O
+            // buffer e 32BGRA em ordem little-endian; o Flutter entrega
+            // RGBA. Nenhuma alocacao, nenhuma conversao de espaco.
+            let destStride = CVPixelBufferGetBytesPerRow(buffer)
+            let dest = base.assumingMemoryBound(to: UInt8.self)
+            rgba.withUnsafeBytes { (src: UnsafeRawBufferPointer) in
+                guard let orig = src.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                else { return }
+                for y in 0..<h {
+                    var s = y * w * 4
+                    var d = y * destStride
+                    for _ in 0..<w {
+                        dest[d] = orig[s + 2]
+                        dest[d + 1] = orig[s + 1]
+                        dest[d + 2] = orig[s]
+                        dest[d + 3] = orig[s + 3]
+                        s += 4
+                        d += 4
+                    }
+                }
+            }
+        } else {
+            // Tamanho diferente do configurado: passa por CGImage uma
+            // vez, que escala corretamente. Caminho de sobra.
+            let espaco = CGColorSpace(name: CGColorSpace.sRGB)
+                ?? CGColorSpaceCreateDeviceRGB()
+            guard let provider = CGDataProvider(data: rgba as CFData),
+                let imagem = CGImage(
+                    width: w, height: h,
+                    bitsPerComponent: 8, bitsPerPixel: 32,
+                    bytesPerRow: w * 4, space: espaco,
+                    bitmapInfo: CGBitmapInfo(
+                        rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                    provider: provider, decode: nil,
+                    shouldInterpolate: true, intent: .defaultIntent)
+            else {
+                throw NSError(domain: "aurea", code: 7,
+                              userInfo: [NSLocalizedDescriptionKey:
+                                            "Nao consegui montar o quadro"])
+            }
+            desenhar(imagem, em: buffer)
+        }
+
+        let pts = CMTime(value: frameIndex, timescale: fps)
+        adaptor.append(buffer, withPresentationTime: pts)
+        frameIndex += 1
+    }
+
+    /// Marca o buffer com o mesmo espaco de cor que o escritor declara.
+    /// Sem isto a conversao para YUV pode usar uma matriz e o arquivo
+    /// anunciar outra - que e o bug de cor que esta correcao ataca.
+    private func marcarCor(_ buffer: CVPixelBuffer) {
+        CVBufferSetAttachment(buffer, kCVImageBufferColorPrimariesKey,
+                              kCVImageBufferColorPrimaries_ITU_R_709_2,
+                              .shouldPropagate)
+        CVBufferSetAttachment(buffer, kCVImageBufferTransferFunctionKey,
+                              kCVImageBufferTransferFunction_ITU_R_709_2,
+                              .shouldPropagate)
+        CVBufferSetAttachment(buffer, kCVImageBufferYCbCrMatrixKey,
+                              kCVImageBufferYCbCrMatrix_ITU_R_709_2,
+                              .shouldPropagate)
+    }
+
+    private func desenhar(_ image: CGImage, em buffer: CVPixelBuffer) {
+        if let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer),
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: CGColorSpace(name: CGColorSpace.sRGB)
+                ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+                | CGBitmapInfo.byteOrder32Little.rawValue
+        ) {
+            context.clear(CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(image,
+                         in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
     }
 
     private func encode(path: String) throws {
@@ -198,6 +346,7 @@ final class VideoEncoderPlugin: NSObject {
                                         "Sem buffer de pixel"])
         }
 
+        marcarCor(buffer)
         CVPixelBufferLockBaseAddress(buffer, [])
         if let context = CGContext(
             data: CVPixelBufferGetBaseAddress(buffer),
@@ -205,7 +354,12 @@ final class VideoEncoderPlugin: NSObject {
             height: height,
             bitsPerComponent: 8,
             bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: CGColorSpaceCreateDeviceRGB(),
+            // sRGB EXPLICITO, e nao DeviceRGB. DeviceRGB e "o que o
+            // aparelho usar": funciona por acidente enquanto o acidente
+            // durar. O Flutter pinta em sRGB; dizer isso aqui e o que
+            // garante que o desenho nao passe por uma conversao que
+            // ninguem pediu.
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
                 | CGBitmapInfo.byteOrder32Little.rawValue
         ) {

@@ -754,6 +754,102 @@ class ExportEngine {
 
   /// Codifica a sequencia de quadros com o CODIFICADOR DA PLATAFORMA e,
   /// se houver som, junta o audio depois sem tocar no video.
+  /// O ARQUIVO DE SAIDA. Publico porque a exportacao em fluxo (sem
+  /// arquivos intermediarios) precisa dele antes do laco de quadros.
+  Future<File> arquivoDeSaida() => _outputFile();
+
+  /// QUANTO ESPACO ESTA EXPORTACAO VAI PRECISAR, em bytes.
+  ///
+  /// [emFluxo] muda a conta em ordens de grandeza. Em fluxo so existe o
+  /// arquivo final. Em arquivos, cada quadro vira um PNG no disco antes
+  /// de ser codificado — um filme de dez minutos a 1080p passava de
+  /// trinta gigabytes so de quadros intermediarios, e era assim que uma
+  /// exportacao longa "simplesmente nao terminava": o disco enchia no
+  /// meio e a gravacao falhava sem dizer por que.
+  int espacoNecessario({required bool emFluxo, required String quality}) {
+    final segundos = _total;
+    final video = (taxaDeBits(quality) / 8 * segundos).round();
+    // Audio AAC a 192 kbps, e uma folga de 20% para o contêiner e o
+    // arquivo mudo que existe antes da juntada.
+    final base = ((video + 192000 / 8 * segundos) * 1.2).round();
+    if (emFluxo) return base;
+    // Um PNG de quadro fotografico fica perto de 1,5 byte por pixel.
+    final quadros = (width * height * 1.5 * frameCount).round();
+    return base + quadros;
+  }
+
+  /// Confere o espaco ANTES de comecar. Uma exportacao de meia hora nao
+  /// pode descobrir no fim que nao cabia.
+  Future<void> conferirEspaco({
+    required bool emFluxo,
+    required String quality,
+  }) async {
+    final dir = await workDir();
+    final livre = await PlatformEncoder.espacoLivre(dir.path);
+    if (livre <= 0) return; // sistema nao respondeu: nao bloqueia
+    final preciso = espacoNecessario(emFluxo: emFluxo, quality: quality);
+    if (livre >= preciso) return;
+    String gb(int b) => (b / (1024 * 1024 * 1024)).toStringAsFixed(1);
+    throw ExportException(
+      'Espaco insuficiente: esta exportacao precisa de cerca de '
+      '${gb(preciso)} GB e o aparelho tem ${gb(livre)} GB livres. '
+      'Libere espaco, ou exporte numa resolucao menor ou por partes.',
+    );
+  }
+
+  /// A TAXA DE BITS escolhida para esta exportacao.
+  int taxaDeBits(String quality) =>
+      settings.bitrateMbps != null ||
+          settings.codec == ExportCodec.hevc ||
+          settings.size != ExportSize.original
+      ? settings.bitrateFor(width, height, fps)
+      : PlatformEncoder.bitrateFor(width, height, fps, quality);
+
+  /// JUNTA O AUDIO ao video mudo, sem recodificar a imagem.
+  ///
+  /// Separado de [encode] porque os dois caminhos chegam aqui: o de
+  /// fluxo, que ja entregou o video pelo codificador da plataforma, e o
+  /// de reserva, que passou pelo FFmpeg.
+  Future<File> juntarAudio(File silent) async {
+    final file = await _outputFile();
+    if (!silent.existsSync() || silent.lengthSync() < 1024) {
+      throw ExportException('O codificador nao produziu video.');
+    }
+    final audio = audioGraph(1);
+    if (audio.outLabel == null) {
+      silent.renameSync(file.path);
+      return file;
+    }
+    final session = await FFmpegKit.executeWithArguments([
+      '-y',
+      '-i',
+      silent.path,
+      ...audio.inputs,
+      '-filter_complex',
+      audio.filter!,
+      '-map',
+      '0:v',
+      '-map',
+      audio.outLabel!,
+      '-c:v',
+      'copy',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-movflags',
+      '+faststart',
+      '-t',
+      _total.toStringAsFixed(3),
+      file.path,
+    ]);
+    if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+      final log = await session.getAllLogsAsString();
+      throw ExportException('Falha ao juntar o audio.\n${_tail(log)}');
+    }
+    return file;
+  }
+
   Future<File> encode({
     required Directory framesDir,
     required String quality,
@@ -772,12 +868,7 @@ class ExportEngine {
       throw ExportException('Nenhum quadro foi desenhado.');
     }
 
-    final bitrate =
-        settings.bitrateMbps != null ||
-            settings.codec == ExportCodec.hevc ||
-            settings.size != ExportSize.original
-        ? settings.bitrateFor(width, height, fps)
-        : PlatformEncoder.bitrateFor(width, height, fps, quality);
+    final bitrate = taxaDeBits(quality);
     final silent = File('${framesDir.parent.path}/mudo.mp4');
 
     if (await PlatformEncoder.available) {

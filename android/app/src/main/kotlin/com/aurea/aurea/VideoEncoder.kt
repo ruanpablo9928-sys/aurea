@@ -7,6 +7,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.os.Build
 import java.io.File
 import java.nio.ByteBuffer
 
@@ -86,6 +87,23 @@ class VideoEncoder {
             // Um quadro-chave por segundo: sem isso, buscar no video
             // exportado fica lento.
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            // AS ETIQUETAS DE COR. Sem elas o arquivo nao diz em que
+            // espaco foi escrito, e cada player supoe o seu. Tem de
+            // casar exatamente com a conversao de argbToNv12.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                setInteger(
+                    MediaFormat.KEY_COLOR_STANDARD,
+                    MediaFormat.COLOR_STANDARD_BT709
+                )
+                setInteger(
+                    MediaFormat.KEY_COLOR_RANGE,
+                    MediaFormat.COLOR_RANGE_LIMITED
+                )
+                setInteger(
+                    MediaFormat.KEY_COLOR_TRANSFER,
+                    MediaFormat.COLOR_TRANSFER_SDR_VIDEO
+                )
+            }
         }
 
         val c = MediaCodec.createEncoderByType(mime)
@@ -102,7 +120,53 @@ class VideoEncoder {
         argb = IntArray(width * height)
     }
 
-    /** Codifica um quadro vindo de um PNG no disco. */
+    /**
+     * CODIFICA UM QUADRO VINDO DA MEMORIA — o caminho normal.
+     *
+     * Os bytes chegam como RGBA de 8 bits, na ordem que o Flutter
+     * entrega. Antes eles vinham por PNG no disco: comprimir com zlib
+     * de um lado da ponte para descomprimir do outro, e guardar o filme
+     * inteiro em disco no meio do caminho. Nao havia motivo de imagem
+     * para isso — so era o jeito de os pixels chegarem aqui.
+     */
+    fun encodeFrameRgba(bytes: ByteArray, w: Int, h: Int) {
+        if (w == width && h == height) {
+            val pixels = argb!!
+            var p = 0
+            for (i in pixels.indices) {
+                // RGBA (Flutter) -> ARGB (o que argbToNv12 le).
+                val r = bytes[p].toInt() and 0xff
+                val g = bytes[p + 1].toInt() and 0xff
+                val b = bytes[p + 2].toInt() and 0xff
+                pixels[i] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
+                p += 4
+            }
+            encodeYuvFromArgb()
+            return
+        }
+        // TAMANHO DIFERENTE DO CONFIGURADO. Acontece so na sobra: a
+        // captura ja sai na resolucao de saida (o Flutter reduz na GPU,
+        // de graca), mas um arredondamento de um pixel ainda e possivel.
+        // Aqui vale pagar um Bitmap para escalar corretamente, em vez de
+        // recusar o quadro.
+        val quadro = IntArray(w * h)
+        var p = 0
+        for (i in quadro.indices) {
+            val r = bytes[p].toInt() and 0xff
+            val g = bytes[p + 1].toInt() and 0xff
+            val b = bytes[p + 2].toInt() and 0xff
+            quadro[i] = (0xff shl 24) or (r shl 16) or (g shl 8) or b
+            p += 4
+        }
+        val bmp = Bitmap.createBitmap(quadro, w, h, Bitmap.Config.ARGB_8888)
+        try {
+            encodeBitmap(bmp)
+        } finally {
+            bmp.recycle()
+        }
+    }
+
+    /** Codifica um quadro vindo de um PNG no disco. Caminho de reserva. */
     fun encodeFrameFile(framePath: String) {
         val opts = BitmapFactory.Options().apply {
             inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -129,7 +193,13 @@ class VideoEncoder {
         bmp.getPixels(pixels, 0, width, 0, 0, width, height)
         if (bmp !== source) bmp.recycle()
 
-        argbToNv12(pixels, yuv!!, width, height)
+        encodeYuvFromArgb()
+    }
+
+    /** Converte o quadro que esta em [argb] e o entrega ao codificador. */
+    private fun encodeYuvFromArgb() {
+        val c = codec ?: throw IllegalStateException("Codificador nao iniciado")
+        argbToNv12(argb!!, yuv!!, width, height)
 
         // Enfileira o quadro.
         var queued = false
@@ -226,11 +296,25 @@ class VideoEncoder {
 
     companion object {
         /**
-         * ARGB -> NV12 (Y plano, depois UV intercalado).
+         * ARGB -> NV12 (Y plano, depois UV intercalado), em BT.709 de
+         * faixa limitada.
+         *
+         * AQUI ESTAVA O BUG DE COR. Os coeficientes eram os do BT.601
+         * (66/129/25) e o arquivo saia sem etiqueta nenhuma. Player
+         * nenhum adivinha: diante de um H.264 de alta definicao sem
+         * etiqueta, todos assumem BT.709. O quadro era escrito com uma
+         * matriz e lido com outra — e matriz trocada nao escurece a
+         * imagem, ela GIRA o matiz: o verde puxa para amarelo, a pele
+         * avermelha. Era esse o "as cores do video nao batem com o
+         * preview".
+         *
+         * Agora sao os coeficientes do BT.709, e o formato leva as
+         * etiquetas que dizem exatamente isso (ver start()). Os numeros
+         * vem de ExportColor, no Dart, que e onde a politica de cor do
+         * app esta escrita — e de onde o teste os cobra.
          *
          * A conversao roda por quadro, entao e escrita para nao alocar
-         * nada e percorrer a imagem uma vez so. Coeficientes BT.601, que
-         * e o que o codificador espera em video de faixa limitada.
+         * nada e percorrer a imagem uma vez so.
          */
         fun argbToNv12(argb: IntArray, out: ByteArray, w: Int, h: Int) {
             val frameSize = w * h
@@ -245,13 +329,16 @@ class VideoEncoder {
                     val g = (c shr 8) and 0xff
                     val b = c and 0xff
 
-                    val y = ((66 * r + 129 * g + 25 * b + 128) shr 8) + 16
+                    val y = ((47 * r + 157 * g + 16 * b + 128) shr 8) + 16
                     out[yIndex++] = clamp(y)
 
-                    // Croma em 2x2: so nas linhas e colunas pares.
+                    // Croma em 2x2: so nas linhas e colunas pares. Os
+                    // tres coeficientes de cada linha somam ZERO — se
+                    // nao somassem, cinza deixaria de ser cinza e a
+                    // imagem inteira ganharia uma dominante.
                     if (j and 1 == 0 && i and 1 == 0) {
-                        val u = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
-                        val v = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
+                        val u = ((-26 * r - 87 * g + 113 * b + 128) shr 8) + 128
+                        val v = ((113 * r - 102 * g - 11 * b + 128) shr 8) + 128
                         out[uvIndex++] = clamp(u)
                         out[uvIndex++] = clamp(v)
                     }

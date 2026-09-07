@@ -39,6 +39,12 @@ class MainActivity : FlutterActivity() {
         when (method) {
             "available" -> true
 
+            "freeBytes" -> {
+                val path = call.argument<String>("path")!!
+                val stat = android.os.StatFs(path)
+                stat.availableBytes
+            }
+
             "start" -> {
                 encoder.start(
                     call.argument<String>("path")!!,
@@ -47,6 +53,15 @@ class MainActivity : FlutterActivity() {
                     call.argument<Int>("fps")!!,
                     call.argument<Int>("bitrate")!!,
                     call.argument<Boolean>("hevc") ?: false
+                )
+                true
+            }
+
+            "frameRgba" -> {
+                encoder.encodeFrameRgba(
+                    call.argument<ByteArray>("bytes")!!,
+                    call.argument<Int>("width")!!,
+                    call.argument<Int>("height")!!
                 )
                 true
             }

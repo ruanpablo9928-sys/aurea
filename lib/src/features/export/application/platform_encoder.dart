@@ -53,8 +53,38 @@ class PlatformEncoder {
   }
 
   /// Codifica um quadro a partir de um PNG no disco.
+  ///
+  /// Caminho ANTIGO, mantido so para o modo de reserva. Ver [frameRgba]:
+  /// passar por PNG e disco custava mais que codificar.
   static Future<void> frame(String path) async {
     await _channel.invokeMethod<bool>('frame', {'path': path});
+  }
+
+  /// CODIFICA UM QUADRO DIRETO DA MEMORIA.
+  ///
+  /// Este metodo e a correcao central da exportacao. O caminho anterior,
+  /// por quadro, era:
+  ///
+  ///   GPU → CPU  →  codificar PNG (zlib)  →  gravar no disco
+  ///                        ... e depois, numa segunda passada ...
+  ///   ler do disco  →  decodificar PNG  →  buffer  →  codificador
+  ///
+  /// O PNG nao existia por nenhum motivo de imagem: era so o jeito de os
+  /// pixels irem do Dart ao codificador nativo. Custava de longe a maior
+  /// parte do tempo de exportacao (o zlib de um quadro 1080p sozinho e
+  /// dezenas a centenas de milissegundos) e obrigava a guardar o filme
+  /// inteiro descomprimido em disco — dezenas de gigabytes num filme de
+  /// dez minutos, que e por que a exportacao as vezes simplesmente nao
+  /// terminava.
+  ///
+  /// Agora os bytes crus atravessam a ponte uma vez e entram no
+  /// codificador. Sem compressao, sem disco, sem segunda passada.
+  static Future<void> frameRgba(Uint8List rgba, int width, int height) async {
+    await _channel.invokeMethod<bool>('frameRgba', {
+      'bytes': rgba,
+      'width': width,
+      'height': height,
+    });
   }
 
   /// Codifica um LOTE de quadros numa chamada so. Atravessar a ponte por
@@ -62,6 +92,18 @@ class PlatformEncoder {
   static Future<int> frames(List<String> paths) async {
     final n = await _channel.invokeMethod<int>('frames', {'paths': paths});
     return n ?? 0;
+  }
+
+  /// ESPACO LIVRE no disco onde a exportacao vai escrever, em bytes.
+  /// Zero quando o sistema nao responde — nesse caso nao se bloqueia
+  /// nada: e melhor tentar do que impedir por falta de informacao.
+  static Future<int> espacoLivre(String path) async {
+    try {
+      final v = await _channel.invokeMethod<int>('freeBytes', {'path': path});
+      return v ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   static Future<bool> finish() async =>

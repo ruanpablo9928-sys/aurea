@@ -22,6 +22,7 @@ import '../../editor/presentation/widgets/preview_stage.dart';
 import '../../editor/application/duck_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../application/export_engine.dart';
+import '../application/platform_encoder.dart';
 import '../domain/export_settings.dart';
 import '../../settings/application/settings_controller.dart';
 
@@ -182,6 +183,42 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       final framesDir = Directory('${work.path}/frames');
       framesDir.createSync(recursive: true);
 
+      // EM FLUXO OU EM ARQUIVOS?
+      //
+      // Em fluxo, cada quadro sai da GPU e entra no codificador da
+      // plataforma, na memoria. Nada de PNG, nada de disco, nada de
+      // segunda passada. E o caminho normal.
+      //
+      // Em arquivos so quando nao ha escolha: a sequencia PNG, que E
+      // arquivos por definicao, e o aparelho sem codificador de
+      // hardware, onde quem codifica e o FFmpeg lendo do disco.
+      final sequencia = widget.settings.format == ExportFormat.pngSequence;
+      final emFluxo = !sequencia && await PlatformEncoder.available;
+
+      // A composicao e desenhada no tamanho dela; a saida pode ser
+      // menor (720p de um projeto 1080p). A razao entre as duas vira a
+      // escala da captura.
+      final escala = project.outputHeight <= 0
+          ? 1.0
+          : engine.height / project.outputHeight;
+
+      // ESPACO ANTES DE COMECAR, nao no fim.
+      _passo(_Fase.preparando, .2, 'Conferindo o espaco em disco...');
+      await engine.conferirEspaco(emFluxo: emFluxo, quality: widget.quality);
+
+      File? mudo;
+      if (emFluxo) {
+        mudo = File('${work.path}/mudo.mp4');
+        await PlatformEncoder.start(
+          path: mudo.path,
+          width: engine.width,
+          height: engine.height,
+          fps: engine.fps,
+          bitrate: engine.taxaDeBits(widget.quality),
+          hevc: widget.settings.codec == ExportCodec.hevc,
+        );
+      }
+
       for (var i = 0; i < total; i++) {
         if (engine.cancelled) return;
         final t = engine.timeOfFrame(i);
@@ -194,17 +231,54 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         await WidgetsBinding.instance.endOfFrame;
         if (!mounted || engine.cancelled) return;
 
-        final png = await _capturar();
-        if (png == null) {
-          throw ExportException('Nao consegui desenhar o quadro $i.');
+        if (emFluxo) {
+          final quadro = await _capturarCru(escala);
+          if (quadro == null) {
+            throw ExportException('Nao consegui desenhar o quadro $i.');
+          }
+          await PlatformEncoder.frameRgba(
+            quadro.bytes,
+            quadro.largura,
+            quadro.altura,
+          );
+        } else {
+          final png = await _capturar();
+          if (png == null) {
+            throw ExportException('Nao consegui desenhar o quadro $i.');
+          }
+          final name = i.toString().padLeft(6, '0');
+          File('${framesDir.path}/$name.png').writeAsBytesSync(png);
         }
-        final name = i.toString().padLeft(6, '0');
-        File('${framesDir.path}/$name.png').writeAsBytesSync(png);
 
         _passo(_Fase.desenhando, (i + 1) / total, 'Quadro ${i + 1} de $total');
       }
 
-      // 3. Sequencia PNG para quando termina aqui: nao ha o que
+      // 3. EM FLUXO o video ja esta pronto quando o laco acaba: so falta
+      // fechar o codificador e juntar o audio.
+      if (emFluxo) {
+        _passo(_Fase.codificando, .4, 'Fechando o video...');
+        if (!await PlatformEncoder.finish()) {
+          throw ExportException(
+            'O codificador do aparelho nao fechou o arquivo. '
+            'Tente exportar em H.264 ou numa resolucao menor.',
+          );
+        }
+        _passo(_Fase.codificando, .7, 'Juntando o audio...');
+        final file = await engine.juntarAudio(mudo!);
+        await engine.cleanup();
+        final naGaleria = await _salvarNaGaleria(file);
+        if (!mounted) return;
+        setState(() {
+          _fase = _Fase.pronto;
+          _progresso = 1;
+          _saida = file;
+          _detalhe = file.path;
+          _galeria = naGaleria;
+        });
+        return;
+      }
+
+      // 4. Sequencia PNG para quando termina aqui: nao ha o que
       // codificar, so onde guardar.
       if (widget.settings.format == ExportFormat.pngSequence) {
         _passo(_Fase.codificando, 0.5, 'Salvando a sequencia...');
@@ -245,20 +319,54 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         _galeria = naGaleria;
       });
     } on ExportException catch (e) {
-      await engine.cleanup();
+      await _abandonar(engine);
       if (!mounted) return;
       setState(() {
         _fase = _Fase.erro;
         _erro = e.message;
       });
     } catch (e) {
-      await engine.cleanup();
+      await _abandonar(engine);
       if (!mounted) return;
       setState(() {
         _fase = _Fase.erro;
-        _erro = '$e';
+        // UM ERRO SEM CAUSA NAO SERVE PARA NINGUEM. A frase abaixo diz
+        // em que ETAPA parou e o que o sistema respondeu — e quando da,
+        // o que fazer a respeito.
+        _erro = _explicar(e);
       });
     }
+  }
+
+  /// LARGA A EXPORTACAO NO MEIO sem deixar nada aberto.
+  ///
+  /// Em fluxo o codificador da plataforma esta ABERTO quando algo falha
+  /// no meio do laco. Sem fecha-lo, o proximo `start` encontra um
+  /// escritor vivo e a exportacao seguinte falha tambem — um erro vira
+  /// dois, e o segundo nao tem nada a ver com a causa.
+  Future<void> _abandonar(ExportEngine engine) async {
+    await PlatformEncoder.cancel();
+    await engine.cleanup();
+  }
+
+  /// Traduz o que veio de baixo para uma frase que diz o que houve.
+  String _explicar(Object e) {
+    final texto = '$e';
+    final baixo = texto.toLowerCase();
+    final causa = switch (baixo) {
+      _ when baixo.contains('no space') || baixo.contains('enospc') =>
+        'O disco encheu durante a exportacao.',
+      _ when baixo.contains('permission') || baixo.contains('eacces') =>
+        'O aplicativo nao teve permissao para gravar o arquivo.',
+      _ when baixo.contains('out of memory') || baixo.contains('oom') =>
+        'O aparelho ficou sem memoria. Tente uma resolucao menor.',
+      _ when baixo.contains('codec') || baixo.contains('encoder') =>
+        'O codificador do aparelho falhou. Tente H.264 em vez de HEVC.',
+      _ when baixo.contains('missingplugin') =>
+        'O codificador do aparelho nao respondeu.',
+      _ => 'Falha inesperada na exportacao.',
+    };
+    return '$causa\n\n$texto';
   }
 
   Future<void> _prepararRecursos3D(List<Layer> layers) async {
@@ -369,6 +477,30 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       codec.dispose();
       _quadroAtual[l.id] = frame.image;
     }
+  }
+
+  /// CAPTURA CRUA: os pixels como saem da composicao, sem compressao.
+  ///
+  /// `rawRgba` e o formato que o codificador quer. Pedir PNG aqui — que
+  /// era o que se fazia — significava passar o quadro inteiro por um
+  /// zlib na CPU para logo em seguida descomprimi-lo do outro lado da
+  /// ponte. Era o maior custo por quadro da exportacao inteira, e nao
+  /// servia a nenhum proposito de imagem.
+  Future<({Uint8List bytes, int largura, int altura})?> _capturarCru(
+    double escala,
+  ) async {
+    final obj = _boundary.currentContext?.findRenderObject();
+    if (obj is! RenderRepaintBoundary) return null;
+    // A ESCALA ACONTECE NA GPU. Exportar 720p de uma composicao 1080p
+    // nao pode custar um redimensionamento por quadro na CPU: pedir a
+    // captura ja na razao certa e de graca, e a qualidade e melhor que
+    // a de qualquer reamostragem depois.
+    final image = await obj.toImage(pixelRatio: escala);
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final l = image.width, a = image.height;
+    image.dispose();
+    if (data == null) return null;
+    return (bytes: data.buffer.asUint8List(), largura: l, altura: a);
   }
 
   Future<Uint8List?> _capturar() async {
