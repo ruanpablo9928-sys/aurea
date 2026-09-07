@@ -137,7 +137,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('estado-vazio')), findsOneWidget);
     expect(find.byKey(const ValueKey('estado-vazio-cta')), findsOneWidget);
-    // O chip de ajuda do E1 leva ao guia rapido.
+    // A barra de adicionar (com o chip de ajuda) so vem pelo "+".
+    expect(find.byKey(const ValueKey('projeto-ajuda')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('editor-fab')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('projeto-ajuda')), findsOneWidget);
   });
 }

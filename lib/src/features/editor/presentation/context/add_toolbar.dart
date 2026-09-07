@@ -66,46 +66,7 @@ class AddToolbar extends StatelessWidget {
         return ListView(
           padding: EdgeInsets.zero,
           children: [
-            // ESTADO VAZIO com chamada (criterio 13): "+ Adicione uma midia".
-            if (empty && !compacto)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Comece adicionando uma mídia, um texto ou uma forma.',
-                        key: const ValueKey('estado-vazio'),
-                        style: TextStyle(fontSize: 12.5, color: t.muted),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      key: const ValueKey('estado-vazio-cta'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onTarget(AddTarget.midia),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: t.accent,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '+ Adicione uma mídia',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: t.onAccent,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (empty && !compacto) EstadoVazio(onMidia: () => onTarget(AddTarget.midia)),
             SizedBox(
               height: compacto ? 64 : 84,
               child: ListView.separated(
@@ -236,6 +197,57 @@ class _Chip extends StatelessWidget {
             Text(rotulo, style: TextStyle(fontSize: 12.5, color: t.text)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// O ESTADO VAZIO (criterio 13 do prompt): sem camada nenhuma, o painel
+/// nao fica em branco — diz o que fazer e tem o botao que faz.
+///
+/// Ele mora fora da barra de adicionar de proposito: a barra so aparece
+/// quando se toca no "+", e o estado vazio precisa aparecer ANTES disso.
+class EstadoVazio extends StatelessWidget {
+  const EstadoVazio({super.key, required this.onMidia});
+
+  final VoidCallback onMidia;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AureaTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Comece adicionando uma mídia, um texto ou uma forma.',
+              key: const ValueKey('estado-vazio'),
+              style: TextStyle(fontSize: 12.5, color: t.muted),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            key: const ValueKey('estado-vazio-cta'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onMidia,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: t.accent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '+ Adicione uma mídia',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: t.onAccent,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -8,9 +8,9 @@ import '../am/am_colors.dart';
 /// pessoa saiba, e nada mais. Aparecem uma vez, no alto do preview, e
 /// voltam por ⚙ Projeto › "Ver as dicas de novo".
 const dicasDoEditor = [
+  'Toque no objeto na tela para selecionar. Arraste para mover; a bolinha de baixo redimensiona e a de cima gira.',
+  'Com o objeto selecionado, as ações e as categorias dele aparecem embaixo.',
   'Toque no + (na barra de transporte) para adicionar mídia, texto ou forma.',
-  'Toque numa camada na timeline: as ações e as categorias dela aparecem embaixo.',
-  'Toque no número de um parâmetro para digitar o valor exato; arraste a régua para ajustar.',
   'O ◆ na barra de transporte crava um keyframe no instante do cabeçote.',
 ];
 
@@ -108,4 +108,30 @@ class _OnboardingCoachState extends State<OnboardingCoach> {
       ),
     );
   }
+}
+
+/// A LINHA DE DICA quando nada esta selecionado.
+///
+/// O painel some sem selecao (a timeline fica com o espaco), mas quem
+/// abre o app pela primeira vez precisa saber por onde comecar. Uma
+/// linha so, que some no primeiro toque em qualquer objeto.
+class DicaDoPalco extends StatelessWidget {
+  const DicaDoPalco({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+    color: AmColors.panel,
+    child: Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          'Toque num objeto na tela para editar.',
+          key: ValueKey('dica-palco'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12.5, color: AmColors.muted),
+        ),
+      ),
+    ),
+  );
 }

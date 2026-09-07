@@ -73,6 +73,10 @@ bool _containsRasterMedia(List<Layer> layers) => layers.any(
 
 /// Palco: composicao renderizada em coordenadas logicas, escalada para
 /// caber. Gestos editam a camada selecionada.
+/// A alca que o dedo pegou: canto de baixo e a direita redimensiona,
+/// canto de cima e a direita gira.
+enum _Alca { escala, giro }
+
 class PreviewStage extends ConsumerStatefulWidget {
   const PreviewStage({super.key, required this.playback, required this.videos});
 
@@ -112,10 +116,114 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
   double _startScale = 1;
   double _startRotation = 0;
   double _stageScale = 1;
+
+  /// Canto de cima e da esquerda do quadro da composicao dentro do
+  /// palco: com ele o toque na tela vira ponto na composicao.
+  Offset _stageOrigin = Offset.zero;
+
+  /// A alca que o dedo pegou neste gesto (null = arrastar a camada).
+  _Alca? _alca;
   Offset _dragStartPos = Offset.zero;
   Offset _dragAccum = Offset.zero;
 
+  /// O ponto tocado, em coordenadas da COMPOSICAO.
+  Offset _naComposicao(Offset local) =>
+      (local - _stageOrigin) / (_stageScale <= 0 ? 1 : _stageScale);
+
+  /// A camada mais de cima cujo quadro contem o ponto (null = nenhuma).
+  ///
+  /// E o que faltava para o app parecer um editor: o testador toca no
+  /// objeto na tela e ele fica selecionado, sem precisar descobrir que
+  /// a barrinha da timeline e que seleciona.
+  String? _camadaNoPonto(Offset comp) {
+    final project = ref.read(editorControllerProvider);
+    final controller = ref.read(editorControllerProvider.notifier);
+    final t = widget.playback.time.value;
+    for (final l in project.layers) {
+      // Som, nulo e camada de ajuste nao tem desenho: se entrassem na
+      // conta, um deles por cima engoliria o toque do que se ve.
+      if (l is AudioLayer || l is NullLayer || l is AdjustmentLayer) continue;
+      if (!l.activeAt(t)) continue;
+      if (project.isHidden(l.id)) continue;
+      if (project.metaOf(l.id).locked) continue;
+      final eff = effectiveTransform(project, l, t);
+      final tamanho = controller.layerBoxSize(l, t);
+      if (tamanho.isEmpty) continue;
+      final pivot = l.pivot.valueAt(l.localTime(t));
+      // Desfaz o que o palco fez: leva o ponto para o espaco da camada.
+      var p = comp - eff.pos - pivot;
+      final r = -eff.rot * math.pi / 180;
+      p = Offset(
+        p.dx * math.cos(r) - p.dy * math.sin(r),
+        p.dx * math.sin(r) + p.dy * math.cos(r),
+      );
+      final k = eff.scale.abs() < 1e-6 ? 1.0 : eff.scale;
+      p = Offset(p.dx / k, p.dy / k) + pivot;
+      // Uma folga de 12 px: alvo pequeno tambem tem de dar para pegar.
+      final caixa = Rect.fromCenter(
+        center: Offset.zero,
+        width: tamanho.width,
+        height: tamanho.height,
+      ).inflate(12 / (_stageScale <= 0 ? 1 : _stageScale));
+      if (caixa.contains(p)) return l.id;
+    }
+    return null;
+  }
+
+  /// Onde ficam as alcas da selecao, em coordenadas do PALCO.
+  ({Offset escala, Offset giro, Rect quadro})? _alcasDaSelecao() {
+    final id = ref.read(selectedLayerProvider);
+    if (id == null) return null;
+    final project = ref.read(editorControllerProvider);
+    final l = project.layerById(id);
+    if (l == null || l is AudioLayer) return null;
+    final t = widget.playback.time.value;
+    if (!l.activeAt(t)) return null;
+    final eff = effectiveTransform(project, l, t);
+    final tamanho = ref.read(editorControllerProvider.notifier).layerBoxSize(l, t);
+    if (tamanho.isEmpty) return null;
+    final meia = Offset(tamanho.width / 2, tamanho.height / 2) * eff.scale.abs();
+    final r = eff.rot * math.pi / 180;
+    Offset noPalco(Offset canto) {
+      final girado = Offset(
+        canto.dx * math.cos(r) - canto.dy * math.sin(r),
+        canto.dx * math.sin(r) + canto.dy * math.cos(r),
+      );
+      return _stageOrigin + (eff.pos + girado) * _stageScale;
+    }
+
+    return (
+      escala: noPalco(Offset(meia.dx, meia.dy)),
+      giro: noPalco(Offset(meia.dx, -meia.dy)),
+      quadro: Rect.fromCenter(
+        center: _stageOrigin + eff.pos * _stageScale,
+        width: tamanho.width * eff.scale.abs() * _stageScale,
+        height: tamanho.height * eff.scale.abs() * _stageScale,
+      ),
+    );
+  }
+
   void _onScaleStart(ScaleStartDetails d) {
+    // O dedo pegou uma alca? (raio generoso: 28 px)
+    _alca = null;
+    final alcas = _alcasDaSelecao();
+    if (alcas != null && d.pointerCount < 2) {
+      if ((d.localFocalPoint - alcas.escala).distance <= 28) {
+        _alca = _Alca.escala;
+      } else if ((d.localFocalPoint - alcas.giro).distance <= 28) {
+        _alca = _Alca.giro;
+      }
+    }
+    // Tocou fora de qualquer alca: seleciona o que estiver embaixo do
+    // dedo (e nada, se for o vazio).
+    if (_alca == null && d.pointerCount < 2) {
+      final alvo = _camadaNoPonto(_naComposicao(d.localFocalPoint));
+      final atual = ref.read(selectedLayerProvider);
+      if (alvo != atual) {
+        ref.read(multiSelectProvider.notifier).state = const {};
+        ref.read(selectedLayerProvider.notifier).state = alvo;
+      }
+    }
     final id = ref.read(selectedLayerProvider);
     if (id == null) return;
     final layer = ref.read(editorControllerProvider).layerById(id);
@@ -145,6 +253,32 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
         t,
         _startRotation + d.rotation * 180 / math.pi,
       );
+      return;
+    }
+
+    // ALCAS: um dedo so, mas nao arrasta a camada — redimensiona ou gira.
+    if (_alca != null) {
+      final centro = _stageOrigin + _dragStartPos * _stageScale;
+      final v = d.localFocalPoint - centro;
+      if (_alca == _Alca.giro) {
+        final ang = math.atan2(v.dy, v.dx) * 180 / math.pi;
+        // O canto de cima e a direita comeca a 45 graus do centro.
+        controller.editRotation(id, t, ang + 45);
+      } else {
+        final camada = project.layerById(id);
+        if (camada != null) {
+          final caixa = controller.layerBoxSize(camada, t);
+          final meia = math.max(
+            1.0,
+            Offset(caixa.width / 2, caixa.height / 2).distance,
+          );
+          controller.editScaleUniform(
+            id,
+            t,
+            (v.distance / _stageScale / meia).clamp(0.05, 8.0),
+          );
+        }
+      }
       return;
     }
     final deltaLogical = d.focalPointDelta / _stageScale;
@@ -259,6 +393,10 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                   constraints.maxHeight / compH,
                 );
                 _stageScale = scale;
+                _stageOrigin = Offset(
+                  (constraints.maxWidth - compW * scale) / 2,
+                  (constraints.maxHeight - compH * scale) / 2,
+                );
                 return Center(
                   child: SizedBox(
                     width: compW * scale,
@@ -406,6 +544,49 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
               },
             ),
           ),
+          // ALCAS DA SELECAO: uma para redimensionar (canto de baixo e a
+          // direita) e uma para girar (canto de cima e a direita). Com um
+          // dedo so — a pinca continua valendo para quem prefere.
+          if (!drawing)
+            Builder(
+              builder: (context) {
+                final a = _alcasDaSelecao();
+                if (a == null) return const SizedBox.shrink();
+                Widget alca(Offset p, IconData icone, String chave) => Positioned(
+                  left: p.dx - 15,
+                  top: p.dy - 15,
+                  child: IgnorePointer(
+                    child: Container(
+                      key: ValueKey(chave),
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: .35),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Icon(icone, size: 17, color: const Color(0xFF12151A)),
+                    ),
+                  ),
+                );
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    alca(
+                      a.escala,
+                      CupertinoIcons.arrow_up_left_arrow_down_right,
+                      'alca-escala',
+                    ),
+                    alca(a.giro, CupertinoIcons.arrow_2_circlepath, 'alca-giro'),
+                  ],
+                );
+              },
+            ),
           if (drawing)
             Positioned(
               top: 4,

@@ -151,6 +151,8 @@ void main() {
     final e = c.read(editorControllerProvider.notifier);
     c.read(selectedLayerProvider.notifier).state = null;
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('editor-fab')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
     await tester.pumpAndSettle();
     final texto = c.read(editorControllerProvider).layers.whereType<TextLayer>().single;

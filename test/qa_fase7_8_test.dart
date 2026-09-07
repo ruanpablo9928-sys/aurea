@@ -31,15 +31,17 @@ void main() {
   testWidgets('tablet/paisagem: acima de 700 pt o painel fica ao lado do preview', (tester) async {
     final c = await openEditor(tester, size: const Size(1024, 768));
     expect(find.byKey(const ValueKey('editor-largo')), findsOneWidget);
+    // Sem selecao o painel e so a linha de dica.
+    expect(find.byKey(const ValueKey('dica-palco')), findsOneWidget);
+
+    final id = c.read(editorControllerProvider).layers.first.id;
+    c.read(selectedLayerProvider.notifier).state = id;
+    await tester.pumpAndSettle();
     final preview = tester.getRect(find.byType(PreviewStage));
     final folha = tester.getRect(find.byKey(const ValueKey('context-sheet')));
     expect(folha.left, greaterThanOrEqualTo(preview.right - 1), reason: 'painel a direita');
     expect(folha.width, closeTo(380, 1));
     expect(folha.height, greaterThan(500), reason: 'painel de altura inteira');
-    // O E2 aparece la, do mesmo jeito.
-    final id = c.read(editorControllerProvider).layers.first.id;
-    c.read(selectedLayerProvider.notifier).state = id;
-    await tester.pumpAndSettle();
     expect(find.text('Mover e\ntransf.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

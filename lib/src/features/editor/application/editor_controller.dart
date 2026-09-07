@@ -40,6 +40,7 @@ import '../domain/apple_motion.dart';
 import '../domain/mask.dart';
 import '../domain/nle_ops.dart';
 import '../domain/shape.dart';
+import '../domain/svg_document.dart';
 import '../domain/shape_ops.dart';
 import '../domain/text_anim.dart';
 import '../domain/text_path.dart';
@@ -261,6 +262,48 @@ class EditorController extends Notifier<VideoProject> {
         position: AnimatedOffset(_center),
       ),
     );
+  }
+
+  /// UM ARQUIVO SVG COMO FORMA (nunca imagem).
+  ///
+  /// Um desenho vira uma camada; varios viram um grupo com uma camada
+  /// por desenho — e a unica forma de cada um manter a SUA cor, ja que a
+  /// pintura de uma camada vale para tudo que veio antes dela.
+  /// Devolve o id do que entrou.
+  String? addSvgLayers(SvgImportado svg, Duration at, {String nome = 'SVG'}) {
+    final partes = itensDoSvg(svg);
+    if (partes.isEmpty) return null;
+    if (partes.length == 1) {
+      final l = ShapeLayer(
+        name: nome,
+        startTime: at,
+        duration: const Duration(seconds: 3),
+        contents: partes.single,
+        position: AnimatedOffset(_center),
+      );
+      _push(l);
+      return l.id;
+    }
+    final filhos = <Layer>[
+      for (var i = 0; i < partes.length; i++)
+        ShapeLayer(
+          name: svg.formas[i].nome,
+          startTime: Duration.zero,
+          duration: const Duration(seconds: 3),
+          contents: partes[i],
+          position: AnimatedOffset(_center),
+        ),
+    ];
+    // No arquivo, o primeiro desenho fica ATRAS.
+    final g = GroupLayer(
+      name: nome,
+      startTime: at,
+      duration: const Duration(seconds: 3),
+      children: filhos.reversed.toList(),
+      position: AnimatedOffset(_center),
+    );
+    _push(g);
+    return g.id;
   }
 
   /// Insere um icone do Iconify como FORMA vetorial editavel (nunca

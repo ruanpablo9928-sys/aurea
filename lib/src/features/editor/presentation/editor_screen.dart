@@ -117,6 +117,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void _back() {
     final s = _s;
     if (s.adding) {
+      // Do seletor com abas, Voltar volta para a barra do "+".
+      if (_addTab != null) {
+        setState(() => _addTab = null);
+        return;
+      }
       _session.closeAdd();
       return;
     }
@@ -701,7 +706,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         ref.read(editorControllerProvider.notifier).dentroDeGrupo;
 
     // O CONTEUDO DA ZONA E, pela selecao.
-    final Widget conteudo;
+    //
+    // SEM SELECAO E SEM O "+", O PAINEL NAO EXISTE: a barra de adicionar
+    // ficava aberta o tempo todo e comia meia tela de timeline sem
+    // ninguem ter pedido. Ela e o segundo passo do "+", e o toque na
+    // timeline fecha (ver AmTimeline: tocar no vazio fecha o adicionar).
+    final Widget? conteudo;
     String? titulo;
     String? trilha;
     if (panel != null) {
@@ -711,12 +721,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ? ref.watch(editorControllerProvider).name
           : '${ref.watch(editorControllerProvider).name} › ${layer.name}';
     } else if (s.adding) {
-      conteudo = AddLayerPanel(
-        key: ValueKey('adicionar-${_addTab?.name ?? 'padrao'}'),
-        playhead: _playback.time.value,
-        initialTab: _addTab,
-        onClose: _session.closeAdd,
-      );
+      // Primeiro a barra do "+" (o que se pode adicionar); so depois de
+      // escolher e que abre o seletor com abas.
+      conteudo = _addTab == null
+          ? AddToolbar(pro: pro, empty: semCamadas, onTarget: _onAddTarget)
+          : AddLayerPanel(
+              key: ValueKey('adicionar-${_addTab!.name}'),
+              playhead: _playback.time.value,
+              initialTab: _addTab,
+              onClose: () => setState(() => _addTab = null),
+            );
     } else if (targets.length >= 2) {
       conteudo = MultiSelectionPanel(targets: targets, playback: _playback);
     } else if (layer != null) {
@@ -725,13 +739,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         playback: _playback,
         onAction: (action) => _openLayerAction(layer, action),
       );
+    } else if (semCamadas) {
+      conteudo = EstadoVazio(onMidia: () => _onAddTarget(AddTarget.midia));
     } else {
-      conteudo = AddToolbar(
-        pro: pro,
-        empty: semCamadas,
-        onTarget: _onAddTarget,
-      );
+      conteudo = const DicaDoPalco();
     }
+    // O estado vazio e a dica ocupam UMA linha; o resto e painel de verdade.
+    final folhaFina = panel == null && !s.adding && layer == null && targets.length < 2;
 
     return AureaTheme(
       tokens: AureaTokens.dark,
@@ -746,15 +760,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final ws = EditorLayoutMetrics.workspace(constraints.maxHeight);
                 final m = EditorLayoutMetrics.solve(
                   totalHeight: constraints.maxHeight,
                   previewFraction: s.previewFraction,
-                  sheetFraction: s.effectiveSheetFraction,
+                  // A dica e o estado vazio ocupam UMA linha; painel de
+                  // verdade ocupa o nivel que a alca deixou.
+                  sheetFraction: folhaFina && ws > 0
+                      ? 48 / ws
+                      : s.effectiveSheetFraction,
                   previewExpanded: s.previewExpanded,
                   timelineExpanded: s.timelineExpanded,
-                  sheetMayCoverTimeline: s.adding,
+                  sheetVisible: conteudo != null,
+                  sheetMayCoverTimeline: s.adding && _addTab != null,
                 );
-                final ws = EditorLayoutMetrics.workspace(constraints.maxHeight);
                 // AS PECAS, montadas uma vez; o arranjo depende da largura
                 // (Fase 7: acima de 700 pt, timeline e painel lado a lado —
                 // tablet e paisagem).
@@ -783,7 +802,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           onKeyframe: () {
                             if (layer != null) _toggleKeyframe(layer, s);
                           },
-                          onAdd: s.adding ? null : () => _openAdd(),
+                          onAdd: s.adding ? null : _openAdd,
                         );
                 Widget timeline(double alturaTimeline) =>                           RepaintBoundary(
                             child: AmTimeline(
@@ -810,7 +829,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               onKeyframeTap: _onKeyframeTap,
                             ),
                           );
-                Widget folha(double alturaFolha) =>                           ContextSheet(
+                Widget folha(double alturaFolha) => ContextSheet(
                             height: alturaFolha,
                             title: titulo,
                             subtitle: trilha,
@@ -851,12 +870,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                     ],
                                   ),
                                 ),
-                                SizedBox(
-                                  width: 380,
-                                  child: folha(
-                                    constraints.maxHeight - AureaTokens.topBar,
+                                if (conteudo != null)
+                                  SizedBox(
+                                    width: 380,
+                                    child: folha(
+                                      constraints.maxHeight - AureaTokens.topBar,
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ),
@@ -872,7 +892,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           transporte,
                           if (!s.previewExpanded) ...[
                             timeline(m.timeline),
-                            folha(m.sheet),
+                            if (conteudo != null) folha(m.sheet),
                           ],
                         ],
                       ),

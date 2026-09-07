@@ -1,4 +1,5 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
+import 'package:aurea/src/features/editor/presentation/am/am_timeline.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_layout.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
@@ -227,8 +228,15 @@ void main() {
     }
 
     barra('sem selecao');
-    expect(find.byKey(const ValueKey('adicionar-midia')), findsOneWidget, reason: 'E1 sem selecao');
+    // A barra de adicionar so aparece pelo "+": sem selecao o painel fica
+    // fechado e a timeline fica com o espaco.
+    expect(find.byKey(const ValueKey('adicionar-midia')), findsNothing);
     expect(find.byKey(const ValueKey('editor-fab')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('editor-fab')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('adicionar-midia')), findsOneWidget, reason: 'E1 pelo +');
+    await tester.tap(find.byKey(const ValueKey('editor-back')));
+    await tester.pumpAndSettle();
 
     final id = c.read(editorControllerProvider).layers.first.id;
     c.read(selectedLayerProvider.notifier).state = id;
@@ -303,10 +311,13 @@ void main() {
     expect(find.byKey(const ValueKey('acao-alinhar')), findsOneWidget, reason: 'Pro acrescenta');
   });
 
-  testWidgets('E1: Texto cria a camada em um toque; Midia abre o seletor; o + abre adicionar', (tester) async {
+  testWidgets('o + abre a barra; Texto cria em um toque; Midia abre o seletor', (tester) async {
     final c = await openEditor(tester);
     final antes = c.read(editorControllerProvider).layers.length;
 
+    await tester.tap(find.byKey(const ValueKey('editor-fab')));
+    await tester.pumpAndSettle();
+    expect(c.read(editorSessionProvider).adding, isTrue, reason: 'o + e o unico lugar de adicionar');
     await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
     await tester.pumpAndSettle();
     final camadas = c.read(editorControllerProvider).layers;
@@ -315,18 +326,23 @@ void main() {
 
     c.read(selectedLayerProvider.notifier).state = null;
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('adicionar-midia')));
-    await tester.pumpAndSettle();
-    expect(c.read(editorSessionProvider).adding, isTrue);
-    expect(find.byTooltip('Fechar adicionar'), findsOneWidget);
-    await tester.tap(find.byTooltip('Fechar adicionar'));
-    await tester.pumpAndSettle();
-    expect(c.read(editorSessionProvider).adding, isFalse);
-    expect(find.byKey(const ValueKey('adicionar-midia')), findsOneWidget, reason: 'voltou ao E1');
-
     await tester.tap(find.byKey(const ValueKey('editor-fab')));
     await tester.pumpAndSettle();
-    expect(c.read(editorSessionProvider).adding, isTrue, reason: 'o + e o unico lugar de adicionar');
+    await tester.tap(find.byKey(const ValueKey('adicionar-midia')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Fechar adicionar'), findsOneWidget);
+    // Fechar o seletor volta um passo, para a barra do "+".
+    await tester.tap(find.byTooltip('Fechar adicionar'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('adicionar-midia')), findsOneWidget, reason: 'voltou a barra');
+    expect(c.read(editorSessionProvider).adding, isTrue);
+
+    // Tocar no vazio da timeline fecha tudo.
+    final linha = tester.getRect(find.byType(AmTimeline));
+    await tester.tapAt(Offset(linha.left + 20, linha.bottom - 10));
+    await tester.pumpAndSettle();
+    expect(c.read(editorSessionProvider).adding, isFalse, reason: 'a timeline fecha');
+    expect(find.byKey(const ValueKey('adicionar-midia')), findsNothing);
   });
 
   testWidgets('selecao multipla mostra a barra do conjunto', (tester) async {

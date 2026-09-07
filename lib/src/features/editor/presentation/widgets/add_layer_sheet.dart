@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +16,9 @@ import '../../domain/scene3d.dart';
 import '../../domain/element3d.dart';
 import '../../domain/layer.dart';
 import '../../domain/keyframe.dart';
+import '../../../../core/ui/snack.dart';
 import '../../domain/shape.dart';
+import '../../domain/svg_document.dart';
 import '../../domain/shape_library.dart';
 import '../am/points_panel.dart' show editPointsRequestProvider;
 import 'freehand_overlay.dart' show freehandRequestProvider;
@@ -1041,6 +1046,7 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
                 ref.read(editPointsRequestProvider.notifier).state = id;
               }
             }),
+            item(CupertinoIcons.doc_text, 'Arquivo\nSVG', _importarSvg),
             item(CupertinoIcons.textformat, 'Texto', () {
               _fecha();
               _controller.addTextLayer(widget.playhead);
@@ -1062,6 +1068,45 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
           ),
         ],
       ),
+    );
+  }
+
+  /// ARQUIVO SVG: entra como forma editavel, com a cor de cada desenho.
+  Future<void> _importarSvg() async {
+    String? caminho;
+    try {
+      final r = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['svg'],
+      );
+      caminho = r?.files.single.path;
+    } catch (_) {
+      caminho = null;
+    }
+    if (caminho == null || !mounted) return;
+    SvgImportado svg;
+    try {
+      svg = lerSvg(await File(caminho).readAsString());
+    } on SvgException catch (e) {
+      if (mounted) AureaSnack.show(context, e.message);
+      return;
+    } catch (e) {
+      if (mounted) AureaSnack.show(context, 'Nao consegui ler esse SVG.');
+      return;
+    }
+    if (!mounted) return;
+    final nome = caminho
+        .split(RegExp(r'[\\/]'))
+        .last
+        .replaceAll(RegExp(r'\.svg$', caseSensitive: false), '');
+    _controller.addSvgLayers(svg, widget.playhead, nome: nome);
+    _fecha();
+    if (!mounted) return;
+    AureaSnack.show(
+      context,
+      svg.ignorados.isEmpty
+          ? '${svg.formas.length} desenho(s) do SVG, editaveis'
+          : '${svg.formas.length} desenho(s); ficou de fora: ${svg.ignorados.join(', ')}',
     );
   }
 

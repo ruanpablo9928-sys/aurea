@@ -154,6 +154,9 @@ void main() {
       final barriers = find.byType(ModalBarrier).evaluate().length;
       await tester.tap(find.byTooltip('Adicionar camada'));
       await tester.pumpAndSettle();
+      // O "+" abre a barra de adicionar; Midia abre o seletor com abas.
+      await tester.tap(find.byKey(const ValueKey('adicionar-midia')));
+      await tester.pumpAndSettle();
       expect(find.byType(AddLayerPanel), findsOneWidget);
       expect(find.byType(ModalBarrier).evaluate().length, barriers);
       expect(tester.getRect(find.byType(PreviewStage)), preview);
@@ -202,7 +205,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AddLayerPanel), findsNothing);
       expect(tester.getRect(find.byType(PreviewStage)), preview);
-      await tester.tap(find.byTooltip('Adicionar camada'));
+      await tester.tap(find.byKey(const ValueKey('adicionar-forma')));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Circulo'));
       await tester.pumpAndSettle();

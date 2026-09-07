@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +11,7 @@ import '../../domain/angulo.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import 'area_de_arrasto.dart';
 import 'panel_chrome.dart';
 import '../context/parameter_row.dart';
 import '../../application/ui/pro_mode.dart';
@@ -440,17 +440,15 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
         ),
         const SizedBox(height: 4),
         Expanded(
-          child: GestureDetector(
+          child: AreaDeArrasto(
             key: const ValueKey('position-drag-pad'),
-            behavior: HitTestBehavior.opaque,
-            dragStartBehavior: DragStartBehavior.down,
-            onPanStart: (_) {
+            onStart: (_) {
               _dragStart = layer.position.valueAt(
                 layer.localTime(playback.time.value),
               );
               _accum = Offset.zero;
             },
-            onPanUpdate: (d) => _onPadUpdate(d.delta),
+            onUpdate: (_, delta) => _onPadUpdate(delta),
             child: Container(
               decoration: BoxDecoration(
                 color: AmColors.bg.withValues(alpha: 0.45),
@@ -556,12 +554,11 @@ class _PivotControl extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanUpdate: (d) =>
-                controller.editPivot(layer.id, t, pivot + d.delta * 2),
-            onDoubleTap: () => controller.editPivot(layer.id, t, Offset.zero),
+          child: AreaDeArrasto(
             key: const ValueKey('pivot-drag-pad'),
+            onUpdate: (_, delta) =>
+                controller.editPivot(layer.id, t, pivot + delta * 2),
+            onDoubleTap: () => controller.editPivot(layer.id, t, Offset.zero),
             child: Container(
               decoration: BoxDecoration(
                 color: AmColors.bg.withValues(alpha: 0.45),
@@ -681,15 +678,16 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final radius = math.min(size.width, size.height) / 2 - 16;
-        return GestureDetector(
+        return AreaDeArrasto(
           key: const ValueKey('rotation-dial'),
-          behavior: HitTestBehavior.opaque,
-          onPanDown: (d) => _pousar(d.localPosition, size, local),
-          onPanStart: (d) => _comecar(d.localPosition, size, local),
-          onPanUpdate: (d) => _arrastar(d.localPosition, size, t),
-          onPanEnd: (_) => _terminar(),
-          onPanCancel: _terminar,
-          onTapDown: (d) => _tocar(d.localPosition, size, t, deg),
+          onStart: (p) {
+            _pousar(p, size, local);
+            _comecar(p, size, local);
+          },
+          onUpdate: (p, _) => _arrastar(p, size, t),
+          onEnd: _terminar,
+          // Toque seco: o angulo tocado, na volta em que a camada esta.
+          onTap: (p) => _tocar(p, size, t, deg),
           child: Stack(
             alignment: Alignment.center,
             children: [

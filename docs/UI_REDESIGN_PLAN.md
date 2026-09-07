@@ -360,3 +360,22 @@ Tudo do documento foi implementado no lugar, fase a fase, com a suíte verde ao 
 ### Como conferir
 
 `flutter analyze` limpo (fora dos pacotes de terceiros); `flutter test` verde; capturas em `C:\Users\SnyX\Downloads\Aurea-UI\` geradas por `test/zz_ui_screenshot_test.dart` (não versionado).
+
+---
+
+## 11. Depois dos testadores (2026-09-07, beta 52)
+
+Relatos: "a barra de adicionar fica aparecendo sozinha", "a rotação não gira", "aceite SVG", "abrir projetos XML sem erro" e, o mais importante, **"os testadores não estão conseguindo editar"**.
+
+| O que mudou | Por quê |
+|---|---|
+| **Tocar no objeto no palco seleciona** (e o vazio tira a seleção). | Era a causa de "não consigo editar": só a barrinha da timeline selecionava, e ninguém descobre isso sozinho. |
+| **Alças no palco**: a bolinha de baixo redimensiona, a de cima gira; arrastar move. A pinça continua valendo. | Um dedo é como se edita num celular. Sem alça, redimensionar exigia achar a categoria certa. |
+| **A barra de adicionar só aparece pelo "+"**; qualquer toque na timeline fecha. Sem seleção, o painel é uma linha de dica e a timeline fica com o espaço. | A barra ocupava metade da tela o tempo todo sem ninguém ter pedido. |
+| **Dial e pads ganham o gesto** (`AreaDeArrasto` aceita o ponteiro na hora). | O reconhecedor de rolagem aceita com 18 px e o de arrasto livre com 36: a rolagem ganhava sempre, e o dial "não girava". |
+| **As 4 dicas de primeiro uso** passam a ensinar o palco. | Ensinavam a timeline, que é o caminho difícil. |
+| **SVG**: arquivo entra como forma editável (um desenho por camada, com a cor de cada um), pela trilha de adicionar. | O app lia path data (ícones), não lia arquivo. |
+| **Cena em XML**: importador reescrito para o formato real (`cena_xml_import.dart`). | O antigo lia 10 de 199 keyframes e achatava os grupos; agora são 24 camadas de topo, 153 keyframes, grupos, pais, olho fechado, caminhos editáveis e fade virando opacidade. |
+| Barra da timeline **encolhe o conteúdo** em vez de estourar em clipes curtos. | Projetos importados têm pedaços de 266 ms. |
+
+O que o importador de cena ainda deixa de fora, e diz na hora: mídia do aparelho de origem (`content://`), áudio, cor animada de preenchimento, e os efeitos sem equivalente (`transform2`, `squeeze`, `textspacing`, `pinchbulge`).

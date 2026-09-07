@@ -408,7 +408,17 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       });
     }
 
-    return SizedBox(
+    return Listener(
+      behavior: HitTestBehavior.deferToChild,
+      // "Clicar na timeline fecha essa e qualquer outra aba": o toque
+      // aqui fecha a barra de adicionar, sem disputar o gesto com a
+      // rolagem, o arrasto da barra ou o encaixe do cabecote.
+      onPointerDown: (_) {
+        if (ref.read(editorSessionProvider).adding) {
+          ref.read(editorSessionProvider.notifier).closeAdd();
+        }
+      },
+      child: SizedBox(
       height: widget.height,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -801,6 +811,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
             ),
           );
         },
+      ),
       ),
     );
   }
@@ -1341,12 +1352,15 @@ class _AmLayerRow extends ConsumerWidget {
     child: Stack(
       clipBehavior: Clip.none,
       children: [
+        // TOCAR NO VAZIO DA TIMELINE FECHA TUDO: tira a selecao (e com ela
+        // as ferramentas da camada) e fecha a barra de adicionar.
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
               ref.read(multiSelectProvider.notifier).state = const {};
               ref.read(selectedLayerProvider.notifier).state = null;
+              ref.read(editorSessionProvider.notifier).closeAdd();
             },
           ),
         ),
@@ -1708,11 +1722,16 @@ class _AmBarState extends ConsumerState<_AmBar> {
                 // sem elas, achar o corte e tatear.
                 child: _ClipPreview(
                   layer: layer,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  // CLIPE CURTO: um pedaco de 266 ms tem 20 px de barra. O
+                  // conteudo some por ordem de importancia em vez de
+                  // estourar a linha (o projeto importado esta cheio deles).
+                  child: ClipRect(
+                    child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: width < 46 ? 3 : 12),
                     child: Row(
                       children: [
                         // ICONE DO TIPO na ponta: reconhecer sem ler.
+                        if (width > 28)
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: Icon(
@@ -1723,7 +1742,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                             ),
                           ),
                         ),
-                        if (locked)
+                        if (locked && width > 70)
                           const Padding(
                             padding: EdgeInsets.only(right: 5),
                             child: Icon(
@@ -1732,6 +1751,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                               color: Colors.white70,
                             ),
                           ),
+                        if (width > 52)
                         Flexible(
                           child: Text(
                             layer.name,
@@ -1744,7 +1764,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                             ),
                           ),
                         ),
-                        if (layer.hasAnimation) ...[
+                        if (layer.hasAnimation && width > 120) ...[
                           const SizedBox(width: 6),
                           const Icon(
                             CupertinoIcons.rhombus,
@@ -1754,7 +1774,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                         ],
                         // GRUPO: a contagem de filhos, e o toque duplo
                         // entra.
-                        if (layer is GroupLayer) ...[
+                        if (layer is GroupLayer && width > 100) ...[
                           const SizedBox(width: 6),
                           Container(
                             key: ValueKey('grupo-contagem-${layer.id}'),
@@ -1777,7 +1797,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                           ),
                         ],
                         const Spacer(),
-                        if (!compact && width > 90)
+                        if (!compact && width > 150)
                           const Icon(
                             CupertinoIcons.line_horizontal_3,
                             size: 14,
@@ -1785,6 +1805,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                           ),
                       ],
                     ),
+                  ),
                   ),
                 ),
               ),

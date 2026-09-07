@@ -19,7 +19,7 @@ import '../application/reference_rebuild_assets.dart';
 import '../application/dnyx_remix_assets.dart';
 import '../application/vhf_motion_assets.dart';
 import '../application/thumbnail_service.dart';
-import '../domain/alight_xml_import.dart';
+import '../domain/cena_xml_import.dart';
 import '../domain/abyss_cinematic_template.dart';
 import '../domain/colina_tv_template.dart';
 import '../domain/deriva_template.dart';
@@ -217,24 +217,24 @@ class ProjectsTab extends ConsumerWidget {
         .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
-  /// PRESET DO ALIGHT MOTION (XML): le o que reconhece, mostra o balanco
-  /// (camadas, keyframes, o que ficou de fora) e abre como projeto novo.
-  Future<void> _importarAlight(BuildContext context, WidgetRef ref) async {
+  /// CENA EM XML: le o que reconhece, mostra o balanco (camadas,
+  /// keyframes, o que ficou de fora) e abre como projeto novo.
+  Future<void> _importarCena(BuildContext context, WidgetRef ref) async {
     final r = await FilePicker.platform.pickFiles(type: FileType.any);
     final caminho = r?.files.single.path;
     if (caminho == null || !context.mounted) return;
     final nomeArquivo = caminho.split(RegExp(r'[\\/]')).last;
-    AlightImportResult resultado;
+    CenaXmlResult resultado;
     try {
       final texto = await File(caminho).readAsString();
-      resultado = importAlightXml(
+      resultado = importarCenaXml(
         texto,
         nome: nomeArquivo.replaceAll(
           RegExp(r'\.xml$', caseSensitive: false),
           '',
         ),
       );
-    } on AlightImportException catch (e) {
+    } on CenaXmlException catch (e) {
       if (!context.mounted) return;
       await _aviso(context, 'Nao deu para importar', e.message);
       return;
@@ -247,7 +247,7 @@ class ProjectsTab extends ConsumerWidget {
     final abrir = await showCupertinoDialog<bool>(
       context: context,
       builder: (c) => CupertinoAlertDialog(
-        title: const Text('Preset do Alight'),
+        title: const Text('Cena importada'),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
@@ -276,7 +276,7 @@ class ProjectsTab extends ConsumerWidget {
         .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
   }
 
-  static String _resumoDaImportacao(AlightImportResult r) {
+  static String _resumoDaImportacao(CenaXmlResult r) {
     final b = StringBuffer()
       ..write('${r.layersImported} camadas e ')
       ..write('${r.keyframesImported} keyframes reconhecidos.');
@@ -412,7 +412,7 @@ class ProjectsTab extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    // Template e preset do Alight sao estudio.
+                    // Template e cena em XML sao estudio.
                     if (completo && !apertado) ...[
                       const SizedBox(width: 10),
                       _IconeQuadrado(
@@ -423,8 +423,8 @@ class ProjectsTab extends ConsumerWidget {
                       const SizedBox(width: 10),
                       _IconeQuadrado(
                         icon: CupertinoIcons.arrow_down_doc,
-                        tooltip: 'Importar preset do Alight (XML)',
-                        onTap: () => _importarAlight(context, ref),
+                        tooltip: 'Importar cena (XML)',
+                        onTap: () => _importarCena(context, ref),
                       ),
                     ],
                   ],
@@ -458,8 +458,8 @@ class ProjectsTab extends ConsumerWidget {
                                 CupertinoIcons.arrow_down_doc,
                                 size: 17,
                               ),
-                              label: const Text('Preset XML'),
-                              onPressed: () => _importarAlight(context, ref),
+                              label: const Text('Abrir XML'),
+                              onPressed: () => _importarCena(context, ref),
                             ),
                           ),
                         ),
