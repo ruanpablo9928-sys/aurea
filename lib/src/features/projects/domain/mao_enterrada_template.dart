@@ -24,13 +24,21 @@ import 'textura_procedural.dart';
 ///      esta;
 ///   4. QUATRO CAMERAS com corte seco, uma delas em contraluz direto.
 ///
-/// POR QUE A MAO NAO E FEITA DE PECAS. A primeira versao montava cada
-/// dedo com tres tubos e uma bola em cada junta. Parecia certo no papel
-/// e saiu errado na tela: onde duas superficies se atravessam, um
+/// POR QUE CADA DEDO E UMA PECA SO. A primeira versao montava cada dedo
+/// com tres tubos e uma bola em cada junta. Parecia certo no papel e
+/// saiu errado na tela: onde duas superficies se atravessam, um
 /// desenhador que ordena por profundidade nao tem como decidir quem vem
-/// antes, e aparecem lascas escuras em toda junta. Varrer um tubo so ao
-/// longo do dedo inteiro, engrossando nos nos, nao tem intersecao
-/// nenhuma — e de quebra fica mais parecido com um dedo.
+/// antes, e apareciam lascas escuras em TODA junta — quinze por mao.
+/// Varrer um tubo so ao longo do dedo inteiro, engrossando nos nos,
+/// elimina essas quinze — e de quebra fica mais parecido com um dedo.
+///
+/// SOBRAM SEIS: os cinco dedos e o polegar entram na palma, e la eles se
+/// atravessam de verdade. Isso nao tem como evitar sem recortar
+/// geometria, e nao precisa: o motor de GPU tem buffer de profundidade e
+/// resolve por pixel. Quem ve a lasca e o pintor de CPU, que e a reserva
+/// — e e por isso que o dump visual mostra um degrau no dedo anelar que
+/// o aparelho nao mostra. Comecar o dedo mais fundo na palma nao
+/// resolve; foi tentado.
 
 const maoFps = 30;
 const maoDuracao = Duration(seconds: 15);

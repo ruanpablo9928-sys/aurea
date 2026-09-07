@@ -103,14 +103,15 @@ void main() {
     expect(mao + dunas + ceu, lessThan(15000));
   });
 
-  test('a mao e uma peca so: nenhuma juncao de superficies', () {
-    // A versao de pecas encaixadas deixava lascas escuras em cada junta,
-    // porque um desenhador que ordena por profundidade nao resolve
-    // intersecao. A malha de agora e varrida, e o teste que segura isso
-    // e o numero de primitivas: um material, uma peca.
+  test('a mao sai numa primitiva so, sem juntas por dentro dos dedos', () {
+    // A versao de pecas encaixadas deixava lasca escura em cada junta de
+    // falange — quinze por mao — porque quem ordena por profundidade nao
+    // resolve intersecao. Com o dedo varrido de uma vez, essas quinze
+    // somem. As seis que sobram (dedo entrando na palma) sao resolvidas
+    // pelo buffer de profundidade da GPU.
     final asset = maoMalha().asset('Mao');
     final primitivas = asset.data['primitives'] as List;
-    expect(primitivas.length, 1);
+    expect(primitivas.length, 1, reason: 'um material, uma primitiva');
   });
 
   test('o ceu tem degrade de verdade, e o sol onde a luz diz', () {
