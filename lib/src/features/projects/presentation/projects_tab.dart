@@ -671,6 +671,16 @@ class ProjectsTab extends ConsumerWidget {
             ),
           ),
           _Linha(
+            key: const ValueKey('inicio-tutorial-cena-completa'),
+            icon: CupertinoIcons.cube_box,
+            texto: 'Tutorial em vídeo: cena 3D com modelos e câmeras',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const TutorialScreen(id: 'cena-completa'),
+              ),
+            ),
+          ),
+          _Linha(
             icon: CupertinoIcons.exclamationmark_bubble,
             texto: 'Versao beta: achou um problema? Conte pra gente',
             onTap: () => showReportSheet(context),

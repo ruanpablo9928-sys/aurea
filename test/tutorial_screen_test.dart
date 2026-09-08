@@ -33,23 +33,35 @@ void main() {
     expect(t.video, 'assets/tutoriais/x.mp4');
   });
 
-  test('o tutorial gravado esta no pacote e faz sentido', () async {
-    final t = await Tutorial.carregar('cena3d');
-    expect(t.cenas.length, greaterThanOrEqualTo(10));
-    expect(t.duracao, greaterThan(30));
-    var anterior = -1.0;
-    for (final c in t.cenas) {
-      expect(c.inicio, greaterThanOrEqualTo(anterior));
-      expect(c.fim, greaterThan(c.inicio));
-      anterior = c.inicio;
-    }
-    expect(t.cenas.first.texto, contains('Novo projeto'));
-    expect(t.cenas.any((c) => c.texto.contains('Câmera')), isTrue);
-    // O video e o poster existem como assets.
-    final video = await rootBundle.load(t.video);
-    expect(video.lengthInBytes, greaterThan(100 * 1024));
-    final poster = await rootBundle.load(t.poster);
-    expect(poster.lengthInBytes, greaterThan(5 * 1024));
+  for (final id in ['cena3d', 'cena-completa']) {
+    test('o tutorial $id esta no pacote e faz sentido', () async {
+      final t = await Tutorial.carregar(id);
+      expect(t.cenas.length, greaterThanOrEqualTo(10));
+      expect(t.duracao, greaterThan(30));
+      var anterior = -1.0;
+      for (final c in t.cenas) {
+        expect(c.inicio, greaterThanOrEqualTo(anterior));
+        expect(c.fim, greaterThan(c.inicio));
+        anterior = c.inicio;
+      }
+      expect(t.cenas.first.texto, contains('projeto'));
+      expect(t.cenas.any((c) => c.texto.contains('âmera')), isTrue);
+      // O video e o poster existem como assets.
+      final video = await rootBundle.load(t.video);
+      expect(video.lengthInBytes, greaterThan(100 * 1024));
+      final poster = await rootBundle.load(t.poster);
+      expect(poster.lengthInBytes, greaterThan(5 * 1024));
+    });
+  }
+
+  test('o tutorial dos modelos ensina o que promete', () async {
+    final t = await Tutorial.carregar('cena-completa');
+    final tudo = t.cenas.map((c) => c.texto).join(' ');
+    expect(tudo, contains('GLB'), reason: 'importar modelo');
+    expect(tudo, contains('keyframe'), reason: 'animacao');
+    expect(tudo, contains('Nova câmera'), reason: 'segunda camera');
+    expect(tudo, contains('corte'), reason: 'troca de camera no tempo');
+    expect(tudo, contains('Olhar para'), reason: 'a camera segue o objeto');
   });
 
   testWidgets('sem player, a tela mostra os passos e diz que o video nao abriu', (

@@ -1,28 +1,40 @@
 """
-MONTA O TUTORIAL DA CENA 3D a partir dos quadros que o gravador tirou.
+MONTA UM TUTORIAL a partir dos quadros que o gravador tirou.
 
-Le build/tutorial/cena3d/{quadros.json, cenas.json, quadros/*.png}, desenha
-o dedo onde houve toque e a faixa de legenda embaixo de cada quadro, e
-chama o ffmpeg (o embutido do imageio_ffmpeg) para fazer:
+Le build/tutorial/<id>/{quadros.json, cenas.json, quadros/*.png}, desenha o
+dedo onde houve toque e a faixa de legenda embaixo de cada quadro, e chama
+o ffmpeg (o embutido do imageio_ffmpeg) para fazer:
 
-  - Downloads/Aurea-Tutoriais/tutorial-cena3d.mp4   (780 x 1908, para o grupo)
-  - assets/tutoriais/cena3d.mp4                      (480 x 1174, para o app)
-  - assets/tutoriais/cena3d.jpg                      (poster)
-  - assets/tutoriais/cena3d.json                     (as cenas, com inicio e fim)
-  - Downloads/Aurea-Tutoriais/tutorial-cena3d.srt
+  - Downloads/Aurea-Tutoriais/tutorial-<id>.mp4  (tamanho cheio, para o grupo)
+  - assets/tutoriais/<id>.mp4                    (480 px de largura, no app)
+  - assets/tutoriais/<id>.jpg                    (poster)
+  - assets/tutoriais/<id>.json                   (as cenas, com inicio e fim)
+  - Downloads/Aurea-Tutoriais/tutorial-<id>.srt
 
-Rodar, na raiz do projeto:  python montar_tutorial_cena3d.py
+Rodar, na raiz do projeto:
+
+  python test/tutoriais/montar_tutorial.py                 # cena3d
+  python test/tutoriais/montar_tutorial.py cena-completa
 """
 import json
 import os
 import subprocess
+import sys
 import textwrap
 
 import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
-RAIZ = r'C:\Users\SnyX\Documents\Projetos - Claude\Aurea'
-ENTRADA = os.path.join(RAIZ, 'build', 'tutorial', 'cena3d')
+RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Qual tutorial montar, e o nome dele na tela do app.
+TITULOS = {
+    'cena3d': 'Cena 3D',
+    'cena-completa': 'Cena 3D completa',
+}
+ID = sys.argv[1] if len(sys.argv) > 1 else 'cena3d'
+TITULO = TITULOS.get(ID, ID)
+ENTRADA = os.path.join(RAIZ, 'build', 'tutorial', ID)
 MONTADO = os.path.join(ENTRADA, 'montado')
 SAIDA = r'C:\Users\SnyX\Downloads\Aurea-Tutoriais'
 ASSETS = os.path.join(RAIZ, 'assets', 'tutoriais')
@@ -55,6 +67,35 @@ for i, c in enumerate(cenas):
 fonte_legenda = ImageFont.truetype(FONTE, 34)
 fonte_passo = ImageFont.truetype(FONTE, 22)
 
+# A FONTE DO APP NAO TEM SETA.
+#
+# AureaMotionSans e uma fonte de texto latino: "->", "<-" e o "tres
+# pontinhos na vertical" do menu sairam como quadradinhos na primeira
+# montagem. Esses poucos caracteres sao desenhados com a fonte de
+# simbolos do sistema, do tamanho da linha; o resto continua na fonte
+# do app. Sem a fonte de simbolos, viram os equivalentes em ASCII.
+SIMBOLOS = set('→←↑↓›‹⋮·×—')
+SUBSTITUTOS = {'→': '>', '←': '<', '›': '>', '‹': '<', '⋮': ':', '·': '-', '—': '-', '×': 'x'}
+try:
+    fonte_simbolo = ImageFont.truetype(r'C:\Windows\Fonts\seguisym.ttf', 32)
+except OSError:
+    fonte_simbolo = None
+
+
+def escrever(d, xy, texto, cor):
+    """Escreve a linha, trocando de fonte nos simbolos que faltam."""
+    x, y = xy
+    for ch in texto:
+        if ch in SIMBOLOS:
+            if fonte_simbolo is None:
+                ch = SUBSTITUTOS.get(ch, '?')
+            else:
+                d.text((x, y + 2), ch, font=fonte_simbolo, fill=cor)
+                x += d.textlength(ch, font=fonte_simbolo)
+                continue
+        d.text((x, y), ch, font=fonte_legenda, fill=cor)
+        x += d.textlength(ch, font=fonte_legenda)
+
 
 def compor(caminho, dedo, cena):
     quadro = Image.open(caminho).convert('RGBA')
@@ -78,7 +119,7 @@ def compor(caminho, dedo, cena):
     linhas = textwrap.wrap(cena['texto'], width=40)[:4]
     y = h + 60
     for linha in linhas:
-        d.text((32, y), linha, font=fonte_legenda, fill=BRANCO)
+        escrever(d, (32, y), linha, BRANCO)
         y += 40
     return tela
 
@@ -104,30 +145,31 @@ def ffmpeg(*args):
     subprocess.run(cmd, check=True, cwd=MONTADO)
 
 
-grande = os.path.join(SAIDA, 'tutorial-cena3d.mp4')
+grande = os.path.join(SAIDA, f'tutorial-{ID}.mp4')
 ffmpeg('-f', 'concat', '-safe', '0', '-i', 'concat.txt',
        '-vf', 'fps=24,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium',
        '-crf', '21', '-movflags', '+faststart', grande)
 
-pequeno = os.path.join(ASSETS, 'cena3d.mp4')
+pequeno = os.path.join(ASSETS, f'{ID}.mp4')
 ffmpeg('-i', grande, '-vf', 'scale=480:-2,format=yuv420p', '-c:v', 'libx264',
        '-preset', 'medium', '-crf', '27', '-movflags', '+faststart', pequeno)
 
 # O poster: o primeiro quadro do Estudio (a cena 4, o tour), reduzido.
 poster_idx = next((i for i, q in enumerate(quadros) if q['cena'] == 4), 0)
-Image.open(os.path.join(MONTADO, f'{poster_idx:04d}.png')).convert('RGB') \
-    .resize((480, int(480 * (1688 + FAIXA) / 780))) \
-    .save(os.path.join(ASSETS, 'cena3d.jpg'), quality=82)
+poster = Image.open(os.path.join(MONTADO, f'{poster_idx:04d}.png')).convert('RGB')
+poster.resize((480, round(480 * poster.height / poster.width))) \
+    .save(os.path.join(ASSETS, f'{ID}.jpg'), quality=82)
 
+primeiro = Image.open(os.path.join(MONTADO, '0000.png'))
 json.dump(
     {
-        'titulo': 'Cena 3D',
+        'titulo': TITULO,
         'duracao': round(duracao, 3),
-        'largura': 780,
-        'altura': 1688 + FAIXA,
+        'largura': primeiro.width,
+        'altura': primeiro.height,
         'cenas': cenas,
     },
-    open(os.path.join(ASSETS, 'cena3d.json'), 'w', encoding='utf-8'),
+    open(os.path.join(ASSETS, f'{ID}.json'), 'w', encoding='utf-8'),
     ensure_ascii=False,
     indent=1,
 )
@@ -141,10 +183,10 @@ def srt(t):
     return f'{h:02d}:{m:02d}:{s:02d},{ms:03d}'
 
 
-with open(os.path.join(SAIDA, 'tutorial-cena3d.srt'), 'w', encoding='utf-8') as f:
+with open(os.path.join(SAIDA, f'tutorial-{ID}.srt'), 'w', encoding='utf-8') as f:
     for c in cenas:
         f.write(f"{c['n']}\n{srt(c['inicio'])} --> {srt(c['fim'])}\n{c['texto']}\n\n")
 
-print('quadros:', len(quadros), '| cenas:', total, '| duracao: %.1f s' % duracao)
-for caminho in (grande, pequeno, os.path.join(ASSETS, 'cena3d.jpg')):
+print(ID, '| quadros:', len(quadros), '| cenas:', total, '| duracao: %.1f s' % duracao)
+for caminho in (grande, pequeno, os.path.join(ASSETS, f'{ID}.jpg')):
     print(f'{os.path.getsize(caminho) / 1e6:6.2f} MB  {caminho}')

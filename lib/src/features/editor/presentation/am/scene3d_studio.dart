@@ -1092,18 +1092,33 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                 setState(() => _dica = 0);
               },
             ),
-            // O TUTORIAL EM VIDEO: a gravacao do proprio app fazendo uma
-            // cena do zero — cubo, animacao, duas cameras, corte.
+            // OS TUTORIAIS EM VIDEO: gravacoes do proprio app montando uma
+            // cena do zero. O primeiro com um cubo; o segundo com os
+            // modelos, a animacao e os cortes de camera.
             LinhaDoEstudio(
               key: const ValueKey('mais-tutorial'),
               icone: CupertinoIcons.play_rectangle,
-              titulo: 'Tutorial em vídeo (1 min e meio)',
+              titulo: 'Tutorial: primeira cena 3D (1 min)',
               onTap: () {
                 Navigator.pop(ctx);
                 _playback.pause();
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const TutorialScreen(id: 'cena3d'),
+                  ),
+                );
+              },
+            ),
+            LinhaDoEstudio(
+              key: const ValueKey('mais-tutorial-completo'),
+              icone: CupertinoIcons.cube_box,
+              titulo: 'Tutorial: modelos, animação e câmeras (1min24)',
+              onTap: () {
+                Navigator.pop(ctx);
+                _playback.pause();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TutorialScreen(id: 'cena-completa'),
                   ),
                 );
               },

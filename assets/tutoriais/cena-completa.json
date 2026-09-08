@@ -1,0 +1,122 @@
+{
+ "titulo": "Cena 3D completa",
+ "duracao": 84.076,
+ "largura": 780,
+ "altura": 1908,
+ "cenas": [
+  {
+   "n": 1,
+   "texto": "Novo projeto, formato 16:9 — o de cinema.",
+   "inicio": 0.0,
+   "fim": 4.28
+  },
+  {
+   "n": 2,
+   "texto": "Aba Objeto → Cena 3D, e o menu da camada abre o Estúdio.",
+   "inicio": 4.28,
+   "fim": 9.39
+  },
+  {
+   "n": 3,
+   "texto": "Em + → Objeto 3D está o importador: GLB, glTF, OBJ ou FBX. Escolha o modelo e, junto, o .mtl e a textura.",
+   "inicio": 9.39,
+   "fim": 16.24
+  },
+  {
+   "n": 4,
+   "texto": "O modelo entra com a textura dele. Focar enquadra o que está selecionado.",
+   "inicio": 16.24,
+   "fim": 19.58
+  },
+  {
+   "n": 5,
+   "texto": "Agora a árvore, pelo mesmo caminho: uma cena tem quantos modelos você quiser.",
+   "inicio": 19.58,
+   "fim": 26.31
+  },
+  {
+   "n": 6,
+   "texto": "Com Mover, o X afasta a árvore do personagem — o valor entra digitado, sem depender da mira.",
+   "inicio": 26.31,
+   "fim": 31.08
+  },
+  {
+   "n": 7,
+   "texto": "Uma luz de ponto: + → Luz. A barra de baixo passa a ser a da luz — intensidade e sombras.",
+   "inicio": 31.08,
+   "fim": 35.96
+  },
+  {
+   "n": 8,
+   "texto": "Animar: selecione o astronauta na lista da cena (menu ⋮ → Cena).",
+   "inicio": 35.96,
+   "fim": 40.35
+  },
+  {
+   "n": 9,
+   "texto": "Com Auto-key ligado, o tempo em 3 s e o giro Y em 180: o keyframe nasce sozinho, e o início fica guardado.",
+   "inicio": 40.35,
+   "fim": 46.34
+  },
+  {
+   "n": 10,
+   "texto": "Arraste o tempo: o personagem gira entre os dois keyframes.",
+   "inicio": 46.34,
+   "fim": 49.54
+  },
+  {
+   "n": 11,
+   "texto": "Câmera → Nova câmera. Ela nasce olhando para onde a vista está agora.",
+   "inicio": 49.54,
+   "fim": 53.44
+  },
+  {
+   "n": 12,
+   "texto": "Arraste no palco para escolher o enquadramento dela.",
+   "inicio": 53.44,
+   "fim": 55.83
+  },
+  {
+   "n": 13,
+   "texto": "A barra de baixo é sempre a do que está selecionado. Escolha a câmera na lista da cena para ver a barra dela.",
+   "inicio": 55.83,
+   "fim": 60.42
+  },
+  {
+   "n": 14,
+   "texto": "Olhar para → o astronauta: a câmera passa a seguir o personagem, mesmo que ele se mexa.",
+   "inicio": 60.42,
+   "fim": 64.52
+  },
+  {
+   "n": 15,
+   "texto": "Trocar de câmera é um corte no instante em que você toca: em 1,5 s, a primeira câmera.",
+   "inicio": 64.52,
+   "fim": 68.5
+  },
+  {
+   "n": 16,
+   "texto": "Em 3 s, de volta para a segunda: dois cortes, uma cena que respira.",
+   "inicio": 68.5,
+   "fim": 72.48
+  },
+  {
+   "n": 17,
+   "texto": "Arraste o tempo do começo ao fim: o corte acontece sozinho, na hora marcada.",
+   "inicio": 72.48,
+   "fim": 76.42
+  },
+  {
+   "n": 18,
+   "texto": "← volta para o editor. A cena 3D é uma camada como as outras: dê o play.",
+   "inicio": 76.42,
+   "fim": 81.576
+  },
+  {
+   "n": 19,
+   "texto": "Daqui em diante é edição normal: texto, música, efeitos — e exportar.",
+   "inicio": 81.576,
+   "fim": 84.076
+  }
+ ]
+}
