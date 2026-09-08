@@ -130,13 +130,21 @@ SENHA_DE_MODERACAO=SUA_SENHA node aviso.mjs "Estamos resolvendo um bug na export
 ```
 
 Opções: `--nivel info|atencao|problema` (a cor), `--link https://...`
-("Saiba mais"), `--horas 12` (some sozinho). Para tirar do ar:
-`node aviso.mjs --apagar`. Em curl, é um `PUT /aviso` com o cabeçalho
-`x-moderacao: SUA_SENHA` e o corpo `{"texto": "...", "nivel": "problema"}`.
+("Saiba mais"), `--horas 12` (some sozinho), `--somar` (põe **mais um**
+embaixo em vez de trocar, até três no ar) e `--popup` (além da faixa,
+abre uma janela na primeira vez que o app abrir). Para tirar do ar:
+`node aviso.mjs --apagar`. Em curl, é um `PUT /aviso` (ou `POST`, para
+somar) com o cabeçalho `x-moderacao: SUA_SENHA` e o corpo
+`{"texto": "...", "nivel": "problema"}`.
 
 Cada aviso tem um id: quem fechar um aviso não vê aquele de novo, mas vê
 o próximo. Publicar o mesmo texto duas vezes gera dois ids — e quem já
 tinha fechado o primeiro vê o segundo.
+
+**O aparelho que ainda não atualizou lê só o primeiro.** Vários avisos e
+o pop-up chegaram no app 1.6.1; antes disso o app pede o mesmo endereço e
+usa só o campo `aviso`. Enquanto o beta antigo estiver espalhado, o
+recado que todo mundo precisa ver vai no primeiro da lista — ou sozinho.
 
 ## O que foi criado, com os nomes certos
 
@@ -169,8 +177,10 @@ nome. É o que KV faz melhor: 100 mil leituras por dia na camada gratuita.
 | `POST /post` | com conta, com limite | Aceita um post depois dos portões. |
 | `DELETE /post/:id` | o dono, ou a senha | Tira um post do mural. |
 | `POST /midia`, `GET /midia/:id` | com conta | Sobe e serve imagem, vídeo e projeto. |
-| `GET /aviso` | qualquer um | O aviso ao vivo que a Início mostra (ou `null`). |
-| `PUT /aviso`, `DELETE /aviso` | só com a senha | Escreve e apaga o aviso ao vivo. |
+| `GET /aviso` | qualquer um | Os avisos ao vivo (`avisos`, lista) e o primeiro solto (`aviso`, para apps antigos). |
+| `PUT /aviso` | só com a senha | Troca tudo por um aviso. |
+| `POST /aviso` | só com a senha | Põe mais um aviso embaixo (até 3 no ar). |
+| `DELETE /aviso`, `DELETE /aviso/:id` | só com a senha | Apaga todos, ou um. |
 | `POST /transcricao` | com conta, com cota | Transcreve um áudio na nuvem (Groq Whisper). Ver [`transcricao-na-nuvem.md`](transcricao-na-nuvem.md). |
 | `GET /transcricao/cota` | com conta | Quanto da cota de transcrição do dia ainda resta. |
 

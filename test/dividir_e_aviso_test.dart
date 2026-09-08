@@ -59,52 +59,83 @@ void main() {
     );
   });
 
-  testWidgets('o aviso ao vivo aparece e o X esconde so aquele', (
-    tester,
-  ) async {
+  testWidgets('os avisos empilham, e o X esconde so aquele', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final servico = AvisosService();
     addTearDown(servico.parar);
-    servico.atual.value = const Aviso(
-      id: 'bug-export-1',
-      texto: 'Estamos resolvendo um bug na exportação.',
-      nivel: NivelDoAviso.problema,
-    );
+    servico.todos.value = const [
+      Aviso(
+        id: 'bug-export-1',
+        texto: 'Estamos resolvendo um bug na exportação.',
+        nivel: NivelDoAviso.problema,
+      ),
+      Aviso(
+        id: 'grupo-1',
+        texto: 'Entre no grupo do WhatsApp.',
+        link: 'https://chat.whatsapp.com/exemplo',
+      ),
+    ];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: Column(children: [AvisoAoVivo(servico: servico)])),
       ),
     );
     await tester.pump();
-    expect(find.text('Estamos resolvendo um bug na exportação.'), findsOneWidget);
     expect(find.byKey(const ValueKey('aviso-bug-export-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('aviso-grupo-1')), findsOneWidget);
+    expect(find.textContaining('Saiba mais'), findsOneWidget);
+    // O de cima e o de cima: a ordem da lista e a ordem na tela.
+    expect(
+      tester.getRect(find.byKey(const ValueKey('aviso-bug-export-1'))).top,
+      lessThan(tester.getRect(find.byKey(const ValueKey('aviso-grupo-1'))).top),
+    );
 
-    await tester.tap(find.byKey(const ValueKey('aviso-fechar')));
+    // Fechar um deixa o outro.
+    await tester.tap(find.byKey(const ValueKey('aviso-fechar-bug-export-1')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('aviso-bug-export-1')), findsNothing);
-
-    // O MESMO aviso nao volta; um NOVO (outro id) aparece.
-    servico.atual.value = const Aviso(id: 'bug-export-1', texto: 'de novo');
-    await tester.pump();
-    // O servico so filtra no _mostrar; a tela mostra o que o notifier
-    // tiver. Simula o caminho real: atualizar() passa pelo filtro.
-    servico.atual.value = null;
-    await tester.pump();
-    servico.atual.value = const Aviso(
-      id: 'bug-export-2',
-      texto: 'Resolvido! Atualize o app.',
-    );
-    await tester.pump();
-    expect(find.text('Resolvido! Atualize o app.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('aviso-grupo-1')), findsOneWidget);
   });
 
-  test('um aviso vencido nao aparece; um dispensado tambem nao', () async {
-    SharedPreferences.setMockInitialValues({'aviso.dispensado': 'velho'});
+  testWidgets('um aviso de popup abre a janela, e so uma vez', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final servico = AvisosService();
+    addTearDown(servico.parar);
+    const grupo = Aviso(
+      id: 'grupo-1',
+      texto: 'Entre no grupo do WhatsApp.',
+      link: 'https://chat.whatsapp.com/exemplo',
+      popup: true,
+    );
+    servico.todos.value = const [grupo];
+    servico.emJanela.value = grupo;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: Column(children: [AvisoAoVivo(servico: servico)])),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('aviso-janela-grupo-1')), findsOneWidget);
+    expect(find.text('Entre no grupo do WhatsApp.'), findsWidgets);
+    expect(find.byKey(const ValueKey('aviso-janela-abrir')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('aviso-janela-fechar')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('aviso-janela-grupo-1')), findsNothing);
+    // A faixa continua: quem quiser o link depois, acha la.
+    expect(find.byKey(const ValueKey('aviso-grupo-1')), findsOneWidget);
+    expect(servico.emJanela.value, isNull);
+  });
+
+  test('vencido nao aparece; dispensado tambem nao; e o popup e opcional', () async {
+    SharedPreferences.setMockInitialValues({
+      'aviso.dispensados': ['velho'],
+    });
     final s = AvisosService();
     addTearDown(s.parar);
     // Sem rede o iniciar so le o guardado; aqui nao ha guardado.
     await s.iniciar();
-    expect(s.atual.value, isNull);
+    expect(s.todos.value, isEmpty);
     final vencido = Aviso(
       id: 'x',
       texto: 'ja passou',
@@ -115,5 +146,7 @@ void main() {
     expect(Aviso.deJson({'id': 'a', 'texto': '   '}), isNull);
     expect(Aviso.deJson({'id': 'a', 'texto': 'ok', 'nivel': 'atencao'})!.nivel,
         NivelDoAviso.atencao);
+    expect(Aviso.deJson({'id': 'a', 'texto': 'ok'})!.popup, isFalse);
+    expect(Aviso.deJson({'id': 'a', 'texto': 'ok', 'popup': true})!.popup, isTrue);
   });
 }

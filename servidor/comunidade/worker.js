@@ -17,9 +17,11 @@
  *   DELETE /post/:id       apaga (o dono, ou a senha de moderacao)
  *   POST   /midia          sobe uma imagem, um video ou um projeto
  *   GET    /midia/:id      serve o arquivo
- *   GET    /aviso          o recado ao vivo (ou null)
- *   PUT    /aviso          escreve o recado (senha de moderacao)
- *   DELETE /aviso          apaga o recado (senha de moderacao)
+ *   GET    /aviso          os recados ao vivo (lista, e o primeiro solto)
+ *   PUT    /aviso          troca tudo por um recado (senha de moderacao)
+ *   POST   /aviso          poe mais um recado embaixo (senha de moderacao)
+ *   DELETE /aviso          apaga todos os recados (senha de moderacao)
+ *   DELETE /aviso/:id      apaga um recado (senha de moderacao)
  *   POST   /transcricao    transcreve um audio na nuvem (conta + cota)
  *   GET    /transcricao/cota      quanto da cota do dia ainda resta
  *   GET    /transcricao/registro  o registro tecnico (senha de moderacao)
@@ -115,6 +117,57 @@ function limitesDeTranscricao(env) {
 }
 
 const diaDeHoje = () => new Date().toISOString().slice(0, 10);
+
+// ------------------------------------------------------------ avisos
+
+/// Quantos avisos ficam no ar ao mesmo tempo. Tres ja e uma pilha de
+/// recado na frente do trabalho de quem so queria editar um video.
+const AVISOS_NO_AR = 3;
+const CHAVE_AVISOS = 'aviso:lista';
+
+/**
+ * Os avisos no ar, do mais antigo para o mais novo (a ordem em que
+ * aparecem na tela), ja sem os vencidos.
+ *
+ * A chave antiga (`aviso:atual`, um aviso so) continua sendo lida: um
+ * servidor que ja estava no ar nao perde o recado ao atualizar.
+ */
+async function lerAvisos(env) {
+  let lista = [];
+  const bruto = await env.MURAL.get(CHAVE_AVISOS);
+  if (bruto) {
+    try {
+      const lido = JSON.parse(bruto);
+      if (Array.isArray(lido)) lista = lido;
+    } catch {
+      lista = [];
+    }
+  } else {
+    const antigo = await env.MURAL.get('aviso:atual');
+    if (antigo) {
+      try {
+        lista = [JSON.parse(antigo)];
+      } catch {
+        lista = [];
+      }
+    }
+  }
+  const agora = Date.now();
+  return lista.filter(
+    (a) => a && a.texto && (!a.ate || Date.parse(a.ate) > agora),
+  );
+}
+
+async function gravarAvisos(env, lista) {
+  await env.MURAL.put(CHAVE_AVISOS, JSON.stringify(lista));
+  // A chave antiga acompanha o primeiro: aparelho velho continua vendo
+  // alguma coisa, e nao um recado de semanas atras.
+  if (lista.length === 0) {
+    await env.MURAL.delete('aviso:atual');
+  } else {
+    await env.MURAL.put('aviso:atual', JSON.stringify(lista[0]));
+  }
+}
 
 function segundosAteAmanha() {
   const agora = new Date();
@@ -658,18 +711,35 @@ export default {
     // porque o app pergunta de dez em dez minutos.
 
     if (request.method === 'GET' && caminho === '/aviso') {
-      const bruto = await env.MURAL.get('aviso:atual');
-      return json({ aviso: bruto ? JSON.parse(bruto) : null });
+      const lista = await lerAvisos(env);
+      // `aviso` (um so) continua saindo para os aparelhos antigos, que
+      // nao sabem ler a lista; `avisos` e o que o app novo mostra.
+      return json({ aviso: lista[0] ?? null, avisos: lista });
     }
 
-    if ((request.method === 'PUT' || request.method === 'DELETE') && caminho === '/aviso') {
+    if (
+      ['PUT', 'POST', 'DELETE'].includes(request.method)
+      && (caminho === '/aviso' || caminho.startsWith('/aviso/'))
+    ) {
       const senha = (request.headers.get('x-moderacao') ?? '').trim();
       if (!env.SENHA_DE_MODERACAO || senha !== env.SENHA_DE_MODERACAO) {
         return erro('Sem permissao.', 401);
       }
+      // DELETE /aviso        tira todos do ar
+      // DELETE /aviso/:id    tira so aquele
       if (request.method === 'DELETE') {
-        await env.MURAL.delete('aviso:atual');
-        return json({ ok: true, aviso: null });
+        const id = caminho.slice('/aviso/'.length);
+        if (caminho === '/aviso') {
+          // As DUAS chaves: a lista e a antiga (de um aviso so). Sem
+          // apagar a antiga, o proximo GET a leria de volta e o recado
+          // "apagado" reapareceria.
+          await env.MURAL.delete(CHAVE_AVISOS);
+          await env.MURAL.delete('aviso:atual');
+          return json({ ok: true, avisos: [] });
+        }
+        const restantes = (await lerAvisos(env)).filter((a) => a.id !== id);
+        await gravarAvisos(env, restantes);
+        return json({ ok: true, avisos: restantes });
       }
       let corpo;
       try {
@@ -694,10 +764,18 @@ export default {
         ...(typeof corpo.ate === 'string' && !Number.isNaN(Date.parse(corpo.ate))
           ? { ate: new Date(corpo.ate).toISOString() }
           : {}),
+        // POPUP: alem da faixa, aparece como janela na primeira vez que
+        // o app abrir. E para o recado que nao pode passar batido — e
+        // por isso mesmo se usa pouco.
+        ...(corpo.popup === true ? { popup: true } : {}),
         quando: new Date().toISOString(),
       };
-      await env.MURAL.put('aviso:atual', JSON.stringify(aviso));
-      return json({ ok: true, aviso }, 201);
+      // PUT troca tudo por este; POST poe mais um embaixo.
+      const lista = request.method === 'POST'
+        ? [...(await lerAvisos(env)), aviso].slice(-AVISOS_NO_AR)
+        : [aviso];
+      await gravarAvisos(env, lista);
+      return json({ ok: true, aviso, avisos: lista }, 201);
     }
 
     if (request.method === 'GET' && (caminho === '/feed' || caminho === '/')) {

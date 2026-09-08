@@ -316,6 +316,60 @@ r = await chamar('PUT', '/aviso', {
 });
 confere('aviso curto demais e recusado', r.status, 422);
 
+// MAIS DE UM AVISO: o POST poe outro embaixo, sem tirar o primeiro.
+r = await chamar('POST', '/aviso', {
+  corpo: {
+    texto: 'Entre no grupo do WhatsApp.',
+    nivel: 'info',
+    link: 'https://chat.whatsapp.com/exemplo',
+    popup: true,
+  },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+confere('o POST poe mais um aviso', r.status, 201);
+let avisos = (await r.json()).avisos;
+confere('os dois ficam no ar, na ordem', avisos.length, 2);
+confere('o primeiro continua sendo o primeiro', avisos[0].texto, aviso.texto);
+confere('o novo entra embaixo', avisos[1].texto, 'Entre no grupo do WhatsApp.');
+confere('e pode ser popup', avisos[1].popup, true);
+confere('com link', avisos[1].link, 'https://chat.whatsapp.com/exemplo');
+
+r = await chamar('GET', '/aviso');
+const lidos = await r.json();
+confere('o app novo le a lista', lidos.avisos.length, 2);
+confere(
+  'o app antigo continua lendo um so, o de cima',
+  lidos.aviso.texto,
+  aviso.texto,
+);
+
+r = await chamar('DELETE', `/aviso/${avisos[1].id}`, {
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+confere('da para apagar so um', (await r.json()).avisos.length, 1);
+
+r = await chamar('POST', '/aviso', {
+  corpo: { texto: 'aviso numero dois de novo' },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+r = await chamar('POST', '/aviso', {
+  corpo: { texto: 'aviso numero tres' },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+r = await chamar('POST', '/aviso', {
+  corpo: { texto: 'aviso numero quatro' },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+avisos = (await r.json()).avisos;
+confere('no maximo tres no ar', avisos.length, 3);
+confere('e o mais velho sai', avisos[2].texto, 'aviso numero quatro');
+
+r = await chamar('PUT', '/aviso', {
+  corpo: { texto: 'Voltamos a um recado so.' },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+confere('o PUT troca a lista inteira', (await r.json()).avisos.length, 1);
+
 r = await chamar('DELETE', '/aviso', { cabecalhos: { 'x-moderacao': 'senha-de-teste' } });
 confere('a moderacao apaga o aviso', r.status, 200);
 r = await chamar('GET', '/aviso');

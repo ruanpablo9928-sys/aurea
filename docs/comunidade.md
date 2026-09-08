@@ -108,12 +108,14 @@ publicou duas vezes sem querer.
 
 ## Aviso ao vivo
 
-Uma faixa no alto da Início, com um "!" e um texto que vem do servidor
+Até três faixas no alto da Início, com um "!" e um texto que vem do servidor
 (`GET /aviso`): "estamos resolvendo um bug na exportação". O app pergunta
 ao abrir e de dez em dez minutos, guarda o último aviso para mostrá-lo
 mesmo sem rede, e o X esconde SÓ aquele aviso (pelo id) — o próximo
-aparece de novo. Um aviso pode ter `link` ("Saiba mais") e `ate`, o
-instante em que some sozinho. Quem escreve é a moderação, pelo
+aparece de novo. Um aviso pode ter `link` ("Saiba mais"), `ate` (o
+instante em que some sozinho) e `popup` — este último abre também uma
+janela na primeira vez que o app abrir, uma vez por aviso. Um app
+anterior à 1.6.1 mostra só o primeiro da lista e não abre janela. Quem escreve é a moderação, pelo
 `aviso.mjs` (ver [`servidor-da-comunidade.md`](servidor-da-comunidade.md)).
 
 ## O servidor
