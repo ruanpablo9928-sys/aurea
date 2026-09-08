@@ -642,6 +642,10 @@ EnvironmentKind environmentForPanorama(PanoramaPreset preset) =>
       PanoramaPreset.interior => EnvironmentKind.interior,
     };
 
+/// O indice por id de cada cena, montado sob demanda. Ver
+/// [Scene3D.nodeById].
+final Expando<Map<String, SceneNode>> _indiceDeNos = Expando('nos por id');
+
 /// A CENA: grafo de nos, luzes e orcamento.
 class Scene3D {
   const Scene3D({
@@ -700,12 +704,17 @@ class Scene3D {
   final String? cameraParentId;
 
   /// O no de [id], ou null.
-  SceneNode? nodeById(String id) {
-    for (final n in nodes) {
-      if (n.id == id) return n;
-    }
-    return null;
-  }
+  ///
+  /// Pelo INDICE, montado na primeira busca desta cena. Antes era uma
+  /// varredura da lista inteira — e quem procura o pai e a resolucao de
+  /// transformacao, uma vez por no, por quadro: numa cena de cinquenta
+  /// objetos pendurados, cinquenta vezes cinquenta a cada quadro.
+  ///
+  /// O mapa mora FORA do objeto (a cena tem construtor `const`, entao
+  /// nao pode ganhar campo), preso a ela por identidade; quando a cena e
+  /// trocada, o mapa dela vai junto para o coletor.
+  SceneNode? nodeById(String id) =>
+      (_indiceDeNos[this] ??= {for (final n in nodes) n.id: n})[id];
 
   final List<Light3D> lights;
   final List<SavedView> savedViews;

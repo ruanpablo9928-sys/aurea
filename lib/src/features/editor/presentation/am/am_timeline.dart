@@ -21,6 +21,7 @@ import 'am_colors.dart';
 import 'layer_look.dart';
 import 'clip_preview_painters.dart';
 import 'transition_sheet.dart';
+import '../../application/perfil3d.dart';
 
 // Mais baixas do que eram (46/38): num celular, tres camadas ja
 // tomavam a tela; e o que se le numa barra e nome e keyframe.
@@ -363,7 +364,10 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      Perfil3D.fase('build.timeline', () => _build(context));
+
+  Widget _build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final multi = ref.watch(multiSelectProvider);
@@ -1076,6 +1080,10 @@ class _BeatsPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    Perfil3D.fase('pintar.batidas', () => _pintar(canvas, size));
+  }
+
+  void _pintar(Canvas canvas, Size size) {
     if (beats.isEmpty) return;
     // Uma grade densa tem milhares de riscos; num Path so, uma chamada.
     final caminho = Path();
@@ -1294,6 +1302,10 @@ class _AmRulerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    Perfil3D.fase('pintar.regua', () => _pintar(canvas, size));
+  }
+
+  void _pintar(Canvas canvas, Size size) {
     // DOIS CAMINHOS, DUAS CHAMADAS. Antes era um drawLine por marca, e a
     // regua cobre a linha do tempo INTEIRA: num projeto de tres minutos
     // sao milhares de chamadas gravadas a cada quadro so para desenhar
@@ -2225,6 +2237,10 @@ class _AmBarPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    Perfil3D.fase('pintar.barra.fundo', () => _pintar(canvas, size));
+  }
+
+  void _pintar(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
       Offset.zero & size,
       const Radius.circular(8),
@@ -2278,6 +2294,10 @@ class _AmBarFrentePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    Perfil3D.fase('pintar.barra.frente', () => _pintar(canvas, size));
+  }
+
+  void _pintar(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
       Offset.zero & size,
       const Radius.circular(8),

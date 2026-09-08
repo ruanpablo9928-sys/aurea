@@ -159,7 +159,11 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
         ],
       );
     }
-    if (!_pronto || widget.renderCamera.orthographic) {
+    // SO ENQUANTO A GPU NAO ESTA PRONTA. A camera ortografica ficava
+    // aqui tambem — e era o caminho das vistas fixas do Estudio, que
+    // desenhavam a cena inteira no processador. Agora o motor tem lente
+    // ortografica (camera_ortografica.dart) e elas seguem pela GPU.
+    if (!_pronto) {
       return CustomPaint(
         painter: Scene3DPainter(
           scene: widget.rascunho

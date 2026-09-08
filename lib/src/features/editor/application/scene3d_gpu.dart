@@ -18,6 +18,9 @@ import 'motor3d_modo.dart';
 import 'preview_stats.dart';
 import 'qualidade3d_controller.dart';
 import 'texture_cache.dart';
+import 'perfil3d.dart';
+import 'camera_ortografica.dart';
+import 'fonte_de_malha.dart';
 
 /// O MOTOR 3D EM GPU.
 ///
@@ -180,22 +183,36 @@ class Scene3DGpu {
     if (_capDasTexturas != _receita.texturaMax) {
       _retrocarregarTexturas(onMudou);
     }
-    _sincronizarNos(scene, t, onMudou);
-    _sincronizarLuzes(scene, t);
-    _sincronizarAmbiente(scene, t, onMudou);
+    Perfil3D.fase('sincronia.nos', () => _sincronizarNos(scene, t, onMudou));
+    Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t));
+    Perfil3D.fase(
+      'sincronia.ambiente',
+      () => _sincronizarAmbiente(scene, t, onMudou),
+    );
     _sincronizarNevoa(scene);
     _sincronizarPos(scene, rascunho);
+    Perfil3D.quadro();
   }
 
   /// Camera do motor a partir da camera resolvida do dominio, para uma
   /// area de [tamanho] pixels. O campo de visao do dominio e HORIZONTAL;
   /// o do motor, vertical.
-  fs.PerspectiveCamera camera(RenderCamera cam, ui.Size tamanho) {
+  fs.Camera camera(RenderCamera cam, ui.Size tamanho) {
     final basis = cameraBasis(cam);
     final aspecto = tamanho.height <= 0
         ? 16 / 9
         : tamanho.width / tamanho.height;
-    final fovX = cam.orthographic ? 0.6 : cam.fovRadians;
+    // VISTA FIXA (Frente, Topo, Lado): lente ortografica de verdade, na
+    // GPU. Ate aqui ela nao existia no motor e a vista inteira caia no
+    // pintor de processador — a travada que a bancada mediu em ate 44 ms
+    // por quadro.
+    if (cam.orthographic) {
+      return cameraOrtograficaDoMotor(
+        cam,
+        tamanho.height <= 0 ? 700 : tamanho.height,
+      );
+    }
+    final fovX = cam.fovRadians;
     final fovY = 2 * math.atan(math.tan(fovX / 2) / aspecto);
     return fs.PerspectiveCamera(
       position: _v(cam.position),
@@ -355,73 +372,55 @@ class Scene3DGpu {
     final vivos = <String>{};
     for (final node in scene.nodes) {
       if (!node.visible || node.isNull) continue;
-      final xf = resolveNodeTransform(scene, node, t);
-      final malha = _malhaDe(node, t);
+      Perfil3D.contar('nos.vistos');
+      final xf = Perfil3D.fase(
+        'sincronia.transform',
+        () => resolveNodeTransform(scene, node, t),
+      );
+      final malha = Perfil3D.fase('sincronia.malha', () => _malhaDe(node, t));
       if (malha == null) continue;
       vivos.add(node.id);
       var g = _nos[node.id];
       if (g == null || g.assinatura != malha.assinatura) {
+        Perfil3D.contar('nos.reconstruidos');
         g?.remover(cena);
-        g = _construir(node, malha, onMudou);
+        g = Perfil3D.fase<_NoGpu>(
+          'sincronia.construir',
+          () => _construir(node, malha, onMudou),
+        );
         _nos[node.id] = g;
       } else if (malha.dinamica && !identical(g.ultimaMalha, malha.malha)) {
-        _construir(node, malha, onMudou, existente: g);
+        Perfil3D.contar('nos.remalhados');
+        Perfil3D.fase(
+          'sincronia.remalhar',
+          () => _construir(node, malha, onMudou, existente: g),
+        );
       }
-      g.transformar(xf, node);
+      Perfil3D.fase('sincronia.aplicarTransform', () => g!.transformar(xf, node));
     }
     for (final id in _nos.keys.toList()) {
       if (!vivos.contains(id)) {
         _nos.remove(id)!.remover(cena);
       }
     }
+    _malhas.manterApenas(vivos);
     final usadas = {for (final n in _nos.values) ...n.aplicadores.keys};
     _texturas.removeWhere((path, _) => !usadas.contains(path));
   }
 
   /// A malha do no neste instante: vertices, faces, normais e UVs por
   /// vertice quando existem (modelos), e o material de cada face.
-  _MalhaFonte? _malhaDe(SceneNode node, Duration t) {
-    final asset = node.modelAsset;
-    if (asset != null) {
-      final motion = node.modelMotion;
-      final animado =
-          motion.keys.isNotEmpty ||
-          (motion.clip >= 0 && motion.clip < asset.clips.length);
-      final frame = asset.evaluate(t, motion);
-      final materiais = node.useModelMaterials
-          ? frame.materials
-          : List<Material3D>.filled(frame.mesh.faces.length, node.material);
-      return _MalhaFonte(
-        malha: frame.mesh,
-        normais: frame.normals,
-        uvs: frame.uvs,
-        materiais: materiais,
-        dinamica: animado,
-        assinatura:
-            'm${identityHashCode(asset)}:${identityHashCode(motion)}:${node.instances.isNotEmpty}:'
-            '${node.useModelMaterials ? 'a' : _assinaturaMaterial(node.material)}',
-      );
-    }
-    // O LOD: a escolha do no, e no automatico a da receita. A assinatura
-    // leva a identidade da malha, entao trocar de LOD refaz o no.
-    final escolhida = switch (node.lod) {
-      MeshLod3D.low => node.lowMesh ?? node.mediumMesh ?? node.mesh,
-      MeshLod3D.medium => node.mediumMesh ?? node.mesh,
-      MeshLod3D.high => node.mesh,
-      MeshLod3D.auto => _lodPelaReceita(node),
-    };
-    final mesh = escolhida ?? element3DMesh(node.kind);
-    return _MalhaFonte(
-      malha: mesh,
-      normais: mesh.normals
-          ?.map((n) => Vec3(n[0], n[1], n[2]))
-          .toList(growable: false),
-      uvs: null,
-      materiais: List<Material3D>.filled(mesh.faces.length, node.material),
-      assinatura:
-          'p${node.kind.index}:${identityHashCode(mesh)}:${node.instances.isNotEmpty}:${_assinaturaMaterial(node.material)}',
-    );
-  }
+  /// A malha de cada no, com memoria: um objeto parado passa a custar
+  /// uma comparacao de identidade, e nao duas listas novas por quadro.
+  /// Ver [CacheDeMalhas].
+  final CacheDeMalhas _malhas = CacheDeMalhas();
+
+  MalhaDoNo? _malhaDe(SceneNode node, Duration t) => _malhas.doNo(
+    node,
+    t,
+    lodDaReceita: _lodPelaReceita,
+    assinaturaDoMaterial: _assinaturaMaterial,
+  );
 
   Element3DMesh? _lodPelaReceita(SceneNode node) => switch (_receita.lod) {
     MeshLod3D.high => node.mesh,
@@ -437,7 +436,7 @@ class Scene3DGpu {
 
   _NoGpu _construir(
     SceneNode node,
-    _MalhaFonte fonte,
+    MalhaDoNo fonte,
     VoidCallback? onMudou, {
     _NoGpu? existente,
   }) {
@@ -1042,20 +1041,3 @@ class _NoGpu {
   void remover(fs.Scene cena) => cena.remove(no);
 }
 
-class _MalhaFonte {
-  _MalhaFonte({
-    required this.malha,
-    required this.normais,
-    required this.uvs,
-    required this.materiais,
-    required this.assinatura,
-    this.dinamica = false,
-  });
-
-  final Element3DMesh malha;
-  final List<Vec3?>? normais;
-  final List<ui.Offset?>? uvs;
-  final List<Material3D> materiais;
-  final String assinatura;
-  final bool dinamica;
-}

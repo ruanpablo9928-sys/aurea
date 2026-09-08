@@ -31,6 +31,7 @@ import 'color_picker_sheet.dart';
 import 'scene3d_sheet.dart';
 import 'scene3d_studio_ux.dart';
 import '../../../tutoriais/presentation/tutorial_screen.dart';
+import 'hud_desempenho.dart';
 
 /// ESTUDIO DA CENA 3D: a vista no centro, e o resto em volta dela.
 ///
@@ -1873,6 +1874,14 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                   selectedNodeId: _selected,
                   overrideCamera: cam,
                 ),
+              ),
+            // O PAINEL DE DESEMPENHO, so em build de desenvolvimento: e
+            // aqui que se ve o quadro cair, e por qual fase.
+            if (mostrarHudDesempenho)
+              const Positioned(
+                right: 6,
+                top: 6,
+                child: HudDesempenho(),
               ),
           ],
         ),
