@@ -34,11 +34,38 @@ class ModelAsset3D {
   late final _bounds = _bindBounds();
   double get poseTranslationRange => 4 / _bounds.scale;
   late final int estimatedBytes = () {
+    // A CONTA SEGUE O QUE ESTA GUARDADO, e nao um numero redondo.
+    //
+    // Eram 320 bytes por vertice — a medida de quando cada vertice era
+    // uma lista de doubles com boxing. Com os vetores empacotados, uma
+    // posicao custa 24 bytes, e a estimativa passou a acusar treze vezes
+    // a memoria real. Isso nao e detalhe: e ela que alimenta o orcamento
+    // que escolhe o nivel de qualidade, entao o exagero rebaixava a cena
+    // — ou a recusava — por memoria que ninguem estava usando.
+    //
+    // Perguntando ao proprio buffer, a conta continua certa na proxima
+    // vez que o formato interno mudar.
+    int daLista(Object? v) => switch (v) {
+      PackedModelVectors p => p.data.lengthInBytes,
+      // Lista comum de numeros: um ponteiro por item no vetor da lista.
+      List<dynamic> l => l.length * 8,
+      _ => 0,
+    };
     var bytes = 0;
     for (final p in primitives) {
-      final count = (p['positions'] as List).length;
-      bytes += count * 320 + (p['indices'] as List).length * 8;
-      bytes += count * (p['targets'] as List? ?? []).length * 64;
+      for (final chave in const [
+        'positions',
+        'normals',
+        'uv',
+        'indices',
+        'joints',
+        'weights',
+      ]) {
+        bytes += daLista(p[chave]);
+      }
+      for (final t in (p['targets'] as List? ?? const [])) {
+        bytes += daLista((t as Map)['positions']) + daLista(t['normals']);
+      }
     }
     for (final c in clips) {
       for (final channel in c['channels'] as List) {
@@ -49,7 +76,13 @@ class ModelAsset3D {
       }
     }
     for (final material in data['materials'] as List? ?? []) {
-      bytes += (material['image'] as String? ?? '').length * 2;
+      // UM BYTE POR CARACTERE, e nao dois. O data URI e base64, que e
+      // ASCII, e a maquina virtual guarda texto ASCII em um byte. Contar
+      // dois dobrava a memoria estimada de toda textura importada — e
+      // esta conta alimenta o orcamento que escolhe o nivel de
+      // qualidade, entao o exagero fazia a cena ser rebaixada sem
+      // motivo, justamente em quem tem modelo com textura grande.
+      bytes += (material['image'] as String? ?? '').length;
     }
     return bytes;
   }();

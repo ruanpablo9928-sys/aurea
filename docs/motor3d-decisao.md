@@ -31,22 +31,24 @@ escritor — e o escritor é o elo mais estreito de todos.
 
 ### 1. Quatro em quatorze não abrem, e o Filament não foi consultado
 
-| Recusado | Motivo | Onde |
-| --- | --- | --- |
-| Draco | `KHR_draco_mesh_compression` não suportado | importador |
-| Meshopt | `EXT_meshopt_compression` não suportado | importador |
-| KTX2 / BasisU | `KHR_texture_basisu` não suportado | importador |
-| GLB com cauda | tamanho declarado ≠ tamanho do arquivo | importador |
+| Recusado | Motivo | Onde | Situação |
+| --- | --- | --- | --- |
+| Draco | `KHR_draco_mesh_compression` | importador | aberto |
+| Meshopt | `EXT_meshopt_compression` | importador | aberto |
+| KTX2 / BasisU | `KHR_texture_basisu` | importador | aberto |
+| GLB com cauda | tamanho declarado ≠ arquivo | importador | **corrigido** |
 
 Draco e meshopt são o padrão de fato de qualquer glTF otimizado para a
 web — Sketchfab, Poly, a maioria dos exportadores com "compress". KTX2 é
 o formato de textura que existe justamente para **não** estourar memória
 em celular. São exatamente os arquivos que o usuário baixa e tenta abrir.
 
-O caso da cauda é mais cruel porque a mensagem culpa o arquivo: um GLB
-íntegro, com dezesseis bytes sobrando no fim, é recusado como
-"incompleto". Ler os blocos até o fim declarado e ignorar o resto abriria
-esse arquivo sem afrouxar nada.
+O caso da cauda era o mais cruel porque a mensagem culpava o arquivo: um
+GLB íntegro, com dezesseis bytes sobrando no fim, recusado como
+"incompleto". **Corrigido**: leio os blocos até o fim declarado e ignoro
+o resto, e o alinhamento de bloco passou a ser problema de quem escreve,
+não de quem lê. O contrário — cabeçalho que promete mais bytes do que o
+arquivo tem — continua recusado, porque aí a quebra é real.
 
 ### 2. A ponte descarta esqueleto, animação e morph — em 100% dos casos
 
@@ -66,31 +68,38 @@ fica congelado no primeiro quadro na GPU** — que é exatamente o
 Nenhuma troca de motor conserta isso. O Filament carrega glTF com skin e
 animação nativamente; nós é que não mandamos.
 
-### 3. A memória estoura no heap do Dart, não na GPU
+### 3. A memória: o que era, e o que ficou
 
-| Asset | Arquivo | Heap estimado | Multiplicador |
+A primeira leitura desta auditoria acusou o dobro do custo real de
+textura, e um custo de geometria que já não existia. As duas coisas
+foram corrigidas — a segunda pelo Codex, antes de eu chegar. Os números
+de agora:
+
+| Asset | Arquivo | Heap antes | Heap depois |
 | --- | ---: | ---: | ---: |
-| Pesado (250k tri) | 6.9 MB | 45.7 MB | 6,6× |
-| Complexo (60 materiais) | 0.1 MB | 35.2 MB | 350× |
-| Textura 2048² | 4.0 MB | 10.8 MB | 2,7× |
-| Textura 4096² | 16.0 MB | **42.8 MB** | 2,7× |
+| Pesado (250k tri) | 6.9 MB | 45.7 MB | **13.9 MB** |
+| Complexo (60 materiais) | 0.1 MB | 35.2 MB | **10.6 MB** |
+| Médio (50k tri) | 1.4 MB | 9.1 MB | **2.8 MB** |
+| Textura 4096² | 16.0 MB | 42.8 MB | **21.4 MB** |
 
-Duas causas, ambas nossas:
+**Geometria: já estava resolvida.** `PackedModelVectors` guarda os
+vetores contíguos num `Float64List` e continua sendo uma `List<double>`
+para quem lê — a correção certa, feita no lugar certo. O que sobrava era
+a ESTIMATIVA: `estimatedBytes` ainda cobrava 320 bytes por vértice, a
+medida da época do boxing, treze vezes o real. Ela alimenta o orçamento
+que escolhe o nível de qualidade, então o exagero **rebaixava a cena por
+memória que ninguém estava usando**. Agora a conta pergunta ao próprio
+buffer quanto ele ocupa.
 
-**Geometria em `List<double>` com boxing.** O formato interno guarda
-posições, normais e UVs como listas de `double` do Dart, não como
-`Float32List`. `ModelAsset3D.estimatedBytes` cobra **320 bytes por
-vértice** — contra 32 bytes num buffer tipado. **Dez vezes.**
+**Textura: a metade do que eu disse.** O data URI em base64 é ASCII, e a
+máquina virtual guarda texto ASCII em um byte por caractere, não dois. O
+custo real é 1,33× o arquivo, não 2,67×. Corrigi a conta do app e a da
+bancada.
 
-**Textura como texto.** O importador converte a imagem para um data URI
-em base64 e guarda numa `String`. Base64 acrescenta um terço; a `String`
-do Dart usa dois bytes por caractere. Resultado: **2,67× o arquivo**, e a
-tabela confirma — 16 MB de PNG viram 42,7 MB de String.
-
-Uma textura 8K seguiria a mesma conta: ~64 MB de arquivo → ~171 MB de
-heap, mais 64 MB do GLB que a ponte fabrica. **235 MB para uma textura**,
-antes de a GPU existir. Num iPhone 13 isso é o app fechado, e o culpado
-aparente é o renderizador.
+Ainda assim, uma 4K custa **21 MB de heap mais 16 MB** do GLB que a ponte
+fabrica: 37 MB para uma textura, antes de a GPU existir. Guardar os bytes
+em vez do texto em base64 elimina os dois de uma vez — é o próximo passo
+de memória, e o de melhor retorno.
 
 ### 4. A ponte custa quase meio segundo por nó
 
@@ -163,20 +172,30 @@ fabrica.
 
 Na ordem, do que dá mais resultado por linha de código:
 
-1. **Aceitar GLB com cauda.** Ler blocos até o fim declarado, ignorar o
-   resto. Uma condição.
-2. **Trocar `List<double>` por `Float32List`/`Uint32List`** no formato
-   interno. Corta a memória de geometria por dez.
-3. **Guardar textura como bytes, não como base64.** Corta a memória de
-   textura por 2,7 e some com a re-codificação.
-4. **Levar skin, animação e morph pela ponte** (`JOINTS_0`, `WEIGHTS_0`,
+**Feito nesta passagem:**
+
+1. ~~Aceitar GLB com cauda~~ — **feito**. Um recusado a menos.
+2. ~~Buffers tipados na geometria~~ — **já estava feito** pelo Codex
+   (`PackedModelVectors`).
+3. ~~Corrigir a estimativa de memória~~ — **feito**. Era treze vezes o
+   real na geometria e o dobro na textura, e é ela que decide o nível de
+   qualidade da cena.
+
+**A seguir, nesta ordem:**
+
+4. **Draco e meshopt.** É o que mais devolve em compatibilidade: são o
+   padrão de fato do glTF otimizado, e hoje são um "não abre" seco. São
+   decodificadores bem definidos — dá para implementar sem trocar de
+   motor. Meshopt primeiro, que é bem menor que Draco.
+5. **Guardar textura como bytes**, não como base64 numa `String`. Tira
+   21 MB de heap e 16 MB de re-codificação por textura 4K.
+6. **Levar skin, animação e morph pela ponte** (`JOINTS_0`, `WEIGHTS_0`,
    `skins`, `animations`, `targets`) e incluir o tempo na chave de cache.
-   Devolve animação de modelo importado, que hoje simplesmente não existe.
-5. **Levar os mapas PBR** (normal, AO, metal-rugosidade, emissivo). O
+   Devolve animação de modelo importado, que hoje simplesmente não
+   existe. É a mudança mais funda da lista e merece uma passagem própria.
+7. **Levar os mapas PBR** (normal, AO, metal-rugosidade, emissivo). O
    Filament já sabe usá-los.
-6. **Draco e meshopt.** São decodificadores bem definidos; dá para
-   implementar ou vendorizar só o decodificador, sem trocar de motor.
-7. **KTX2/BasisU** por último — é o mais trabalhoso e o que mais devolve
+8. **KTX2/BasisU** por último — o mais trabalhoso, e o que mais devolve
    em memória de GPU.
 
 Cada item desses é verificável pela mesma bancada: a tabela muda, e a

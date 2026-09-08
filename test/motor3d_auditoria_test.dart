@@ -397,7 +397,10 @@ _Resultado _medir(String nome, Uint8List glb) {
   // um terco do base64. E o multiplicador que ninguem ve.
   for (final m in (asset.data['materials'] as List? ?? const [])) {
     final img = (m as Map)['image'] as String?;
-    if (img != null) r.bytesDeTextura += img.length * 2;
+    // UM BYTE POR CARACTERE: base64 e ASCII, e a maquina virtual guarda
+    // texto ASCII em um byte. Medir dois dobrava o numero e teria feito
+    // a auditoria acusar o dobro do custo real.
+    if (img != null) r.bytesDeTextura += img.length;
   }
 
   // A SEGUNDA CONVERSAO: o que sobra do modelo quando ele vira o GLB que
@@ -535,20 +538,17 @@ void main() {
     expect(r.abriu, isTrue, reason: r.recusa);
   });
 
-  test('GLB com bytes sobrando no fim e recusado', () {
+  test('GLB com bytes sobrando no fim abre', () {
     // O QUE ACONTECE COM ARQUIVO REAL. Vários exportadores e CDNs deixam
     // bytes depois do último bloco; o cabeçalho continua descrevendo o
-    // conteúdo. A especificação pede igualdade, e nós exigimos — então o
-    // arquivo não abre, e a pessoa culpa o renderizador.
+    // conteúdo. Cortar pelo tamanho declarado abre o arquivo sem
+    // afrouxar nada — o cabeçalho que promete MAIS do que existe
+    // continua sendo recusado.
     final g = _malha(4);
     final r = _medir('GLB com cauda', g.bytes(extra: List.filled(16, 0)));
     resultados.add(r);
-    expect(
-      r.abriu,
-      isFalse,
-      reason: 'se passou a abrir, o portao afrouxou — atualize a auditoria',
-    );
-    expect(r.recusa, contains('Tamanho'));
+    expect(r.abriu, isTrue, reason: r.recusa);
+    expect(r.triangulos, 32);
   });
 
   test('Draco e recusado com mensagem', () {

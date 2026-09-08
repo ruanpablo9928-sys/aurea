@@ -32,17 +32,35 @@ ModelAsset3D importGltf3D(
           h.getUint32(4, Endian.little) != 2) {
         modelFail('Somente GLB/glTF 2.0 e suportado.');
       }
-      if (h.getUint32(8, Endian.little) != bytes.length) {
-        modelFail('Tamanho do GLB invalido ou arquivo incompleto.');
+      // BYTES SOBRANDO NO FIM NAO SAO ARQUIVO QUEBRADO.
+      //
+      // A especificacao pede que o tamanho do cabecalho seja igual ao do
+      // arquivo, e a exigencia era literal aqui. Na pratica, exportador,
+      // CDN e ferramenta de empacotamento deixam cauda: o GLB esta
+      // inteiro, o cabecalho descreve certo o conteudo, e havia
+      // dezesseis bytes a mais no fim. O arquivo era recusado como
+      // "incompleto" e a pessoa culpava o aplicativo — com razao, porque
+      // o modelo abre em qualquer outro lugar.
+      //
+      // Curto pelo tamanho declarado e ignoro o resto. O que continua
+      // sendo recusado e o contrario, que e quebra de verdade: cabecalho
+      // que promete mais bytes do que o arquivo tem.
+      final declarado = h.getUint32(8, Endian.little);
+      if (declarado > bytes.length) {
+        modelFail('GLB incompleto: faltam bytes no fim do arquivo.');
       }
+      final fim = declarado < 12 ? bytes.length : declarado;
       var p = 12;
-      while (p < bytes.length) {
-        if (p + 8 > bytes.length) {
+      while (p < fim) {
+        if (p + 8 > fim) {
           modelFail('Cabecalho de bloco GLB incompleto.');
         }
         final len = h.getUint32(p, Endian.little),
             type = h.getUint32(p + 4, Endian.little);
-        if (len % 4 != 0 || p + 8 + len > bytes.length) {
+        // O ALINHAMENTO E DE QUEM ESCREVE, e nao de quem le. Recusar um
+        // bloco final sem enchimento so cumpria a regra contra o usuario:
+        // basta avancar ate o proximo multiplo de quatro.
+        if (p + 8 + len > fim) {
           modelFail('Bloco GLB fora dos limites.');
         }
         final chunk = Uint8List.sublistView(bytes, p + 8, p + 8 + len);
@@ -57,6 +75,7 @@ ModelAsset3D importGltf3D(
           bin = chunk;
         }
         p += 8 + len;
+        if (p % 4 != 0) p += 4 - p % 4;
       }
     } else {
       doc = (jsonDecode(utf8.decode(bytes)) as Map).cast<String, dynamic>();
