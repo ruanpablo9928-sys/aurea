@@ -178,9 +178,38 @@ class LayerToolsDock extends ConsumerWidget {
                             : action,
                         icon: Icon(icon, size: 19, color: AmColors.text),
                       ),
+                    IconButton(
+                      key: const ValueKey('camada-linkar-nulo'),
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      tooltip: 'Linkar a objeto nulo ou camada',
+                      icon: Icon(
+                        CupertinoIcons.link,
+                        color:
+                            project.linkFor(layer.id, LayerProp.parent) == null
+                            ? AmColors.text
+                            : AmColors.accent,
+                      ),
+                      onPressed: () {
+                        playback.pause();
+                        showParentSheet(
+                          context,
+                          ref,
+                          layer,
+                          playback.time.value,
+                        );
+                      },
+                    ),
                     Expanded(
                       child: TextButton.icon(
                         key: const ValueKey('camada-mais'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: const Size(40, 40),
+                        ),
                         onPressed: () => showAllActionsSheet(
                           context,
                           acoes

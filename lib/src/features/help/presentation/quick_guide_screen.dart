@@ -154,7 +154,7 @@ const quickStartSteps = <(String, String)>[
   ),
   (
     '4 · Combine efeitos',
-    'Abra Efeitos → Adicionar efeito. Pronto aplica um preset; Montar mostra os controles principais; Avançado abre os demais. Arraste a alça para reordenar: o cálculo vai de cima para baixo. O menu do efeito permite copiar, redefinir e organizar. Desative um efeito para comparar.',
+    'Abra Efeitos → Adicionar efeito. Toque no nome do efeito para abrir seus parâmetros e cores. Arraste as réguas para ajustar os valores e toque no diamante para criar um keyframe. Role para acessar os demais controles. Arraste a alça para reordenar: o cálculo vai de cima para baixo. Use Resetar para restaurar os valores ou o olho para comparar com o efeito desativado.',
   ),
   (
     '5 · Salve e retome',
@@ -167,6 +167,16 @@ const quickStartSteps = <(String, String)>[
 ];
 
 String effectHelp(EffectType type) => switch (type) {
+  EffectType.twirl => 'Torce a imagem ao redor de um centro. Angulo controla o giro e raio delimita a area afetada. As bordas sao espelhadas.',
+  EffectType.fisheye => 'Deforma a imagem como uma lente grande angular. Valores positivos ampliam o centro; negativos comprimem.',
+  EffectType.kaleidoscope => 'Espelha setores ao redor do centro. Ajuste segmentos, rotacao e mistura; todos aceitam keyframes.',
+  EffectType.venetianBlinds => 'Revela ou recorta a camada em faixas. Conclusao vai de imagem completa a transparente; direcao, faixas e suavidade controlam o recorte.',
+  EffectType.blockDissolve => 'Dissolve a camada em blocos. A semente fixa garante o mesmo resultado ao voltar na timeline e ao exportar.',
+  EffectType.offset => 'Desloca a imagem com repeticao continua nas bordas. Centro X e Y em 0,5 preservam o enquadramento original.',
+  EffectType.invert => 'Inverte os canais RGB preservando a transparencia. Mistura controla a intensidade.',
+  EffectType.waveWarp => 'Ondula a imagem. Anime a fase para movimento continuo; amplitude, frequencia e eixo Y controlam a forma.',
+
+  EffectType.oscillate => 'Oscila a camada numa direcao. Amplitude define a distancia; frequencia define ciclos por segundo. Ajuste fase e forma de onda para sincronizar o movimento. Os parametros aceitam keyframes.',
   EffectType.chromaKey => 'Tira o fundo verde (ou azul) e deixa transparente. Toque na cor para pegar a do seu fundo. Tolerância decide quanto some; suavidade amacia a borda; supressão tira o verde que ficou no cabelo e nos ombros.',
   EffectType.lumaKey => 'Tira o fundo pelo brilho: preto para fumaça, fogo e luz; branco para tinta e papel. Escolha qual dos dois some em Remover.',
   EffectType.colorKey => 'Tira uma cor chapada. Mais previsível que o Chroma Key quando o fundo é sólido — um estúdio, uma cor de marca.',
@@ -212,6 +222,6 @@ String effectHelp(EffectType type) => switch (type) {
   EffectType.forceMotionBlur => 'Reamostra a animação da camada em vários instantes. Mais amostras melhoram o rastro, mas aumentam o trabalho de renderização.',
   EffectType.flicker => 'Modula brilho ou opacidade. Escolha aleatório, strobe ou senoide; frequência controla a repetição. Evite flashes intensos ou rápidos em conteúdo para o público.',
   EffectType.gradient4 => 'Gradiente de quatro cantos. Escolha as quatro cores, opacidade, ângulo e modo de mistura. Pode colorir a imagem sem apagar sua forma.',
-  EffectType.liquidGlass => 'Look de vidro com refração, luz e bordas. Comece por um preset e ajuste a força com cuidado; o resultado depende do conteúdo disponível atrás da camada.',
+  EffectType.liquidGlass => 'Look de vidro com refração, luz e bordas. Ajuste diretamente os parâmetros de refração e iluminação; o resultado depende do conteúdo disponível atrás da camada.',
   EffectType.corrections => 'Correção básica em sequência: exposição, contraste, sombras/altas, temperatura, matiz, saturação e gama. Ajuste primeiro exposição e balanço de branco.',
 };

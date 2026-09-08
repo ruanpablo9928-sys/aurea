@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'audio_effect.dart';
+
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -325,17 +328,22 @@ AnimatedDouble _migrarTrilha(
 ) {
   final base = migrateParamValue(tipo, chave, t.base, versao);
   if (base == t.base && t.keyframes.isEmpty) return t;
-  return AnimatedDouble(base, [
-    for (final k in t.keyframes)
-      Keyframe<double>(
-        time: k.time,
-        value: migrateParamValue(tipo, chave, k.value, versao),
-        ease: k.ease,
-      ),
-    // A migracao reconstroi a trilha para converter unidades; sem
-    // repassar a expressao aqui ela morria ao ABRIR o projeto — e so em
-    // trilhas com keyframe, que e o caso que ninguem testa a mao.
-  ], t.loop, t.expression);
+  return AnimatedDouble(
+    base,
+    [
+      for (final k in t.keyframes)
+        Keyframe<double>(
+          time: k.time,
+          value: migrateParamValue(tipo, chave, k.value, versao),
+          ease: k.ease,
+        ),
+      // A migracao reconstroi a trilha para converter unidades; sem
+      // repassar a expressao aqui ela morria ao ABRIR o projeto — e so em
+      // trilhas com keyframe, que e o caso que ninguem testa a mao.
+    ],
+    t.loop,
+    t.expression,
+  );
 }
 
 EffectInstance _asEffect(Map<String, dynamic> m) {
@@ -879,6 +887,8 @@ Map<String, dynamic> _processing(AudioProcessing p) => {
   if (p.lowDb != 0) 'lo': p.lowDb,
   if (p.midDb != 0) 'mid': p.midDb,
   if (p.highDb != 0) 'hi': p.highDb,
+  if (p.effects.isNotEmpty)
+    'effects': p.effects.map((e) => e.toJson()).toList(),
 };
 
 AudioProcessing _asProcessing(Object? raw) {
@@ -891,6 +901,12 @@ AudioProcessing _asProcessing(Object? raw) {
     lowDb: (m['lo'] as num?)?.toDouble() ?? 0,
     midDb: (m['mid'] as num?)?.toDouble() ?? 0,
     highDb: (m['hi'] as num?)?.toDouble() ?? 0,
+    effects: m['effects'] is List
+        ? (m['effects'] as List)
+              .map(AudioEffect.fromJson)
+              .whereType<AudioEffect>()
+              .toList()
+        : const [],
   );
 }
 
@@ -1135,6 +1151,7 @@ Map<String, dynamic> layerToJson(Layer l) {
     'blend': l.blendMode.index,
     // So sai no arquivo quando a camada usa um modo proprio.
     if (l.customBlend != null) 'blendX': l.customBlend!.index,
+    if (l.transitionIn != null) 'transitionIn': _transition(l.transitionIn!),
     'is3D': l.is3D,
     'z': _ad(l.positionZ),
     'effects': [for (final e in l.effects) _effect(e)],
@@ -1150,9 +1167,6 @@ Map<String, dynamic> layerToJson(Layer l) {
       if (v.speed != 1.0) base['speed'] = v.speed;
       if (v.reverse) base['reverse'] = true;
       if (v.speedBlur) base['speedBlur'] = true;
-      if (v.transitionIn != null) {
-        base['transitionIn'] = _transition(v.transitionIn!);
-      }
       base['volume'] = v.volume;
       final va = _audioSpec(v.audio);
       if (va != null) base['audio'] = va;
@@ -1206,6 +1220,7 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'particles';
       base['count'] = p.count;
       base['seed'] = p.seed;
+      if (p.uniformDistribution) base['uniformDistribution'] = true;
       base['speed'] = p.speed;
       base['spread'] = p.spreadDeg;
       base['dir'] = p.directionDeg;
@@ -1905,7 +1920,6 @@ Layer layerFromJson(Map<String, dynamic> m) {
         speed: (m['speed'] as num?)?.toDouble() ?? 1.0,
         reverse: m['reverse'] as bool? ?? false,
         speedBlur: m['speedBlur'] as bool? ?? false,
-        transitionIn: _asTransition(m['transitionIn']),
         volume: (m['volume'] as num).toDouble(),
         audio: _asAudioSpec(m['audio']),
         position: pos,
@@ -1926,6 +1940,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'image':
       return ImageLayer(
@@ -1952,6 +1967,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'text':
       return TextLayer(
@@ -1991,6 +2007,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'shape':
       return ShapeLayer(
@@ -2020,6 +2037,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'group':
       return GroupLayer(
@@ -2055,6 +2073,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'caption':
       return CaptionLayer(
@@ -2086,6 +2105,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'audio':
       return AudioLayer(
@@ -2116,6 +2136,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'adjust':
       return AdjustmentLayer(
@@ -2141,6 +2162,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'null':
       return NullLayer(
@@ -2169,6 +2191,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'particles':
       return ParticlesLayer(
@@ -2177,6 +2200,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         startTime: start,
         duration: dur,
         count: (m['count'] as num).toInt(),
+        uniformDistribution: m['uniformDistribution'] == true,
         seed: (m['seed'] as num).toInt(),
         speed: (m['speed'] as num).toDouble(),
         spreadDeg: (m['spread'] as num).toDouble(),
@@ -2226,6 +2250,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'scene3d':
       return Scene3DLayer(
@@ -2270,6 +2295,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     case 'el3d':
       return Element3DLayer(
@@ -2312,6 +2338,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         masks: masks,
         matteMode: matte,
         matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
       );
     default:
       throw FormatException('Camada desconhecida: ${m['kind']}');

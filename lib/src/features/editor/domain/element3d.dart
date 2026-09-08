@@ -171,19 +171,63 @@ String environmentLabel(EnvironmentKind k) => switch (k) {
 /// Malha em coordenadas unitarias (meia-extensao ~1). O pintor escala
 /// pelo tamanho da camada e projeta com a focal padrao do app (1200).
 class Element3DMesh {
-  Element3DMesh(this.verts, this.faces);
+  Element3DMesh(this.verts, this.faces, {this.normals});
 
   /// Cada vertice e [x, y, z]; y positivo desce (convencao de tela).
   final List<List<double>> verts;
 
   /// Cada face e uma lista de indices (poligono plano).
   final List<List<int>> faces;
+  final List<List<double>>? normals;
 }
 
 final Map<Element3DKind, Element3DMesh> _meshCache = {};
 
 Element3DMesh element3DMesh(Element3DKind kind) =>
-    _meshCache[kind] ??= _build(kind);
+    _meshCache[kind] ??= _smoothNative(kind, _build(kind));
+
+Element3DMesh _smoothNative(Element3DKind kind, Element3DMesh mesh) {
+  if (![
+    Element3DKind.sphere,
+    Element3DKind.torus,
+    Element3DKind.capsule,
+    Element3DKind.cylinder,
+  ].contains(kind)) {
+    return mesh;
+  }
+  final vertices = [...mesh.verts],
+      faces = [
+        for (final f in mesh.faces) [...f],
+      ];
+  final normals = <List<double>>[];
+  for (final p in vertices) {
+    var x = p[0], y = p[1], z = p[2];
+    if (kind == Element3DKind.torus) {
+      final r = math.sqrt(x * x + z * z);
+      x -= 0.72 * x / r;
+      z -= 0.72 * z / r;
+    } else if (kind == Element3DKind.capsule) {
+      y -= y.clamp(-0.45, 0.45);
+    } else if (kind == Element3DKind.cylinder) {
+      y = 0;
+    }
+    final length = math.sqrt(x * x + y * y + z * z);
+    normals.add([x / length, y / length, z / length]);
+  }
+  // Cylindrical sides share smooth normals; the two caps retain a hard rim.
+  if (kind == Element3DKind.cylinder) {
+    for (var face = faces.length - 2; face < faces.length; face++) {
+      final cap = <int>[];
+      for (final index in faces[face]) {
+        cap.add(vertices.length);
+        vertices.add(mesh.verts[index]);
+        normals.add([0, mesh.verts[index][1].sign, 0]);
+      }
+      faces[face] = cap;
+    }
+  }
+  return Element3DMesh(vertices, faces, normals: normals);
+}
 
 Element3DMesh _build(Element3DKind kind) {
   switch (kind) {
@@ -209,19 +253,13 @@ Element3DMesh _build(Element3DKind kind) {
       );
 
     case Element3DKind.cone:
-      return _lathe(
-        segments: 24,
-        apex: const [0.0, -1.1, 0.0],
-        ringY: 1,
-        ringR: 1,
-        withCap: true,
-      );
+      return _smoothCone();
 
     case Element3DKind.sphere:
-      return _sphere(stacks: 10, slices: 16);
+      return _sphere(stacks: 20, slices: 32);
 
     case Element3DKind.cylinder:
-      return _cylinder(segments: 20);
+      return _cylinder(segments: 40);
 
     case Element3DKind.prism:
       return _extrude(
@@ -237,7 +275,7 @@ Element3DMesh _build(Element3DKind kind) {
       return _diamond();
 
     case Element3DKind.torus:
-      return _torus(major: 0.72, minor: 0.3, around: 18, tube: 10);
+      return _torus(major: 0.72, minor: 0.3, around: 36, tube: 16);
 
     case Element3DKind.star:
       final pts = <List<double>>[];
@@ -252,7 +290,7 @@ Element3DMesh _build(Element3DKind kind) {
       return _plane();
 
     case Element3DKind.capsule:
-      return _capsule(slices: 18, arcos: 5);
+      return _capsule(slices: 32, arcos: 10);
 
     case Element3DKind.tube:
       return _tube(segments: 24, inner: 0.62);
@@ -476,29 +514,6 @@ Element3DMesh _tube({required int segments, required double inner}) {
     faces.add([at(1, i), at(1, i + 1), at(2, i + 1), at(2, i)]);
     faces.add([at(2, i), at(2, i + 1), at(3, i + 1), at(3, i)]);
     faces.add([at(3, i), at(3, i + 1), at(0, i + 1), at(0, i)]);
-  }
-  return Element3DMesh(verts, faces);
-}
-
-/// Cone/funil: aro no plano Y + apex; cap opcional no aro.
-Element3DMesh _lathe({
-  required int segments,
-  required List<double> apex,
-  required double ringY,
-  required double ringR,
-  required bool withCap,
-}) {
-  final verts = <List<double>>[apex];
-  for (var i = 0; i < segments; i++) {
-    final a = 2 * math.pi * i / segments;
-    verts.add([ringR * math.cos(a), ringY, ringR * math.sin(a)]);
-  }
-  final faces = <List<int>>[];
-  for (var i = 0; i < segments; i++) {
-    faces.add([0, 1 + i, 1 + (i + 1) % segments]);
-  }
-  if (withCap) {
-    faces.add([for (var i = 0; i < segments; i++) 1 + i]);
   }
   return Element3DMesh(verts, faces);
 }
@@ -727,4 +742,50 @@ Element3DMesh _cuboChanfrado({double chanfro = 0.075}) {
   }
 
   return Element3DMesh(verts, faces);
+}
+
+/// Upright cone with a smooth side and separate hard-edged base normals.
+Element3DMesh _smoothCone() {
+  const count = 40, height = 2.1;
+  final vertices = <List<double>>[],
+      normals = <List<double>>[],
+      faces = <List<int>>[];
+  final normalLength = math.sqrt(1 + 1 / (height * height));
+  for (var i = 0; i < count; i++) {
+    final a = i * 2 * math.pi / count;
+    vertices.add([math.cos(a), -1, math.sin(a)]);
+    normals.add([
+      math.cos(a) / normalLength,
+      1 / height / normalLength,
+      math.sin(a) / normalLength,
+    ]);
+  }
+  for (var i = 0; i < count; i++) {
+    final a = (i + .5) * 2 * math.pi / count;
+    final tip = vertices.length;
+    vertices.add([0, 1.1, 0]);
+    normals.add([
+      math.cos(a) / normalLength,
+      1 / height / normalLength,
+      math.sin(a) / normalLength,
+    ]);
+    faces.add([i, tip, (i + 1) % count]);
+  }
+  final cap = <int>[];
+  for (var i = 0; i < count; i++) {
+    cap.add(vertices.length);
+    vertices.add(vertices[i]);
+    normals.add([0, -1, 0]);
+  }
+  faces.add(cap);
+  // Preserve the original local axis so saved projects retain their pose.
+  return Element3DMesh(
+    [
+      for (final p in vertices) [p[0], -p[1], p[2]],
+    ],
+    [for (final face in faces) face.reversed.toList()],
+    normals: [
+      for (final n in normals) [n[0], -n[1], n[2]],
+    ],
+  );
 }

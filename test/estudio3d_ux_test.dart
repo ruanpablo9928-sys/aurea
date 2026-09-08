@@ -238,7 +238,10 @@ void main() {
       expect(find.text('Cena'), findsOneWidget);
       expect(find.byKey(const ValueKey('estudio-camera')), findsOneWidget);
       expect(
-        find.text('Camera'),
+        find.descendant(
+          of: find.byKey(const ValueKey('estudio-camera')),
+          matching: find.text('Camera'),
+        ),
         findsOneWidget,
         reason: 'o nome da camera no ar',
       );
@@ -255,10 +258,10 @@ void main() {
       // Sem selecao, a barra de contexto e a da camera.
       expect(find.byKey(const ValueKey('contexto-adicionar')), findsOneWidget);
       expect(find.byKey(const ValueKey('contexto-lente')), findsOneWidget);
-      // O modo simples esconde as vistas e os comandos de camera.
-      expect(find.text('Enquadrar tudo'), findsNothing);
-      expect(find.text('Frente'), findsNothing);
-      expect(find.text('Auto-key'), findsNothing);
+      // As vistas ficam acessiveis no modo Pro permanente.
+      expect(find.text('Enquadrar tudo'), findsOneWidget);
+      expect(find.text('Frente'), findsOneWidget);
+      expect(find.text('Auto-key'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -315,8 +318,8 @@ void main() {
     expect(find.text('Pela camera'), findsOneWidget);
     expect(
       find.text('Frente'),
-      findsOneWidget,
-      reason: 'as vistas moram no menu da camera',
+      findsNWidgets(2),
+      reason: 'as vistas ficam na barra e no menu da camera',
     );
     await tester.tap(find.byKey(const ValueKey('camera-nova')));
     await tester.pumpAndSettle();
@@ -553,18 +556,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('o modo avancado devolve vistas e comandos, e fica guardado', (
+  testWidgets('estudio sempre completo mesmo com preferencia basica antiga', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      EstudioPreferencia.kAvancado: false,
+    });
     final prefs = await SharedPreferences.getInstance();
     await abrir(tester, prefs: prefs);
-    expect(find.text('Enquadrar tudo'), findsNothing);
+    expect(find.text('Enquadrar tudo'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('estudio-mais')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('mais-avancado')));
-    await tester.pumpAndSettle();
-    expect(prefs.getBool(EstudioPreferencia.kAvancado), isTrue);
+    expect(find.byKey(const ValueKey('mais-avancado')), findsNothing);
     // Fecha o menu.
     await tester.tapAt(const Offset(195, 40));
     await tester.pumpAndSettle();

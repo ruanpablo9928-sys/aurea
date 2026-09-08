@@ -159,8 +159,13 @@ void main() {
       // por pixel na thread de UI e o que travava o app. O contrato
       // shader<->ficha deles e cobrado em pixel_effect_engine_test.
       const foraDoSwitch = {
-        'echo', 'forceMotionBlur', 'timeRemap',
-        'chromaKey', 'lumaKey', 'colorKey', 'findEdges',
+        'echo',
+        'forceMotionBlur',
+        'timeRemap',
+        'chromaKey',
+        'lumaKey',
+        'colorKey',
+        'findEdges',
       };
 
       final mortos = <String>[];
@@ -183,6 +188,29 @@ void main() {
         // analise, nao pelo desenho. A lista e explicita para nao virar
         // uma busca frouxa que deixa de acusar controle morto.
         var texto = corpo;
+        if (nome == 'motionTile') {
+          texto += File(
+            'lib/src/features/editor/presentation/widgets/motion_tile_pass.dart',
+          ).readAsStringSync().replaceAll("p('", "paramAt('");
+        }
+        if (const {
+          'twirl',
+          'fisheye',
+          'kaleidoscope',
+          'venetianBlinds',
+          'blockDissolve',
+          'offset',
+          'invert',
+          'waveWarp',
+        }.contains(nome)) {
+          texto += File(
+            'lib/src/features/editor/presentation/widgets/essential_warp_pass.dart',
+          ).readAsStringSync().replaceAll("p('", "paramAt('");
+        }
+        if (nome == 'oscillate') {
+          texto += File('lib/src/features/editor/domain/oscillate.dart')
+              .readAsStringSync();
+        }
         if (nome == 'blobTracker') {
           texto += File(
             'lib/src/features/editor/application/'

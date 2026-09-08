@@ -1,3 +1,4 @@
+import 'package:aurea/src/features/projects/presentation/release_notice.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,9 +7,12 @@ import 'package:aurea/src/app.dart';
 import 'package:aurea/src/core/storage/prefs.dart';
 
 void main() {
-  testWidgets('home shell renders brand, tabs and new project action',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
+  testWidgets('home shell renders brand, tabs and new project action', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      releaseNoticeSeenKey: releaseNoticeRevision,
+    });
     final prefs = await SharedPreferences.getInstance();
 
     await tester.pumpWidget(

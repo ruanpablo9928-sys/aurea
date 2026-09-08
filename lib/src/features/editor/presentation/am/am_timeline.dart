@@ -1829,12 +1829,13 @@ class _AmBarState extends ConsumerState<_AmBar> {
           Consumer(
             builder: (context, ref, _) {
               final ctrl = ref.read(editorControllerProvider.notifier);
-              if (layer is! VideoLayer || ctrl.clipAfter(layer.id) == null) {
+              if (!isTransitionLayer(layer) ||
+                  ctrl.clipAfter(layer.id) == null) {
                 return const SizedBox.shrink();
               }
               final transition = ctrl.transitionAfter(layer.id);
               final x = left + (layer.duration.inMicroseconds / 1e6 * pps);
-              final markerWidth = transition == null ? 24.0 : 66.0;
+              final markerWidth = transition == null ? 40.0 : 66.0;
               return Positioned(
                 left: x - markerWidth / 2,
                 top: 0,

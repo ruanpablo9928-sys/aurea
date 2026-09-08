@@ -1387,11 +1387,50 @@ class _EnvironmentTab extends StatelessWidget {
               label: 'Importar panorama',
               onTap: () async {
                 final result = await FilePicker.platform.pickFiles(
-                  type: FileType.image,
+                  type: FileType.custom,
+                  allowedExtensions: [
+                    'hdr',
+                    'exr',
+                    'png',
+                    'jpg',
+                    'jpeg',
+                    'webp',
+                  ],
+                  withData: false,
                 );
                 final path = result?.files.single.path;
                 if (path == null) return;
-                setPanorama(preparePanorama(path: path));
+                try {
+                  final saved = await persistEnvironment(path);
+                  if (context.mounted) {
+                    setPanorama(preparePanorama(path: saved));
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    AureaSnack.show(
+                      context,
+                      'Nao foi possivel importar o ambiente.',
+                    );
+                  }
+                }
+              },
+            ),
+            _Action(
+              icon: CupertinoIcons.building_2_fill,
+              label: 'Reflexo urbano HDR',
+              onTap: () async {
+                try {
+                  final next = await installUrbanEnvironment();
+                  if (!context.mounted) return;
+                  setPanorama(next);
+                } catch (_) {
+                  if (context.mounted) {
+                    AureaSnack.show(
+                      context,
+                      'Nao foi possivel carregar o ambiente.',
+                    );
+                  }
+                }
               },
             ),
             _Action(
@@ -1403,9 +1442,11 @@ class _EnvironmentTab extends StatelessWidget {
                   imageQuality: 100,
                 );
                 if (file == null) return;
+                final saved = await persistEnvironment(file.path);
+                if (!context.mounted) return;
                 setPanorama(
                   preparePanorama(
-                    path: file.path,
+                    path: saved,
                     coverageDegrees: 150,
                     capturedWithPhone: true,
                   ),

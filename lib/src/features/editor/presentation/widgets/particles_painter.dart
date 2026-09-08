@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' show PointMode;
 
 import 'package:flutter/rendering.dart';
 
@@ -39,9 +41,21 @@ class ParticlesPainter extends CustomPainter {
 
   /// xorshift32 de (seed, i, canal) -> [0,1).
   double _rand(int i, int channel) {
-    var s = (layer.seed * 0x9E3779B9 ^ (i + 1) * 0x85EBCA6B ^
+    var s =
+        (layer.seed * 0x9E3779B9 ^
+            (i + 1) * 0x85EBCA6B ^
             (channel + 1) * 0xC2B2AE35) &
         0xFFFFFFFF;
+    if (layer.uniformDistribution) {
+      // Avalanche mixing decorrelates X/Y/Z. A linear xorshift of channel XORs
+      // produced diagonal bands. Legacy projects keep their previous layout.
+      s ^= s >> 16;
+      s = (s * 0x7FEB352D) & 0xFFFFFFFF;
+      s ^= s >> 15;
+      s = (s * 0x846CA68B) & 0xFFFFFFFF;
+      s ^= s >> 16;
+      return (s & 0xFFFFFF) / 0x1000000;
+    }
     s ^= (s << 13) & 0xFFFFFFFF;
     s ^= s >> 17;
     s ^= (s << 5) & 0xFFFFFFFF;
@@ -50,7 +64,10 @@ class ParticlesPainter extends CustomPainter {
 
   /// Hash inteiro de um no da grade do ruido -> [0,1).
   static double _hash3(int x, int y, int z, int seed) {
-    var h = (x * 0x27D4EB2D) ^ (y * 0x165667B1) ^ (z * 0x9E3779B1) ^
+    var h =
+        (x * 0x27D4EB2D) ^
+        (y * 0x165667B1) ^
+        (z * 0x9E3779B1) ^
         (seed * 0x85EBCA6B);
     h &= 0xFFFFFFFF;
     h ^= h >> 15;
@@ -69,14 +86,22 @@ class ParticlesPainter extends CustomPainter {
     final uy = fy * fy * (3 - 2 * fy);
     final uz = fz * fz * (3 - 2 * fz);
     double l(double a, double b, double t) => a + (b - a) * t;
-    final c00 =
-        l(_hash3(x0, y0, z0, seed), _hash3(x0 + 1, y0, z0, seed), ux);
+    final c00 = l(_hash3(x0, y0, z0, seed), _hash3(x0 + 1, y0, z0, seed), ux);
     final c10 = l(
-        _hash3(x0, y0 + 1, z0, seed), _hash3(x0 + 1, y0 + 1, z0, seed), ux);
+      _hash3(x0, y0 + 1, z0, seed),
+      _hash3(x0 + 1, y0 + 1, z0, seed),
+      ux,
+    );
     final c01 = l(
-        _hash3(x0, y0, z0 + 1, seed), _hash3(x0 + 1, y0, z0 + 1, seed), ux);
-    final c11 = l(_hash3(x0, y0 + 1, z0 + 1, seed),
-        _hash3(x0 + 1, y0 + 1, z0 + 1, seed), ux);
+      _hash3(x0, y0, z0 + 1, seed),
+      _hash3(x0 + 1, y0, z0 + 1, seed),
+      ux,
+    );
+    final c11 = l(
+      _hash3(x0, y0 + 1, z0 + 1, seed),
+      _hash3(x0 + 1, y0 + 1, z0 + 1, seed),
+      ux,
+    );
     return l(l(c00, c10, uy), l(c01, c11, uy), uz);
   }
 
@@ -84,7 +109,13 @@ class ParticlesPainter extends CustomPainter {
   /// decai com a resistencia [k], vento [w] (deriva) e gravidade [g]
   /// (com [k] > 0 chega a velocidade terminal g/k).
   static double _integra(
-      double x0, double v0, double g, double w, double k, double t) {
+    double x0,
+    double v0,
+    double g,
+    double w,
+    double k,
+    double t,
+  ) {
     if (k < 1e-6) return x0 + (v0 + w) * t + 0.5 * g * t * t;
     final e = (1 - math.exp(-k * t)) / k;
     return x0 + v0 * e + w * t + g * (t - e) / k;
@@ -115,8 +146,8 @@ class ParticlesPainter extends CustomPainter {
 
     for (var i = 0; i < layer.count; i++) {
       // Vida propria: parte das particulas vive menos (Life Random).
-      final lifeI = life *
-          (1 - layer.lifeRandom.clamp(0.0, 1.0) * _rand(i, 14) * 0.8);
+      final lifeI =
+          life * (1 - layer.lifeRandom.clamp(0.0, 1.0) * _rand(i, 14) * 0.8);
       // Emissor em REGIME CONTINUO (pre-roll): o campo ja nasce cheio no
       // frame 0, como se o sistema rodasse desde sempre; cada particula
       // "renasce" ao fim da vida, com fase propria.
@@ -176,8 +207,8 @@ class ParticlesPainter extends CustomPainter {
             vz = bz / len * v0;
           }
         default: // cone no plano XY + componente em Z
-          final dir = (layer.directionDeg +
-                  (_rand(i, 1) - 0.5) * layer.spreadDeg) *
+          final dir =
+              (layer.directionDeg + (_rand(i, 1) - 0.5) * layer.spreadDeg) *
               math.pi /
               180;
           vx = math.cos(dir) * v0;
@@ -197,12 +228,8 @@ class ParticlesPainter extends CustomPainter {
           final ramp = (a / 0.6).clamp(0.0, 1.0) * turb;
           final nx = px * turbF, ny = py * turbF, nz = pz * turbF + turbT;
           px += (_noise3(nx, ny, nz, layer.seed) - 0.5) * 2 * ramp;
-          py += (_noise3(nx + 31.7, ny, nz, layer.seed + 1) - 0.5) *
-              2 *
-              ramp;
-          pz += (_noise3(nx, ny + 47.3, nz, layer.seed + 2) - 0.5) *
-              2 *
-              ramp;
+          py += (_noise3(nx + 31.7, ny, nz, layer.seed + 1) - 0.5) * 2 * ramp;
+          pz += (_noise3(nx, ny + 47.3, nz, layer.seed + 2) - 0.5) * 2 * ramp;
         }
         return (px, py, pz);
       }
@@ -231,22 +258,24 @@ class ParticlesPainter extends CustomPainter {
           case 2:
             alpha = uu;
           case 3:
-            alpha = (uu / 0.03).clamp(0.0, 1.0) *
-                ((1 - uu) / 0.03).clamp(0.0, 1.0);
+            alpha =
+                (uu / 0.03).clamp(0.0, 1.0) * ((1 - uu) / 0.03).clamp(0.0, 1.0);
           default:
-            alpha = (uu / 0.08).clamp(0.0, 1.0) *
-                ((1 - uu) / 0.35).clamp(0.0, 1.0);
+            alpha =
+                (uu / 0.08).clamp(0.0, 1.0) * ((1 - uu) / 0.35).clamp(0.0, 1.0);
         }
         alpha *= 1 - layer.opacityRandom.clamp(0.0, 1.0) * _rand(i, 12);
 
         // Cintilar: oscila com frequencia e fase proprias.
         if (layer.twinkle) {
-          final tw = 0.5 +
+          final tw =
+              0.5 +
               0.5 *
                   math.sin(
-                      (tSec * (0.7 + _rand(i, 8) * 1.5) + _rand(i, 9)) *
-                          2 *
-                          math.pi);
+                    (tSec * (0.7 + _rand(i, 8) * 1.5) + _rand(i, 9)) *
+                        2 *
+                        math.pi,
+                  );
           alpha *= 0.30 + 0.70 * tw;
         }
         alpha *= alphaMul;
@@ -264,8 +293,7 @@ class ParticlesPainter extends CustomPainter {
           default:
             vida = 1;
         }
-        final espalha =
-            1 + (_rand(i, 4) - 0.5) * layer.sizeRandom * 1.8;
+        final espalha = 1 + (_rand(i, 4) - 0.5) * layer.sizeRandom * 1.8;
         final r = layer.size * espalha * vida * proj * 0.5 * radiusMul;
         if (r < 0.3) return null;
 
@@ -298,6 +326,40 @@ class ParticlesPainter extends CustomPainter {
       }
     }
 
+    // Small, same-color points commute under srcOver. Batch a star field into
+    // radius/opacity buckets instead of thousands of per-star draw calls.
+    if (layer.shape == 0 &&
+        layer.glow == 0 &&
+        layer.colorEnd == null &&
+        drawList.every((p) => p.radius <= 4)) {
+      final bins = <int, List<double>>{};
+      for (final p in drawList) {
+        if (p.pos.dx < -8 ||
+            p.pos.dy < -8 ||
+            p.pos.dx > size.width + 8 ||
+            p.pos.dy > size.height + 8) {
+          continue;
+        }
+        final radius = (p.radius * 4).round().clamp(1, 16);
+        final alpha = (p.alpha * 15).round().clamp(1, 15);
+        (bins[radius * 16 + alpha] ??= []).addAll([p.pos.dx, p.pos.dy]);
+      }
+      final paint = Paint()..strokeCap = StrokeCap.round;
+      for (final entry in bins.entries) {
+        paint
+          ..strokeWidth = (entry.key ~/ 16) * 0.5
+          ..color = layer.color.withValues(
+            alpha: layer.color.a * (entry.key % 16) / 15,
+          );
+        canvas.drawRawPoints(
+          PointMode.points,
+          Float32List.fromList(entry.value),
+          paint,
+        );
+      }
+      return;
+    }
+
     // Longe primeiro: perto cobre longe (ordem 3D correta).
     drawList.sort((a, b) => b.z.compareTo(a.z));
 
@@ -310,8 +372,9 @@ class ParticlesPainter extends CustomPainter {
     final glow = layer.glow.clamp(0.0, 1.0);
     final fim = layer.colorEnd;
     for (final d in drawList) {
-      final base =
-          fim == null ? layer.color : Color.lerp(layer.color, fim, d.u)!;
+      final base = fim == null
+          ? layer.color
+          : Color.lerp(layer.color, fim, d.u)!;
       final color = base.withValues(alpha: base.a * d.alpha);
       paintDot.color = color;
 
@@ -323,8 +386,7 @@ class ParticlesPainter extends CustomPainter {
 
       switch (layer.shape) {
         case 1:
-          _drawSparkle(
-              canvas, d.pos, d.radius, paintDot, d.variant, d.angle);
+          _drawSparkle(canvas, d.pos, d.radius, paintDot, d.variant, d.angle);
         case 2:
           final tail = d.tail ?? d.pos;
           linha
@@ -352,11 +414,13 @@ class ParticlesPainter extends CustomPainter {
           canvas.translate(d.pos.dx, d.pos.dy);
           canvas.rotate(d.angle);
           canvas.drawRect(
-              Rect.fromCenter(
-                  center: Offset.zero,
-                  width: d.radius * 2,
-                  height: d.radius * 2),
-              paintDot);
+            Rect.fromCenter(
+              center: Offset.zero,
+              width: d.radius * 2,
+              height: d.radius * 2,
+            ),
+            paintDot,
+          );
           canvas.restore();
         case 5:
           anel
@@ -371,8 +435,14 @@ class ParticlesPainter extends CustomPainter {
 
   /// Cruz de 4 pontas alongada (sparkle de lente): dois losangos finos +
   /// nucleo claro, como nas referencias de edicao.
-  void _drawSparkle(Canvas canvas, Offset c, double r, Paint paint,
-      double variant, double angle) {
+  void _drawSparkle(
+    Canvas canvas,
+    Offset c,
+    double r,
+    Paint paint,
+    double variant,
+    double angle,
+  ) {
     final len = r * (2.4 + variant * 1.6);
     final lenH = len * 0.72;
     final w = r * 0.40;

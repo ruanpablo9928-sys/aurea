@@ -25,11 +25,11 @@ class EstudioPreferencia {
 
   final SharedPreferences? _prefs;
 
-  bool get avancado => _prefs?.getBool(kAvancado) ?? false;
+  bool get avancado => true;
   bool get dicasVistas => _prefs?.getBool(kDicasVistas) ?? false;
 
   Future<void> definirAvancado(bool ligado) async {
-    await _prefs?.setBool(kAvancado, ligado);
+    await _prefs?.setBool(kAvancado, true);
   }
 
   Future<void> marcarDicasVistas(bool vistas) async {

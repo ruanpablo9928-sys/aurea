@@ -1,4 +1,5 @@
 import 'editor_audit_helpers.dart';
+
 import 'dart:convert';
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
@@ -57,9 +58,15 @@ void main() {
       expect(p.isHidden(a), isTrue);
       expect(p.rendersInPreview(a), isFalse);
       expect(e.projetoParaExportar.layers.map((l) => l.id), isNot(contains(a)));
-      expect(p.layers.map((l) => l.id), contains(a), reason: 'continua no projeto');
+      expect(
+        p.layers.map((l) => l.id),
+        contains(a),
+        reason: 'continua no projeto',
+      );
 
-      final volta = projectFromJson(jsonDecode(jsonEncode(projectToJson(p))) as Map<String, dynamic>);
+      final volta = projectFromJson(
+        jsonDecode(jsonEncode(projectToJson(p))) as Map<String, dynamic>,
+      );
       expect(volta.isHidden(a), isTrue);
 
       e.undo();
@@ -79,9 +86,14 @@ void main() {
       final e = c.read(editorControllerProvider.notifier);
       e.addShapeLayer(const Duration(seconds: 1), name: 'A');
       e.addShapeLayer(const Duration(seconds: 2), name: 'B');
-      final ids = c.read(editorControllerProvider).layers.map((l) => l.id).toList();
+      final ids = c
+          .read(editorControllerProvider)
+          .layers
+          .map((l) => l.id)
+          .toList();
       e.groupLayers(ids);
-      final grupo = c.read(editorControllerProvider).layers.single as GroupLayer;
+      final grupo =
+          c.read(editorControllerProvider).layers.single as GroupLayer;
       expect(grupo.children.length, 2);
       final passosAntes = e.canUndo;
 
@@ -90,8 +102,11 @@ void main() {
       expect(e.caminhoDoGrupo, ['Grupo']);
       final dentro = c.read(editorControllerProvider);
       expect(dentro.layers.length, 2, reason: 'os filhos sao a timeline');
-      expect(dentro.layers.map((l) => l.startTime), contains(Duration.zero),
-          reason: 'tempo local ao grupo');
+      expect(
+        dentro.layers.map((l) => l.startTime),
+        contains(Duration.zero),
+        reason: 'tempo local ao grupo',
+      );
       expect(c.read(selectedLayerProvider), isNull);
       expect(e.canUndo, isFalse, reason: 'pilha propria dentro do grupo');
 
@@ -111,9 +126,15 @@ void main() {
       final fora = c.read(editorControllerProvider);
       final g2 = fora.layers.single as GroupLayer;
       expect(g2.children.map((l) => l.name), contains('Filho editado'));
-      expect(g2.children.firstWhere((l) => l.id == filho).startTime,
-          const Duration(milliseconds: 500));
-      expect(c.read(selectedLayerProvider), grupo.id, reason: 'volta selecionando o grupo');
+      expect(
+        g2.children.firstWhere((l) => l.id == filho).startTime,
+        const Duration(milliseconds: 500),
+      );
+      expect(
+        c.read(selectedLayerProvider),
+        grupo.id,
+        reason: 'volta selecionando o grupo',
+      );
 
       // Um undo so desfaz a edicao inteira feita la dentro.
       expect(e.canUndo, isTrue);
@@ -164,111 +185,166 @@ void main() {
         v('b', 2, 2),
         v('a', 0, 2),
         v('c', 1, 2), // sobrepoe: linha nova
-        VideoLayer(name: 'outro', startTime: Duration.zero, duration: const Duration(seconds: 1), sourcePath: '/b.mp4'),
-        ShapeLayer(name: 'forma', startTime: Duration.zero, duration: const Duration(seconds: 1)),
-        ShapeLayer(name: 'forma 2', startTime: Duration.zero, duration: const Duration(seconds: 1)),
+        VideoLayer(
+          name: 'outro',
+          startTime: Duration.zero,
+          duration: const Duration(seconds: 1),
+          sourcePath: '/b.mp4',
+        ),
+        ShapeLayer(
+          name: 'forma',
+          startTime: Duration.zero,
+          duration: const Duration(seconds: 1),
+        ),
+        ShapeLayer(
+          name: 'forma 2',
+          startTime: Duration.zero,
+          duration: const Duration(seconds: 1),
+        ),
       ]);
       expect(trilhas.map((t) => t.length).toList(), [2, 1, 1, 1, 1]);
       expect(trilhas.first.map((l) => l.name), ['b', 'a']);
     });
   });
 
-  testWidgets('coluna esquerda: olho e cadeado por linha; bloqueada nao arrasta', (tester) async {
-    final c = await openEditor(tester);
-    final e = c.read(editorControllerProvider.notifier);
-    final id = c.read(editorControllerProvider).layers.first.id;
-    expect(find.byKey(ValueKey('olho-$id')), findsOneWidget);
-    expect(find.byKey(ValueKey('kf-$id')), findsOneWidget);
+  testWidgets(
+    'coluna esquerda: olho e cadeado por linha; bloqueada nao arrasta',
+    (tester) async {
+      final c = await openEditor(tester);
+      final e = c.read(editorControllerProvider.notifier);
+      final id = c.read(editorControllerProvider).layers.first.id;
+      expect(find.byKey(ValueKey('olho-$id')), findsOneWidget);
+      expect(find.byKey(ValueKey('kf-$id')), findsOneWidget);
 
+      await tester.tap(find.byKey(ValueKey('olho-$id')));
+      await tester.pumpAndSettle();
+      expect(c.read(editorControllerProvider).isHidden(id), isTrue);
+      expect(find.byTooltip('Mostrar camada'), findsOneWidget);
 
-    await tester.tap(find.byKey(ValueKey('olho-$id')));
-    await tester.pumpAndSettle();
-    expect(c.read(editorControllerProvider).isHidden(id), isTrue);
-    expect(find.byTooltip('Mostrar camada'), findsOneWidget);
+      await tester.longPress(find.byKey(ValueKey('kf-$id')));
+      await tester.pumpAndSettle();
+      expect(e.isLocked(id), isTrue);
 
-    await tester.longPress(find.byKey(ValueKey('kf-$id')));
-    await tester.pumpAndSettle();
-    expect(e.isLocked(id), isTrue);
+      // Selecionada e bloqueada: arrastar a barra nao move no tempo.
+      c.read(selectedLayerProvider.notifier).state = id;
+      await tester.pumpAndSettle();
+      final antes = c.read(editorControllerProvider).layerById(id)!.startTime;
+      final linha = tester.getRect(find.byKey(ValueKey(id)));
+      await tester.dragFrom(
+        Offset(linha.left + 30, linha.top + kAmBarHeight / 2),
+        const Offset(120, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        c.read(editorControllerProvider).layerById(id)!.startTime,
+        antes,
+        reason: 'cadeado segura',
+      );
 
-    // Selecionada e bloqueada: arrastar a barra nao move no tempo.
-    c.read(selectedLayerProvider.notifier).state = id;
-    await tester.pumpAndSettle();
-    final antes = c.read(editorControllerProvider).layerById(id)!.startTime;
-    final linha = tester.getRect(find.byKey(ValueKey(id)));
-    await tester.dragFrom(Offset(linha.left + 30, linha.top + kAmBarHeight / 2), const Offset(120, 0));
-    await tester.pumpAndSettle();
-    expect(c.read(editorControllerProvider).layerById(id)!.startTime, antes, reason: 'cadeado segura');
+      await tester.longPress(find.byKey(ValueKey('kf-$id')));
+      await tester.pumpAndSettle();
+      await tester.dragFrom(
+        Offset(linha.left + 30, linha.top + kAmBarHeight / 2),
+        const Offset(120, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        c.read(editorControllerProvider).layerById(id)!.startTime,
+        isNot(antes),
+        reason: 'destravada move',
+      );
+    },
+  );
 
-    await tester.longPress(find.byKey(ValueKey('kf-$id')));
-    await tester.pumpAndSettle();
-    await tester.dragFrom(Offset(linha.left + 30, linha.top + kAmBarHeight / 2), const Offset(120, 0));
-    await tester.pumpAndSettle();
-    expect(c.read(editorControllerProvider).layerById(id)!.startTime, isNot(antes), reason: 'destravada move');
-  });
+  testWidgets(
+    'toque longo + arrastar reordena; toque longo parado alterna a selecao multipla',
+    (tester) async {
+      final c = await openEditor(tester);
+      final camadas = c.read(editorControllerProvider).layers;
+      final deBaixo = camadas[1].id;
+      final linha = tester.getRect(find.byKey(ValueKey(deBaixo)));
+      final pegada = Offset(linha.left + 30, linha.top + kAmBarHeight / 2);
 
-  testWidgets('toque longo + arrastar reordena; toque longo parado alterna a selecao multipla', (tester) async {
-    final c = await openEditor(tester);
-    final camadas = c.read(editorControllerProvider).layers;
-    final deBaixo = camadas[1].id;
-    final linha = tester.getRect(find.byKey(ValueKey(deBaixo)));
-    final pegada = Offset(linha.left + 30, linha.top + kAmBarHeight / 2);
+      // Toque longo e sobe uma linha, sem selecionar antes.
+      final dedo = await tester.startGesture(pegada);
+      await tester.pump(const Duration(milliseconds: 600));
+      for (var i = 1; i <= 6; i++) {
+        await dedo.moveBy(const Offset(0, -kAmRowHeight / 6));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await dedo.up();
+      await tester.pumpAndSettle();
+      expect(
+        c.read(editorControllerProvider).layers.first.id,
+        deBaixo,
+        reason: 'subiu na pilha',
+      );
+      expect(
+        c.read(multiSelectProvider),
+        isEmpty,
+        reason: 'mover nao e selecionar',
+      );
 
-    // Toque longo e sobe uma linha, sem selecionar antes.
-    final dedo = await tester.startGesture(pegada);
-    await tester.pump(const Duration(milliseconds: 600));
-    for (var i = 1; i <= 6; i++) {
-      await dedo.moveBy(const Offset(0, -kAmRowHeight / 6));
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    await dedo.up();
-    await tester.pumpAndSettle();
-    expect(c.read(editorControllerProvider).layers.first.id, deBaixo, reason: 'subiu na pilha');
-    expect(c.read(multiSelectProvider), isEmpty, reason: 'mover nao e selecionar');
+      // Toque longo parado: entra na selecao multipla.
+      final linha2 = tester.getRect(find.byKey(ValueKey(deBaixo)));
+      await tester.longPressAt(
+        Offset(linha2.left + 30, linha2.top + kAmBarHeight / 2),
+      );
+      await tester.pumpAndSettle();
+      expect(c.read(multiSelectProvider), contains(deBaixo));
+    },
+  );
 
-    // Toque longo parado: entra na selecao multipla.
-    final linha2 = tester.getRect(find.byKey(ValueKey(deBaixo)));
-    await tester.longPressAt(Offset(linha2.left + 30, linha2.top + kAmBarHeight / 2));
-    await tester.pumpAndSettle();
-    expect(c.read(multiSelectProvider), contains(deBaixo));
-  });
+  testWidgets(
+    'grupo: toque duplo entra, Projeto › Grupo na regua, Projeto sai',
+    (tester) async {
+      final c = await openEditor(tester);
+      final e = c.read(editorControllerProvider.notifier);
+      final ids = c
+          .read(editorControllerProvider)
+          .layers
+          .map((l) => l.id)
+          .toList();
+      e.groupLayers(ids);
+      c.read(selectedLayerProvider.notifier).state = null;
+      await tester.pumpAndSettle();
+      final gid = c.read(editorControllerProvider).layers.single.id;
+      expect(find.byKey(ValueKey('grupo-contagem-$gid')), findsOneWidget);
+      expect(find.byKey(const ValueKey('timeline-breadcrumb')), findsNothing);
 
-  testWidgets('grupo: toque duplo entra, Projeto › Grupo na regua, Projeto sai', (tester) async {
-    final c = await openEditor(tester);
-    final e = c.read(editorControllerProvider.notifier);
-    final ids = c.read(editorControllerProvider).layers.map((l) => l.id).toList();
-    e.groupLayers(ids);
-    c.read(selectedLayerProvider.notifier).state = null;
-    await tester.pumpAndSettle();
-    final gid = c.read(editorControllerProvider).layers.single.id;
-    expect(find.byKey(ValueKey('grupo-contagem-$gid')), findsOneWidget);
-    expect(find.byKey(const ValueKey('timeline-breadcrumb')), findsNothing);
+      final linha = tester.getRect(find.byKey(ValueKey(gid)));
+      final ponto = Offset(linha.left + 30, linha.top + kAmBarHeight / 2);
+      await tester.tapAt(ponto);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(ponto);
+      await tester.pumpAndSettle();
+      expect(e.dentroDeGrupo, isTrue, reason: 'toque duplo entrou');
+      expect(find.byKey(const ValueKey('timeline-breadcrumb')), findsOneWidget);
+      expect(find.text('Projeto'), findsOneWidget);
+      expect(find.text('Grupo'), findsWidgets);
+      // Os filhos estao na timeline.
+      for (final id in ids) {
+        expect(
+          find.byKey(ValueKey(id)),
+          findsOneWidget,
+          reason: 'filho $id visivel',
+        );
+      }
 
-    final linha = tester.getRect(find.byKey(ValueKey(gid)));
-    final ponto = Offset(linha.left + 30, linha.top + kAmBarHeight / 2);
-    await tester.tapAt(ponto);
-    await tester.pump(const Duration(milliseconds: 60));
-    await tester.tapAt(ponto);
-    await tester.pumpAndSettle();
-    expect(e.dentroDeGrupo, isTrue, reason: 'toque duplo entrou');
-    expect(find.byKey(const ValueKey('timeline-breadcrumb')), findsOneWidget);
-    expect(find.text('Projeto'), findsOneWidget);
-    expect(find.text('Grupo'), findsWidgets);
-    // Os filhos estao na timeline.
-    for (final id in ids) {
-      expect(find.byKey(ValueKey(id)), findsOneWidget, reason: 'filho $id visivel');
-    }
-
-    await tester.tap(find.byKey(const ValueKey('timeline-breadcrumb-0')));
-    await tester.pumpAndSettle();
-    expect(e.dentroDeGrupo, isFalse);
-    expect(find.byKey(const ValueKey('timeline-breadcrumb')), findsNothing);
-    expect(c.read(selectedLayerProvider), gid);
-  });
+      await tester.tap(find.byKey(const ValueKey('timeline-breadcrumb-0')));
+      await tester.pumpAndSettle();
+      expect(e.dentroDeGrupo, isFalse);
+      expect(find.byKey(const ValueKey('timeline-breadcrumb')), findsNothing);
+      expect(c.read(selectedLayerProvider), gid);
+    },
+  );
 
   testWidgets('E2 do grupo tem Entrar; Voltar sai do grupo', (tester) async {
     final c = await openEditor(tester);
     final e = c.read(editorControllerProvider.notifier);
-    e.groupLayers(c.read(editorControllerProvider).layers.map((l) => l.id).toList());
+    e.groupLayers(
+      c.read(editorControllerProvider).layers.map((l) => l.id).toList(),
+    );
     await tester.pumpAndSettle();
     await openLayerActions(tester);
     expect(find.byKey(const ValueKey('mais-entrar')), findsOneWidget);
@@ -279,23 +355,36 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('editor-back')));
     await tester.pumpAndSettle();
     expect(e.dentroDeGrupo, isFalse);
-    expect(find.byKey(const ValueKey('editor-capture')), findsOneWidget, reason: 'ainda no editor');
+    expect(
+      find.byKey(const ValueKey('editor-capture')),
+      findsOneWidget,
+      reason: 'ainda no editor',
+    );
   });
 
-  testWidgets('expandir a timeline pelo canto da regua encolhe o preview', (tester) async {
+  testWidgets('expandir a timeline pelo canto da regua encolhe o preview', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
-    final preview = tester.getRect(find.byKey(const ValueKey('preview-resize-handle'))).top;
+    final preview = tester
+        .getRect(find.byKey(const ValueKey('preview-resize-handle')))
+        .top;
     await tester.tap(find.byKey(const ValueKey('timeline-expandir')));
     await tester.pumpAndSettle();
     expect(c.read(editorSessionProvider).timelineExpanded, isTrue);
-    expect(tester.getRect(find.byKey(const ValueKey('preview-resize-handle'))).top, lessThan(preview));
+    expect(
+      tester.getRect(find.byKey(const ValueKey('preview-resize-handle'))).top,
+      lessThan(preview),
+    );
     expect(find.byTooltip('Recolher timeline'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('timeline-expandir')));
     await tester.pumpAndSettle();
     expect(c.read(editorSessionProvider).timelineExpanded, isFalse);
   });
 
-  testWidgets('ima com estado a vista; busca de camadas no Pro', (tester) async {
+  testWidgets('ima com estado a vista; busca de camadas no Pro', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
     expect(c.read(magneticProvider), isTrue);
     expect(find.byTooltip('Encaixe ligado'), findsOneWidget);
@@ -304,14 +393,21 @@ void main() {
     expect(c.read(magneticProvider), isFalse);
     expect(find.byTooltip('Encaixe desligado'), findsOneWidget);
 
-    expect(find.byKey(const ValueKey('timeline-buscar')), findsNothing, reason: 'busca e Pro');
+    expect(
+      find.byKey(const ValueKey('timeline-buscar')),
+      findsOneWidget,
+      reason: 'busca e Pro',
+    );
     c.read(proModeProvider.notifier).set(true);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('timeline-buscar')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('busca-campo')), 'fundo');
     await tester.pumpAndSettle();
-    final fundo = c.read(editorControllerProvider).layers.firstWhere((l) => l.name.toLowerCase().contains('fundo'));
+    final fundo = c
+        .read(editorControllerProvider)
+        .layers
+        .firstWhere((l) => l.name.toLowerCase().contains('fundo'));
     expect(find.byKey(ValueKey('busca-camada-${fundo.id}')), findsOneWidget);
     await tester.tap(find.byKey(ValueKey('busca-camada-${fundo.id}')));
     await tester.pumpAndSettle();

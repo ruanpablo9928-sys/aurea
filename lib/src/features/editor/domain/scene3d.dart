@@ -1426,7 +1426,10 @@ SceneFrame renderScene(
           environmentSampler: environmentSampler,
         );
         Color? vertexColor(int index) {
-          final n = modelFrame?.normals[index];
+          final packed = mesh.normals?[index];
+          final n =
+              modelFrame?.normals[index] ??
+              (packed == null ? null : Vec3(packed[0], packed[1], packed[2]));
           if (n == null) return null;
           var direction = _rotate(n, rx, ry, rz).normalized;
           final point = Vec3(wx[index], wy[index], wz[index]);

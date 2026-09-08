@@ -95,7 +95,6 @@ ModelAsset3D importObj3D(
     }
   }
 
-  var faceCount = 0;
   for (final raw in const LineSplitter().convert(
     text.replaceAll('\\\r\n', ' ').replaceAll('\\\n', ' '),
   )) {
@@ -114,9 +113,6 @@ ModelAsset3D importObj3D(
           }
         }
         positions.add(v);
-        if (positions.length > 500000) {
-          modelFail('OBJ acima de 500 mil vertices.');
-        }
       case 'vt':
         uv.add(numbers(rest, 2));
       case 'vn':
@@ -161,8 +157,6 @@ ModelAsset3D importObj3D(
             .putIfAbsent(group, () => {})
             .putIfAbsent(material, () => [])
             .add(resolved);
-        faceCount += rest.length - 2;
-        if (faceCount > 150000) modelFail('OBJ acima de 150 mil triangulos.');
     }
   }
   final nodes = <Map<String, dynamic>>[], primitives = <Map<String, dynamic>>[];

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../editor/presentation/am/am_colors.dart';
+import 'release_notice.dart';
 
 /// Uma novidade da versao.
 class NewsItem {
@@ -550,8 +551,8 @@ class WhatsNewCard extends StatelessWidget {
                   ),
                   SizedBox(height: 2),
                   Text(
-                    'Exportar MP4, animacao de texto refeita, Cena 3D, 12 '
-                    'efeitos novos e seletor de qualquer cor.',
+                    'Correções de áudio e keyframes, melhorias no 3D, '
+                    'novos efeitos e transições.',
                     style: TextStyle(fontSize: 12, color: AmColors.muted),
                   ),
                 ],
@@ -569,7 +570,10 @@ class WhatsNewCard extends StatelessWidget {
   }
 }
 
-Future<void> showWhatsNewSheet(BuildContext context) {
+Future<void> showWhatsNewSheet(BuildContext context) =>
+    showReleaseNotice(context);
+
+Future<void> showWhatsNewHistorySheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AmColors.panel,
@@ -605,7 +609,7 @@ Future<void> showWhatsNewSheet(BuildContext context) {
           ),
           const SizedBox(height: 4),
           Text(
-            '${aureaNews.length} novidades nesta versao',
+            'Histórico de novidades',
             style: const TextStyle(fontSize: 13, color: AmColors.muted),
           ),
           const SizedBox(height: 18),

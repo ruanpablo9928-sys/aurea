@@ -34,7 +34,7 @@ void main() {
     },
   );
   test('all 47 catalog entries have concrete offline instructions', () {
-    expect(effectSpecs.length, 47);
+    expect(effectSpecs.length, EffectType.values.length);
     expect(quickStartSteps.length, 6);
     for (final type in EffectType.values) {
       expect(effectHelp(type).length, greaterThan(65), reason: type.name);

@@ -28,10 +28,9 @@ ModelAsset3D importFbx3D(
   Uint8List bytes, {
   String name = 'Modelo FBX',
   Map<String, Uint8List> resources = const {},
-  int maxTriangles = 150000,
+  int? maxTriangles,
 }) {
   try {
-    if (bytes.length > 64 * 1024 * 1024) modelFail('FBX acima de 64 MB.');
     final binary =
         bytes.length >= 27 &&
         ascii.decode(bytes.sublist(0, 18), allowInvalid: true) ==
@@ -63,7 +62,6 @@ ModelAsset3D importFbx3D(
       }
     }
     final models = byId.entries.where((e) => e.value.name == 'Model').toList();
-    if (models.length > 4096) modelFail('FBX acima de 4096 nos.');
     final index = {
       for (var i = 0; i < models.length; i++) models[i].key: i + 1,
     };
@@ -166,7 +164,11 @@ ModelAsset3D importFbx3D(
       if (arquivo == null) return null;
       final base = arquivo.toLowerCase();
       for (final entry in resources.entries) {
-        final nome = entry.key.replaceAll(String.fromCharCode(92), '/').split('/').last.toLowerCase();
+        final nome = entry.key
+            .replaceAll(String.fromCharCode(92), '/')
+            .split('/')
+            .last
+            .toLowerCase();
         if (nome == base) {
           return 'data:application/octet-stream;base64,${base64Encode(entry.value)}';
         }
@@ -176,8 +178,10 @@ ModelAsset3D importFbx3D(
       );
       return null;
     }
+
     // Sem conexoes legiveis mas com UMA imagem selecionada: vale para todos.
-    final unicaImagem = texturaDoMaterial.isEmpty && temTextura && resources.length == 1
+    final unicaImagem =
+        texturaDoMaterial.isEmpty && temTextura && resources.length == 1
         ? 'data:application/octet-stream;base64,${base64Encode(resources.values.single)}'
         : null;
     final materials = <Map<String, dynamic>>[];
@@ -218,8 +222,8 @@ ModelAsset3D importFbx3D(
         final g = byId[gi];
         if (g?.name != 'Geometry' || g!.values.last != 'Mesh') continue;
         final raw = g.array('Vertices'), polys = g.array('PolygonVertexIndex');
-        if (raw.length % 3 != 0 || raw.length > 1500000) {
-          modelFail('Vertices FBX invalidos ou acima do limite.');
+        if (raw.length % 3 != 0) {
+          modelFail('Vertices FBX invalidos.');
         }
         final base = [
           for (var i = 0; i < raw.length; i += 3)
@@ -421,7 +425,7 @@ ModelAsset3D importFbx3D(
           final triangles = triangulateModelPolygon(vertices, face);
           (bucket['indices'] as List<int>).addAll(triangles);
           triangleCount += triangles.length ~/ 3;
-          if (triangleCount > maxTriangles) {
+          if (maxTriangles != null && triangleCount > maxTriangles) {
             modelFail('FBX acima de ${maxTriangles ~/ 1000} mil triangulos.');
           }
           cornerIndex += corners.length;
@@ -572,7 +576,6 @@ class _FbxBinary {
       final count = uint32(), encoding = uint32(), length = uint32();
       final stride = {'f': 4, 'd': 8, 'l': 8, 'i': 4, 'b': 1, 'c': 1}[type]!;
       final expected = count * stride;
-      if (expected > 32 * 1024 * 1024) modelFail('Array FBX acima de 32 MB.');
       need(length);
       var raw = bytes.sublist(p, p + length);
       p += length;

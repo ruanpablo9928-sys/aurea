@@ -8,6 +8,7 @@ import 'caption.dart';
 import 'caption_highlight.dart';
 import 'cut.dart';
 import 'effect.dart';
+import 'audio_effect.dart';
 import 'element3d.dart';
 import 'grid_rig.dart';
 import 'blend_extra.dart';
@@ -50,6 +51,7 @@ sealed class Layer {
     List<LayerMask>? masks,
     MatteMode? matteMode,
     this.matteSourceId,
+    this.transitionIn,
   }) : id = id ?? const Uuid().v4(),
        position = position ?? AnimatedOffset(Offset.zero),
        scaleX = scaleX ?? AnimatedDouble(1),
@@ -112,6 +114,7 @@ sealed class Layer {
   /// fonte fica oculta automaticamente na composicao.
   final MatteMode matteMode;
   final String? matteSourceId;
+  final ClipTransition? transitionIn;
 
   Duration get endTime => startTime + duration;
 
@@ -218,6 +221,8 @@ sealed class Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   });
 
   Layer duplicated();
@@ -238,6 +243,7 @@ class AudioProcessing {
     this.lowDb = 0,
     this.midDb = 0,
     this.highDb = 0,
+    this.effects = const [],
   });
 
   /// Tirar ruido de fundo, 0..1.
@@ -253,6 +259,7 @@ class AudioProcessing {
   final double lowDb;
   final double midDb;
   final double highDb;
+  final List<AudioEffect> effects;
 
   bool get isNeutral =>
       denoise == 0 &&
@@ -260,7 +267,8 @@ class AudioProcessing {
       deEsser == 0 &&
       lowDb == 0 &&
       midDb == 0 &&
-      highDb == 0;
+      highDb == 0 &&
+      effects.isEmpty;
 
   /// A CHAVE DO CACHE. Duas fichas iguais tem de dar a mesma chave, ou o
   /// audio seria reprocessado a cada abertura do projeto.
@@ -270,7 +278,7 @@ class AudioProcessing {
       's${deEsser.toStringAsFixed(3)}'
       'l${lowDb.toStringAsFixed(2)}'
       'm${midDb.toStringAsFixed(2)}'
-      'h${highDb.toStringAsFixed(2)}';
+      'h${highDb.toStringAsFixed(2)}${effects.map((e) => e.cacheKey).join()}';
 
   AudioProcessing copyWith({
     double? denoise,
@@ -279,6 +287,7 @@ class AudioProcessing {
     double? lowDb,
     double? midDb,
     double? highDb,
+    List<AudioEffect>? effects,
   }) => AudioProcessing(
     denoise: denoise ?? this.denoise,
     voice: voice ?? this.voice,
@@ -286,6 +295,7 @@ class AudioProcessing {
     lowDb: lowDb ?? this.lowDb,
     midDb: midDb ?? this.midDb,
     highDb: highDb ?? this.highDb,
+    effects: effects ?? this.effects,
   );
 
   @override
@@ -404,7 +414,6 @@ class VideoLayer extends Layer {
     this.speed = 1.0,
     this.reverse = false,
     this.speedBlur = false,
-    this.transitionIn,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
     super.position,
@@ -425,6 +434,7 @@ class VideoLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   });
 
   final String sourcePath;
@@ -445,7 +455,6 @@ class VideoLayer extends Layer {
   final bool speedBlur;
 
   /// Transicao da camada anterior (A) para esta camada (B).
-  final ClipTransition? transitionIn;
 
   final double volume;
 
@@ -589,6 +598,7 @@ class ImageLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   });
 
   final String sourcePath;
@@ -618,9 +628,14 @@ class ImageLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return ImageLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -707,6 +722,7 @@ class TextLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   }) : anims = List.unmodifiable(anims ?? const <TextAnim>[]),
        animators = List.unmodifiable(animators ?? const <TextAnimator>[]);
 
@@ -780,9 +796,14 @@ class TextLayer extends Layer {
     TextPathSpec? textPath,
     List<TextAnim>? anims,
     List<TextAnimator>? animators,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return TextLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -879,6 +900,7 @@ class ShapeLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   }) : contents = List.unmodifiable(contents ?? ShapePresets.circle());
 
   /// Itens avaliados de baixo para cima (operador afeta o que veio antes).
@@ -973,9 +995,14 @@ class ShapeLayer extends Layer {
     String? matteSourceId,
     bool clearMatteSource = false,
     List<ShapeItem>? contents,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return ShapeLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -1062,6 +1089,7 @@ class GroupLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   }) : children = List.unmodifiable(children ?? const <Layer>[]);
 
   /// Ordem: indice 0 e a camada mais acima (como na composicao raiz).
@@ -1132,9 +1160,14 @@ class GroupLayer extends Layer {
     AnimatedDouble? timeRemap,
     bool? collapse,
     bool? clipToComp,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return GroupLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -1225,6 +1258,7 @@ class CaptionLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   }) : cues = List.unmodifiable(cues ?? const <Cue>[]);
 
   final List<Cue> cues;
@@ -1264,9 +1298,14 @@ class CaptionLayer extends Layer {
     List<Cue>? cues,
     CaptionStyle? style,
     CaptionHighlightStyle? highlight,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return CaptionLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -1354,6 +1393,7 @@ class AudioLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   });
 
   final String sourcePath;
@@ -1404,9 +1444,14 @@ class AudioLayer extends Layer {
     AudioSpec? audio,
     Duration? sourceOffset,
     double? speed,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return AudioLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -1497,6 +1542,7 @@ class NullLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   });
 
   @override
@@ -1524,9 +1570,14 @@ class NullLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return NullLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -1653,6 +1704,7 @@ class ParticlesLayer extends Layer {
     required super.duration,
     this.count = 90,
     this.seed = 7,
+    this.uniformDistribution = false,
     this.speed = 40,
     this.spreadDeg = 360,
     this.directionDeg = -90,
@@ -1701,11 +1753,13 @@ class ParticlesLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   }) : shape = shape ?? (star ? 1 : 0);
 
   /// Numero de particulas vivas por ciclo.
   final int count;
   final int seed;
+  final bool uniformDistribution;
 
   /// Velocidade inicial (px/s), direcao media e abertura do cone (graus).
   final double speed;
@@ -1792,6 +1846,7 @@ class ParticlesLayer extends Layer {
   ParticlesLayer copyParticles({
     int? count,
     int? seed,
+    bool? uniformDistribution,
     double? speed,
     double? spreadDeg,
     double? directionDeg,
@@ -1826,11 +1881,13 @@ class ParticlesLayer extends Layer {
   }) {
     return ParticlesLayer(
       id: id,
+      transitionIn: transitionIn,
       name: name,
       startTime: startTime,
       duration: duration,
       count: count ?? this.count,
       seed: seed ?? this.seed,
+      uniformDistribution: uniformDistribution ?? this.uniformDistribution,
       speed: speed ?? this.speed,
       spreadDeg: spreadDeg ?? this.spreadDeg,
       directionDeg: directionDeg ?? this.directionDeg,
@@ -1903,14 +1960,20 @@ class ParticlesLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return ParticlesLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
       count: count,
       seed: seed,
+      uniformDistribution: uniformDistribution,
       speed: speed,
       spreadDeg: spreadDeg,
       directionDeg: directionDeg,
@@ -1971,6 +2034,7 @@ class ParticlesLayer extends Layer {
     duration: duration,
     count: count,
     seed: seed,
+    uniformDistribution: uniformDistribution,
     speed: speed,
     spreadDeg: spreadDeg,
     directionDeg: directionDeg,
@@ -2065,6 +2129,7 @@ class Element3DLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   });
 
   final Element3DKind kind;
@@ -2115,6 +2180,7 @@ class Element3DLayer extends Layer {
   }) {
     return Element3DLayer(
       id: id,
+      transitionIn: transitionIn,
       name: name,
       startTime: startTime,
       duration: duration,
@@ -2174,9 +2240,14 @@ class Element3DLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return Element3DLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -2289,6 +2360,7 @@ class Scene3DLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   }) : scene = scene ?? const Scene3D(),
        camera = camera ?? _defaultCamera(),
        extraCameras = List.unmodifiable(extraCameras ?? const <Camera3D>[]),
@@ -2386,6 +2458,7 @@ class Scene3DLayer extends Layer {
     bool? showHelpers,
   }) => Scene3DLayer(
     id: id,
+    transitionIn: transitionIn,
     name: name,
     startTime: startTime,
     duration: duration,
@@ -2497,9 +2570,14 @@ class Scene3DLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return Scene3DLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,
@@ -2596,6 +2674,7 @@ class AdjustmentLayer extends Layer {
     super.masks,
     super.matteMode,
     super.matteSourceId,
+    super.transitionIn,
   });
 
   @override
@@ -2623,9 +2702,14 @@ class AdjustmentLayer extends Layer {
     MatteMode? matteMode,
     String? matteSourceId,
     bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
   }) {
     return AdjustmentLayer(
       id: id,
+      transitionIn: clearTransitionIn
+          ? null
+          : (transitionIn ?? this.transitionIn),
       name: name ?? this.name,
       startTime: startTime ?? this.startTime,
       duration: duration ?? this.duration,

@@ -178,7 +178,6 @@ void main() {
       expect(c.read(editorSessionProvider).panel, EditorPanel.editShape);
       expect(c.read(editorSessionProvider).pointsItemId, isNull);
     });
-
   });
 
   group('parseTimecodeInput', () {
@@ -292,27 +291,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'controles avancados ficam nos ajustes sem esconder as ferramentas',
-    (tester) async {
-      final c = await openEditor(tester);
-      expect(c.read(proModeProvider), isFalse);
-      c.read(selectedLayerProvider.notifier).state = c
-          .read(editorControllerProvider)
-          .layers
-          .first
-          .id;
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
-      expect(find.byKey(const ValueKey('editor-pro')), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('editor-settings')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('editor-pro')));
-      await tester.pumpAndSettle();
-      expect(c.read(proModeProvider), isTrue);
-      expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
-    },
-  );
+  testWidgets('editor sempre Pro sem seletor de modo nos ajustes', (
+    tester,
+  ) async {
+    final c = await openEditor(tester);
+    expect(c.read(proModeProvider), isTrue);
+    c.read(proModeProvider.notifier).set(false);
+    expect(c.read(proModeProvider), isTrue);
+    c.read(selectedLayerProvider.notifier).state = c
+        .read(editorControllerProvider)
+        .layers
+        .first
+        .id;
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
+    expect(find.byKey(const ValueKey('editor-pro')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('editor-settings')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('editor-pro')), findsNothing);
+    expect(c.read(proModeProvider), isTrue);
+    expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
+  });
 
   testWidgets(
     'o + abre a barra; Texto cria em um toque; Midia abre o seletor',

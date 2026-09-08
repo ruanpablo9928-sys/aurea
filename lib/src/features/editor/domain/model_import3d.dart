@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'model_asset3d.dart';
+import 'packed_model_vectors.dart';
 
 class ModelImportException implements Exception {
   const ModelImportException(this.message);
@@ -21,9 +22,6 @@ ModelAsset3D importGltf3D(
   bool binary = true,
   Map<String, Uint8List> resources = const {},
 }) {
-  if (bytes.length > 96 * 1024 * 1024) {
-    modelFail('Modelo acima de 96 MB. Reduza texturas e geometria.');
-  }
   try {
     Map<String, dynamic>? doc;
     Uint8List? bin;
@@ -88,9 +86,6 @@ class _GltfReader {
   Uint8List resource(String uri) {
     if (uri.startsWith('data:')) {
       final result = UriData.parse(uri).contentAsBytes();
-      if (result.length > 64 * 1024 * 1024) {
-        modelFail('Recurso embutido acima de 64 MB.');
-      }
       return result;
     }
     final value = resources[uri] ?? resources[Uri.decodeComponent(uri)];
@@ -120,8 +115,8 @@ class _GltfReader {
     }
     if (_accessors.containsKey(index)) return _accessors[index]!;
     final count = a['count'] as int;
-    if (count < 1 || count > 1000000) {
-      modelFail('Accessor vazio ou acima do limite de 1 milhao de valores.');
+    if (count < 1) {
+      modelFail('Accessor vazio.');
     }
     final components = {
       'SCALAR': 1,
@@ -165,10 +160,8 @@ class _GltfReader {
       return v.toDouble();
     }
 
-    final values = List.generate(
-      count,
-      (_) => List<double>.filled(components, 0),
-    );
+    // Allocate only after the buffer bounds below have been validated.
+    late final values = PackedModelVectors(count, components);
     if (a['bufferView'] != null) {
       final vi = a['bufferView'] as int;
       final data = ByteData.sublistView(view(vi));
@@ -184,7 +177,10 @@ class _GltfReader {
       }
       for (var i = 0; i < count; i++) {
         for (var c = 0; c < components; c++) {
-          values[i][c] = number(data, offset + i * stride + c * size);
+          values.data[i * components + c] = number(
+            data,
+            offset + i * stride + c * size,
+          );
         }
       }
     } else if (a['sparse'] == null) {
@@ -221,7 +217,10 @@ class _GltfReader {
         }
         previous = target;
         for (var c = 0; c < components; c++) {
-          values[target][c] = number(va, vo + (i * components + c) * size);
+          values.data[target * components + c] = number(
+            va,
+            vo + (i * components + c) * size,
+          );
         }
       }
     }
@@ -260,7 +259,6 @@ class _GltfReader {
       }
     }
     final rawNodes = list('nodes');
-    if (rawNodes.length > 4096) modelFail('Modelo acima de 4096 nos.');
     final parents = <int, int>{};
     for (var i = 0; i < rawNodes.length; i++) {
       for (final child in rawNodes[i]['children'] as List? ?? []) {
@@ -537,11 +535,6 @@ class _GltfReader {
           }
         }
         triangleCount += indices.length ~/ 3;
-        if (triangleCount > 150000) {
-          modelFail(
-            'Acima de 150 mil triangulos: simplifique o modelo antes de importar.',
-          );
-        }
         final targets = <Map<String, dynamic>>[];
         for (final target in p['targets'] as List? ?? []) {
           if (targets.length >= 64) modelFail('Mais de 64 morph targets.');
@@ -577,11 +570,6 @@ class _GltfReader {
     }
     if (primitives.isEmpty || triangleCount == 0) {
       modelFail('A cena ativa nao contem triangulos.');
-    }
-    if (triangleCount > 30000) {
-      warnings.add(
-        'Modelo pesado: $triangleCount triangulos; reproducao pode perder fluidez.',
-      );
     }
     final clips = <Map<String, dynamic>>[];
     for (final clip in list('animations')) {

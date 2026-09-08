@@ -12,10 +12,44 @@ import '../domain/layer.dart';
 import 'media_preview_service.dart';
 import 'preview_stats.dart';
 import 'proxy_service.dart';
+import 'audio_render_service.dart';
 
 /// Gerencia um VideoPlayerController por camada de video e mantem todos
 /// sincronizados ao clock mestre (play/pause/seek + correcao de drift).
 class VideoLayerManager {
+  VideoLayerManager() {
+    AudioRenderService.instance.revision.addListener(_audioChanged);
+  }
+  Timer? _audioDebounce;
+  int _lastAudioRevision = -1;
+  void _audioChanged() {
+    sync(_lastLayers, _lastT, _lastPlaying, seekRevision: _seekRevision);
+    revision.value++;
+  }
+
+  void _prepareAudio() {
+    _audioDebounce?.cancel();
+    _audioDebounce = Timer(const Duration(milliseconds: 300), () {
+      final service = AudioRenderService.instance;
+      for (final layer in _lastLayers) {
+        if (_lastT < layer.startTime - _janelaPreRoll ||
+            _lastT >= layer.endTime) {
+          continue;
+        }
+        if (AudioRenderService.needed(layer) &&
+            service.ready(layer) == null &&
+            !service.busy(layer) &&
+            service.error(layer) == null) {
+          unawaited(
+            service
+                .prepare(layer)
+                .catchError((Object _) => AudioRenderService.source(layer)),
+          );
+        }
+      }
+    });
+  }
+
   final Map<String, VideoPlayerController> _controllers = {};
   final Map<String, String> _controllerPath = {};
   final Map<String, Object> _controllerTicket = {};
@@ -165,7 +199,10 @@ class VideoLayerManager {
     if (_controllers.containsKey(id) || _initializing.containsKey(id)) {
       return;
     }
-    final controller = VideoPlayerController.file(File(path));
+    final controller = VideoPlayerController.file(
+      File(path),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     final ticket = Object();
     _controllerPath[id] = path;
     _controllerTicket[id] = ticket;
@@ -239,10 +276,15 @@ class VideoLayerManager {
     // Zero alocacao no caminho quente (travada-periodica C6): a lista de
     // midias so e remontada quando a CENA muda, nunca a cada tick.
     final proxyRevision = ProxyService.instance.revision.value;
+    final audioService = AudioRenderService.instance;
+    final audioRevision = audioService.revision.value;
     if (!identical(layers, _lastLayers) ||
-        proxyRevision != _lastProxyRevision) {
+        proxyRevision != _lastProxyRevision ||
+        audioRevision != _lastAudioRevision) {
       _lastLayers = layers;
       _lastProxyRevision = proxyRevision;
+      _lastAudioRevision = audioRevision;
+      _prepareAudio();
       _media
         ..clear()
         // Audio primeiro: ele e o relogio mestre (nunca "pula" frame).
@@ -251,7 +293,16 @@ class VideoLayerManager {
             if (l is AudioLayer)
               (
                 id: l.id,
-                path: l.sourcePath,
+                path: audioService.ready(l) ?? l.sourcePath,
+                volume: l.volume,
+                offset: l.sourceOffset,
+                layer: l,
+              ),
+          for (final l in layers)
+            if (l is VideoLayer && audioService.ready(l) != null)
+              (
+                id: '${l.id}:audiofx',
+                path: audioService.ready(l)!,
                 volume: l.volume,
                 offset: l.sourceOffset,
                 layer: l,
@@ -307,6 +358,14 @@ class VideoLayerManager {
     }
     for (final m in mediaLayers) {
       if (wanted.contains(m.id)) _ensure(m.id, m.path, m.volume);
+      if (wanted.contains(m.id) &&
+          AudioRenderService.needed(m.layer) &&
+          audioService.ready(m.layer) == null &&
+          !audioService.busy(m.layer) &&
+          audioService.error(m.layer) == null &&
+          _audioDebounce?.isActive != true) {
+        _prepareAudio();
+      }
     }
 
     // Relogio mestre desta passada: a primeira midia ativa que trouxer
@@ -343,6 +402,11 @@ class VideoLayerManager {
         t,
         duck: duckEnvelopes[layer.id] ?? DuckEnvelope.neutro,
       );
+      if (layer is VideoLayer &&
+          m.id == layer.id &&
+          audioService.ready(layer) != null) {
+        effectiveVolume = 0;
+      }
       for (final transition in layerTransitions) {
         if (!transition.transition.crossfadeAudio) continue;
         final angle = transition.progress * math.pi / 2;
@@ -546,6 +610,8 @@ class VideoLayerManager {
   }
 
   void dispose() {
+    _audioDebounce?.cancel();
+    AudioRenderService.instance.revision.removeListener(_audioChanged);
     _positioning.clear();
     _starting.clear();
     _positionTargets.clear();

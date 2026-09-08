@@ -60,16 +60,6 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
               atualiza();
             },
           ),
-          LinhaDoEstudio(
-            key: const ValueKey('editor-pro'),
-            icone: CupertinoIcons.slider_horizontal_3,
-            titulo: 'Controles avançados',
-            subtitulo: pro ? 'Ativados' : 'Desativados',
-            onTap: () {
-              ref.read(proModeProvider.notifier).toggle();
-              atualiza();
-            },
-          ),
           const SecaoDoEstudio('Composicao'),
           _Chips<String>(
             chave: 'projeto-proporcao',

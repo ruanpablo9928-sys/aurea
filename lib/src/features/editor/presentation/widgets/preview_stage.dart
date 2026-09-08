@@ -1,3 +1,4 @@
+import 'essential_warp_pass.dart';
 import 'composition_frame.dart';
 
 import 'dart:io';
@@ -22,10 +23,13 @@ export '../../application/freehand_session.dart' show onionSkinProvider;
 import '../../application/playback_controller.dart';
 import '../../application/preview_stats.dart';
 import '../../application/video_layer_manager.dart';
+import '../../domain/keyframe.dart' show AnimatedDouble;
 import '../../domain/cut.dart';
 import '../../domain/cut_ops.dart';
 import '../../domain/effect.dart';
 import '../../domain/fx.dart';
+import '../../domain/oscillate.dart';
+import 'motion_tile_pass.dart';
 import '../../domain/gear.dart';
 import '../../domain/text_animator.dart' show valueNoise01;
 import '../../domain/caption_highlight.dart';
@@ -1276,7 +1280,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             project.rendersInPreview(layer.id))
           layer,
     ];
-    final sorted = depthSortPaintOrder(paintOrder, t);
+    final sorted = transitionPaintOrder(
+      depthSortPaintOrder(paintOrder, t),
+      transitions,
+    );
+    final transitionIds = {
+      for (final c in transitions) ...[c.outgoing.id, c.incoming.id],
+    };
 
     // MUNDO 3D: solidos VIZINHOS na pilha viram uma cena so, com a
     // profundidade compartilhada — um entra dentro do outro, passa por
@@ -1289,10 +1299,13 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
       var i = 0;
       while (i < sorted.length) {
         final l = sorted[i];
-        if (l is Element3DLayer && _mundoElegivel(project, l)) {
+        if (l is Element3DLayer &&
+            !transitionIds.contains(l.id) &&
+            _mundoElegivel(project, l)) {
           var j = i + 1;
           while (j < sorted.length &&
               sorted[j] is Element3DLayer &&
+              !transitionIds.contains(sorted[j].id) &&
               _mundoElegivel(project, sorted[j] as Element3DLayer)) {
             j++;
           }
@@ -1592,6 +1605,36 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
             context.incoming.startTime,
           );
           final local = globalTime - context.window.start;
+          if (essentialWarpTypes.contains(effect.type)) {
+            final reveal =
+                effect.type == EffectType.venetianBlinds ||
+                effect.type == EffectType.blockDissolve;
+            if (reveal && !incoming) {
+              out = canvas;
+            } else {
+              final params = {...effect.params};
+              if (effect.type == EffectType.offset) {
+                for (final key in ['center_x', 'center_y']) {
+                  params[key] = AnimatedDouble(
+                    .5 + (effect.paramAt(key, local) - .5) * amount,
+                  );
+                }
+              } else {
+                params['amount'] = AnimatedDouble(
+                  reveal ? 1 - p : effect.paramAt('amount', local) * amount,
+                );
+              }
+              out = Opacity(
+                opacity: reveal ? 1 : context.opacityFor(layer.id),
+                child: _applyEffects(
+                  [effect.copyWith(params: params)],
+                  canvas,
+                  local,
+                ),
+              );
+            }
+            break;
+          }
           final effected = _applyEffects([effect], canvas, local);
           out = Opacity(
             opacity: context.opacityFor(layer.id).clamp(0.0, 1.0),
@@ -3360,6 +3403,26 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
                   );
           }
 
+        case EffectType.twirl:
+        case EffectType.fisheye:
+        case EffectType.kaleidoscope:
+        case EffectType.venetianBlinds:
+        case EffectType.blockDissolve:
+        case EffectType.offset:
+        case EffectType.invert:
+        case EffectType.waveWarp:
+          out = EssentialWarpPass(effect: effect, time: local, child: out);
+
+        case EffectType.oscillate:
+          out = Transform.translate(
+            offset: oscillationOffset(
+              effect,
+              local,
+              pixelScale: math.min(fxWidth, fxHeight) / 1080,
+            ),
+            child: out,
+          );
+
         case EffectType.tremor:
           // SHAKE: fase INTEGRADA no tempo, componentes aleatoria e de
           // onda separadas por eixo, e canais RGB com fase propria.
@@ -4381,24 +4444,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               (ladoH - 100).abs() < 0.01 &&
               (saidaW - 100).abs() < 0.01 &&
               (saidaH - 100).abs() < 0.01 &&
+              (effect.paramAt('tile_center', local) - 0.5).abs() < 0.001 &&
+              (effect.paramAt('tile_center_y', local) - 0.5).abs() < 0.001 &&
               fase.abs() < 0.01 &&
               !espelha;
           if (!identidade) {
-            out = FxSnapshot(
-              painter: MotionTilePainter(
-                tileW: ladoW,
-                tileH: ladoH,
-                outW: saidaW,
-                outH: saidaH,
-                centerX: effect.paramAt('tile_center', local),
-                centerY: effect.paramAt('tile_center_y', local),
-                mirror: espelha,
-                phase: fase,
-                horizontalPhase:
-                    effect.paramAt('horizontal_phase_shift', local) >= 0.5,
-              ),
-              child: out,
-            );
+            out = MotionTilePass(effect: effect, time: local, child: out);
           }
 
         case EffectType.ccSplit:

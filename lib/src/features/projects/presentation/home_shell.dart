@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/storage/prefs.dart';
+import 'release_notice.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../about/presentation/about_tab.dart';
@@ -13,15 +18,36 @@ import 'projects_tab.dart';
 
 /// Casca principal: abas com tab bar translucida estilo iOS
 /// (blur + hairline, conteudo rolando por baixo).
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_showUpdateOnce());
+    });
+  }
+
+  Future<void> _showUpdateOnce() async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    if (prefs.getString(releaseNoticeSeenKey) == releaseNoticeRevision) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    await showReleaseNotice(context);
+    // Persist after dismissal, so an interrupted launch can show it again.
+    try {
+      await prefs.setString(releaseNoticeSeenKey, releaseNoticeRevision);
+    } catch (_) {
+      // A preferences failure must never prevent opening the editor.
+    }
+  }
 
   static const _tabs = [
     (CupertinoIcons.house, CupertinoIcons.house_fill, 'Inicio'),

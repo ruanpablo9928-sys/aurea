@@ -40,6 +40,7 @@ void main() {
     expect(File(saved.path).existsSync(), isTrue);
     expect(await File(saved.path).readAsBytes(), png);
     expect(saved.path, contains('imported_media'));
+    expect(saved.name, 'picker.png');
   });
 
   test('invalid image is rejected and partial copy is removed', () async {

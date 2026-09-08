@@ -126,7 +126,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
   FerramentaDoEstudio _tool = FerramentaDoEstudio.selecionar;
 
   /// MODO AVANCADO: vistas, mini-vista, grade, eixo, comandos.
-  bool _avancado = false;
+  final bool _avancado = true;
 
   /// Encaixar na grade e eixo travado (modo avancado).
   bool _snap = false;
@@ -139,7 +139,6 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
   void initState() {
     super.initState();
     _prefs = EstudioPreferencia.de(ref);
-    _avancado = _prefs.avancado;
     _dica = _prefs.dicasVistas ? -1 : 0;
     _playback = PlaybackController(
       vsync: this,
@@ -1072,20 +1071,6 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
               },
             ),
             const SecaoDoEstudio('Tela'),
-            LinhaDoEstudio(
-              key: const ValueKey('mais-avancado'),
-              icone: CupertinoIcons.wrench,
-              titulo: 'Modo avancado',
-              subtitulo:
-                  'Vistas, mini-vista, eixo travado e os comandos de '
-                  'camera na tela.',
-              ligado: _avancado,
-              onTap: () {
-                setState(() => _avancado = !_avancado);
-                _prefs.definirAvancado(_avancado);
-                setSheet(() {});
-              },
-            ),
             if (_avancado)
               LinhaDoEstudio(
                 key: const ValueKey('mais-minivista'),
@@ -1497,6 +1482,12 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
         onTap: () => _acoesDoObjeto(node),
       ),
       ChipDoEstudio(
+        key: const ValueKey('contexto-linkar-nulo'),
+        label: node.parentId == null ? 'Linkar nulo' : 'Vinculado',
+        icone: CupertinoIcons.link,
+        onTap: node.locked ? null : () => _linkarObjeto(layer, node),
+      ),
+      ChipDoEstudio(
         key: const ValueKey('contexto-focar'),
         label: 'Focar',
         icone: CupertinoIcons.viewfinder,
@@ -1533,6 +1524,70 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
         onTap: () => _selecionar(null),
       ),
     ];
+  }
+
+  Future<void> _linkarObjeto(Scene3DLayer layer, SceneNode node) async {
+    _playback.pause();
+    final nodes = {for (final n in layer.scene.nodes) n.id: n};
+    bool eligible(SceneNode candidate) {
+      final seen = <String>{};
+      SceneNode? current = candidate;
+      while (current != null && seen.add(current.id)) {
+        if (current.id == node.id) return false;
+        current = nodes[current.parentId];
+      }
+      return current == null;
+    }
+
+    final candidates = [
+      ...layer.scene.nodes.where((n) => n.isNull && eligible(n)),
+      ...layer.scene.nodes.where((n) => !n.isNull && eligible(n)),
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AmColors.panel,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Linkar a objeto nulo ou objeto')),
+            ListTile(
+              leading: const Icon(CupertinoIcons.add),
+              title: const Text('Criar nulo e linkar'),
+              onTap: () {
+                final parent = _controller.addSceneNull(widget.layerId);
+                _controller.setSceneNodeParent(widget.layerId, node.id, parent);
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              leading: const Icon(CupertinoIcons.link),
+              title: const Text('Sem vinculo'),
+              onTap: () {
+                _controller.setSceneNodeParent(widget.layerId, node.id, null);
+                Navigator.pop(ctx);
+              },
+            ),
+            for (final parent in candidates)
+              ListTile(
+                title: Text(parent.name),
+                leading: Icon(
+                  parent.isNull ? CupertinoIcons.folder : CupertinoIcons.cube,
+                ),
+                selected: node.parentId == parent.id,
+                onTap: () {
+                  _controller.setSceneNodeParent(
+                    widget.layerId,
+                    node.id,
+                    parent.id,
+                  );
+                  Navigator.pop(ctx);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _acoesDoObjeto(SceneNode node) {
@@ -2175,40 +2230,43 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                   'Proximo keyframe',
                   next == null ? null : () => seek(next),
                 ),
-                PopupMenuButton<Easing>(
-                  tooltip: 'Curva do movimento',
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.show_chart,
-                    size: 20,
-                    color: AmColors.accent,
+                SizedBox(
+                  width: 34,
+                  child: PopupMenuButton<Easing>(
+                    tooltip: 'Curva do movimento',
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.show_chart,
+                      size: 20,
+                      color: AmColors.accent,
+                    ),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: Easing.linear,
+                        child: Text('Linear'),
+                      ),
+                      const PopupMenuItem(
+                        value: Easing.easeInOut,
+                        child: Text('Suave'),
+                      ),
+                      const PopupMenuItem(
+                        value: Easing.easeOut,
+                        child: Text('Desacelerar'),
+                      ),
+                      const PopupMenuItem(
+                        value: Easing.overshoot,
+                        child: Text('Antecipacao e retorno'),
+                      ),
+                    ],
+                    onSelected: (ease) => _mapTracks((track) {
+                      final start = track.keyframes
+                          .where((k) => k.time <= _time)
+                          .lastOrNull;
+                      return start == null
+                          ? track
+                          : track.withEase(start.time, ease);
+                    }),
                   ),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: Easing.linear,
-                      child: Text('Linear'),
-                    ),
-                    const PopupMenuItem(
-                      value: Easing.easeInOut,
-                      child: Text('Suave'),
-                    ),
-                    const PopupMenuItem(
-                      value: Easing.easeOut,
-                      child: Text('Desacelerar'),
-                    ),
-                    const PopupMenuItem(
-                      value: Easing.overshoot,
-                      child: Text('Antecipacao e retorno'),
-                    ),
-                  ],
-                  onSelected: (ease) => _mapTracks((track) {
-                    final start = track.keyframes
-                        .where((k) => k.time <= _time)
-                        .lastOrNull;
-                    return start == null
-                        ? track
-                        : track.withEase(start.time, ease);
-                  }),
                 ),
                 const Spacer(),
                 if (_avancado) ...[

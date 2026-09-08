@@ -216,6 +216,50 @@ VideoLayer? videoAfter(List<Layer> layers, String outgoingId) {
   return candidates.first;
 }
 
+bool isTransitionLayer(Layer layer) =>
+    layer is! AudioLayer &&
+    layer is! NullLayer &&
+    layer is! GroupLayer &&
+    layer is! AdjustmentLayer;
+
+Layer? layerAfter(List<Layer> layers, String outgoingId) {
+  Layer? outgoing;
+  for (final l in layers.where(isTransitionLayer)) {
+    if (l.id == outgoingId) outgoing = l;
+  }
+  if (outgoing == null) return null;
+
+  for (final l in layers.where(isTransitionLayer)) {
+    if (l.transitionIn?.outgoingLayerId == outgoingId &&
+        _touches(l.startTime, outgoing.endTime)) {
+      return l;
+    }
+  }
+  final candidates = [
+    for (final l in layers.where(isTransitionLayer))
+      if (l.id != outgoingId && _touches(l.startTime, outgoing.endTime)) l,
+  ];
+  if (candidates.isEmpty) return null;
+  for (final l in candidates) {
+    if (l is VideoLayer &&
+        outgoing is VideoLayer &&
+        l.sourcePath == outgoing.sourcePath &&
+        _touches(
+          l.sourceOffset,
+          outgoing.sourceOffset + videoSourceSpan(outgoing),
+        )) {
+      return l;
+    }
+  }
+  final index = layers.indexOf(outgoing);
+  candidates.sort(
+    (a, b) => (layers.indexOf(a) - index).abs().compareTo(
+      (layers.indexOf(b) - index).abs(),
+    ),
+  );
+  return candidates.first;
+}
+
 class ClipTransitionContext {
   const ClipTransitionContext({
     required this.transition,
@@ -226,8 +270,8 @@ class ClipTransitionContext {
   });
 
   final ClipTransition transition;
-  final VideoLayer outgoing;
-  final VideoLayer incoming;
+  final Layer outgoing;
+  final Layer incoming;
   final TransitionWindow window;
   final double progress;
 
@@ -261,7 +305,7 @@ List<ClipTransitionContext> transitionContextsAt(
   final contexts = <ClipTransitionContext>[];
   // Resolve participants once, instead of scanning the entire timeline
   // for every cut on every preview frame.
-  final videos = {for (final l in layers.whereType<VideoLayer>()) l.id: l};
+  final videos = {for (final l in layers.where(isTransitionLayer)) l.id: l};
   for (final incoming in videos.values) {
     final transition = incoming.transitionIn;
     if (transition == null || !transition.enabled) continue;
@@ -363,8 +407,8 @@ class TransitionHandleReport {
     required this.knownAfterA,
   });
 
-  final VideoLayer outgoing;
-  final VideoLayer incoming;
+  final Layer outgoing;
+  final Layer incoming;
   final ClipTransition requested;
   final Duration availableBeforeB;
   final Duration availableAfterA;
@@ -409,10 +453,10 @@ TransitionHandleReport? transitionHandles(
   String outgoingId,
   ClipTransition requested,
 ) {
-  final incoming = videoAfter(layers, outgoingId);
+  final incoming = layerAfter(layers, outgoingId);
   if (incoming == null) return null;
-  VideoLayer? outgoing;
-  for (final l in layers.whereType<VideoLayer>()) {
+  Layer? outgoing;
+  for (final l in layers.where(isTransitionLayer)) {
     if (l.id == outgoingId) outgoing = l;
   }
   if (outgoing == null) return null;
@@ -421,13 +465,17 @@ TransitionHandleReport? transitionHandles(
     microseconds: (source.inMicroseconds / math.max(0.05, rate.abs())).round(),
   );
 
-  final before = timelineFromSource(
-    incoming.sourceOffset,
-    videoPlaybackRateAt(incoming, Duration.zero),
-  );
+  final before = incoming is! VideoLayer
+      ? requested.duration
+      : timelineFromSource(
+          incoming.sourceOffset,
+          videoPlaybackRateAt(incoming, Duration.zero),
+        );
   var after = Duration.zero;
   var knownAfter = false;
-  if (outgoing.sourcePath == incoming.sourcePath) {
+  if (outgoing is VideoLayer &&
+      incoming is VideoLayer &&
+      outgoing.sourcePath == incoming.sourcePath) {
     final outgoingEnd = outgoing.sourceOffset + videoSourceSpan(outgoing);
     if (incoming.sourceOffset >= outgoingEnd - _junctionTolerance) {
       after = timelineFromSource(
@@ -445,4 +493,41 @@ TransitionHandleReport? transitionHandles(
     availableAfterA: after,
     knownAfterA: knownAfter,
   );
+}
+
+/// Keep incoming clips above outgoing clips during their shared window, even
+/// after layer reordering. Unrelated overlays retain their exact stack slots.
+List<Layer> transitionPaintOrder(
+  List<Layer> order,
+  List<ClipTransitionContext> contexts,
+) {
+  if (contexts.isEmpty) return order;
+  final parents = <String, String>{};
+  String root(String id) {
+    var at = id;
+    while (parents[at] != null && parents[at] != at) {
+      at = parents[at]!;
+    }
+    return at;
+  }
+
+  for (final c in contexts) {
+    parents[root(c.incoming.id)] = root(c.outgoing.id);
+  }
+  final members = {
+    for (final c in contexts) ...[c.outgoing.id, c.incoming.id],
+  };
+  final slots = <String, List<int>>{};
+  for (var i = 0; i < order.length; i++) {
+    if (members.contains(order[i].id)) (slots[root(order[i].id)] ??= []).add(i);
+  }
+  final result = [...order];
+  for (final indices in slots.values) {
+    final layers = [for (final i in indices) order[i]]
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    for (var i = 0; i < indices.length; i++) {
+      result[indices[i]] = layers[i];
+    }
+  }
+  return result;
 }

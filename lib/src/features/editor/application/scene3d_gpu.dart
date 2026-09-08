@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -8,6 +9,7 @@ import 'package:vector_math/vector_math.dart' as vm;
 
 import '../domain/camera3d.dart';
 import '../domain/element3d.dart';
+import '../domain/environment_radiance.dart';
 import '../domain/geometria_gpu.dart';
 import '../domain/orcamento_render.dart';
 import '../domain/scene3d.dart';
@@ -411,7 +413,9 @@ class Scene3DGpu {
     final mesh = escolhida ?? element3DMesh(node.kind);
     return _MalhaFonte(
       malha: mesh,
-      normais: null,
+      normais: mesh.normals
+          ?.map((n) => Vec3(n[0], n[1], n[2]))
+          .toList(growable: false),
       uvs: null,
       materiais: List<Material3D>.filled(mesh.faces.length, node.material),
       assinatura:
@@ -520,7 +524,12 @@ class Scene3DGpu {
       u.baseColorFactor = fator;
       u.doubleSided = m.doubleSided;
       if (opacidade < .999) u.alphaMode = fs.AlphaMode.blend;
-      _ligarTextura(m.imagePath, onMudou, no, (tex) => u.baseColorTexture = tex);
+      _ligarTextura(
+        m.imagePath,
+        onMudou,
+        no,
+        (tex) => u.baseColorTexture = tex,
+      );
       return u;
     }
     final p = fs.PhysicallyBasedMaterial();
@@ -586,7 +595,8 @@ class Scene3DGpu {
         if (_descartado || !_alguemUsa(path)) return;
         _texturas[path] = tex;
         for (final n in _nos.values) {
-          for (final f in n.aplicadores[path] ?? const <void Function(fs.Texture2D)>[]) {
+          for (final f
+              in n.aplicadores[path] ?? const <void Function(fs.Texture2D)>[]) {
             f(tex);
           }
         }
@@ -663,7 +673,9 @@ class Scene3DGpu {
   /// O lado do tile de sombra para o alvo do ultimo quadro (a receita,
   /// limitada pelo que o alvo aproveita — ver [sombraEfetiva]).
   int get _ladoDaSombra {
-    final maior = (math.max(_ultimoAlvo.width, _ultimoAlvo.height) * _ultimaEscala).round();
+    final maior =
+        (math.max(_ultimoAlvo.width, _ultimoAlvo.height) * _ultimaEscala)
+            .round();
     return sombraEfetiva(_receita, maior);
   }
 
@@ -819,13 +831,16 @@ class Scene3DGpu {
       if (l.kind == Light3DKind.ambient) extra += l.intensity.valueAt(t);
     }
     final pano = scene.panorama;
+    cena.environmentTransform = vm.Matrix3.rotationY(
+      pano.rotationDegrees * math.pi / 180,
+    );
     cena.environmentIntensity =
         ((scene.ambient + extra) / .28) * pano.intensity.clamp(0.0, 4.0);
     final caminho = pano.hasImage ? pano.sourcePath : null;
     final chave = caminho != null
         ? 'img:$caminho:${pano.showBackground}:${pano.backgroundBlur}'
         : 'ceu:${scene.environment.index}:${scene.skyColor.toARGB32()}:'
-              '${scene.groundColor.toARGB32()}:${pano.showBackground}';
+              '${scene.groundColor.toARGB32()}:${pano.showBackground}:${pano.backgroundBlur}';
     if (chave == _chaveAmbiente) return;
     _chaveAmbiente = chave;
     final epoca = ++_epocaAmbiente;
@@ -851,6 +866,37 @@ class Scene3DGpu {
           onMudou?.call();
         } catch (e) {
           debugPrint('Panorama nao carregou na GPU ($caminho): $e');
+        }
+      }();
+      return;
+    }
+
+    // Bake the actual studio/neon/interior map, not a featureless gradient.
+    // HDR highlights and roughness mip levels give metals readable reflections.
+    if (scene.environment != EnvironmentKind.ceu) {
+      final kind = scene.environment;
+      () async {
+        try {
+          final pixels = await Isolate.run(() => environmentRadiance(kind));
+          if (_descartado || epoca != _epocaAmbiente) return;
+          final map = await fs.EnvironmentMap.fromEquirectHdr(
+            linearPixels: pixels,
+            width: 512,
+            height: 256,
+          );
+          if (_descartado || epoca != _epocaAmbiente) return;
+          cena.skyEnvironment = null;
+          cena.environment = map;
+          cena.skybox = pano.showBackground
+              ? fs.Skybox(
+                  fs.EnvironmentSkySource(
+                    blurriness: (pano.backgroundBlur / 30).clamp(0.0, 1.0),
+                  ),
+                )
+              : null;
+          onMudou?.call();
+        } catch (e) {
+          debugPrint('Ambiente HDR: $e');
         }
       }();
       return;

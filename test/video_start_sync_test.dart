@@ -11,6 +11,12 @@ import 'package:aurea/src/features/editor/domain/layer.dart';
 class _NativePlayer extends VideoPlayerPlatform {
   final events = StreamController<VideoEvent>();
   final calls = <String>[];
+  bool? mixing;
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {
+    mixing = mixWithOthers;
+  }
+
   Duration position = Duration.zero;
   Completer<void>? seekGate;
   @override
@@ -79,6 +85,11 @@ void main() {
     manager.sync(layers, const Duration(seconds: 4), false);
     await tester.pumpAndSettle();
     expect(manager.controllerFor('clip'), isNotNull);
+    expect(
+      native.mixing,
+      isTrue,
+      reason: 'overlapping video must not steal another layer audio focus',
+    );
     expect(native.position, const Duration(seconds: 4));
     native.calls.clear();
     native.seekGate = Completer<void>();

@@ -59,6 +59,15 @@ enum EffectType {
   lumaKey,
   colorKey,
   findEdges,
+  oscillate,
+  twirl,
+  fisheye,
+  kaleidoscope,
+  venetianBlinds,
+  blockDissolve,
+  offset,
+  invert,
+  waveWarp,
 }
 
 /// O tipo a partir do IDENTIFICADOR estavel.
@@ -82,6 +91,7 @@ const _aliasesDeId = <String, EffectType>{
   'glow_vol': EffectType.glowVol,
   'volumetric_glow': EffectType.glowVol,
   'tremor': EffectType.tremor,
+  's_shake': EffectType.tremor,
   'light_glow': EffectType.lightGlow,
   'radial_aberration': EffectType.radialAberration,
   'spatial_echo': EffectType.spatialEcho,
@@ -306,6 +316,34 @@ class EffectSpec {
 }
 
 const effectSpecs = <EffectType, EffectSpec>{
+  EffectType.oscillate: EffectSpec(
+    id: 'oscillate',
+    name: 'Oscilar',
+    category: 'Distort',
+    procedural: true,
+    synonyms: [
+      'oscilar',
+      'oscillate',
+      'oscilacao',
+      'oscilação',
+      'balancar',
+      'balançar',
+    ],
+    params: {
+      'amplitude': EffectParam('Amplitude', 50, 0, 2000, relative: true),
+      'frequency': EffectParam('Frequencia (Hz)', 1, 0, 30),
+      'angle': EffectParam('Direcao', 0, -360, 360),
+      'phase': EffectParam('Fase', 0, -360, 360),
+      'wave': EffectParam(
+        'Onda',
+        0,
+        0,
+        3,
+        kind: ParamKind.choice,
+        options: ['Seno', 'Triangulo', 'Quadrada', 'Dente de serra'],
+      ),
+    },
+  ),
   EffectType.gaussianBlur: EffectSpec(
     id: 'gaussian_blur',
     name: 'Gaussian Blur',
@@ -546,11 +584,13 @@ const effectSpecs = <EffectType, EffectSpec>{
   // a frequencia acelera de verdade, sem salto.
   EffectType.tremor: EffectSpec(
     id: 'shake',
-    name: 'Shake',
+    name: 'S_Shake',
     category: 'Distort',
     synonyms: [
       'tremor',
       'shake',
+      's_shake',
+      's shake',
       'camera shake',
       'tremer',
       'camera na mao',
@@ -2228,6 +2268,95 @@ const effectSpecs = <EffectType, EffectSpec>{
       EffectPronto('Medio', {'samples': 16, 'shutter_angle': 180}),
       EffectPronto('Forte', {'samples': 32, 'shutter_angle': 360}),
     ],
+  ),
+  EffectType.twirl: EffectSpec(
+    id: 'twirl',
+    synonyms: ['torcer', 'redemoinho'],
+    name: 'Twirl',
+    category: 'Distort',
+    params: {
+      'amount': EffectParam('Angulo', 180, -1440, 1440),
+      'radius': EffectParam('Raio', .65, .01, 3),
+      'center_x': EffectParam('Centro X', .5, -2, 3),
+      'center_y': EffectParam('Centro Y', .5, -2, 3),
+    },
+  ),
+  EffectType.fisheye: EffectSpec(
+    id: 'fisheye',
+    synonyms: ['olho de peixe', 'lente'],
+    name: 'Fisheye',
+    category: 'Lens',
+    params: {
+      'amount': EffectParam('Distorcao', 1, -3, 3),
+      'radius': EffectParam('Raio', 1, .01, 3),
+      'center_x': EffectParam('Centro X', .5, -2, 3),
+      'center_y': EffectParam('Centro Y', .5, -2, 3),
+    },
+  ),
+  EffectType.kaleidoscope: EffectSpec(
+    id: 'kaleidoscope',
+    synonyms: ['caleidoscopio', 'espelho'],
+    name: 'Kaleidoscope',
+    category: 'Distort',
+    params: {
+      'amount': EffectParam('Mistura', 1, 0, 1),
+      'count': EffectParam('Segmentos', 6, 1, 32),
+      'angle': EffectParam('Rotacao', 0, -360, 360),
+      'center_x': EffectParam('Centro X', .5, -2, 3),
+      'center_y': EffectParam('Centro Y', .5, -2, 3),
+    },
+  ),
+  EffectType.venetianBlinds: EffectSpec(
+    id: 'venetian_blinds',
+    synonyms: ['persianas', 'faixas'],
+    name: 'Venetian Blinds',
+    category: 'Keying',
+    params: {
+      'amount': EffectParam('Conclusao', .5, 0, 1),
+      'count': EffectParam('Faixas', 12, 1, 200),
+      'angle': EffectParam('Direcao', 90, -360, 360),
+      'radius': EffectParam('Suavidade', .01, .0001, .3),
+    },
+  ),
+  EffectType.blockDissolve: EffectSpec(
+    id: 'block_dissolve',
+    synonyms: ['blocos', 'dissolver'],
+    name: 'Block Dissolve',
+    category: 'Keying',
+    params: {
+      'amount': EffectParam('Conclusao', .5, 0, 1),
+      'count': EffectParam('Blocos', 32, 1, 200),
+      'seed': EffectParam('Semente', 0, 0, 1000),
+    },
+  ),
+  EffectType.offset: EffectSpec(
+    id: 'offset',
+    synonyms: ['deslocamento', 'repetir'],
+    name: 'Offset',
+    category: 'Distort',
+    params: {
+      'center_x': EffectParam('Centro X', .5, -2, 3),
+      'center_y': EffectParam('Centro Y', .5, -2, 3),
+    },
+  ),
+  EffectType.invert: EffectSpec(
+    id: 'invert',
+    synonyms: ['inverter', 'negativo'],
+    name: 'Invert',
+    category: 'Color',
+    params: {'amount': EffectParam('Mistura', 1, 0, 1)},
+  ),
+  EffectType.waveWarp: EffectSpec(
+    id: 'wave_warp',
+    synonyms: ['onda', 'ondular'],
+    name: 'Wave Warp',
+    category: 'Distort',
+    params: {
+      'amount': EffectParam('Amplitude', .04, -.5, .5),
+      'count': EffectParam('Frequencia', 4, .1, 100),
+      'angle': EffectParam('Fase', 0, -3600, 3600),
+      'radius': EffectParam('Eixo Y', 0, 0, 1),
+    },
   ),
 };
 

@@ -176,7 +176,12 @@ void main() {
       await tester.runAsync(() async {
         await tester.tap(find.byKey(const ValueKey('fontes-importar')));
         final deadline = DateTime.now().add(const Duration(seconds: 5));
-        while (!FontService.instance.has('BetaFontB') &&
+        // Registration finishes before the picker applies the first font.
+        // Wait for both asynchronous steps, including the layer update.
+        while ((!FontService.instance.has('BetaFontB') ||
+                (c.read(editorControllerProvider).layerById(id) as TextLayer)
+                        .fontFamily !=
+                    'BetaFontA') &&
             DateTime.now().isBefore(deadline)) {
           await Future<void>.delayed(const Duration(milliseconds: 20));
         }

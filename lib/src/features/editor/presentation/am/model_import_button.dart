@@ -33,6 +33,7 @@ class _ModelImportButtonState extends ConsumerState<ModelImportButton> {
       final selection = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.any,
+        withData: false,
       );
       final paths =
           selection?.files.map((f) => f.path).whereType<String>().toList() ??
@@ -61,11 +62,7 @@ class _ModelImportButtonState extends ConsumerState<ModelImportButton> {
           .addModel3D(widget.layerId, model);
       if (id.isEmpty) return;
       widget.onImported(id);
-      setState(
-        () => status =
-            '${model.triangleCount} triangulos · ${model.joints.length} ossos · ${model.clips.length} clipes. '
-            '${model.warnings.join(' ')}',
-      );
+      setState(() => status = null);
     } on ModelImportException catch (e) {
       if (mounted) setState(() => status = e.message);
     } catch (_) {

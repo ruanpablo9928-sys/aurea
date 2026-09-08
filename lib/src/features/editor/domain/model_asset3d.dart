@@ -1,3 +1,5 @@
+import 'packed_model_vectors.dart';
+
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -166,7 +168,13 @@ class ModelAsset3D {
     ];
     vm.Vector3 normalized(vm.Vector3 p) =>
         normalize ? (p - _bounds.center) * _bounds.scale : p;
-    final vertices = <List<double>>[], faces = <List<int>>[];
+    final vertexCount = primitives.fold<int>(
+      0,
+      (sum, p) => sum + (p['positions'] as List).length,
+    );
+    final vertices = PackedModelVectors(vertexCount, 3);
+    final faces = <List<int>>[];
+    var vertexCursor = 0;
     final uvs = <Offset?>[], normals = <Vec3?>[], materials = <Material3D>[];
     for (final p in primitives) {
       final ni = p['node'] as int;
@@ -175,9 +183,10 @@ class ModelAsset3D {
       final tex = p['uv'] as List?;
       final js = p['joints'] as List?, ws = p['weights'] as List?;
       final skin = nodes[ni]['skin'] as int?;
-      final first = vertices.length;
+      final first = vertexCursor;
       final morphs = p['targets'] as List? ?? const [];
       final morphWeights = trs[ni]['weights']!;
+      final staticNormal = vm.Matrix3.zero()..copyNormalMatrix(world[ni]!);
       for (var vi = 0; vi < positions.length; vi++) {
         final v = modelVector(positions[vi]);
         final normal = ns == null ? null : modelVector(ns[vi]);
@@ -212,10 +221,11 @@ class ModelAsset3D {
           }
         }
         final out = normalized(transform.transformed3(v));
-        vertices.add([out.x, out.y, out.z]);
+        vertices[vertexCursor++] = [out.x, out.y, out.z];
         if (normal != null) {
-          final nm = vm.Matrix3.zero();
-          nm.copyNormalMatrix(transform);
+          final nm = skin == null
+              ? staticNormal
+              : (vm.Matrix3.zero()..copyNormalMatrix(transform));
           final result = nm.transformed(normal)..normalize();
           normals.add(Vec3(result.x, result.y, result.z));
         } else {

@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../domain/audio_ops.dart';
-import '../domain/loudness.dart';
+import '../domain/streaming_waveform.dart';
 import '../domain/peak_pyramid.dart';
 
 /// FORMA DE ONDA e TIRA DE MINIATURAS.
@@ -62,6 +62,7 @@ class MediaPreviewService {
   final Map<String, PeakPyramid> _pyramids = {};
   final Map<String, List<ui.Image>> _strips = {};
   final Map<String, Future<void>> _emAndamento = {};
+  Future<void> _waveQueue = Future.value();
 
   /// Avisa a interface quando algo novo ficou pronto.
   final ValueNotifier<int> revision = ValueNotifier(0);
@@ -114,7 +115,10 @@ class MediaPreviewService {
   Future<void> ensureWaveform(String path) {
     final k = 'wave:$path';
     if (_peaks.containsKey(path)) return Future.value();
-    return _emAndamento[k] ??= _buildWaveform(path).whenComplete(() {
+    if (_emAndamento[k] != null) return _emAndamento[k]!;
+    final work = _waveQueue.then((_) => _buildWaveform(path));
+    _waveQueue = work.catchError((Object _) {});
+    return _emAndamento[k] = work.whenComplete(() {
       _emAndamento.remove(k);
     });
   }
@@ -126,7 +130,10 @@ class MediaPreviewService {
       if (cache.existsSync()) {
         final bytes = await cache.readAsBytes();
         final env = Float32List.view(
-            bytes.buffer, bytes.offsetInBytes, bytes.length ~/ 4);
+          bytes.buffer,
+          bytes.offsetInBytes,
+          bytes.length ~/ 4,
+        );
         _peaks[path] = env;
         // A piramide se remonta do envelope guardado: cada balde do
         // envelope vira uma "amostra". Perde o detalhe abaixo de 10 ms,
@@ -135,8 +142,7 @@ class MediaPreviewService {
         for (var i = 0; i < env.length; i++) {
           comoAmostras[i] = (env[i].clamp(0.0, 1.0) * 32767).round();
         }
-        _pyramids[path] =
-            buildPeakPyramid(comoAmostras, peaksPerSecond);
+        _pyramids[path] = buildPeakPyramid(comoAmostras, peaksPerSecond);
         revision.value++;
         return;
       }
@@ -151,12 +157,17 @@ class MediaPreviewService {
 
       final session = await FFmpegKit.executeWithArguments([
         '-y',
-        '-i', path,
+        '-i',
+        path,
         '-vn',
-        '-ac', '1',
-        '-ar', '16000',
-        '-f', 's16le',
-        '-acodec', 'pcm_s16le',
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        '-f',
+        's16le',
+        '-acodec',
+        'pcm_s16le',
         raw.path,
       ]);
       if (!ReturnCode.isSuccess(await session.getReturnCode()) ||
@@ -166,21 +177,15 @@ class MediaPreviewService {
         return;
       }
 
-      final bytes = await raw.readAsBytes();
-      raw.deleteSync();
-      final samples = Int16List.view(
-          bytes.buffer, bytes.offsetInBytes, bytes.length ~/ 2);
-
-      final out = computePeaks(samples, 16000, peaksPerSecond);
-      _pyramids[path] = buildPeakPyramid(samples, 16000);
-      // A SONORIDADE sai da mesma decodificacao. Medir depois obrigaria a
-      // decodificar o arquivo de novo so para isso.
-      final flutuante = Float32List(samples.length);
-      for (var i = 0; i < samples.length; i++) {
-        flutuante[i] = samples[i] / 32768.0;
+      final scanned = await compute(scanMonoPcm, raw.path);
+      await raw.delete();
+      final out = scanned.peaks;
+      final compact = Int16List(out.length);
+      for (var i = 0; i < out.length; i++) {
+        compact[i] = (out[i].clamp(0.0, 1.0) * 32767).round();
       }
-      _lufs[path] = integratedLufs(flutuante, 16000);
-
+      _pyramids[path] = buildPeakPyramid(compact, peaksPerSecond);
+      _lufs[path] = scanned.lufs;
       await cache.writeAsBytes(out.buffer.asUint8List(), flush: true);
       _peaks[path] = out;
       revision.value++;
@@ -209,12 +214,17 @@ class MediaPreviewService {
 
       final session = await FFmpegKit.executeWithArguments([
         '-y',
-        '-i', path,
+        '-i',
+        path,
         '-vn',
-        '-ac', '1',
-        '-ar', '16000',
-        '-f', 's16le',
-        '-acodec', 'pcm_s16le',
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        '-f',
+        's16le',
+        '-acodec',
+        'pcm_s16le',
         raw.path,
       ]);
       if (!ReturnCode.isSuccess(await session.getReturnCode()) ||
@@ -224,9 +234,11 @@ class MediaPreviewService {
       final bytes = await raw.readAsBytes();
       raw.deleteSync();
       final samples = Int16List.view(
-          bytes.buffer, bytes.offsetInBytes, bytes.length ~/ 2);
-      return _bandas[k] =
-          bandEnvelope(samples, 16000, peaksPerSecond, band);
+        bytes.buffer,
+        bytes.offsetInBytes,
+        bytes.length ~/ 2,
+      );
+      return _bandas[k] = bandEnvelope(samples, 16000, peaksPerSecond, band);
     } catch (_) {
       return _bandas[k] = Float32List(0);
     }
@@ -241,8 +253,7 @@ class MediaPreviewService {
   Future<void> ensureFilmstrip(String path, Duration duration) {
     final k = 'strip:$path';
     if (_strips.containsKey(path)) return Future.value();
-    return _emAndamento[k] ??=
-        _buildFilmstrip(path, duration).whenComplete(() {
+    return _emAndamento[k] ??= _buildFilmstrip(path, duration).whenComplete(() {
       _emAndamento.remove(k);
     });
   }
@@ -264,11 +275,16 @@ class MediaPreviewService {
         final fps = stripCount / total;
         final session = await FFmpegKit.executeWithArguments([
           '-y',
-          '-i', path,
-          '-vf', 'fps=${fps.toStringAsFixed(4)},scale=-1:96',
-          '-vsync', '0',
-          '-q:v', '5',
-          '-frames:v', '$stripCount',
+          '-i',
+          path,
+          '-vf',
+          'fps=${fps.toStringAsFixed(4)},scale=-1:96',
+          '-vsync',
+          '0',
+          '-q:v',
+          '5',
+          '-frames:v',
+          '$stripCount',
           '${sub.path}/%03d.jpg',
         ]);
         if (!ReturnCode.isSuccess(await session.getReturnCode())) {
@@ -278,19 +294,21 @@ class MediaPreviewService {
         }
       }
 
-      final files = sub
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.jpg'))
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
+      final files =
+          sub
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.jpg'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
 
       final images = <ui.Image>[];
       for (final f in files) {
         try {
           final codec = await ui.instantiateImageCodec(
-              await f.readAsBytes(),
-              targetHeight: 96);
+            await f.readAsBytes(),
+            targetHeight: 96,
+          );
           final frame = await codec.getNextFrame();
           codec.dispose();
           images.add(frame.image);

@@ -21,6 +21,7 @@ import '../domain/cut.dart';
 import '../domain/cut_ops.dart';
 import '../domain/scene3d.dart';
 import '../domain/effect.dart';
+import '../domain/oscillate.dart';
 import '../domain/effect_preset.dart';
 import '../domain/element3d.dart';
 import '../domain/extrude3d.dart';
@@ -71,8 +72,13 @@ class EditorController extends Notifier<VideoProject> {
   final Map<String, String> _isolatedSceneNode = {};
   DateTime _lastPush = DateTime.fromMillisecondsSinceEpoch(0);
 
+  bool _disposed = false;
   @override
-  VideoProject build() => VideoProject.empty('Novo projeto');
+  VideoProject build() {
+    _disposed = false;
+    ref.onDispose(() => _disposed = true);
+    return VideoProject.empty('Novo projeto');
+  }
 
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
@@ -415,23 +421,17 @@ class EditorController extends Notifier<VideoProject> {
     return layer.id;
   }
 
-  /// Importa AUDIO pelo seletor de arquivos; duracao real chega do probe
-  /// em background (mesmo fluxo do video).
-  Future<void> importAudioFile(Duration at) async {
-    final file = await ref.read(mediaImportServiceProvider).pickAudioFile();
+  /// Valida antes de publicar: cancelar ou falhar nao cria camadas incompletas.
+  Future<void> importAudioFile(Duration at, {bool fromVideo = false}) async {
+    final projectId = state.id;
+    final service = ref.read(mediaImportServiceProvider);
+    final file = fromVideo
+        ? await service.pickAudioFromVideo()
+        : await service.pickAudioFile();
     if (file == null) return;
-    final id = addAudioLayer(
-      at,
-      file.path,
-      file.name,
-      const Duration(seconds: 4),
-    );
-    _probeDuration(file.path).then((d) {
-      final layer = _layer(id);
-      if (layer is AudioLayer && d > Duration.zero) {
-        _replace(layer.copyLayer(duration: d));
-      }
-    });
+    final duration = await service.audioDuration(file.path);
+    if (_disposed || state.id != projectId) return;
+    addAudioLayer(at, file.path, file.name, duration);
   }
 
   // ------------------------------------------ oficio: meta da camada
@@ -727,6 +727,48 @@ class EditorController extends Notifier<VideoProject> {
       if (e.id == effectId) effect = e;
     }
     if (effect == null || !effect.spec.procedural) return;
+
+    if (effect.type == EffectType.oscillate) {
+      final count = (layer.duration.inMicroseconds * fps / 1000000).ceil();
+      final frames = <Keyframe<Offset>>[];
+      for (var i = 0; i <= count; i++) {
+        final t = Duration(
+          microseconds: math.min(
+            layer.duration.inMicroseconds,
+            (i * 1000000 / fps).round(),
+          ),
+        );
+        final d = oscillationOffset(
+          effect,
+          t,
+          pixelScale: math.min(state.outputWidth, state.outputHeight) / 1080,
+        );
+        final x = d.dx * layer.scaleX.valueAt(t),
+            y = d.dy * layer.scaleY.valueAt(t);
+        final a = layer.rotation.valueAt(t) * math.pi / 180;
+        frames.add(
+          Keyframe(
+            time: t,
+            value:
+                layer.position.valueAt(t) +
+                Offset(
+                  x * math.cos(a) - y * math.sin(a),
+                  x * math.sin(a) + y * math.cos(a),
+                ),
+          ),
+        );
+      }
+      _replace(
+        layer.copyLayer(
+          position: AnimatedOffset(layer.position.base, frames),
+          effects: [
+            for (final e in layer.effects)
+              if (e.id != effectId) e,
+          ],
+        ),
+      );
+      return;
+    }
 
     // Amostra o MESMO calculo que o compositor faz, frame a frame — por
     // isso o assado bate com o procedural.
@@ -1170,7 +1212,12 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     switch (prop) {
       case LayerProp.position:
-        _replace(layer.copyLayer(position: layer.position.withLoop(spec)));
+        _replace(
+          layer.copyLayer(
+            position: layer.position.withLoop(spec),
+            positionZ: layer.positionZ.withLoop(spec),
+          ),
+        );
       case LayerProp.scale:
         _replace(
           layer.copyLayer(
@@ -1197,7 +1244,12 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     switch (prop) {
       case LayerProp.position:
-        _replace(layer.copyLayer(position: layer.position.reversedInTime()));
+        _replace(
+          layer.copyLayer(
+            position: layer.position.reversedInTime(),
+            positionZ: layer.positionZ.reversedInTime(),
+          ),
+        );
       case LayerProp.scale:
         _replace(
           layer.copyLayer(
@@ -1251,6 +1303,20 @@ class EditorController extends Notifier<VideoProject> {
         name: 'Particulas $n',
         startTime: at,
         duration: const Duration(seconds: 5),
+        count: 5000,
+        uniformDistribution: true,
+        size: 1,
+        sizeRandom: 0.8,
+        color: const Color(0xffeef4ff),
+        star: false,
+        shape: 0,
+        speed: 0,
+        depth: 1800,
+        emitW: state.outputWidth * 1.4,
+        emitH: state.outputHeight * 1.4,
+        lifetimeMs: 120000,
+        opacityRandom: 0.75,
+        glow: 0,
         is3D: true,
         position: AnimatedOffset(_center),
       ),
@@ -1505,12 +1571,12 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   bool _criaCiclo(Scene3D cena, String nodeId, String parentId) {
-    var atual = cena.nodeById(parentId);
-    var passos = 0;
-    while (atual != null && passos++ < 32) {
-      if (atual.id == nodeId) return true;
-      final p = atual.parentId;
-      atual = p == null ? null : cena.nodeById(p);
+    final porId = {for (final no in cena.nodes) no.id: no};
+    final visitados = <String>{};
+    var atual = porId[parentId];
+    while (atual != null) {
+      if (atual.id == nodeId || !visitados.add(atual.id)) return true;
+      atual = porId[atual.parentId];
     }
     return false;
   }
@@ -2078,7 +2144,7 @@ class EditorController extends Notifier<VideoProject> {
         layers: [
           for (final l in state.layers)
             if (l.id != id)
-              if (l is VideoLayer && l.transitionIn?.outgoingLayerId == id)
+              if (l.transitionIn?.outgoingLayerId == id)
                 l.copyLayer(clearTransitionIn: true)
               else
                 l,
@@ -2100,8 +2166,7 @@ class EditorController extends Notifier<VideoProject> {
         layers: [
           for (final l in state.layers)
             if (!set.contains(l.id))
-              if (l is VideoLayer &&
-                  set.contains(l.transitionIn?.outgoingLayerId))
+              if (set.contains(l.transitionIn?.outgoingLayerId))
                 l.copyLayer(clearTransitionIn: true)
               else
                 l,
@@ -2971,8 +3036,7 @@ class EditorController extends Notifier<VideoProject> {
 
   // --------------------------------------------------------- transicoes
 
-  VideoLayer? clipAfter(String outgoingId) =>
-      videoAfter(state.layers, outgoingId);
+  Layer? clipAfter(String outgoingId) => layerAfter(state.layers, outgoingId);
 
   ClipTransition? transitionAfter(String outgoingId) =>
       clipAfter(outgoingId)?.transitionIn;
@@ -3001,7 +3065,7 @@ class EditorController extends Notifier<VideoProject> {
       : Duration.zero;
 
   ClipTransition _fitEndATrim(
-    VideoLayer outgoing,
+    Layer outgoing,
     ClipTransition requested,
     ClipTransition? previous,
   ) {
@@ -3023,8 +3087,8 @@ class EditorController extends Notifier<VideoProject> {
   /// remover a transicao restaura exatamente o ajuste anterior antes de
   /// aplicar o novo, portanto a operacao nunca acumula trims ocultos.
   void _commitTransition(
-    VideoLayer outgoing,
-    VideoLayer incoming,
+    Layer outgoing,
+    Layer incoming,
     ClipTransition? previous,
     ClipTransition? next,
   ) {
@@ -3095,7 +3159,12 @@ class EditorController extends Notifier<VideoProject> {
       alignment: alignment,
       curve: curve,
       effect: type == ClipTransitionType.effect && effectType != null
-          ? EffectInstance(type: effectType)
+          ? EffectInstance(
+              type: effectType,
+              params: effectType == EffectType.offset
+                  ? {'center_x': AnimatedDouble(1)}
+                  : null,
+            )
           : null,
     );
     final report = transitionHandles(state.layers, outgoingId, requested);
@@ -3124,11 +3193,13 @@ class EditorController extends Notifier<VideoProject> {
         requested.duration > Duration.zero) {
       return false;
     }
-    _commitTransition(
-      report.outgoing,
-      report.incoming,
-      report.incoming.transitionIn,
-      requested,
+    runAsOneUndo(
+      () => _commitTransition(
+        report.outgoing,
+        report.incoming,
+        report.incoming.transitionIn,
+        requested,
+      ),
     );
     return true;
   }
@@ -3137,8 +3208,10 @@ class EditorController extends Notifier<VideoProject> {
     final incoming = clipAfter(outgoingId);
     if (incoming == null || incoming.transitionIn == null) return;
     final outgoing = _layer(outgoingId);
-    if (outgoing is! VideoLayer) return;
-    _commitTransition(outgoing, incoming, incoming.transitionIn, null);
+    if (outgoing == null || !isTransitionLayer(outgoing)) return;
+    runAsOneUndo(
+      () => _commitTransition(outgoing, incoming, incoming.transitionIn, null),
+    );
   }
 
   void updateTransition(
@@ -3163,7 +3236,7 @@ class EditorController extends Notifier<VideoProject> {
       next = next.copyWith(duration: report.maximumDuration);
     }
     final outgoing = _layer(outgoingId);
-    if (outgoing is! VideoLayer) return;
+    if (outgoing == null || !isTransitionLayer(outgoing)) return;
     next = _fitEndATrim(outgoing, next, current);
     _commitTransition(outgoing, incoming, current, next);
   }
@@ -3181,7 +3254,7 @@ class EditorController extends Notifier<VideoProject> {
       next = next.copyWith(duration: report.maximumDuration);
     }
     final outgoing = _layer(outgoingId);
-    if (outgoing is! VideoLayer) return;
+    if (outgoing == null || !isTransitionLayer(outgoing)) return;
     next = _fitEndATrim(outgoing, next, current);
     _commitTransition(outgoing, incoming, current, next);
   }
@@ -3367,7 +3440,7 @@ class EditorController extends Notifier<VideoProject> {
               second,
               frozen,
               first,
-            ] else if (l is VideoLayer && l.transitionIn?.outgoingLayerId == id)
+            ] else if (l.transitionIn?.outgoingLayerId == id)
               l.copyLayer(
                 startTime: l.startTime >= globalTime
                     ? l.startTime + duration
@@ -3526,7 +3599,7 @@ class EditorController extends Notifier<VideoProject> {
       state.copyWith(
         layers: [
           for (final l in deleted)
-            if (l is VideoLayer && l.transitionIn?.outgoingLayerId == id)
+            if (l.transitionIn?.outgoingLayerId == id)
               l.copyLayer(clearTransitionIn: true)
             else
               l,
@@ -4076,7 +4149,12 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     switch (prop) {
       case LayerProp.position:
-        _replace(layer.copyLayer(position: AnimatedOffset(_center)));
+        _replace(
+          layer.copyLayer(
+            position: AnimatedOffset(_center),
+            positionZ: AnimatedDouble(0),
+          ),
+        );
       case LayerProp.scale:
         _replace(
           layer.copyLayer(scaleX: AnimatedDouble(1), scaleY: AnimatedDouble(1)),
@@ -4131,7 +4209,20 @@ class EditorController extends Notifier<VideoProject> {
 
     switch (prop) {
       case LayerProp.position:
-        _replace(layer.copyLayer(position: togO(layer.position)));
+        final remove =
+            layer.position.hasKeyframeAt(t) || layer.positionZ.hasKeyframeAt(t);
+        _replace(
+          layer.copyLayer(
+            position: remove
+                ? layer.position.withoutKeyframe(t)
+                : layer.position.withKeyframe(t, layer.position.valueAt(t)),
+            positionZ: remove
+                ? layer.positionZ.withoutKeyframe(t)
+                : layer.is3D || layer.positionZ.isAnimated
+                ? layer.positionZ.withKeyframe(t, layer.positionZ.valueAt(t))
+                : layer.positionZ,
+          ),
+        );
       case LayerProp.scale:
         _replace(
           layer.copyLayer(scaleX: tog(layer.scaleX), scaleY: tog(layer.scaleY)),
@@ -4172,6 +4263,7 @@ class EditorController extends Notifier<VideoProject> {
         _replace(
           layer.copyLayer(
             position: layer.position.withEase(segStartLocal, ease),
+            positionZ: layer.positionZ.withEase(segStartLocal, ease),
           ),
         );
       case LayerProp.scale:
@@ -4214,7 +4306,12 @@ class EditorController extends Notifier<VideoProject> {
     if (layer == null) return;
     switch (prop) {
       case LayerProp.position:
-        _replace(layer.copyLayer(position: layer.position.withEaseAll(ease)));
+        _replace(
+          layer.copyLayer(
+            position: layer.position.withEaseAll(ease),
+            positionZ: layer.positionZ.withEaseAll(ease),
+          ),
+        );
       case LayerProp.scale:
         _replace(
           layer.copyLayer(
@@ -6553,7 +6650,10 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   Future<Duration> _probeDuration(String path) async {
-    final probe = VideoPlayerController.file(File(path));
+    final probe = VideoPlayerController.file(
+      File(path),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     try {
       await probe.initialize();
       return probe.value.duration;

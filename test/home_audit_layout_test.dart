@@ -1,3 +1,4 @@
+import 'package:aurea/src/features/projects/presentation/release_notice.dart';
 import 'package:aurea/src/core/theme/app_theme.dart';
 import 'package:aurea/src/features/projects/presentation/home_shell.dart';
 import 'package:aurea/src/core/storage/prefs.dart';
@@ -21,7 +22,9 @@ void main() {
       tester.view.physicalSize = Size(width, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        releaseNoticeSeenKey: releaseNoticeRevision,
+      });
       final prefs = await SharedPreferences.getInstance();
       final theme = AppTheme.dark;
       // The native default font is not available in flutter_tester. Resolve

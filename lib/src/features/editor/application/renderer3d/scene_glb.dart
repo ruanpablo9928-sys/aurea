@@ -85,7 +85,10 @@ Uint8List encodeNodeGlb(SceneNode node) {
       for (var i = 1; i + 1 < face.length; i++) {
         for (final v in [face[0], face[i], face[i + 1]]) {
           final p = point(v);
-          final n = frame?.normals[v] ?? normal;
+          final smooth = mesh.normals?[v];
+          final n =
+              frame?.normals[v] ??
+              (smooth == null ? normal : Vec3(smooth[0], smooth[1], smooth[2]));
           final key = (v, n.x, n.y, n.z);
           final existing = vertexIndices[key];
           if (existing != null) {

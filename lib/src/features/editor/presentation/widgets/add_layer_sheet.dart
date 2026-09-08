@@ -791,6 +791,30 @@ class AddLayerPanel extends ConsumerStatefulWidget {
 }
 
 class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
+  bool _importingAudio = false;
+
+  Future<void> _importAudio({bool fromVideo = false}) async {
+    if (_importingAudio) return;
+    setState(() => _importingAudio = true);
+    final controller = _controller;
+    final at = widget.playhead;
+    try {
+      await controller.importAudioFile(at, fromVideo: fromVideo);
+      if (mounted) _fecha();
+    } catch (error) {
+      if (mounted) {
+        AureaSnack.show(
+          context,
+          error is FormatException
+              ? error.message.toString()
+              : 'Nao consegui importar esse audio. Tente outro arquivo.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importingAudio = false);
+    }
+  }
+
   late _AbaAdd _aba = switch (widget.initialTab) {
     AddTab.midia => _AbaAdd.midia,
     AddTab.audio => _AbaAdd.audio,
@@ -1164,16 +1188,33 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
           },
         );
       case _AbaAdd.audio:
+        if (_importingAudio) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CupertinoActivityIndicator(),
+                SizedBox(height: 12),
+                Text(
+                  'Preparando audio...',
+                  style: TextStyle(color: AmColors.text),
+                ),
+              ],
+            ),
+          );
+        }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _AddOption(
               icon: CupertinoIcons.music_note,
-              label: 'Audio',
-              onTap: () {
-                _fecha();
-                _controller.importAudioFile(widget.playhead);
-              },
+              label: 'Arquivo de audio',
+              onTap: () => _importAudio(),
+            ),
+            _AddOption(
+              icon: CupertinoIcons.film,
+              label: 'Extrair de video',
+              onTap: () => _importAudio(fromVideo: true),
             ),
             const Spacer(flex: 5),
           ],

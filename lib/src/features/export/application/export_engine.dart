@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../editor/domain/cut.dart';
 import '../../editor/domain/cut_ops.dart';
 import '../../editor/domain/audio_mix.dart';
+import '../../editor/application/audio_render_service.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/domain/mask.dart';
 import '../../editor/domain/video_project.dart';
@@ -448,9 +449,9 @@ class ExportEngine {
     var idx = firstInputIndex;
 
     for (final l in sources) {
-      final path = l is AudioLayer
+      final path = AudioRenderService.instance.ready(l) ?? (l is AudioLayer
           ? l.sourcePath
-          : (l as VideoLayer).sourcePath;
+          : (l as VideoLayer).sourcePath);
       final volume = l is AudioLayer ? l.volume : (l as VideoLayer).volume;
       var offset = l is VideoLayer
           ? l.sourceOffset
@@ -852,6 +853,14 @@ class ExportEngine {
       ? settings.bitrateFor(width, height, fps)
       : PlatformEncoder.bitrateFor(width, height, fps, quality);
 
+  Future<void> _prepareAudioEffects() async {
+    for (final layer in audioSources) {
+      if (AudioRenderService.needed(layer)) {
+        await AudioRenderService.instance.prepare(layer);
+      }
+    }
+  }
+
   /// JUNTA O AUDIO ao video mudo, sem recodificar a imagem.
   ///
   /// Separado de [encode] porque os dois caminhos chegam aqui: o de
@@ -862,6 +871,7 @@ class ExportEngine {
     if (!silent.existsSync() || silent.lengthSync() < 1024) {
       throw ExportException('O codificador nao produziu video.');
     }
+    await _prepareAudioEffects();
     final audio = audioGraph(1);
     if (audio.outLabel == null) {
       silent.renameSync(file.path);
@@ -947,6 +957,7 @@ class ExportEngine {
       throw ExportException('O codificador nao produziu video.');
     }
 
+    await _prepareAudioEffects();
     final audio = audioGraph(1);
     if (audio.outLabel == null) {
       silent.renameSync(file.path);

@@ -36,8 +36,11 @@ void main() {
     await tester.pumpAndSettle();
     final id = c.read(selectedLayerProvider);
     expect(id, isNotNull, reason: 'o toque no objeto selecionou');
-    expect(id, c.read(editorControllerProvider).layers.first.id,
-        reason: 'a de cima ganha');
+    expect(
+      id,
+      c.read(editorControllerProvider).layers.first.id,
+      reason: 'a de cima ganha',
+    );
     // E as ferramentas da camada apareceram sozinhas.
     expect(find.text('Mover e\ntransf.'), findsOneWidget);
 
@@ -63,10 +66,10 @@ void main() {
     await tester.dragFrom(centroDoPalco(tester), const Offset(0, 60));
     await tester.pumpAndSettle();
     expect(onde().dy, greaterThan(antes.dy + 10), reason: 'desceu');
-    // No Simples o movimento no palco ja nasce animavel (auto-key).
+    // Arrasto manual no Pro nao cria keyframes sem auto-key armado.
     expect(
       c.read(editorControllerProvider).layerById(id)!.position.isAnimated,
-      isTrue,
+      isFalse,
     );
   });
 
@@ -89,7 +92,9 @@ void main() {
         .rotation
         .valueAt(Duration.zero);
     final escalaAntes = escala();
-    final alca = tester.getRect(find.byKey(const ValueKey('alca-escala'))).center;
+    final alca = tester
+        .getRect(find.byKey(const ValueKey('alca-escala')))
+        .center;
     await tester.dragFrom(alca, const Offset(40, 40));
     await tester.pumpAndSettle();
     expect(escala(), greaterThan(escalaAntes), reason: 'a alca aumentou');
@@ -100,7 +105,9 @@ void main() {
     expect(giroAtual().abs(), greaterThan(5), reason: 'a alca girou');
   });
 
-  testWidgets('camada bloqueada nao e pega pelo toque no palco', (tester) async {
+  testWidgets('camada bloqueada nao e pega pelo toque no palco', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
     final e = c.read(editorControllerProvider.notifier);
     final topo = c.read(editorControllerProvider).layers.first.id;

@@ -172,6 +172,36 @@ Future<void> showTransitionSheet(
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Distorcao e revelacao',
+                  style: TextStyle(color: AmColors.muted, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final type in [
+                      EffectType.twirl,
+                      EffectType.fisheye,
+                      EffectType.kaleidoscope,
+                      EffectType.waveWarp,
+                      EffectType.venetianBlinds,
+                      EffectType.blockDissolve,
+                      EffectType.offset,
+                      EffectType.invert,
+                    ])
+                      _ChoiceChip(
+                        label: effectSpecs[type]!.name,
+                        selected:
+                            transition?.type == ClipTransitionType.effect &&
+                            transition?.effect?.type == type,
+                        onTap: () =>
+                            apply(ClipTransitionType.effect, effectType: type),
+                      ),
+                  ],
+                ),
                 if (transition != null) ...[
                   const SizedBox(height: 18),
                   Row(

@@ -61,42 +61,45 @@ void main() {
     });
   }
 
-  test('recente quer dizer recente: quem foi editado vai para a frente', () {
-    final pasta = Directory.systemTemp.createTempSync('aurea_inicio');
-    addTearDown(() => pasta.deleteSync(recursive: true));
-    final container = ProviderContainer(
-      overrides: [
-        projectsControllerProvider.overrideWith(_MemoryProjects.new),
-        projectRepositoryProvider.overrideWithValue(
-          ProjectRepository(directory: pasta, installBundledExamples: false),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
-    final c = container.read(projectsControllerProvider.notifier);
-    final a = VideoProject.empty('A');
-    final b = VideoProject.empty('B');
-    final d = VideoProject.empty('C');
-    for (final p in [a, b, d]) {
-      c.add(p);
-    }
-    // add empilha na frente: C, B, A.
-    expect(
-      container.read(projectsControllerProvider).map((p) => p.name),
-      ['C', 'B', 'A'],
-    );
-    // Mexer no A leva o A para a frente, sem duplicar ninguem.
-    c.upsert(a.copyWith(name: 'A editado'));
-    expect(
-      container.read(projectsControllerProvider).map((p) => p.name),
-      ['A editado', 'C', 'B'],
-    );
-    // Um projeto que ainda nao estava na lista tambem entra na frente.
-    c.upsert(VideoProject.empty('D'));
-    expect(
-      container.read(projectsControllerProvider).first.name,
-      'D',
-    );
-    expect(container.read(projectsControllerProvider), hasLength(4));
-  });
+  test(
+    'recente quer dizer recente: quem foi editado vai para a frente',
+    () async {
+      final pasta = Directory.systemTemp.createTempSync('aurea_inicio');
+      addTearDown(() => pasta.deleteSync(recursive: true));
+      final container = ProviderContainer(
+        overrides: [
+          projectsControllerProvider.overrideWith(_MemoryProjects.new),
+          projectRepositoryProvider.overrideWithValue(
+            ProjectRepository(directory: pasta, installBundledExamples: false),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final c = container.read(projectsControllerProvider.notifier);
+      final a = VideoProject.empty('A');
+      final b = VideoProject.empty('B');
+      final d = VideoProject.empty('C');
+      for (final p in [a, b, d]) {
+        c.add(p);
+      }
+      // add empilha na frente: C, B, A.
+      expect(container.read(projectsControllerProvider).map((p) => p.name), [
+        'C',
+        'B',
+        'A',
+      ]);
+      // Mexer no A leva o A para a frente, sem duplicar ninguem.
+      c.upsert(a.copyWith(name: 'A editado'));
+      expect(container.read(projectsControllerProvider).map((p) => p.name), [
+        'A editado',
+        'C',
+        'B',
+      ]);
+      // Um projeto que ainda nao estava na lista tambem entra na frente.
+      c.upsert(VideoProject.empty('D'));
+      expect(container.read(projectsControllerProvider).first.name, 'D');
+      expect(container.read(projectsControllerProvider), hasLength(4));
+      await c.flush();
+    },
+  );
 }

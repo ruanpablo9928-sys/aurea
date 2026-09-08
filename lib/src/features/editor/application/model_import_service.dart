@@ -26,15 +26,7 @@ Future<ModelAsset3D> _read(List<String> paths) async {
   final file = File(models.single);
   final root = await file.parent.resolveSymbolicLinks();
   final resources = <String, Uint8List>{};
-  var total = 0;
   Future<Uint8List> read(File f) async {
-    final length = await f.length();
-    total += length;
-    if (length > 64 * 1024 * 1024 || total > 96 * 1024 * 1024) {
-      modelFail(
-        'Modelo e recursos ultrapassam o limite de 96 MB (64 MB por arquivo).',
-      );
-    }
     return f.readAsBytes();
   }
 
@@ -89,7 +81,10 @@ Future<ModelAsset3D> _read(List<String> paths) async {
     // As imagens selecionadas junto entram pelo nome: e assim que o FBX
     // acha a textura base.
     for (final p in paths) {
-      if (!RegExp(r'.(png|jpe?g|webp|bmp)$', caseSensitive: false).hasMatch(p)) {
+      if (!RegExp(
+        r'.(png|jpe?g|webp|bmp)$',
+        caseSensitive: false,
+      ).hasMatch(p)) {
         continue;
       }
       final f = File(p);

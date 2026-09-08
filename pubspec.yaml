@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.5.6+57
+version: 1.5.7+58
 
 environment:
   sdk: ^3.13.2
@@ -38,6 +38,7 @@ dependencies:
   video_player: ^2.14.0
   image_picker: ^1.2.3
   path_provider: ^2.1.6
+  path: ^1.9.1
   uuid: ^4.6.0
   # SEM CODECS GPL. A variante "full" traz tudo menos x264/x265/xvid —
   # que sao GPL e obrigariam a abrir o codigo do app inteiro. Quem
@@ -47,6 +48,7 @@ dependencies:
   file_picker: ^10.3.3
   shared_preferences: ^2.5.5
   characters: ^1.4.1
+  crypto: ^3.0.6
   vector_math: ^2.2.0
   url_launcher: ^6.3.2
   whisper_flutter_new: ^1.0.1
@@ -94,12 +96,15 @@ flutter:
 
   # Shader de saida: dithering que mata o banding.
   shaders:
+    - shaders/motion_tile.frag
+    - shaders/essential_warp.frag
     - shaders/dither.frag
     - shaders/blend.frag
     - shaders/gamma.frag
     - shaders/effects_v2.frag
 
   assets:
+    - assets/environments/
     - assets/templates/
     - assets/templates/dnyx/
     - assets/templates/vhf/
