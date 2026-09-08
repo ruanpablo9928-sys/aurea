@@ -76,7 +76,25 @@ class ParameterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ParameterFrame(
+    // A LINHA INTEIRA E A SUPERFICIE DE ARRASTO.
+    //
+    // Antes so a faixa de riscos puxava o valor. Num aparelho de 375 px
+    // sobravam vinte e tres pixels para ela na linha "Largura" — o
+    // losango, o rotulo e o numero comiam o resto — e o beta relatou
+    // exatamente isso: "nao da pra mexer no botao de largura, so no de
+    // altura". A altura funcionava por acaso, por nao ter losango.
+    //
+    // Envolver a linha resolve sem mexer no desenho: o rotulo, os
+    // espacos e a propria regua puxam. O losango e o numero continuam
+    // recebendo o TOQUE, porque toque e arrasto sao gestos diferentes e
+    // a arena entrega cada um a quem pediu.
+    return AmArrastoDeValor(
+      value: value,
+      min: min,
+      max: max,
+      unitsPerPixel: unitsPerPixel,
+      onChanged: onChanged,
+      child: ParameterFrame(
       label: label,
       keyframe: keyframe,
       onReset: onReset,
@@ -92,6 +110,7 @@ class ParameterRow extends StatelessWidget {
               unitsPerPixel: unitsPerPixel,
               accentCenter: accentCenter,
               height: height - 8,
+              arrastavel: false,
               onChanged: onChanged,
             ),
           ),
@@ -114,6 +133,7 @@ class ParameterRow extends StatelessWidget {
             },
           ),
         ],
+      ),
       ),
     );
   }

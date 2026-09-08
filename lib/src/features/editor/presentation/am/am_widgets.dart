@@ -298,7 +298,7 @@ class AmValueChip extends StatelessWidget {
 /// a mais no mesmo quadro era descartado: um arrasto rapido de 300 px
 /// virava o ultimo deltazinho de 3 px, e a superficie de arrasto
 /// parecia "nao pegar".
-class AmTickRuler extends StatefulWidget {
+class AmTickRuler extends StatelessWidget {
   const AmTickRuler({
     super.key,
     required this.value,
@@ -308,6 +308,7 @@ class AmTickRuler extends StatefulWidget {
     this.accentCenter = true,
     this.min = double.negativeInfinity,
     this.max = double.infinity,
+    this.arrastavel = true,
   });
 
   final double value;
@@ -320,11 +321,69 @@ class AmTickRuler extends StatefulWidget {
   final double min;
   final double max;
 
+  /// FALSO quando quem arrasta e a linha inteira, e nao so esta faixa.
+  ///
+  /// Dois detectores de arrasto horizontal encaixados brigam na arena de
+  /// gestos, e quem ganha e o de dentro — que e justamente o mais
+  /// estreito. Desligando este, o dedo pega a linha toda.
+  final bool arrastavel;
+
   @override
-  State<AmTickRuler> createState() => _AmTickRulerState();
+  Widget build(BuildContext context) {
+    final visual = SizedBox(
+      height: height,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _TickRulerPainter(
+          value: value,
+          unitsPerPixel: unitsPerPixel,
+          accentCenter: accentCenter,
+        ),
+      ),
+    );
+    if (!arrastavel) return visual;
+    return AmArrastoDeValor(
+      value: value,
+      min: min,
+      max: max,
+      unitsPerPixel: unitsPerPixel,
+      onChanged: onChanged,
+      child: visual,
+    );
+  }
 }
 
-class _AmTickRulerState extends State<AmTickRuler> {
+/// A SUPERFICIE DE ARRASTO de um numero — o gesto, sem desenho nenhum.
+///
+/// Separada da regua porque a superficie precisa ser MAIOR do que ela.
+/// Numa tela de 375 px, a faixa de riscos da linha "Largura" sobrava com
+/// vinte e tres pixels depois do losango, do rotulo e do valor: o beta
+/// relatou "nao da pra mexer no botao de largura, so no de altura", e
+/// estava certo — nao havia onde pegar. Envolvendo a linha inteira, o
+/// alvo passa a ser a linha, e o rotulo e o espaco vazio tambem puxam.
+class AmArrastoDeValor extends StatefulWidget {
+  const AmArrastoDeValor({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.child,
+    this.unitsPerPixel = 0.5,
+    this.min = double.negativeInfinity,
+    this.max = double.infinity,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+  final Widget child;
+  final double unitsPerPixel;
+  final double min;
+  final double max;
+
+  @override
+  State<AmArrastoDeValor> createState() => _AmArrastoDeValorState();
+}
+
+class _AmArrastoDeValorState extends State<AmArrastoDeValor> {
   double _inicio = 0;
   double _acumulado = 0;
 
@@ -375,17 +434,7 @@ class _AmTickRulerState extends State<AmTickRuler> {
       },
       onHorizontalDragEnd: (_) => _descarregar(),
       onHorizontalDragCancel: _descarregar,
-      child: SizedBox(
-        height: widget.height,
-        width: double.infinity,
-        child: CustomPaint(
-          painter: _TickRulerPainter(
-            value: widget.value,
-            unitsPerPixel: widget.unitsPerPixel,
-            accentCenter: widget.accentCenter,
-          ),
-        ),
-      ),
+      child: widget.child,
     );
   }
 }

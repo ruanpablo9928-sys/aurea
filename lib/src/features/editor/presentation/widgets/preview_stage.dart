@@ -253,6 +253,32 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     );
   }
 
+  /// ONDE O ENCAIXE PEGOU, em coordenadas da composicao. Nulo = solto.
+  ///
+  /// Sao estes dois numeros que a linha de apoio desenha. Ela existia
+  /// antes como uma cruz permanente no meio do quadro, ligada so ao
+  /// fato de haver camada selecionada — e ai o beta relatou o que era
+  /// inevitavel: "passa o dedo por cima e para de mexer". A linha nao
+  /// parava nada (ela e desenhada dentro de um IgnorePointer), quem
+  /// parava era o ENCAIXE, invisivel, agarrando o objeto ao passar pelo
+  /// centro. Duas coisas erradas de uma vez: uma marca que nao explicava
+  /// nada e uma forca que nao aparecia.
+  ///
+  /// Agora a linha SO existe enquanto o dedo esta movendo o objeto, e so
+  /// no eixo em que ele de fato encaixou. Ver a linha aparecer no
+  /// instante em que o objeto para e o que transforma "travou" em
+  /// "alinhou".
+  double? _encaixeX;
+  double? _encaixeY;
+
+  void _limparEncaixe() {
+    if (_encaixeX == null && _encaixeY == null) return;
+    setState(() {
+      _encaixeX = null;
+      _encaixeY = null;
+    });
+  }
+
   void _onScaleStart(ScaleStartDetails d) {
     // O dedo pegou uma alca? (raio generoso: 28 px)
     _alca = null;
@@ -335,23 +361,58 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     if (deltaLogical == Offset.zero) return;
     _dragAccum += deltaLogical;
 
-    // Alinhamento: se o gesto e claramente horizontal/vertical, trava o
-    // outro eixo — o arrasto nao "sai torto".
+    // ALINHAMENTO: enquanto o dedo anda so num eixo, o outro fica quieto
+    // — o arrasto nao "sai torto" ao comecar.
+    //
+    // O CRITERIO E ABSOLUTO, e nao uma proporcao. Antes bastava um eixo
+    // ser 2,5 vezes maior que o outro: depois de arrastar duzentos
+    // pixels para o lado, era preciso descer OITENTA para o objeto voltar
+    // a subir e descer. No meio do gesto isso e indistinguivel de um
+    // travamento, e foi parte do que o beta chamou de "para de mexer".
+    // Com um limite em pixels, o eixo se solta assim que a pessoa move
+    // de verdade para o outro lado, nao importa o quanto ja tenha
+    // andado.
+    const folgaDoEixo = 12.0;
     var target = _dragStartPos + _dragAccum;
     final adx = _dragAccum.dx.abs();
     final ady = _dragAccum.dy.abs();
-    if (adx > 24 || ady > 24) {
-      if (adx > ady * 2.5) {
-        target = Offset(target.dx, _dragStartPos.dy);
-      } else if (ady > adx * 2.5) {
-        target = Offset(_dragStartPos.dx, target.dy);
-      }
+    if (adx > 24 && ady < folgaDoEixo) {
+      target = Offset(target.dx, _dragStartPos.dy);
+    } else if (ady > 24 && adx < folgaDoEixo) {
+      target = Offset(_dragStartPos.dx, target.dy);
     }
 
     // ENCAIXE (PR-X2): centro e bordas da composicao, centros e bordas
     // das OUTRAS camadas, e as guias. O primeiro alvo dentro da
     // tolerancia vence, por eixo.
-    final snap = 16 / _stageScale;
+    // DEZ PIXELS DE TELA, e nao dezesseis. A tolerancia e uma zona morta:
+    // dentro dela o objeto fica parado enquanto o dedo anda. Dezesseis
+    // para cada lado davam trinta e dois pixels de "nao acontece nada" —
+    // um terco de polegada em que o app parece quebrado. Dez ainda pega
+    // o alinhamento e some antes de virar queixa.
+    final snap = 10 / _stageScale;
+
+    // QUEM PASSA CORRENDO NAO ESTA MIRANDO.
+    //
+    // Esta e a metade que faltava do relato "passa o dedo por cima e
+    // para de mexer". Quem arrasta depressa de um lado ao outro nao quer
+    // alinhar nada — quer chegar do outro lado — e o encaixe agarrando
+    // no meio do caminho e puro estorvo. Quem quer alinhar chega devagar.
+    //
+    // O limite e a propria tolerancia: se o dedo atravessa a zona
+    // inteira num unico evento, ele estava passando, e nao mirando.
+    // Assim a regra se ajusta sozinha a qualquer zoom do palco, sem mais
+    // um numero magico para manter.
+    if (deltaLogical.distance > snap) {
+      controller.editPosition(
+        id,
+        t,
+        target,
+        autoKey: ref.read(proModeProvider) ? null : true,
+      );
+      _limparEncaixe();
+      return;
+    }
     final self = ref.read(editorControllerProvider.notifier);
     final size = self.layerBoxSize(
       ref.read(editorControllerProvider).layerById(id)!,
@@ -393,17 +454,30 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
         ..add(oc.dy - oh.dy - half.dy)
         ..add(oc.dy + oh.dy + half.dy);
     }
+    double? pegouX;
+    double? pegouY;
     for (final x in xs) {
       if ((target.dx - x).abs() < snap) {
         target = Offset(x, target.dy);
+        pegouX = x;
         break;
       }
     }
     for (final y in ys) {
       if ((target.dy - y).abs() < snap) {
         target = Offset(target.dx, y);
+        pegouY = y;
         break;
       }
+    }
+    // A LINHA APARECE COM O ENCAIXE E SOME COM ELE. Nada de cruz
+    // permanente: o que ela mostra e "seu objeto esta alinhado com
+    // isto", e essa frase so faz sentido no instante em que e verdade.
+    if (pegouX != _encaixeX || pegouY != _encaixeY) {
+      setState(() {
+        _encaixeX = pegouX;
+        _encaixeY = pegouY;
+      });
     }
 
     // SIMPLES: mover no palco anima (auto-key), sem precisar ligar nada.
@@ -431,6 +505,15 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
       behavior: HitTestBehavior.opaque,
       onScaleStart: drawing ? null : _onScaleStart,
       onScaleUpdate: drawing ? null : _onScaleUpdate,
+      // SOLTOU O DEDO, SOME A LINHA. Ela e um sinal do gesto em
+      // andamento; deixada na tela depois vira decoracao que confunde.
+      //
+      // SO `onScaleEnd`. Um `onTapUp` aqui parecia inofensivo e nao era:
+      // ele poe um reconhecedor de toque na mesma arena, e o toque
+      // simples passava a ser dele em vez de chegar ao `onScaleStart` —
+      // que e quem seleciona a camada embaixo do dedo. O palco parou de
+      // selecionar por causa de uma limpeza que ja acontecia sozinha.
+      onScaleEnd: drawing ? null : (_) => _limparEncaixe(),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -568,7 +651,8 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                                           previewScale: scale,
                                           guides: project.guides,
                                           compSize: Size(compW, compH),
-                                          centerLines: selectedId != null,
+                                          encaixeX: _encaixeX,
+                                          encaixeY: _encaixeY,
                                         ),
                                       ),
                                     ),
@@ -874,25 +958,36 @@ class _GuidesPainter extends CustomPainter {
   const _GuidesPainter({
     required this.guides,
     required this.compSize,
-    this.centerLines = false,
+    this.encaixeX,
+    this.encaixeY,
     this.previewScale = 1,
   });
 
   final GuidesSpec guides;
   final Size compSize;
-  final bool centerLines;
+
+  /// Onde o objeto encaixou agora, em coordenadas da composicao. Nulo em
+  /// cada eixo que nao encaixou — e nulo nos dois quando ninguem esta
+  /// arrastando.
+  final double? encaixeX;
+  final double? encaixeY;
   final double previewScale;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = compSize.width;
     final h = compSize.height;
-    if (centerLines) {
+    // A LINHA DE APOIO do encaixe, so no eixo que pegou.
+    if (encaixeX != null || encaixeY != null) {
       final paint = Paint()
-        ..color = const Color(0x99FF6B6B)
-        ..strokeWidth = 1 / math.max(previewScale, .001);
-      canvas.drawLine(Offset(w / 2, 0), Offset(w / 2, h), paint);
-      canvas.drawLine(Offset(0, h / 2), Offset(w, h / 2), paint);
+        ..color = const Color(0xCCFF6B6B)
+        ..strokeWidth = 1.5 / math.max(previewScale, .001);
+      if (encaixeX != null) {
+        canvas.drawLine(Offset(encaixeX!, 0), Offset(encaixeX!, h), paint);
+      }
+      if (encaixeY != null) {
+        canvas.drawLine(Offset(0, encaixeY!), Offset(w, encaixeY!), paint);
+      }
     }
 
     // Grade de layout.
@@ -969,7 +1064,8 @@ class _GuidesPainter extends CustomPainter {
   bool shouldRepaint(_GuidesPainter old) =>
       old.guides != guides ||
       old.compSize != compSize ||
-      old.centerLines != centerLines ||
+      old.encaixeX != encaixeX ||
+      old.encaixeY != encaixeY ||
       old.previewScale != previewScale;
 }
 

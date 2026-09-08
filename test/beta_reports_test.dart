@@ -311,9 +311,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('selected layers show red composition center guides', (
+  testWidgets('selecionar nao acende a linha vermelha de apoio', (
     tester,
   ) async {
+    // ESTE TESTE JA COBRIU O CONTRARIO. Ate o beta 57 a cruz vermelha
+    // aparecia sempre que havia camada selecionada, e o teste exigia
+    // isso. O relato do beta 57 desfez a regra: "a linha vermelha de
+    // apoio ta bugando, os user passam o dedo por cima e para de mexer
+    // (...) essa linha deve aparecer quando tiver mexendo na posicao do
+    // objeto somente".
+    //
+    // Uma marca permanente nao ajudava ninguem a mirar e, quando o
+    // objeto realmente parava nela (pelo encaixe, invisivel), a linha
+    // ja tinha virado paisagem. Agora ela e o sinal do encaixe: aparece
+    // no eixo que pegou, enquanto o dedo esta movendo, e some ao soltar.
+    // O outro lado da regra esta em test/linha_de_apoio_test.dart.
     final c = await openEditor(tester);
     c.read(selectedLayerProvider.notifier).state = c
         .read(editorControllerProvider)
@@ -321,21 +333,7 @@ void main() {
         .first
         .id;
     await tester.pumpAndSettle();
-    final p = c.read(editorControllerProvider);
-    expect(
-      find.byKey(const ValueKey('composition-guides')),
-      paints
-        ..line(
-          color: const Color(0x99FF6B6B),
-          p1: Offset(p.outputWidth / 2, 0),
-          p2: Offset(p.outputWidth / 2, p.outputHeight.toDouble()),
-        )
-        ..line(
-          color: const Color(0x99FF6B6B),
-          p1: Offset(0, p.outputHeight / 2),
-          p2: Offset(p.outputWidth.toDouble(), p.outputHeight / 2),
-        ),
-    );
+    expect(find.byKey(const ValueKey('composition-guides')), paintsNothing);
     c.read(selectedLayerProvider.notifier).state = null;
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('composition-guides')), paintsNothing);

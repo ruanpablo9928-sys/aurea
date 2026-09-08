@@ -1,12 +1,10 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/domain/algebra_numerica.dart';
 import 'package:aurea/src/features/editor/domain/camera_solver3d.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
-import 'package:aurea/src/features/editor/domain/scene3d.dart';
 import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:aurea/src/features/editor/presentation/am/rastreio3d_screen.dart';
 import 'package:flutter/material.dart';
