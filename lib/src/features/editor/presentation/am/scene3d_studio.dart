@@ -30,6 +30,7 @@ import 'am_widgets.dart';
 import 'color_picker_sheet.dart';
 import 'scene3d_sheet.dart';
 import 'scene3d_studio_ux.dart';
+import '../../../tutoriais/presentation/tutorial_screen.dart';
 
 /// ESTUDIO DA CENA 3D: a vista no centro, e o resto em volta dela.
 ///
@@ -1089,6 +1090,22 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
               onTap: () {
                 Navigator.pop(ctx);
                 setState(() => _dica = 0);
+              },
+            ),
+            // O TUTORIAL EM VIDEO: a gravacao do proprio app fazendo uma
+            // cena do zero — cubo, animacao, duas cameras, corte.
+            LinhaDoEstudio(
+              key: const ValueKey('mais-tutorial'),
+              icone: CupertinoIcons.play_rectangle,
+              titulo: 'Tutorial em vídeo (1 min e meio)',
+              onTap: () {
+                Navigator.pop(ctx);
+                _playback.pause();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TutorialScreen(id: 'cena3d'),
+                  ),
+                );
               },
             ),
             const SizedBox(height: 12),

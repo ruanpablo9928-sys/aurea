@@ -109,6 +109,7 @@ flutter:
     - assets/templates/dnyx/
     - assets/templates/vhf/
     - assets/models/monolito/
+    - assets/tutoriais/
 
   fonts:
     - family: Aurea Motion Sans

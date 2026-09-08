@@ -1,0 +1,116 @@
+{
+ "titulo": "Cena 3D",
+ "duracao": 64.41,
+ "largura": 780,
+ "altura": 1908,
+ "cenas": [
+  {
+   "n": 1,
+   "texto": "Na Início, toque em Novo projeto.",
+   "inicio": 0.0,
+   "fim": 2.56
+  },
+  {
+   "n": 2,
+   "texto": "Escolha o formato — 9:16 para Reels — e toque em Criar projeto.",
+   "inicio": 2.56,
+   "fim": 5.88
+  },
+  {
+   "n": 3,
+   "texto": "O projeto novo abre com o menu de adicionar. Vá na aba Objeto.",
+   "inicio": 5.88,
+   "fim": 9.11
+  },
+  {
+   "n": 4,
+   "texto": "Toque em Cena 3D: um ambiente 3D com objetos, luzes e câmera.",
+   "inicio": 9.11,
+   "fim": 11.25
+  },
+  {
+   "n": 5,
+   "texto": "A cena entra na timeline. No menu da camada, toque em Cena 3D para abrir o Estúdio.",
+   "inicio": 11.25,
+   "fim": 13.59
+  },
+  {
+   "n": 6,
+   "texto": "O Estúdio: em cima, Cena, Câmera e o menu ⋮. Embaixo, a linha do tempo e as ferramentas Selecionar, Mover, Girar e Escalar.",
+   "inicio": 13.59,
+   "fim": 17.09
+  },
+  {
+   "n": 7,
+   "texto": "Toque em + e escolha Objeto → Cubo. Ele já nasce selecionado, com a barra de contexto dele.",
+   "inicio": 17.09,
+   "fim": 21.57
+  },
+  {
+   "n": 8,
+   "texto": "Na barra de contexto, Material: arraste a régua Metálico para mudar o acabamento — sem sair da tela.",
+   "inicio": 21.57,
+   "fim": 25.28
+  },
+  {
+   "n": 9,
+   "texto": "Toque em Focar: a câmera enquadra o objeto selecionado.",
+   "inicio": 25.28,
+   "fim": 27.64
+  },
+  {
+   "n": 10,
+   "texto": "Arraste no palco para orbitar a câmera e ver a cena de outro ângulo.",
+   "inicio": 27.64,
+   "fim": 30.11
+  },
+  {
+   "n": 11,
+   "texto": "Selecione o cubo, leve o tempo para 2 s e escolha a ferramenta Girar.",
+   "inicio": 30.11,
+   "fim": 33.11
+  },
+  {
+   "n": 12,
+   "texto": "Toque no Y do giro e digite 45. Com o Auto-key ligado, o keyframe nasce em 2 s — e o cubo passa a girar de 0 até 45 graus.",
+   "inicio": 33.11,
+   "fim": 37.48
+  },
+  {
+   "n": 13,
+   "texto": "Arraste o tempo de volta e veja o cubo girar entre os dois keyframes.",
+   "inicio": 37.48,
+   "fim": 41.04
+  },
+  {
+   "n": 14,
+   "texto": "Câmera → Nova câmera: ela entra no ar na hora. Com Mover, arraste para reposicioná-la.",
+   "inicio": 41.04,
+   "fim": 46.42
+  },
+  {
+   "n": 15,
+   "texto": "Com duas câmeras aparece a faixa de troca. Leve o tempo para 3 s e toque na primeira câmera: o corte acontece nesse instante.",
+   "inicio": 46.42,
+   "fim": 50.0
+  },
+  {
+   "n": 16,
+   "texto": "Menu ⋮ → Cena: toque na câmera na lista, depois em Olhar para e escolha o cubo. A câmera passa a seguir o objeto.",
+   "inicio": 50.0,
+   "fim": 56.69
+  },
+  {
+   "n": 17,
+   "texto": "Toque em ← para voltar ao editor e dê o play: a cena 3D toca na timeline como qualquer camada.",
+   "inicio": 56.69,
+   "fim": 61.91
+  },
+  {
+   "n": 18,
+   "texto": "Pronto. Exporte pelo botão de compartilhar, como qualquer projeto.",
+   "inicio": 61.91,
+   "fim": 64.41
+  }
+ ]
+}

@@ -30,6 +30,7 @@ import '../domain/monolito_template.dart';
 import '../domain/notes_motion_template.dart';
 import '../domain/pindown_motion_template.dart';
 import '../domain/project_presets.dart';
+import '../../tutoriais/presentation/tutorial_screen.dart';
 import 'new_project_sheet.dart';
 import 'whats_new.dart';
 
@@ -660,9 +661,14 @@ class ProjectsTab extends ConsumerWidget {
             onTap: () => showWhatsNewSheet(context),
           ),
           _Linha(
-            icon: CupertinoIcons.camera_viewfinder,
-            texto: 'PROXIMA ATT: Camera Tracker 3D',
-            onTap: () => showWhatsNewSheet(context),
+            key: const ValueKey('inicio-tutorial-cena3d'),
+            icon: CupertinoIcons.play_rectangle,
+            texto: 'Tutorial em vídeo: sua primeira cena 3D',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const TutorialScreen(id: 'cena3d'),
+              ),
+            ),
           ),
           _Linha(
             icon: CupertinoIcons.exclamationmark_bubble,
