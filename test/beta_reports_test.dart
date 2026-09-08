@@ -199,6 +199,10 @@ void main() {
       );
       expect(find.text('Minha prévia'), findsWidgets);
       expect(tester.takeException(), isNull);
+      // O aviso das fontes importadas fecha sozinho depois de uns
+      // segundos; sem esperar, o relogio dele dispara com a arvore ja
+      // desmontada e o teste falha "depois de ter terminado".
+      await tester.pump(const Duration(seconds: 6));
     },
   );
   testWidgets(

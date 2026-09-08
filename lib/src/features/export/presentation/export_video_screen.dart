@@ -465,10 +465,13 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       final local = localTimeForCut(l, t, transition);
       final source = videoAbsoluteSourceTimeAt(l, local);
       final extractedFrom = _inicioDosQuadros[l.id] ?? l.sourceOffset;
-      final idx =
-          ((source - extractedFrom).inMicroseconds * _engine!.fps / 1000000)
-              .floor()
-              .clamp(0, count - 1);
+      // A MESMA TAXA DA EXTRACAO: com interpolacao ligada ha mais
+      // quadros no disco do que a composicao tem, e o indice segue a
+      // taxa em que eles foram escritos.
+      final taxa = _engine!.fpsDeExtracao(l);
+      final idx = ((source - extractedFrom).inMicroseconds * taxa / 1000000)
+          .floor()
+          .clamp(0, count - 1);
       final file = File('${dir.path}/${idx.toString().padLeft(6, '0')}.png');
       if (!file.existsSync()) continue;
 

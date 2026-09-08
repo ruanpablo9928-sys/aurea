@@ -11,17 +11,17 @@ de GPU e iPhone 13 **não estão aqui**: precisam de aparelho.
 
 | Asset | Arquivo | Abriu | Import | Ponte | Triângulos | Prims | Mats | Esq. | Anim. | Heap estimado | Textura no heap | GLB da ponte | Esq. na ponte | Anim. na ponte |
 | --- | ---: | :--: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--: | :--: |
-| Simples | 0.0 MB | sim | 13 ms | 20 ms | 8 | 1 | 1 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |
-| Médio (50k tri) | 1.4 MB | sim | 100 ms | 255 ms | 51200 | 1 | 1 | 0 | 0 | 2.8 MB | 0.0 MB | 1.1 MB | **não** | **não** |
-| Complexo (60 materiais) | 0.1 MB | sim | 71 ms | 520 ms | 192000 | 60 | 60 | 0 | 0 | 10.6 MB | 0.0 MB | 4.2 MB | **não** | **não** |
-| Muitos objetos (500) | 0.0 MB | sim | 18 ms | 247 ms | 64000 | 500 | 1 | 0 | 0 | 3.9 MB | 0.0 MB | 1.6 MB | **não** | **não** |
-| Pesado (250k tri) | 6.9 MB | sim | 89 ms | 579 ms | 259200 | 1 | 1 | 0 | 0 | 13.9 MB | 0.0 MB | 6.9 MB | **não** | **não** |
-| Personagem (skin) | 0.1 MB | sim | 42 ms | 13 ms | 3200 | 1 | 1 | 1 | 1 | 0.2 MB | 0.0 MB | 0.1 MB | **não** | **não** |
-| Morph targets | 0.1 MB | sim | 4 ms | 25 ms | 1800 | 1 | 1 | 0 | 0 | 0.1 MB | 0.0 MB | 0.0 MB | **não** | **não** |
-| Transparência | 0.1 MB | sim | 1 ms | 6 ms | 1800 | 1 | 1 | 0 | 0 | 0.1 MB | 0.0 MB | 0.0 MB | **não** | **não** |
-| Textura 2048² | 4.0 MB | sim | 29 ms | 107 ms | 800 | 1 | 1 | 0 | 0 | 5.4 MB | 5.3 MB | 4.0 MB | **não** | **não** |
-| Textura 4096² | 16.0 MB | sim | 117 ms | 355 ms | 800 | 1 | 1 | 0 | 0 | 21.4 MB | 21.3 MB | 16.0 MB | **não** | **não** |
-| GLB com cauda | 0.0 MB | sim | 0 ms | 0 ms | 32 | 1 | 1 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |
+| Simples | 0.0 MB | sim | 11 ms | 21 ms | 8 | 1 | 1 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |
+| Médio (50k tri) | 1.4 MB | sim | 112 ms | 212 ms | 51200 | 1 | 1 | 0 | 0 | 2.8 MB | 0.0 MB | 1.1 MB | **não** | **não** |
+| Complexo (60 materiais) | 0.1 MB | sim | 74 ms | 447 ms | 192000 | 60 | 60 | 0 | 0 | 10.6 MB | 0.0 MB | 4.2 MB | **não** | **não** |
+| Muitos objetos (500) | 0.0 MB | sim | 36 ms | 201 ms | 64000 | 500 | 1 | 0 | 0 | 3.9 MB | 0.0 MB | 1.6 MB | **não** | **não** |
+| Pesado (250k tri) | 6.9 MB | sim | 102 ms | 523 ms | 259200 | 1 | 1 | 0 | 0 | 13.9 MB | 0.0 MB | 6.9 MB | **não** | **não** |
+| Personagem (skin) | 0.1 MB | sim | 55 ms | 14 ms | 3200 | 1 | 1 | 1 | 1 | 0.2 MB | 0.0 MB | 0.1 MB | **não** | **não** |
+| Morph targets | 0.1 MB | sim | 1 ms | 22 ms | 1800 | 1 | 1 | 0 | 0 | 0.1 MB | 0.0 MB | 0.0 MB | **não** | **não** |
+| Transparência | 0.1 MB | sim | 2 ms | 4 ms | 1800 | 1 | 1 | 0 | 0 | 0.1 MB | 0.0 MB | 0.0 MB | **não** | **não** |
+| Textura 2048² | 4.0 MB | sim | 20 ms | 78 ms | 800 | 1 | 1 | 0 | 0 | 5.4 MB | 5.3 MB | 4.0 MB | **não** | **não** |
+| Textura 4096² | 16.0 MB | sim | 93 ms | 288 ms | 800 | 1 | 1 | 0 | 0 | 21.4 MB | 21.3 MB | 16.0 MB | **não** | **não** |
+| GLB com cauda | 0.0 MB | sim | 0 ms | 1 ms | 32 | 1 | 1 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |
 | Draco (comprimido) | 0.0 MB | **NÃO** | 1 ms | 0 ms | 0 | 0 | 0 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |
 | KTX2 / BasisU | 0.0 MB | **NÃO** | 0 ms | 0 ms | 0 | 0 | 0 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |
 | Meshopt | 0.0 MB | **NÃO** | 0 ms | 0 ms | 0 | 0 | 0 | 0 | 0 | 0.0 MB | 0.0 MB | 0.0 MB | **não** | **não** |

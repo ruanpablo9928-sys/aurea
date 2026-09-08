@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+
+import '../../domain/rotacao_de_tela.dart';
 import 'dart:typed_data';
 import 'dart:ui' show PointMode;
 
@@ -127,8 +129,11 @@ class ParticlesPainter extends CustomPainter {
     final life = math.max(0.2, layer.lifetimeMs / 1000.0);
     final tSec = time.inMicroseconds / 1e6;
 
-    final rx = rotXDeg * math.pi / 180;
-    final ry = rotYDeg * math.pi / 180;
+    // O MESMO GIRO DO PALCO. Este pintor trata +Z como longe; o palco,
+    // como perto. Sem o espelho, o giro de um nulo inclinava o texto
+    // para um lado e as particulas para o outro (ver rotacao_de_tela).
+    final rx = rxDoPalco(rotXDeg);
+    final ry = ryDoPalco(rotYDeg);
     final rz = rotZDeg * math.pi / 180;
     final cxr = math.cos(rx), sxr = math.sin(rx);
     final cyr = math.cos(ry), syr = math.sin(ry);

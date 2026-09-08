@@ -50,7 +50,7 @@ void main() {
       );
       // Home also starts asynchronous feeds; layout does not wait for network.
       await tester.pump(const Duration(milliseconds: 300));
-      for (final label in ['Novo projeto', 'AutoEdit']) {
+      for (final label in ['Novo projeto']) {
         expect(find.text(label).hitTestable(), findsOneWidget);
         expect(
           tester.getSize(find.text(label)).height,

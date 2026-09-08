@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/aurea_logo.dart';
 import '../../about/presentation/report_sheet.dart';
-import '../../autoedit/presentation/autoedit_screen.dart';
 import '../../editor/application/editor_controller.dart';
 import '../../editor/domain/template_pack.dart';
 import '../../editor/domain/video_project.dart';
@@ -34,22 +33,28 @@ import '../domain/project_presets.dart';
 import 'new_project_sheet.dart';
 import 'whats_new.dart';
 
-/// Aba Inicio, do jeito de um app de video: o titulo, um botao de
-/// criar, os formatos como pilulas, os projetos recentes como cartoes
-/// com a miniatura DE VERDADE do projeto, os modelos com um quadro
-/// renderizado — e nada de cartao-vitrine com degrade e texto de
-/// marketing.
+/// A INICIO, do jeito de um app de video: o titulo, UM botao de criar,
+/// os projetos recentes numa lista com a miniatura DE VERDADE e um menu
+/// que se ve, os modelos com um quadro renderizado — e nada de
+/// cartao-vitrine, pilula ou quadradinho.
+///
+/// O que saiu, e por que: a fila de pilulas de formato (quatro jeitos
+/// de comecar um projeto, e o beta nao sabia qual era o certo — o
+/// formato se escolhe dentro da folha, olhando para a moldura), os dois
+/// quadrados ao lado do botao (viraram texto), o AutoEdit (fora por
+/// enquanto) e o "segurar para excluir", que ninguem descobre sozinho
+/// (virou um menu no botao de reticencias de cada projeto).
 class ProjectsTab extends ConsumerWidget {
   const ProjectsTab({super.key});
 
   Future<void> _createProject(
     BuildContext context,
     WidgetRef ref, {
-    String? presetAspectKey,
+    String? nomeSugerido,
   }) async {
     final project = await showNewProjectSheet(
       context,
-      presetAspectKey: presetAspectKey,
+      nomeSugerido: nomeSugerido,
     );
     if (project == null || !context.mounted) return;
 
@@ -345,12 +350,87 @@ class ProjectsTab extends ConsumerWidget {
     ThumbnailService.instance.delete(project.id);
   }
 
+  /// DUPLICAR: o mesmo projeto com id novo, na frente da lista.
+  void _duplicar(WidgetRef ref, VideoProject project) {
+    final copia = project.copyWith(name: '${project.name} (cópia)').comIdNovo();
+    ref.read(projectsControllerProvider.notifier).add(copia);
+  }
+
+  Future<void> _renomear(
+    BuildContext context,
+    WidgetRef ref,
+    VideoProject project,
+  ) async {
+    final nome = await showCupertinoDialog<String>(
+      context: context,
+      builder: (_) => _DialogoDeNome(inicial: project.name),
+    );
+    final limpo = nome?.trim();
+    if (limpo == null || limpo.isEmpty || limpo == project.name) return;
+    ref
+        .read(projectsControllerProvider.notifier)
+        .upsert(project.copyWith(name: limpo));
+  }
+
+  /// O MENU DO PROJETO, no botao de reticencias e no toque longo. Antes
+  /// so existia "segurar para excluir", que ninguem descobre sozinho.
+  Future<void> _menuDoProjeto(
+    BuildContext context,
+    WidgetRef ref,
+    VideoProject project,
+  ) async {
+    final acao = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (c) => CupertinoActionSheet(
+        title: Text(project.name),
+        message: Text(fichaDoProjeto(project)),
+        actions: [
+          for (final (rotulo, chave) in const [
+            ('Abrir', 'abrir'),
+            ('Duplicar', 'duplicar'),
+            ('Renomear', 'renomear'),
+          ])
+            CupertinoActionSheetAction(
+              key: ValueKey('projeto-$chave'),
+              onPressed: () => Navigator.of(c).pop(chave),
+              child: Text(rotulo),
+            ),
+          CupertinoActionSheetAction(
+            key: const ValueKey('projeto-excluir'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(c).pop('excluir'),
+            child: const Text('Excluir projeto'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(c).pop(),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+    if (acao == null || !context.mounted) return;
+    switch (acao) {
+      case 'abrir':
+        _openProject(context, ref, project);
+      case 'duplicar':
+        _duplicar(ref, project);
+      case 'renomear':
+        await _renomear(context, ref, project);
+      case 'excluir':
+        await _confirmarExclusao(context, ref, project);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projects = ref.watch(projectsControllerProvider);
+    final mostrarTodos = ref.watch(_mostrarTodosProvider);
     final theme = Theme.of(context);
     const completo = true;
     ThumbnailService.instance.init();
+    final visiveis = mostrarTodos
+        ? projects
+        : projects.take(_recentesNaInicio).toList();
 
     return SafeArea(
       bottom: false,
@@ -371,142 +451,53 @@ class ProjectsTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 18),
-          // AS DUAS PORTAS: comecar do zero, ou deixar o AutoEdit montar
-          // o projeto a partir de um video falado. Sao caminhos
-          // diferentes para a mesma coisa — um projeto editavel.
+          // UM BOTAO SO, na largura inteira. O formato, a resolucao e o
+          // nome se escolhem dentro da folha — com a moldura na frente.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            // NUM CELULAR ESTREITO, DUAS LINHAS.
-            //
-            // Os dois botoes de texto mais os dois quadrados de 48 nao
-            // cabem em 375 px de tela: "Novo projeto" saia cortado num
-            // iPhone SE. Quando o espaco nao da, os dois quadrados —
-            // que sao os secundarios — descem para a linha de baixo,
-            // com o nome escrito, em vez de espremerem o principal.
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Reserve room for both labels, icons and button padding.
-                // At 411 logical pixels, the four-button row squeezed AutoEdit.
-                final apertado =
-                    constraints.maxWidth <
-                    460 * MediaQuery.textScalerOf(context).scale(1);
-                Widget principais() => Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 48,
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                          ),
-                          icon: constraints.maxWidth < 320
-                              ? null
-                              : const Icon(CupertinoIcons.plus, size: 19),
-                          label: const Text('Novo projeto'),
-                          onPressed: () => _createProject(context, ref),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SizedBox(
-                        height: 48,
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                          ),
-                          icon: const Icon(CupertinoIcons.sparkles, size: 18),
-                          label: const Text('AutoEdit'),
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const AutoEditScreen(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Template e cena em XML sao estudio.
-                    if (completo && !apertado) ...[
-                      const SizedBox(width: 10),
-                      _IconeQuadrado(
-                        icon: CupertinoIcons.doc_on_doc,
-                        tooltip: 'Abrir template',
-                        onTap: () => _openTemplate(context, ref),
-                      ),
-                      const SizedBox(width: 10),
-                      _IconeQuadrado(
-                        icon: CupertinoIcons.arrow_down_doc,
-                        tooltip: 'Importar cena (XML)',
-                        onTap: () => _importarCena(context, ref),
-                      ),
-                    ],
-                  ],
-                );
-                if (!completo || !apertado) return principais();
-                return Column(
-                  children: [
-                    principais(),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 44,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(
-                                CupertinoIcons.doc_on_doc,
-                                size: 17,
-                              ),
-                              label: const Text('Template'),
-                              onPressed: () => _openTemplate(context, ref),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SizedBox(
-                            height: 44,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(
-                                CupertinoIcons.arrow_down_doc,
-                                size: 17,
-                              ),
-                              label: const Text('Abrir XML'),
-                              onPressed: () => _importarCena(context, ref),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
+            child: SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const ValueKey('novo-projeto'),
+                icon: const Icon(CupertinoIcons.plus, size: 19),
+                label: const Text('Novo projeto'),
+                onPressed: () => _createProject(
+                  context,
+                  ref,
+                  nomeSugerido: 'Projeto ${projects.length + 1}',
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          // FORMATOS como pilulas, numa fila que rola.
-          SizedBox(
-            height: 36,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          // As outras duas portas, escritas: sem caixa em volta. Template
+          // e cena em XML sao estudio.
+          if (completo) ...[
+            const SizedBox(height: 14),
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              children: [
-                for (final aspect in ProjectPresets.aspects)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _Pilula(
-                      icon: aspect.icon,
-                      label: '${aspect.label}  ${aspect.hint}',
-                      onTap: () => _createProject(
-                        context,
-                        ref,
-                        presetAspectKey: aspect.key,
-                      ),
-                    ),
+              // Wrap, nao Row: num celular estreito com fonte grande o
+              // segundo atalho desce de linha em vez de estourar.
+              child: Wrap(
+                spacing: 24,
+                runSpacing: 2,
+                children: [
+                  _Atalho(
+                    icon: CupertinoIcons.doc_on_doc,
+                    texto: 'Template',
+                    tooltip: 'Abrir template',
+                    onTap: () => _openTemplate(context, ref),
                   ),
-              ],
+                  _Atalho(
+                    icon: CupertinoIcons.arrow_down_doc,
+                    texto: 'Importar XML',
+                    tooltip: 'Importar cena (XML)',
+                    onTap: () => _importarCena(context, ref),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: 30),
           _TituloSecao(
             'Recentes',
@@ -514,45 +505,51 @@ class ProjectsTab extends ConsumerWidget {
                 ? null
                 : '${projects.length} ${projects.length == 1 ? 'projeto' : 'projetos'}',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
           if (projects.isEmpty)
             Padding(
-              padding: EdgeInsets.fromLTRB(20, 6, 20, 6),
+              padding: EdgeInsets.fromLTRB(20, 10, 20, 6),
               child: Text(
                 'Seus projetos aparecem aqui, com a miniatura do que voce fez.',
                 style: TextStyle(color: AppColors.muted, fontSize: 13.5),
               ),
             )
           else
+            // UMA LISTA, e nao uma fila que rola de lado: o nome inteiro,
+            // a ficha e o menu de cada projeto cabem numa linha.
             ValueListenableBuilder<int>(
               valueListenable: ThumbnailService.instance.revision,
-              builder: (_, rev, _) => SizedBox(
-                height: 176,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    for (final project in projects)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: _CartaoProjeto(
-                          project: project,
-                          thumb: ThumbnailService.instance.fileFor(project.id),
-                          revision: rev,
-                          onOpen: () => _openProject(context, ref, project),
-                          onLongPress: () =>
-                              _confirmarExclusao(context, ref, project),
-                        ),
-                      ),
-                  ],
-                ),
+              builder: (_, rev, _) => Column(
+                children: [
+                  for (final project in visiveis)
+                    _LinhaProjeto(
+                      key: ValueKey('projeto-${project.id}'),
+                      project: project,
+                      thumb: ThumbnailService.instance.fileFor(project.id),
+                      revision: rev,
+                      onOpen: () => _openProject(context, ref, project),
+                      onMenu: () => _menuDoProjeto(context, ref, project),
+                    ),
+                ],
               ),
+            ),
+          if (projects.length > _recentesNaInicio)
+            _Linha(
+              key: const ValueKey('projetos-todos'),
+              icon: mostrarTodos
+                  ? CupertinoIcons.chevron_up
+                  : CupertinoIcons.chevron_down,
+              texto: mostrarTodos
+                  ? 'Mostrar menos'
+                  : 'Mostrar todos os ${projects.length} projetos',
+              onTap: () =>
+                  ref.read(_mostrarTodosProvider.notifier).state = !mostrarTodos,
             ),
           // MODELOS: motions inteiros montados camada por camada — abrir
           // um e ver como cada coisa foi feita. Estudio: usam texto,
           // formas e efeitos que o nucleo nao mostra.
           if (completo) ...[
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             const _TituloSecao('Modelos'),
             const SizedBox(height: 10),
             SizedBox(
@@ -656,7 +653,7 @@ class ProjectsTab extends ConsumerWidget {
               ),
             ),
           ],
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
           _Linha(
             icon: CupertinoIcons.sparkles,
             texto: 'O que ha de novo nesta versao',
@@ -676,6 +673,22 @@ class ProjectsTab extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Quantos projetos a Inicio mostra antes do "mostrar todos".
+const _recentesNaInicio = 6;
+
+final _mostrarTodosProvider = StateProvider<bool>((_) => false);
+
+/// A ficha tecnica de um projeto: "16:9 · 1080p · 30 fps".
+String fichaDoProjeto(VideoProject project) {
+  final aspect = ProjectPresets.aspects
+      .firstWhere(
+        (a) => (a.ratio - project.aspectRatio).abs() < 0.01,
+        orElse: () => ProjectPresets.aspects.first,
+      )
+      .label;
+  return '$aspect · ${ProjectPresets.resolutionLabel(project.resolutionHeight)} · ${project.fps} fps';
 }
 
 class _TituloSecao extends StatelessWidget {
@@ -705,14 +718,17 @@ class _TituloSecao extends StatelessWidget {
   }
 }
 
-class _IconeQuadrado extends StatelessWidget {
-  const _IconeQuadrado({
+/// Uma porta secundaria, escrita: icone e nome, sem caixa.
+class _Atalho extends StatelessWidget {
+  const _Atalho({
     required this.icon,
+    required this.texto,
     required this.tooltip,
     required this.onTap,
   });
 
   final IconData icon;
+  final String texto;
   final String tooltip;
   final VoidCallback onTap;
 
@@ -723,85 +739,48 @@ class _IconeQuadrado extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceHigh,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, size: 20, color: AppColors.onDark),
-        ),
-      ),
-    );
-  }
-}
-
-class _Pilula extends StatelessWidget {
-  const _Pilula({required this.icon, required this.label, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceHigh,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: AppColors.lime),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.1,
-                color: AppColors.onDark,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: AppColors.lime),
+              const SizedBox(width: 7),
+              Text(
+                texto,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                  color: AppColors.onDark,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Cartao de projeto: miniatura real (quando o projeto ja foi aberto e
-/// fechado uma vez), nome e ficha tecnica. Segurar apaga.
-class _CartaoProjeto extends StatelessWidget {
-  const _CartaoProjeto({
+/// Uma linha de projeto: miniatura real (quando o projeto ja foi aberto
+/// e fechado uma vez), nome, ficha e o menu. Toque abre; segurar ou as
+/// reticencias abrem o menu.
+class _LinhaProjeto extends StatelessWidget {
+  const _LinhaProjeto({
+    super.key,
     required this.project,
     required this.thumb,
     required this.revision,
     required this.onOpen,
-    required this.onLongPress,
+    required this.onMenu,
   });
 
   final VideoProject project;
   final File? thumb;
   final int revision;
   final VoidCallback onOpen;
-  final VoidCallback onLongPress;
-
-  String get _specs {
-    final aspect = ProjectPresets.aspects
-        .firstWhere(
-          (a) => (a.ratio - project.aspectRatio).abs() < 0.01,
-          orElse: () => ProjectPresets.aspects.first,
-        )
-        .label;
-    return '$aspect · ${ProjectPresets.resolutionLabel(project.resolutionHeight)} · ${project.fps} fps';
-  }
+  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -809,17 +788,16 @@ class _CartaoProjeto extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onOpen,
-      onLongPress: onLongPress,
-      child: SizedBox(
-        width: 156,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      onLongPress: onMenu,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 7, 6, 7),
+        child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                width: 156,
-                height: 118,
+                width: 92,
+                height: 58,
                 child: t == null
                     ? ColoredBox(
                         color: AppColors.surfaceHigh,
@@ -827,7 +805,7 @@ class _CartaoProjeto extends StatelessWidget {
                           child: Icon(
                             CupertinoIcons.film,
                             color: AppColors.muted,
-                            size: 24,
+                            size: 20,
                           ),
                         ),
                       )
@@ -839,28 +817,104 @@ class _CartaoProjeto extends StatelessWidget {
                       ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              project.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.1,
-                color: AppColors.onDark,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    project.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.1,
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    fichaDoProjeto(project),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              _specs,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+            // O MENU TEM 44 PX de alvo: e por onde se apaga, duplica e
+            // renomeia — nada disso pode depender de um gesto escondido.
+            GestureDetector(
+              key: ValueKey('projeto-menu-${project.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onMenu,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  CupertinoIcons.ellipsis,
+                  size: 18,
+                  color: AppColors.muted,
+                ),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// O dialogo de renomear: dono do proprio controlador de texto, para
+/// ele so ser descartado quando o dialogo sai da arvore.
+class _DialogoDeNome extends StatefulWidget {
+  const _DialogoDeNome({required this.inicial});
+
+  final String inicial;
+
+  @override
+  State<_DialogoDeNome> createState() => _DialogoDeNomeState();
+}
+
+class _DialogoDeNomeState extends State<_DialogoDeNome> {
+  late final TextEditingController _campo = TextEditingController(
+    text: widget.inicial,
+  );
+
+  @override
+  void dispose() {
+    _campo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoAlertDialog(
+      title: const Text('Renomear'),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: CupertinoTextField(
+          key: const ValueKey('renomear-campo'),
+          controller: _campo,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          onSubmitted: (v) => Navigator.of(context).pop(v),
+        ),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        CupertinoDialogAction(
+          key: const ValueKey('renomear-salvar'),
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(_campo.text),
+          child: const Text('Salvar'),
+        ),
+      ],
     );
   }
 }
@@ -925,7 +979,12 @@ class _CartaoModelo extends StatelessWidget {
 
 /// Linha simples com icone e seta: sem caixa, sem borda.
 class _Linha extends StatelessWidget {
-  const _Linha({required this.icon, required this.texto, required this.onTap});
+  const _Linha({
+    super.key,
+    required this.icon,
+    required this.texto,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String texto;

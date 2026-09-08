@@ -72,12 +72,17 @@ class EditorTransportBar extends ConsumerWidget {
       ),
     );
 
+    // OITO BOTOES NUM CELULAR DE 320 PX. Cada um mede 44 (o alvo minimo),
+    // e oito vezes 44 sao 352: a tesoura nova estourava a fileira em 32
+    // pixels no aparelho mais estreito. Aqui cada botao recebe uma fatia
+    // igual da largura que existe — 44 quando cabe, e nunca menos de 36,
+    // que ainda e um alvo que o dedo acerta.
     return Container(
       height: AureaTokens.transport,
       color: t.surface,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final filhos = <Widget>[
           botao(
             key: const ValueKey('editor-undo'),
             icon: CupertinoIcons.arrow_uturn_left,
@@ -128,6 +133,18 @@ class EditorTransportBar extends ConsumerWidget {
                 ? null
                 : () => controller.duplicateLayer(selected),
           ),
+          // DIVIDIR SEMPRE A VISTA. Estava numa fila de acoes que a
+          // largura da tela escondia atras de "Mais" — e cortar no
+          // cabecote e o gesto mais comum de um editor. Aqui, no
+          // transporte, ele nunca sai da tela.
+          botao(
+            key: const ValueKey('camada-dividir'),
+            icon: CupertinoIcons.scissors,
+            tooltip: 'Dividir a camada no cabeçote',
+            onTap: selected == null
+                ? null
+                : () => controller.splitLayer(selected, playback.time.value),
+          ),
           botao(
             key: const ValueKey('transport-expand'),
             icon: CupertinoIcons.viewfinder,
@@ -136,7 +153,18 @@ class EditorTransportBar extends ConsumerWidget {
                 .read(editorSessionProvider.notifier)
                 .togglePreviewExpanded(),
           ),
-        ],
+          ];
+          final fatia = c.maxWidth.isFinite && filhos.isNotEmpty
+              ? (c.maxWidth / filhos.length).clamp(36.0, AureaTokens.minTap)
+              : AureaTokens.minTap;
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (final f in filhos)
+                SizedBox(width: fatia, child: Center(child: f)),
+            ],
+          );
+        },
       ),
     );
   }

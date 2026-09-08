@@ -1720,10 +1720,13 @@ class _AmBarState extends ConsumerState<_AmBar> {
               child: CustomPaint(
                 painter: _AmBarPainter(
                   selected: selected,
-                  color: hidden
-                      ? layerTypeColor(layer).withValues(alpha: 0.35)
-                      : layerTypeColor(layer),
-                  stripeColor: layerTypeColor(layer),
+                  hidden: hidden,
+                  color: layerTypeColor(layer),
+                ),
+                foregroundPainter: _AmBarFrentePainter(
+                  selected: selected,
+                  hidden: hidden,
+                  color: layerTypeColor(layer),
                 ),
                 // FORMA DE ONDA e TIRA DE MINIATURAS dentro da barra:
                 // sem elas, achar o corte e tatear.
@@ -1735,9 +1738,10 @@ class _AmBarState extends ConsumerState<_AmBar> {
                   child: ClipRect(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
-                        width < 46 ? 3 : 12,
+                        // A faixa de cor ocupa os primeiros 4 px.
+                        width < 46 ? 7 : 14,
                         0,
-                        width < 46 ? 3 : 12,
+                        width < 46 ? 3 : 10,
                         // O espaco de baixo e dos keyframes.
                         kAmFaixaKeyframes,
                       ),
@@ -1771,8 +1775,9 @@ class _AmBarState extends ConsumerState<_AmBar> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -0.1,
                                   color: Colors.white,
                                 ),
                               ),
@@ -2064,7 +2069,9 @@ class _AmBarState extends ConsumerState<_AmBar> {
                           decoration: BoxDecoration(
                             color: cor,
                             borderRadius: BorderRadius.circular(2),
-                            border: Border.all(color: Colors.black87),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.55),
+                            ),
                           ),
                         ),
                       )
@@ -2154,7 +2161,6 @@ class _NavArrow extends StatelessWidget {
   }
 }
 
-/// Barra teal; selecionada ganha listras diagonais claras.
 /// Um punhado de keyframes perto demais para se distinguirem.
 class _GrupoDeKeyframes {
   const _GrupoDeKeyframes(this.times);
@@ -2188,25 +2194,34 @@ List<_GrupoDeKeyframes> _agrupaKeyframes(
   return out;
 }
 
+/// O FUNDO DA BARRA: a cor do tipo assentada sobre o painel, e o trilho
+/// dos keyframes um tom mais escuro embaixo.
+///
+/// O desenho antigo era um bloco chapado da cor do tipo, com listras
+/// diagonais quando selecionado. Dez faixas viravam dez blocos saturados
+/// brigando entre si, e a listra passava por cima do nome. Agora o corpo
+/// e escuro e a cor do tipo vira uma faixa fina na borda esquerda
+/// (pintada por cima, no [_AmBarFrentePainter], para aparecer mesmo
+/// sobre as miniaturas): o que se destaca e o nome, a onda e a imagem.
 class _AmBarPainter extends CustomPainter {
   const _AmBarPainter({
     required this.selected,
+    required this.hidden,
     required this.color,
-    required this.stripeColor,
   });
 
   final bool selected;
+  final bool hidden;
 
-  /// A cor DO TIPO da camada. Antes era o mesmo violeta para tudo, e uma
-  /// linha do tempo com dez faixas exigia ler dez rotulos para achar o
-  /// audio no meio dos videos.
+  /// A cor DO TIPO da camada: e o que deixa achar o audio no meio dos
+  /// videos sem ler dez rotulos.
   final Color color;
-  final Color stripeColor;
 
   // Objetos de pintura reaproveitados: `paint` roda a cada quadro
   // enquanto a linha rola, e alocar aqui dentro e lixo por quadro.
   static final Paint _fundo = Paint();
-  static final Paint _listra = Paint()..strokeWidth = 7;
+  static final Paint _trilho = Paint()
+    ..color = Colors.black.withValues(alpha: 0.22);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2214,25 +2229,77 @@ class _AmBarPainter extends CustomPainter {
       Offset.zero & size,
       const Radius.circular(8),
     );
-    canvas.drawRRect(rrect, _fundo..color = color);
-    if (selected) {
-      canvas.save();
-      canvas.clipRRect(rrect);
-      _listra.color = stripeColor.withValues(alpha: 0.55);
-      for (var x = -size.height; x < size.width + size.height; x += 22) {
-        canvas.drawLine(
-          Offset(x, size.height + 4),
-          Offset(x + size.height + 8, -4),
-          _listra,
-        );
-      }
-      canvas.restore();
-    }
+    final corpo = Color.lerp(
+      AmColors.panelHigh,
+      color,
+      hidden ? 0.22 : (selected ? 0.66 : 0.46),
+    )!;
+    canvas.drawRRect(rrect, _fundo..color = corpo);
+    canvas.save();
+    canvas.clipRRect(rrect);
+    // O TRILHO dos keyframes: a faixa de baixo, onde os losangos moram.
+    canvas.drawRect(
+      Rect.fromLTWH(
+        0,
+        size.height - kAmFaixaKeyframes,
+        size.width,
+        kAmFaixaKeyframes,
+      ),
+      _trilho,
+    );
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(_AmBarPainter old) =>
-      old.selected != selected || old.color != color;
+      old.selected != selected || old.hidden != hidden || old.color != color;
+}
+
+/// A FRENTE DA BARRA, por cima das miniaturas e da onda: a faixa da cor
+/// do tipo na esquerda, um fio de luz no alto e o contorno branco da
+/// selecao — o que tem de aparecer mesmo quando o clipe e uma imagem.
+class _AmBarFrentePainter extends CustomPainter {
+  const _AmBarFrentePainter({
+    required this.selected,
+    required this.hidden,
+    required this.color,
+  });
+
+  final bool selected;
+  final bool hidden;
+  final Color color;
+
+  static final Paint _faixa = Paint();
+  static final Paint _fio = Paint()..strokeWidth = 1;
+  static final Paint _contorno = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..color = Colors.white;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(8),
+    );
+    canvas.save();
+    canvas.clipRRect(rrect);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, 4, size.height),
+      _faixa..color = hidden ? color.withValues(alpha: 0.5) : color,
+    );
+    canvas.drawLine(
+      const Offset(4, 0.5),
+      Offset(size.width, 0.5),
+      _fio..color = Colors.white.withValues(alpha: selected ? 0.24 : 0.10),
+    );
+    canvas.restore();
+    if (selected) canvas.drawRRect(rrect.deflate(0.75), _contorno);
+  }
+
+  @override
+  bool shouldRepaint(_AmBarFrentePainter old) =>
+      old.selected != selected || old.hidden != hidden || old.color != color;
 }
 
 class _TrimHandle extends StatelessWidget {
@@ -2263,14 +2330,14 @@ class _TrimHandle extends StatelessWidget {
         onHorizontalDragCancel: onEnd,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(5),
+            color: const Color(0xFFF2F5F9),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: const Center(
             child: SizedBox(
               width: 2,
               height: 14,
-              child: ColoredBox(color: Colors.black26),
+              child: ColoredBox(color: Colors.black38),
             ),
           ),
         ),

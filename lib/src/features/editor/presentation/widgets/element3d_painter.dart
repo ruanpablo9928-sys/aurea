@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+
+import '../../domain/rotacao_de_tela.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -33,8 +35,9 @@ class Element3DPainter extends CustomPainter {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final s = layer.size;
-    final rx = rotXDeg * math.pi / 180;
-    final ry = rotYDeg * math.pi / 180;
+    // O MESMO GIRO DO PALCO (ver rotacao_de_tela): +Z aqui e longe.
+    final rx = rxDoPalco(rotXDeg);
+    final ry = ryDoPalco(rotYDeg);
     final cxr = math.cos(rx), sxr = math.sin(rx);
     final cyr = math.cos(ry), syr = math.sin(ry);
 

@@ -55,7 +55,6 @@ class AddToolbar extends StatelessWidget {
       (AddTarget.legendas, CupertinoIcons.captions_bubble, 'Legendas'),
       (AddTarget.marcas, CupertinoIcons.bookmark, 'Marcas'),
       (AddTarget.batidas, CupertinoIcons.metronome, 'Batidas'),
-      (AddTarget.autoEdit, CupertinoIcons.sparkles, 'AutoEdit'),
       (AddTarget.ajuda, CupertinoIcons.question_circle, 'Ajuda'),
     ];
     return LayoutBuilder(

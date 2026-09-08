@@ -117,6 +117,12 @@ void main() {
         'curve_panel.dart',
         // O proprio icone que mostra o estado.
         'am_widgets.dart',
+        // O MENU DE CADA PROJETO na Inicio (2026-09-08). Nao e um menu de
+        // painel escondendo modo: sao acoes sobre UM item da lista —
+        // abrir, duplicar, renomear, excluir — no lugar do "segurar para
+        // excluir" que ninguem descobria. Nao ha estado a mostrar; o
+        // que a regra cobra (nada de modo escondido) continua valendo.
+        'projects_tab.dart',
       };
       // O ESTUDIO 3D tem o terceiro (a barra "Cena | Camera | menu" da
       // missao de 2026-09-07). Ele nao usa o icone cru: usa o AmMenuIcon,

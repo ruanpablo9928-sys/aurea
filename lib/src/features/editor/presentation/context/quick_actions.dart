@@ -13,7 +13,6 @@ import '../am/audio_sheet.dart';
 import '../am/beat_pulse_sheet.dart';
 import '../am/beats_sheet.dart';
 import '../am/cameras_sheet.dart';
-import '../am/decupagem_screen.dart';
 import '../am/font_sheet.dart';
 import '../am/freeze_sheet.dart';
 import '../am/layer_menu.dart';
@@ -95,7 +94,8 @@ List<QuickAction> quickActionsFor(
         key: 'velocidade',
         icon: CupertinoIcons.speedometer,
         label: 'Velocidade',
-        onTap: () => pausa(() => showSpeedSheet(context, ref, id)),
+        onTap: () =>
+            pausa(() => showSpeedSheet(context, ref, id, playback: playback)),
       ),
       QuickAction(
         key: 'volume',
@@ -263,13 +263,6 @@ List<QuickAction> quickActionsFor(
       ),
     ],
     if (temSom) ...[
-      QuickAction(
-        key: 'cortes',
-        icon: CupertinoIcons.film,
-        label: 'Cortes',
-        pro: true,
-        onTap: () => pausa(() => openDecupagem(context, ref, id)),
-      ),
       QuickAction(
         key: 'batidas',
         icon: CupertinoIcons.metronome,

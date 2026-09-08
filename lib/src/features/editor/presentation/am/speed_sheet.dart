@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
+import '../../application/playback_controller.dart';
 import '../../application/proxy_service.dart';
 import '../../domain/cut.dart';
 import '../../domain/cut_ops.dart';
@@ -17,8 +18,9 @@ import 'am_widgets.dart';
 Future<void> showSpeedSheet(
   BuildContext context,
   WidgetRef ref,
-  String layerId,
-) async {
+  String layerId, {
+  PlaybackController? playback,
+}) async {
   await showParamSheet(
     context,
     title: 'Velocidade',
@@ -211,6 +213,36 @@ Future<void> showSpeedSheet(
                       setSheetState(() {});
                     },
                   ),
+                  const SizedBox(height: 12),
+                  // INTERPOLACAO DE QUADROS: so faz diferenca na camera
+                  // lenta, e so na exportacao — o preview mostra o quadro
+                  // mais proximo. Dito aqui, para ninguem procurar o
+                  // efeito no palco.
+                  const Text(
+                    'Interpolação de quadros (câmera lenta, na exportação)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final modo in InterpolacaoDeQuadros.values)
+                        _SpeedChip(
+                          key: ValueKey('interpolacao-${modo.name}'),
+                          label: modo.emPalavras,
+                          selected: video.interpolacao == modo,
+                          onTap: () {
+                            controller.setClipInterpolacao(layerId, modo);
+                            setSheetState(() {});
+                          },
+                        ),
+                    ],
+                  ),
                 ],
                 if (video != null && remap != null) ...[
                   const SizedBox(height: 14),
@@ -232,6 +264,65 @@ Future<void> showSpeedSheet(
                       color: AmColors.muted.withValues(alpha: 0.9),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  // OS DOIS GESTOS QUE FALTAVAM. O remap nascia com um
+                  // keyframe em cada ponta e nenhum jeito de por outro no
+                  // meio — entao nao havia como fazer uma rampa, e o
+                  // recurso "nao funcionava". Um keyframe no cabecote, com
+                  // o instante da fonte que ja esta na tela, nao muda nada
+                  // ate a pessoa arrastar o valor; segurar um quadro poe
+                  // dois iguais, um segundo adiante.
+                  if (playback != null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _SpeedChip(
+                            key: const ValueKey('remap-keyframe-aqui'),
+                            label: 'Keyframe de tempo aqui',
+                            selected: false,
+                            onTap: () {
+                              final local = video.localTime(
+                                playback.time.value,
+                              );
+                              controller.setClipTimeRemapKeyframe(
+                                layerId,
+                                local,
+                                videoSourceTimeAt(video, local).inMicroseconds /
+                                    1000000.0,
+                              );
+                              setSheetState(() {});
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _SpeedChip(
+                            key: const ValueKey('remap-segurar'),
+                            label: 'Segurar quadro por 1 s',
+                            selected: false,
+                            onTap: () {
+                              final local = video.localTime(
+                                playback.time.value,
+                              );
+                              final valor =
+                                  videoSourceTimeAt(video, local).inMicroseconds /
+                                  1000000.0;
+                              controller.setClipTimeRemapKeyframe(
+                                layerId,
+                                local,
+                                valor,
+                              );
+                              controller.setClipTimeRemapKeyframe(
+                                layerId,
+                                local + const Duration(seconds: 1),
+                                valor,
+                              );
+                              setSheetState(() {});
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 8),
                   for (final keyframe in remap.keyframes)
                     _RemapRow(
@@ -266,6 +357,7 @@ Future<void> showSpeedSheet(
 
 class _SpeedChip extends StatelessWidget {
   const _SpeedChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

@@ -1167,6 +1167,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       if (v.speed != 1.0) base['speed'] = v.speed;
       if (v.reverse) base['reverse'] = true;
       if (v.speedBlur) base['speedBlur'] = true;
+      if (v.interpolacao != InterpolacaoDeQuadros.nenhuma) {
+        base['interpolacao'] = v.interpolacao.name;
+      }
       base['volume'] = v.volume;
       final va = _audioSpec(v.audio);
       if (va != null) base['audio'] = va;
@@ -1920,6 +1923,10 @@ Layer layerFromJson(Map<String, dynamic> m) {
         speed: (m['speed'] as num?)?.toDouble() ?? 1.0,
         reverse: m['reverse'] as bool? ?? false,
         speedBlur: m['speedBlur'] as bool? ?? false,
+        interpolacao: InterpolacaoDeQuadros.values.firstWhere(
+          (i) => i.name == m['interpolacao'],
+          orElse: () => InterpolacaoDeQuadros.nenhuma,
+        ),
         volume: (m['volume'] as num).toDouble(),
         audio: _asAudioSpec(m['audio']),
         position: pos,

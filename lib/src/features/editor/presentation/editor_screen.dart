@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../core/ui/snack.dart';
-import '../../autoedit/presentation/autoedit_screen.dart';
 import '../../projects/application/projects_controller.dart';
 import '../../projects/application/thumbnail_service.dart';
 import '../application/editor_controller.dart';
@@ -439,10 +438,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         _playback.pause();
         await showBeatsSheet(context, ref, som.id);
       case AddTarget.autoEdit:
-        _playback.pause();
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: (_) => const AutoEditScreen()));
+        // Fora do app por enquanto: sem entrada na interface.
+        break;
     }
   }
 

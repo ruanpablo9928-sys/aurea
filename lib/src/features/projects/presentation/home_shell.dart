@@ -14,6 +14,7 @@ import '../../about/presentation/about_tab.dart';
 import '../../community/presentation/community_tab.dart';
 import '../../settings/presentation/settings_tab.dart';
 import '../../user/presentation/user_tab.dart';
+import 'aviso_ao_vivo.dart';
 import 'projects_tab.dart';
 
 /// Casca principal: abas com tab bar translucida estilo iOS
@@ -73,14 +74,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(
-        index: _index,
-        children: const [
-          ProjectsTab(),
-          CommunityTab(),
-          SettingsTab(),
-          UserTab(),
-          AboutTab(),
+      body: Column(
+        children: [
+          // O AVISO AO VIVO fica ACIMA das abas: e a unica coisa que o
+          // app inteiro mostra sem ninguem pedir, e por isso vive fora
+          // de qualquer aba.
+          const AvisoAoVivo(),
+          Expanded(
+            child: IndexedStack(
+              index: _index,
+              children: const [
+                ProjectsTab(),
+                CommunityTab(),
+                SettingsTab(),
+                UserTab(),
+                AboutTab(),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: ClipRect(

@@ -2953,6 +2953,12 @@ class EditorController extends Notifier<VideoProject> {
 
   /// Liga o modo avancado com identidade linear ou volta a velocidade
   /// constante equivalente, sem alterar o quadro nem a duracao.
+  void setClipInterpolacao(String id, InterpolacaoDeQuadros modo) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return;
+    _replace(layer.copyLayer(interpolacao: modo));
+  }
+
   void setClipTimeRemapEnabled(String id, bool enabled) {
     final layer = _layer(id);
     if (layer is! VideoLayer) return;

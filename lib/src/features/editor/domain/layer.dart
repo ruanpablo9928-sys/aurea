@@ -403,6 +403,28 @@ class AudioSpec {
   );
 }
 
+/// O que se faz com os quadros que a camera lenta pede e a fonte nao
+/// tem. Exportar e onde isso vale: o preview mostra o quadro mais
+/// proximo, e a exportacao inventa os do meio.
+enum InterpolacaoDeQuadros {
+  /// Repete o quadro da fonte. E o que todo editor faz por padrao.
+  nenhuma,
+
+  /// Mistura os dois quadros vizinhos (blend). Barato; suaviza um
+  /// pouco, deixa um rastro leve em movimento rapido.
+  mesclar,
+
+  /// Estima o movimento entre os vizinhos e desloca os pixels
+  /// (motion-compensated). Mais caro; e o que da a camera lenta lisa.
+  movimento;
+
+  String get emPalavras => switch (this) {
+    InterpolacaoDeQuadros.nenhuma => 'Nenhuma',
+    InterpolacaoDeQuadros.mesclar => 'Mesclar',
+    InterpolacaoDeQuadros.movimento => 'Movimento',
+  };
+}
+
 class VideoLayer extends Layer {
   VideoLayer({
     super.id,
@@ -414,6 +436,7 @@ class VideoLayer extends Layer {
     this.speed = 1.0,
     this.reverse = false,
     this.speedBlur = false,
+    this.interpolacao = InterpolacaoDeQuadros.nenhuma,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
     super.position,
@@ -453,6 +476,11 @@ class VideoLayer extends Layer {
 
   /// Borrao adicional proporcional ao modulo da velocidade instantanea.
   final bool speedBlur;
+
+  /// COMO INVENTAR OS QUADROS QUE NAO EXISTEM quando o clipe anda mais
+  /// devagar que a fonte (velocidade abaixo de 1, rampa que estica).
+  /// Sem isto, cada quadro da fonte se repete e a camera lenta soluca.
+  final InterpolacaoDeQuadros interpolacao;
 
   /// Transicao da camada anterior (A) para esta camada (B).
 
@@ -494,6 +522,7 @@ class VideoLayer extends Layer {
     double? speed,
     bool? reverse,
     bool? speedBlur,
+    InterpolacaoDeQuadros? interpolacao,
     ClipTransition? transitionIn,
     bool clearTransitionIn = false,
     AudioSpec? audio,
@@ -509,6 +538,7 @@ class VideoLayer extends Layer {
       speed: speed ?? this.speed,
       reverse: reverse ?? this.reverse,
       speedBlur: speedBlur ?? this.speedBlur,
+      interpolacao: interpolacao ?? this.interpolacao,
       transitionIn: clearTransitionIn
           ? null
           : (transitionIn ?? this.transitionIn),
@@ -547,6 +577,7 @@ class VideoLayer extends Layer {
     speed: speed,
     reverse: reverse,
     speedBlur: speedBlur,
+    interpolacao: interpolacao,
     // A transicao pertence a uma JUNCAO, nao ao conteudo do clipe.
     // Duplicar B nao pode criar uma segunda entrada apontando para A.
     transitionIn: null,

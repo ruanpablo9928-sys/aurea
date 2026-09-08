@@ -38,8 +38,7 @@ void main() {
       expect(tester.takeException(), isNull);
       // Os dois botoes principais continuam inteiros em qualquer largura.
       expect(find.text('Novo projeto'), findsOneWidget);
-      expect(find.text('AutoEdit'), findsOneWidget);
-      for (final texto in ['Novo projeto', 'AutoEdit']) {
+      for (final texto in ['Novo projeto']) {
         final caixa = tester.getRect(find.text(texto));
         expect(
           caixa.width,
