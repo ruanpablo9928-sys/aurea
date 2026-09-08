@@ -72,11 +72,31 @@ para todo mundo, inclusive para você.
 npx wrangler deploy
 ```
 
-No fim ele imprime o endereço. É algo como:
+### Na primeira vez ele pergunta o subdomínio
+
+> *What would you like your workers.dev subdomain to be?*
+
+É o endereço da **conta**, escolhido uma vez só, e ele vira o miolo da
+URL de todos os seus Workers. Como este se chama `mural-do-aurea`, o
+endereço final fica:
 
 ```
-https://mural-do-aurea.SEU-NOME.workers.dev
+https://mural-do-aurea.SEU-SUBDOMINIO.workers.dev
 ```
+
+Três coisas para decidir bem:
+
+- **É público.** Quem receber o link vê esse nome. Não use nome
+  completo, e-mail nem telefone.
+- **É único no mundo todo** da Cloudflare, então nomes óbvios podem já
+  estar tomados.
+- **Mudar depois quebra** os endereços que já existirem.
+
+Aceita letras minúsculas, números e traço. `aurea` é a escolha natural;
+se estiver tomado, `aurea-app` ou `aurea-editor`.
+
+No fim do comando ele imprime o endereço completo. É esse que você me
+manda.
 
 ---
 
@@ -159,6 +179,7 @@ passando.
 | `KV namespace ... is not valid` | faltou o Passo 3: `node configurar.mjs` |
 | `Sem permissao` ao apagar | faltou o Passo 4, ou a senha está diferente |
 | `{"posts":[]}` | está certo. O mural começa vazio. |
+| pergunta o subdomínio | é o endereço da conta, escolhido uma vez. Veja o Passo 5. |
 
 ---
 
