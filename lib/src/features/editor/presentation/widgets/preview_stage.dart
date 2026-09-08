@@ -5058,7 +5058,12 @@ class _LayerContent extends StatelessWidget {
         ),
       ),
       AudioLayer _ => const SizedBox.shrink(),
-      // Objeto nulo: wireframe so no editor (nao sai na exportacao).
+      // OBJETO NULO: o quadrado tracejado com o X e uma AJUDA — existe
+      // para se ver o que se esta arrastando. O comentario aqui sempre
+      // disse "so no editor", mas o desenho nao perguntava se estava
+      // exportando: o gizmo saia no video entregue. Um nulo nao tem
+      // pixel nenhum para dar; exportando, ele nao desenha nada.
+      NullLayer _ when exporting => const SizedBox.shrink(),
       NullLayer _ => const IgnorePointer(
         child: CustomPaint(size: Size(220, 220), painter: NullGizmoPainter()),
       ),
