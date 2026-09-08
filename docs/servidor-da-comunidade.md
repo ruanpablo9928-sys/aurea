@@ -80,9 +80,9 @@ Anote o endereço que aparece. É algo como:
 https://mural-do-aurea.SEU-NOME.workers.dev
 ```
 
-## Parte 4 · Ligar a gaveta no servidor
+## Parte 4 · Ligar o KV no servidor
 
-O código procura a gaveta pelo nome `MURAL`. Falta dizer qual é:
+O código procura o KV pelo nome `MURAL`. Falta dizer qual é:
 
 1. Na página do Worker: **Settings** › **Bindings** › **Add binding**.
 2. Tipo: **KV namespace**.
