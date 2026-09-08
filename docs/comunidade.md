@@ -106,6 +106,16 @@ publicada — sem isso o mural mostraria o post repetido durante o minuto
 que o armazenamento leva para propagar, e quem escreveu acharia que
 publicou duas vezes sem querer.
 
+## Aviso ao vivo
+
+Uma faixa no alto da Início, com um "!" e um texto que vem do servidor
+(`GET /aviso`): "estamos resolvendo um bug na exportação". O app pergunta
+ao abrir e de dez em dez minutos, guarda o último aviso para mostrá-lo
+mesmo sem rede, e o X esconde SÓ aquele aviso (pelo id) — o próximo
+aparece de novo. Um aviso pode ter `link` ("Saiba mais") e `ate`, o
+instante em que some sozinho. Quem escreve é a moderação, pelo
+`aviso.mjs` (ver [`servidor-da-comunidade.md`](servidor-da-comunidade.md)).
+
 ## O servidor
 
 Código, endpoints e como subir: [`docs/servidor-da-comunidade.md`](servidor-da-comunidade.md).

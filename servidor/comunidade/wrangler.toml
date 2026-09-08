@@ -26,3 +26,14 @@ id = "a4dbe25c9d6845e7814ae07052776fc0"
 # `npx wrangler secret put SENHA_DE_MODERACAO`, que guarda o valor no
 # Cloudflare e nunca no repositorio. Segredo em arquivo versionado e
 # segredo vazado.
+
+# A TRANSCRICAO NA NUVEM (Groq Whisper). A chave da Groq NAO fica aqui:
+# entra por `npx wrangler secret put GROQ_API_KEY`. O que fica aqui e o
+# que pode mudar sem build novo do app — o modelo e as cotas. Mudou,
+# `npx wrangler deploy`, e todo aparelho passa a usar o novo.
+[vars]
+MODELO_DE_TRANSCRICAO = "whisper-large-v3-turbo"
+TRANSCRICOES_POR_HORA = "10"
+TRANSCRICOES_POR_DIA = "30"
+SEGUNDOS_DE_AUDIO_POR_DIA = "1800"
+SEGUNDOS_DE_AUDIO_POR_DIA_TODOS = "36000"

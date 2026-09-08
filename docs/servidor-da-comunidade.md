@@ -120,6 +120,24 @@ curl -X DELETE -H "Authorization: Bearer SUA_SENHA" https://mural-do-aurea.SEU-N
 
 ---
 
+## Avisar todo mundo que tem o app
+
+O aviso ao vivo aparece na Início de todo aparelho, com um "!", em até
+dez minutos — sem build novo. Do PC, dentro de `servidor/comunidade`:
+
+```bash
+SENHA_DE_MODERACAO=SUA_SENHA node aviso.mjs "Estamos resolvendo um bug na exportação. Não precisa reinstalar."
+```
+
+Opções: `--nivel info|atencao|problema` (a cor), `--link https://...`
+("Saiba mais"), `--horas 12` (some sozinho). Para tirar do ar:
+`node aviso.mjs --apagar`. Em curl, é um `PUT /aviso` com o cabeçalho
+`x-moderacao: SUA_SENHA` e o corpo `{"texto": "...", "nivel": "problema"}`.
+
+Cada aviso tem um id: quem fechar um aviso não vê aquele de novo, mas vê
+o próximo. Publicar o mesmo texto duas vezes gera dois ids — e quem já
+tinha fechado o primeiro vê o segundo.
+
 ## O que foi criado, com os nomes certos
 
 | Nome | O que é | Para quê |
@@ -142,13 +160,19 @@ nome. É o que KV faz melhor: 100 mil leituras por dia na camada gratuita.
 
 ---
 
-## O que o servidor faz, em três endereços
+## O que o servidor faz
 
 | Endereço | Quem pode | O que faz |
 |---|---|---|
-| `GET /feed` | qualquer um | Devolve os posts, do mais novo para o mais antigo. |
-| `POST /post` | qualquer um, com limite | Aceita um post depois de quatro portões. |
-| `DELETE /post/:id` | só com a senha | Tira um post do mural. |
+| `POST /conta`, `POST /conta/entrar`, `PATCH /conta` | qualquer um | Cria a conta, entra com o código, troca o apelido. |
+| `GET /feed`, `GET /respostas/:id` | qualquer um | Devolve os posts, do mais novo para o mais antigo. |
+| `POST /post` | com conta, com limite | Aceita um post depois dos portões. |
+| `DELETE /post/:id` | o dono, ou a senha | Tira um post do mural. |
+| `POST /midia`, `GET /midia/:id` | com conta | Sobe e serve imagem, vídeo e projeto. |
+| `GET /aviso` | qualquer um | O aviso ao vivo que a Início mostra (ou `null`). |
+| `PUT /aviso`, `DELETE /aviso` | só com a senha | Escreve e apaga o aviso ao vivo. |
+| `POST /transcricao` | com conta, com cota | Transcreve um áudio na nuvem (Groq Whisper). Ver [`transcricao-na-nuvem.md`](transcricao-na-nuvem.md). |
+| `GET /transcricao/cota` | com conta | Quanto da cota de transcrição do dia ainda resta. |
 
 Os quatro portões do `POST`, na ordem:
 

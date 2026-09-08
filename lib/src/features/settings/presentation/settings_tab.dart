@@ -18,6 +18,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../projects/domain/project_presets.dart';
 import '../application/grafico_preferencia.dart';
 import '../application/settings_controller.dart';
+import '../../editor/domain/modo_de_transcricao.dart';
 
 /// Aba Ajustes: listas agrupadas estilo iOS.
 class SettingsTab extends ConsumerWidget {
@@ -109,6 +110,26 @@ class SettingsTab extends ConsumerWidget {
                   _ => 'Escuro',
                 },
                 onChanged: controller.setThemeMode,
+              ),
+            ],
+          ),
+          const SizedBox(height: 26),
+          const _GroupHeader('Legendas'),
+          _Group(
+            children: [
+              _SegmentedRow<ModoDeTranscricao>(
+                label: 'Transcrição automática',
+                values: ModoDeTranscricao.values,
+                selected: settings.modoDeTranscricao,
+                labelOf: (m) => m.emPalavras,
+                onChanged: controller.setModoDeTranscricao,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: Text(
+                  settings.modoDeTranscricao.explicacao,
+                  style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+                ),
               ),
             ],
           ),

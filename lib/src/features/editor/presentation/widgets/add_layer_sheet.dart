@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../application/editor_controller.dart';
 import '../../application/iconify_service.dart';
 import '../../application/transcription_service.dart';
+import '../../application/transcricao_em_andamento.dart';
+import '../../../settings/application/settings_controller.dart';
 import '../../domain/caption.dart';
 import '../../domain/scene3d.dart';
 import '../../domain/element3d.dart';
@@ -487,224 +489,325 @@ class _IconPreviewPainter extends CustomPainter {
   bool shouldRepaint(_IconPreviewPainter old) => old.pathData != pathData;
 }
 
-/// Legendas: transcricao automatica no aparelho (Whisper) ou SRT colado.
+/// Legendas: transcricao automatica — na nuvem (Groq Whisper, pelo
+/// servidor do Aurea) ou no aparelho (whisper.cpp) — ou SRT colado.
+///
+/// A transcricao nao trava o editor: roda num [TranscricaoEmAndamento]
+/// que sobrevive ao fechamento desta folha. Quem fecha a folha no meio
+/// ve a camada de legenda aparecer na timeline quando ficar pronta; quem
+/// reabre ve o andamento (ou o erro) de onde parou.
+///
+/// O audio so sai do aparelho quando a pessoa toca em Transcrever com a
+/// nuvem escolhida — nunca sozinho.
 Future<void> showCaptionCreationSheet(
   BuildContext context,
   WidgetRef ref,
 ) async {
   final controller = ref.read(editorControllerProvider.notifier);
   final textController = TextEditingController();
-  var busy = false;
-  var status = '';
+  final job = TranscricaoEmAndamento.instance;
+  // Uma transcricao pronta de antes ja virou camada: comeca limpo.
+  if (job.estado.value is TranscricaoPronta) job.limpar();
   var mode = CaptionMode.frases;
+  var modo = ref.read(settingsControllerProvider).modoDeTranscricao;
+
+  Future<void> transcrever(
+    BuildContext sheetContext, {
+    ModoDeTranscricao? forcar,
+  }) async {
+    final media = controller.firstTranscribableMediaPath();
+    if (media == null) {
+      job.falhar('Adicione um vídeo ao projeto primeiro.');
+      return;
+    }
+    final entrou = await job.rodar(
+      () => ref
+          .read(transcriptionServiceProvider)
+          .transcribeMedia(
+            media,
+            mode: mode,
+            modo: forcar ?? modo,
+            onStatus: job.status,
+          ),
+      aoTerminar: (falas) => controller.addCaptionLayer(falas) == 0
+          ? 'Nenhuma fala detectada no áudio.'
+          : null,
+    );
+    // Deu certo e a folha ainda esta aberta: fecha. Se a pessoa a fechou
+    // no meio, a camada ja esta na timeline.
+    if (entrou && sheetContext.mounted) Navigator.of(sheetContext).pop();
+  }
+
+  Widget chip({
+    Key? key,
+    required String rotulo,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) => GestureDetector(
+    key: key,
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected ? AmColors.accentDim : AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        rotulo,
+        style: const TextStyle(fontSize: 12, color: AmColors.accent),
+      ),
+    ),
+  );
 
   await showModalBottomSheet<void>(
     context: context,
     backgroundColor: AmColors.panel,
     isScrollControlled: true,
-    isDismissible: false,
-    builder: (sheetContext) => StatefulBuilder(
-      builder: (sheetContext, setSheetState) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          16,
-          20,
-          16 + MediaQuery.of(sheetContext).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Legendas',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text,
-                    ),
-                  ),
-                ),
-                if (!busy)
-                  GestureDetector(
-                    onTap: () => Navigator.of(sheetContext).pop(),
-                    child: const Icon(
-                      CupertinoIcons.xmark,
-                      size: 18,
-                      color: AmColors.muted,
-                    ),
-                  ),
-              ],
+    builder: (sheetContext) => ValueListenableBuilder<EstadoDaTranscricao>(
+      valueListenable: job.estado,
+      builder: (sheetContext, estado, _) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final busy = estado is TranscricaoRodando;
+          final falha = estado is TranscricaoFalhou ? estado : null;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              16,
+              20,
+              16 + MediaQuery.of(sheetContext).viewInsets.bottom,
             ),
-            const SizedBox(height: 10),
-            // Config da legenda: como o texto e segmentado no tempo.
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final m in CaptionMode.values)
-                  GestureDetector(
-                    onTap: busy ? null : () => setSheetState(() => mode = m),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Legendas',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AmColors.text,
+                          ),
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: mode == m ? AmColors.accentDim : AmColors.chip,
-                        borderRadius: BorderRadius.circular(9),
+                      GestureDetector(
+                        onTap: () => Navigator.of(sheetContext).pop(),
+                        child: const Icon(
+                          CupertinoIcons.xmark,
+                          size: 18,
+                          color: AmColors.muted,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Config da legenda: como o texto e segmentado no tempo.
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final m in CaptionMode.values)
+                        chip(
+                          rotulo: captionModeLabel(m),
+                          selected: mode == m,
+                          onTap: busy ? null : () => setSheetState(() => mode = m),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // ONDE TRANSCREVER. A escolha fica nos Ajustes tambem;
+                  // aqui e onde ela importa.
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final m in ModoDeTranscricao.values)
+                        chip(
+                          key: ValueKey('transcricao-modo-${m.name}'),
+                          rotulo: m.emPalavras,
+                          selected: modo == m,
+                          onTap: busy
+                              ? null
+                              : () {
+                                  setSheetState(() => modo = m);
+                                  ref
+                                      .read(settingsControllerProvider.notifier)
+                                      .setModoDeTranscricao(m);
+                                },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    modo.explicacao,
+                    style: const TextStyle(fontSize: 11, color: AmColors.muted),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      key: const ValueKey('transcrever'),
+                      color: AmColors.accent,
+                      borderRadius: BorderRadius.circular(12),
+                      onPressed: busy ? null : () => transcrever(sheetContext),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (busy)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 10),
+                              child: CupertinoActivityIndicator(
+                                color: Color(0xFF0B0E12),
+                              ),
+                            )
+                          else
+                            const Padding(
+                              padding: EdgeInsets.only(right: 8),
+                              child: Icon(
+                                CupertinoIcons.waveform,
+                                size: 18,
+                                color: Color(0xFF0B0E12),
+                              ),
+                            ),
+                          Text(
+                            busy ? 'Transcrevendo...' : 'Transcrever',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0B0E12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (estado is TranscricaoRodando) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        captionModeLabel(m),
+                        estado.status,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AmColors.muted,
+                        ),
+                      ),
+                    ),
+                    // NAO TRAVA O EDITOR: da para fechar e continuar
+                    // mexendo; a legenda entra na timeline quando ficar
+                    // pronta.
+                    CupertinoButton(
+                      key: const ValueKey('segundo-plano'),
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: const Text(
+                        'Continuar em segundo plano',
+                        style: TextStyle(fontSize: 12, color: AmColors.accent),
+                      ),
+                    ),
+                  ],
+                  if (falha != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        falha.mensagem,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AmColors.pink,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (!falha.semInternet)
+                          chip(
+                            key: const ValueKey('tentar-de-novo'),
+                            rotulo: 'Tentar de novo',
+                            selected: false,
+                            onTap: () => transcrever(sheetContext),
+                          ),
+                        if (falha.ofereceLocal)
+                          chip(
+                            key: const ValueKey('usar-local'),
+                            rotulo: 'Usar o Whisper do aparelho',
+                            selected: true,
+                            onTap: () => transcrever(
+                              sheetContext,
+                              forcar: ModoDeTranscricao.local,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (estado is TranscricaoPronta)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Legendas prontas: ${estado.falas} falas.',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AmColors.accent,
                         ),
                       ),
                     ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'ou cole um SRT:',
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
                   ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // Whisper on-device: analisa o audio do video do projeto.
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                color: AmColors.accent,
-                borderRadius: BorderRadius.circular(12),
-                onPressed: busy
-                    ? null
-                    : () async {
-                        final media = controller.firstTranscribableMediaPath();
-                        if (media == null) {
-                          setSheetState(
-                            () => status =
-                                'Adicione um video ao projeto primeiro.',
-                          );
-                          return;
-                        }
-                        setSheetState(() {
-                          busy = true;
-                          status = 'Preparando...';
-                        });
-                        try {
-                          final cues = await ref
-                              .read(transcriptionServiceProvider)
-                              .transcribeMedia(
-                                media,
-                                mode: mode,
-                                onStatus: (s) =>
-                                    setSheetState(() => status = s),
+                  const SizedBox(height: 8),
+                  CupertinoTextField(
+                    controller: textController,
+                    maxLines: 6,
+                    minLines: 3,
+                    enabled: !busy,
+                    placeholder:
+                        '1\n00:00:00,000 --> 00:00:02,000\nSua primeira fala...',
+                    style: const TextStyle(fontSize: 13, color: AmColors.text),
+                    placeholderStyle: const TextStyle(
+                      fontSize: 13,
+                      color: AmColors.muted,
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AmColors.chip,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      color: AmColors.chip,
+                      borderRadius: BorderRadius.circular(12),
+                      onPressed: busy
+                          ? null
+                          : () {
+                              controller.addCaptionLayerFromSrt(
+                                textController.text,
                               );
-                          final n = controller.addCaptionLayer(cues);
-                          if (sheetContext.mounted) {
-                            if (n == 0) {
-                              setSheetState(() {
-                                busy = false;
-                                status = 'Nenhuma fala detectada no audio.';
-                              });
-                            } else {
                               Navigator.of(sheetContext).pop();
-                            }
-                          }
-                        } catch (e) {
-                          setSheetState(() {
-                            busy = false;
-                            status = 'Erro ao transcrever: $e';
-                          });
-                        }
-                      },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (busy)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 10),
-                        child: CupertinoActivityIndicator(
-                          color: Color(0xFF0B0E12),
+                            },
+                      child: const Text(
+                        'Criar do SRT colado',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AmColors.text,
                         ),
-                      )
-                    else
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8),
-                        child: Icon(
-                          CupertinoIcons.waveform,
-                          size: 18,
-                          color: Color(0xFF0B0E12),
-                        ),
-                      ),
-                    Text(
-                      busy
-                          ? 'Transcrevendo...'
-                          : 'Transcrever com Whisper (no aparelho)',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0B0E12),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            if (status.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  status,
-                  style: const TextStyle(fontSize: 12, color: AmColors.muted),
-                ),
-              ),
-            const SizedBox(height: 14),
-            const Text(
-              'ou cole um SRT:',
-              style: TextStyle(fontSize: 12, color: AmColors.muted),
-            ),
-            const SizedBox(height: 8),
-            CupertinoTextField(
-              controller: textController,
-              maxLines: 6,
-              minLines: 3,
-              enabled: !busy,
-              placeholder:
-                  '1\n00:00:00,000 --> 00:00:02,000\nSua primeira fala...',
-              style: const TextStyle(fontSize: 13, color: AmColors.text),
-              placeholderStyle: const TextStyle(
-                fontSize: 13,
-                color: AmColors.muted,
-              ),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AmColors.chip,
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                color: AmColors.chip,
-                borderRadius: BorderRadius.circular(12),
-                onPressed: busy
-                    ? null
-                    : () {
-                        controller.addCaptionLayerFromSrt(textController.text);
-                        Navigator.of(sheetContext).pop();
-                      },
-                child: const Text(
-                  'Criar do SRT colado',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.accent,
                   ),
-                ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     ),
   );
@@ -1112,7 +1215,6 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
             (AddTarget.grupo, CupertinoIcons.folder, 'Agrupar camadas'),
             (AddTarget.marcas, CupertinoIcons.bookmark, 'Marcas'),
             (AddTarget.batidas, CupertinoIcons.metronome, 'Detectar batidas'),
-            (AddTarget.autoEdit, CupertinoIcons.sparkles, 'AutoEdit'),
             (AddTarget.ajuda, CupertinoIcons.question_circle, 'Como editar'),
           ])
             item(entry.$2, entry.$3, () => widget.onProjectAction!(entry.$1)),

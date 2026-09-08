@@ -76,6 +76,9 @@ const env = {
   MURAL: kvFalsa(),
   ARQUIVOS: r2Falso(),
   SENHA_DE_MODERACAO: 'senha-de-teste',
+  // Uma chave de brinquedo, sem a cara de uma chave de verdade — a
+  // varredura do app (segredo_da_groq_test) acusa qualquer "gsk_".
+  GROQ_API_KEY: 'chave-de-brinquedo',
 };
 
 const BASE = 'https://exemplo.workers.dev';
@@ -286,6 +289,38 @@ confere('video sem R2 explica o que falta', r.status, 501);
 r = await subirSemR2('image/png', 5 * 1024 * 1024);
 confere('foto grande demais para o KV e recusada', r.status, 413);
 
+// =========================================================== aviso
+
+r = await chamar('GET', '/aviso');
+confere('sem aviso, vem null', (await r.json()).aviso, null);
+
+r = await chamar('PUT', '/aviso', {
+  corpo: { texto: 'Estamos resolvendo um bug na exportacao.', nivel: 'problema' },
+});
+confere('sem senha nao escreve aviso', r.status, 401);
+
+r = await chamar('PUT', '/aviso', {
+  corpo: { texto: 'Estamos resolvendo um bug na exportacao.', nivel: 'problema' },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+const aviso = (await r.json()).aviso;
+confere('a moderacao escreve o aviso', r.status, 201);
+confere('o aviso tem id', typeof aviso.id === 'string' && aviso.id.length > 10, true);
+
+r = await chamar('GET', '/aviso');
+confere('todo aparelho le o aviso', (await r.json()).aviso.texto, aviso.texto);
+
+r = await chamar('PUT', '/aviso', {
+  corpo: { texto: 'oi' },
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+confere('aviso curto demais e recusado', r.status, 422);
+
+r = await chamar('DELETE', '/aviso', { cabecalhos: { 'x-moderacao': 'senha-de-teste' } });
+confere('a moderacao apaga o aviso', r.status, 200);
+r = await chamar('GET', '/aviso');
+confere('e ele some para todo mundo', (await r.json()).aviso, null);
+
 // =========================================================== limite
 
 let ultimo = 0;
@@ -297,6 +332,168 @@ for (let i = 0; i < 25; i++) {
   ultimo = resposta.status;
 }
 confere('o limite por hora barra o roteiro', ultimo, 429);
+
+
+// ====================================================== transcricao
+//
+// A Groq de brinquedo: o worker chama fetch(api.groq.com); aqui a
+// resposta e roteirizada por teste, e o que ele mandou fica registrado
+// para conferencia — inclusive a chave, que tem de ir no cabecalho e em
+// lugar nenhum mais.
+
+const fetchDeVerdade = globalThis.fetch;
+let groq = {};
+let chamadaGroq = null;
+const respostaGroqBoa = () => ({
+  text: 'Olá mundo',
+  language: 'pt',
+  duration: 2.5,
+  segments: [{ start: 0, end: 2.5, text: ' Olá mundo' }],
+  words: [
+    { word: 'Olá', start: 0, end: 1 },
+    { word: 'mundo', start: 1, end: 2.5 },
+  ],
+});
+globalThis.fetch = async (url, opcoes) => {
+  if (!String(url).includes('api.groq.com')) return fetchDeVerdade(url, opcoes);
+  chamadaGroq = { url: String(url), opcoes };
+  if (groq.derruba) throw new TypeError('rede caiu');
+  return new Response(JSON.stringify(groq.corpo ?? respostaGroqBoa()), {
+    status: groq.status ?? 200,
+    headers: { 'content-type': 'application/json', ...(groq.cabecalhos ?? {}) },
+  });
+};
+
+const mandarAudio = (
+  codigo,
+  { tipo = 'audio/mp4', bytes = 4000, duracao = 2.5, idioma, ambiente } = {},
+) =>
+  worker.fetch(
+    new Request(`${BASE}/transcricao`, {
+      method: 'POST',
+      headers: {
+        'content-type': tipo,
+        'content-length': String(bytes),
+        'x-duracao': String(duracao),
+        ...(idioma ? { 'x-idioma': idioma } : {}),
+        ...(codigo ? { authorization: `Bearer ${codigo}` } : {}),
+      },
+      body: new Uint8Array(bytes),
+    }),
+    ambiente ?? env,
+  );
+
+r = await mandarAudio(null);
+confere('sem conta nao transcreve', r.status, 401);
+
+r = await mandarAudio(ana.codigo, { ambiente: { ...env, GROQ_API_KEY: undefined } });
+confere('sem a chave no servidor a nuvem esta desligada (503)', r.status, 503);
+
+r = await mandarAudio(ana.codigo, { tipo: 'application/json' });
+confere('so audio entra', r.status, 415);
+
+r = await mandarAudio(ana.codigo, { bytes: 26 * 1024 * 1024 });
+confere('audio acima de 25 MB e recusado', r.status, 413);
+
+groq = {};
+r = await mandarAudio(ana.codigo, { idioma: 'pt' });
+let t = await r.json();
+confere('transcreve', r.status, 200);
+confere('devolve o texto', t.texto, 'Olá mundo');
+confere('devolve as palavras com tempo', t.palavras.map((p) => p.texto), ['Olá', 'mundo']);
+confere('devolve os segmentos', t.segmentos.length, 1);
+confere('o modelo padrao e o turbo', t.modelo, 'whisper-large-v3-turbo');
+confere(
+  'a chave vai no cabecalho para a Groq, e so para ela',
+  chamadaGroq.opcoes.headers.authorization,
+  'Bearer chave-de-brinquedo',
+);
+confere('o modelo vai no formulario', chamadaGroq.opcoes.body.get('model'), 'whisper-large-v3-turbo');
+confere('o idioma vai no formulario', chamadaGroq.opcoes.body.get('language'), 'pt');
+confere(
+  'pede tempo por palavra e por segmento',
+  chamadaGroq.opcoes.body.getAll('timestamp_granularities[]'),
+  ['word', 'segment'],
+);
+confere('o audio vai inteiro', chamadaGroq.opcoes.body.get('file').size, 4000);
+
+r = await mandarAudio(ana.codigo, {
+  ambiente: { ...env, MODELO_DE_TRANSCRICAO: 'whisper-large-v3' },
+});
+confere('o modelo vem da configuracao do servidor', (await r.json()).modelo, 'whisper-large-v3');
+confere('e chega assim na Groq', chamadaGroq.opcoes.body.get('model'), 'whisper-large-v3');
+
+groq = { corpo: { text: '', duration: 3, segments: [], words: [] } };
+r = await mandarAudio(ana.codigo);
+t = await r.json();
+confere('silencio: 200 com nada dentro', [r.status, t.texto, t.palavras.length], [200, '', 0]);
+
+groq = { status: 500, corpo: { error: { message: 'boom' } } };
+r = await mandarAudio(ana.codigo);
+confere('Groq fora do ar vira 502', r.status, 502);
+confere('e diz o que foi', (await r.json()).detalhe, 'groq-500');
+
+groq = { status: 429, corpo: {}, cabecalhos: { 'retry-after': '12' } };
+r = await mandarAudio(ana.codigo);
+t = await r.json();
+confere('Groq ocupada vira 503 com quando tentar', [r.status, t.tenteEm], [503, 12]);
+
+groq = { derruba: true };
+r = await mandarAudio(ana.codigo);
+confere('rede ate a Groq caiu: 502', r.status, 502);
+confere('sem-resposta no detalhe', (await r.json()).detalhe, 'sem-resposta');
+groq = {};
+
+r = await chamar('GET', '/transcricao/cota', { codigo: ana.codigo });
+t = await r.json();
+confere('a cota conta so o que deu certo', t.usadasHoje, 3);
+confere('e soma os segundos medidos pela nuvem', t.segundosHoje, 8);
+confere('a cota diz o modelo', t.modelo, 'whisper-large-v3-turbo');
+
+r = await mandarAudio(ana.codigo, { ambiente: { ...env, SEGUNDOS_DE_AUDIO_POR_DIA: '5' } });
+t = await r.json();
+confere('cota de segundos do dia esgotada: 429', r.status, 429);
+confere('com quando tentar', t.tenteEm > 0, true);
+
+r = await mandarAudio(ana.codigo, { ambiente: { ...env, TRANSCRICOES_POR_DIA: '3' } });
+confere('cota de transcricoes do dia esgotada: 429', r.status, 429);
+
+r = await mandarAudio(ana.codigo, {
+  ambiente: { ...env, SEGUNDOS_DE_AUDIO_POR_DIA_TODOS: '9' },
+});
+confere('a cota do servidor inteiro tambem barra', r.status, 429);
+
+const apertado = { ...env, TRANSCRICOES_POR_HORA: '2' };
+r = await mandarAudio(bruno.codigo, { ambiente: apertado });
+confere('bruno: a primeira passa', r.status, 200);
+r = await mandarAudio(bruno.codigo, { ambiente: apertado });
+confere('bruno: a segunda passa', r.status, 200);
+r = await mandarAudio(bruno.codigo, { ambiente: apertado });
+confere('bruno: a terceira na mesma hora e barrada', r.status, 429);
+
+r = await chamar('GET', '/transcricao/registro');
+confere('o registro pede a senha', r.status, 401);
+r = await chamar('GET', '/transcricao/registro', {
+  cabecalhos: { 'x-moderacao': 'senha-de-teste' },
+});
+const registro = (await r.json()).registro;
+confere('o registro tem uma linha por tentativa que chegou a Groq', registro.length, 8);
+confere(
+  'so o tecnico: nada de audio nem texto',
+  Object.keys(registro[0]).sort(),
+  ['conta', 'duracao', 'modelo', 'ms', 'quando', 'status'],
+);
+confere(
+  'guarda o status de cada uma',
+  registro.some((x) => x.status === 'groq-500') && registro.some((x) => x.status === 'ok'),
+  true,
+);
+confere(
+  'nada do audio fica guardado',
+  [...env.MURAL.dados.keys()].some((k) => /audio|transcricao:corpo/.test(k)),
+  false,
+);
+globalThis.fetch = fetchDeVerdade;
 
 console.log(falhas === 0 ? '\nTudo certo.' : `\n${falhas} falha(s).`);
 process.exit(falhas === 0 ? 0 : 1);

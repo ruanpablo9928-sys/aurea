@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/storage/prefs.dart';
+import '../../editor/domain/modo_de_transcricao.dart';
 
 /// Preferencias do app, persistidas em SharedPreferences.
 class AppSettings {
@@ -11,7 +12,12 @@ class AppSettings {
     this.saveToGallery = true,
     this.hapticFeedback = true,
     this.themeMode = 'escuro',
+    this.modoDeTranscricao = ModoDeTranscricao.auto,
   });
+
+  /// Onde as legendas automaticas sao transcritas: nuvem, aparelho ou
+  /// automatico (pela internet).
+  final ModoDeTranscricao modoDeTranscricao;
 
   /// 'escuro' | 'claro' | 'sistema' (Fase 6).
   final String themeMode;
@@ -33,6 +39,7 @@ class AppSettings {
     bool? saveToGallery,
     bool? hapticFeedback,
     String? themeMode,
+    ModoDeTranscricao? modoDeTranscricao,
   }) {
     return AppSettings(
       defaultAspectKey: defaultAspectKey ?? this.defaultAspectKey,
@@ -41,6 +48,7 @@ class AppSettings {
       saveToGallery: saveToGallery ?? this.saveToGallery,
       hapticFeedback: hapticFeedback ?? this.hapticFeedback,
       themeMode: themeMode ?? this.themeMode,
+      modoDeTranscricao: modoDeTranscricao ?? this.modoDeTranscricao,
     );
   }
 }
@@ -52,6 +60,7 @@ class SettingsController extends Notifier<AppSettings> {
   static const _kSaveToGallery = 'settings.saveToGallery';
   static const _kHaptics = 'settings.haptics';
   static const _kTema = 'settings.tema';
+  static const _kTranscricao = 'settings.transcricao';
 
   @override
   AppSettings build() {
@@ -63,6 +72,9 @@ class SettingsController extends Notifier<AppSettings> {
       saveToGallery: prefs.getBool(_kSaveToGallery) ?? true,
       hapticFeedback: prefs.getBool(_kHaptics) ?? true,
       themeMode: prefs.getString(_kTema) ?? 'escuro',
+      modoDeTranscricao: ModoDeTranscricao.deNome(
+        prefs.getString(_kTranscricao),
+      ),
     );
   }
 
@@ -89,6 +101,11 @@ class SettingsController extends Notifier<AppSettings> {
   void setSaveToGallery(bool value) {
     state = state.copyWith(saveToGallery: value);
     ref.read(sharedPreferencesProvider).setBool(_kSaveToGallery, value);
+  }
+
+  void setModoDeTranscricao(ModoDeTranscricao modo) {
+    state = state.copyWith(modoDeTranscricao: modo);
+    ref.read(sharedPreferencesProvider).setString(_kTranscricao, modo.name);
   }
 
   void setHapticFeedback(bool value) {

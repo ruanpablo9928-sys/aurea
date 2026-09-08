@@ -17,6 +17,12 @@
  *   DELETE /post/:id       apaga (o dono, ou a senha de moderacao)
  *   POST   /midia          sobe uma imagem, um video ou um projeto
  *   GET    /midia/:id      serve o arquivo
+ *   GET    /aviso          o recado ao vivo (ou null)
+ *   PUT    /aviso          escreve o recado (senha de moderacao)
+ *   DELETE /aviso          apaga o recado (senha de moderacao)
+ *   POST   /transcricao    transcreve um audio na nuvem (conta + cota)
+ *   GET    /transcricao/cota      quanto da cota do dia ainda resta
+ *   GET    /transcricao/registro  o registro tecnico (senha de moderacao)
  *
  * A CONTA E DE VERDADE, e nao um apelido digitado a cada post. O
  * servidor guarda a conta, garante que o apelido e unico e devolve um
@@ -44,6 +50,152 @@ const MIDIA_MAXIMA = 40 * 1024 * 1024;
 /// O que cabe no KV enquanto o R2 nao esta ligado.
 const IMAGEM_NO_KV = 2 * 1024 * 1024;
 const PROJETO_NO_KV = 2 * 1024 * 1024;
+
+// ------------------------------------------------- transcricao (Groq)
+
+/**
+ * A TRANSCRICAO NA NUVEM.
+ *
+ * A chave da Groq mora AQUI, como secret do Worker (GROQ_API_KEY), e em
+ * lugar nenhum do aplicativo. Um APK e um zip: uma chave dentro dele e
+ * publica em minutos — codificada, partida em pedacos ou "escondida" em
+ * codigo nativo, tanto faz. O aplicativo manda so o audio para ca, com
+ * o codigo de acesso da conta; este servidor confere a conta, o ritmo e
+ * a cota, repassa o audio para a Groq com a chave dele e devolve o texto
+ * com os tempos. O audio vive so na memoria desta requisicao.
+ *
+ * O que fica guardado e um registro TECNICO por tentativa (conta,
+ * duracao, quando, modelo, status, tempo) por trinta dias, e os
+ * contadores de cota do dia. Nunca o audio, nunca o texto.
+ *
+ * O modelo e os limites vem das variaveis do wrangler.toml: trocar o
+ * modelo nao pede build novo do app. O formato que sai daqui e o do
+ * app (texto, segmentos, palavras), e nao o da Groq — se a Groq mudar,
+ * ou for trocada, quem muda e este arquivo.
+ */
+const GROQ_TRANSCRICAO = 'https://api.groq.com/openai/v1/audio/transcriptions';
+const MODELO_DE_TRANSCRICAO_PADRAO = 'whisper-large-v3-turbo';
+const AUDIO_MAXIMO = 25 * 1024 * 1024;
+const TEMPO_LIMITE_GROQ = 120000;
+
+/** So audio entra — e, por descuido comum, o mp4 so de audio tambem. */
+const TIPOS_DE_AUDIO = {
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/aac': 'aac',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/flac': 'flac',
+  'audio/x-flac': 'flac',
+  'audio/ogg': 'ogg',
+  'audio/opus': 'ogg',
+  'audio/webm': 'webm',
+  'video/mp4': 'mp4',
+};
+
+const numeroOu = (valor, padrao) => {
+  const n = Number(valor);
+  return Number.isFinite(n) && n > 0 ? n : padrao;
+};
+
+/** O que pode mudar sem build novo do app: vem do wrangler.toml. */
+function limitesDeTranscricao(env) {
+  return {
+    modelo:
+      String(env.MODELO_DE_TRANSCRICAO ?? '').trim() || MODELO_DE_TRANSCRICAO_PADRAO,
+    porHora: numeroOu(env.TRANSCRICOES_POR_HORA, 10),
+    porDia: numeroOu(env.TRANSCRICOES_POR_DIA, 30),
+    segundosPorDia: numeroOu(env.SEGUNDOS_DE_AUDIO_POR_DIA, 1800),
+    segundosPorDiaTodos: numeroOu(env.SEGUNDOS_DE_AUDIO_POR_DIA_TODOS, 36000),
+  };
+}
+
+const diaDeHoje = () => new Date().toISOString().slice(0, 10);
+
+function segundosAteAmanha() {
+  const agora = new Date();
+  const amanha = Date.UTC(
+    agora.getUTCFullYear(),
+    agora.getUTCMonth(),
+    agora.getUTCDate() + 1,
+  );
+  return Math.max(1, Math.ceil((amanha - agora.getTime()) / 1000));
+}
+
+async function lerUso(env, chave) {
+  const bruto = await env.MURAL.get(chave);
+  if (!bruto) return { n: 0, segundos: 0 };
+  try {
+    const u = JSON.parse(bruto);
+    return { n: Number(u.n) || 0, segundos: Number(u.segundos) || 0 };
+  } catch {
+    return { n: 0, segundos: 0 };
+  }
+}
+
+async function somarUso(env, chave, segundos) {
+  const uso = await lerUso(env, chave);
+  await env.MURAL.put(
+    chave,
+    JSON.stringify({ n: uso.n + 1, segundos: uso.segundos + segundos }),
+    { expirationTtl: 2 * 86400 },
+  );
+}
+
+/**
+ * So o tecnico: conta, duracao, quando, modelo, status, tempo. Nunca o
+ * audio, nunca o texto. Some sozinho em trinta dias.
+ */
+async function registrarTranscricao(env, contaId, duracao, modelo, status, ms) {
+  const quando = new Date().toISOString();
+  // O sufixo sorteado separa duas tentativas no mesmo milissegundo —
+  // sem ele, a segunda apagaria a primeira.
+  const sufixo = crypto.randomUUID().slice(0, 8);
+  await env.MURAL.put(
+    `registro:transcricao:${ordemDe(quando)}:${contaId}:${sufixo}`,
+    JSON.stringify({
+      conta: contaId,
+      duracao: Math.round(duracao * 10) / 10,
+      quando,
+      modelo,
+      status,
+      ms,
+    }),
+    { expirationTtl: 30 * 86400 },
+  );
+}
+
+/**
+ * Do verbose_json da Groq para o formato do app — e so o que o app usa.
+ */
+function normalizarTranscricao(bruto, modelo) {
+  const segmento = (s) => ({
+    inicio: Number(s.start) || 0,
+    fim: Number(s.end) || 0,
+    texto: String(s.text ?? '').trim(),
+  });
+  const palavra = (w) => ({
+    inicio: Number(w.start) || 0,
+    fim: Number(w.end) || 0,
+    texto: String(w.word ?? '').trim(),
+  });
+  return {
+    texto: String(bruto.text ?? '').trim(),
+    idioma: bruto.language ?? null,
+    duracao: Number(bruto.duration) || 0,
+    modelo,
+    segmentos: (Array.isArray(bruto.segments) ? bruto.segments : [])
+      .map(segmento)
+      .filter((s) => s.texto && s.fim > s.inicio),
+    palavras: (Array.isArray(bruto.words) ? bruto.words : [])
+      .map(palavra)
+      .filter((p) => p.texto && p.fim >= p.inicio),
+  };
+}
 
 /** O tipo que sai no cabecalho, tirado da extensao do nome sorteado. */
 const TIPO_DA_EXTENSAO = {
@@ -181,14 +333,18 @@ async function quemFala(request, env) {
   }
 }
 
-async function passouDoLimite(env, quem) {
+/** Um contador por hora, para qualquer coisa que tenha ritmo maximo. */
+async function passouDoLimiteDe(env, prefixo, teto) {
   const hora = new Date().toISOString().slice(0, 13);
-  const chave = `limite:${quem}:${hora}`;
+  const chave = `${prefixo}:${hora}`;
   const atual = Number((await env.MURAL.get(chave)) ?? 0);
-  if (atual >= LIMITE_POR_HORA) return true;
+  if (atual >= teto) return true;
   await env.MURAL.put(chave, String(atual + 1), { expirationTtl: 7200 });
   return false;
 }
+
+const passouDoLimite = (env, quem) =>
+  passouDoLimiteDe(env, `limite:${quem}`, LIMITE_POR_HORA);
 
 /**
  * A chave de ordenacao: o instante ao contrario, para o `list` ja vir
@@ -249,7 +405,8 @@ export default {
         headers: {
           'access-control-allow-origin': '*',
           'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-          'access-control-allow-headers': 'content-type,authorization,x-aurea-midia',
+          'access-control-allow-headers':
+            'content-type,authorization,x-aurea-midia,x-moderacao,x-duracao,x-idioma',
         },
       });
     }
@@ -317,6 +474,231 @@ export default {
     }
 
     // ============================================================ ler
+
+    // ===================================================== transcricao
+
+    if (request.method === 'GET' && caminho === '/transcricao/cota') {
+      const conta = await quemFala(request, env);
+      if (!conta) return erro('Crie sua conta antes de transcrever.', 401);
+      const limites = limitesDeTranscricao(env);
+      const uso = await lerUso(env, `uso:transcricao:${conta.id}:${diaDeHoje()}`);
+      return json({
+        ligada: Boolean(env.GROQ_API_KEY),
+        modelo: limites.modelo,
+        porDia: limites.porDia,
+        usadasHoje: uso.n,
+        segundosPorDia: limites.segundosPorDia,
+        segundosHoje: Math.round(uso.segundos),
+      });
+    }
+
+    if (request.method === 'GET' && caminho === '/transcricao/registro') {
+      const senha = (request.headers.get('x-moderacao') ?? '').trim();
+      if (!env.SENHA_DE_MODERACAO || senha !== env.SENHA_DE_MODERACAO) {
+        return erro('Sem permissao.', 401);
+      }
+      const limite = Math.min(500, numeroOu(url.searchParams.get('limite'), 100));
+      return json({ registro: await lerLista(env, 'registro:transcricao:', limite) });
+    }
+
+    if (request.method === 'POST' && caminho === '/transcricao') {
+      const comecou = Date.now();
+      // OS PORTOES, na ordem: conta, chave, tipo, tamanho, ritmo, cota da
+      // conta, cota do servidor. So depois de todos o audio e lido.
+      const conta = await quemFala(request, env);
+      if (!conta) return erro('Crie sua conta antes de transcrever.', 401);
+      if (!env.GROQ_API_KEY) {
+        return erro('A transcricao na nuvem esta desligada neste servidor.', 503);
+      }
+      const tipo = (request.headers.get('content-type') ?? '')
+        .split(';')[0]
+        .trim()
+        .toLowerCase();
+      const extensao = TIPOS_DE_AUDIO[tipo];
+      if (!extensao) {
+        return erro('Mande so o audio (m4a, mp3, wav, flac, ogg ou webm).', 415);
+      }
+      const anunciado = Number(request.headers.get('content-length') ?? 0);
+      if (anunciado > AUDIO_MAXIMO) {
+        return erro(
+          'Audio grande demais (maximo 25 MB). Corte o video ou transcreva no aparelho.',
+          413,
+        );
+      }
+
+      const limites = limitesDeTranscricao(env);
+      const hoje = diaDeHoje();
+      const chaveConta = `uso:transcricao:${conta.id}:${hoje}`;
+      const chaveTodos = `uso:transcricao:todos:${hoje}`;
+      // A estimativa vem do app e so serve para barrar ANTES de gastar;
+      // a cota de verdade e cobrada pela duracao que a nuvem mede.
+      const estimativa = Math.max(0, Number(request.headers.get('x-duracao'))) || 0;
+
+      if (
+        await passouDoLimiteDe(env, `limite:transcricao:${conta.id}`, limites.porHora)
+      ) {
+        return json(
+          {
+            erro: 'Muitas transcricoes seguidas. Espere uma hora, ou transcreva no aparelho.',
+            tenteEm: 3600,
+          },
+          429,
+        );
+      }
+      const usoConta = await lerUso(env, chaveConta);
+      if (
+        usoConta.n >= limites.porDia
+        || usoConta.segundos + estimativa > limites.segundosPorDia
+      ) {
+        return json(
+          {
+            erro: 'Sua cota de transcricao de hoje acabou. Amanha volta — ou transcreva no aparelho.',
+            tenteEm: segundosAteAmanha(),
+          },
+          429,
+        );
+      }
+      const usoTodos = await lerUso(env, chaveTodos);
+      if (usoTodos.segundos + estimativa > limites.segundosPorDiaTodos) {
+        return json(
+          {
+            erro: 'O servidor atingiu a cota de transcricao de hoje. Transcreva no aparelho.',
+            tenteEm: segundosAteAmanha(),
+          },
+          429,
+        );
+      }
+
+      const audio = await request.arrayBuffer();
+      if (audio.byteLength === 0) return erro('O audio veio vazio.', 400);
+      if (audio.byteLength > AUDIO_MAXIMO) {
+        return erro(
+          'Audio grande demais (maximo 25 MB). Corte o video ou transcreva no aparelho.',
+          413,
+        );
+      }
+
+      const form = new FormData();
+      form.append('file', new Blob([audio], { type: tipo }), `audio.${extensao}`);
+      form.append('model', limites.modelo);
+      form.append('response_format', 'verbose_json');
+      form.append('timestamp_granularities[]', 'word');
+      form.append('timestamp_granularities[]', 'segment');
+      form.append('temperature', '0');
+      const idioma = (request.headers.get('x-idioma') ?? '').trim().toLowerCase();
+      if (/^[a-z]{2}$/.test(idioma)) form.append('language', idioma);
+
+      const registrar = (status, duracao) =>
+        registrarTranscricao(
+          env,
+          conta.id,
+          duracao,
+          limites.modelo,
+          status,
+          Date.now() - comecou,
+        );
+
+      let resposta;
+      try {
+        resposta = await fetch(GROQ_TRANSCRICAO, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${env.GROQ_API_KEY}` },
+          body: form,
+          signal: AbortSignal.timeout(TEMPO_LIMITE_GROQ),
+        });
+      } catch {
+        await registrar('sem-resposta', estimativa);
+        return json(
+          { erro: 'A transcricao na nuvem nao respondeu. Tente de novo.', detalhe: 'sem-resposta' },
+          502,
+        );
+      }
+      if (resposta.status === 429) {
+        await registrar('ocupado', estimativa);
+        return json(
+          {
+            erro: 'A transcricao na nuvem esta ocupada. Tente de novo em instantes.',
+            tenteEm: numeroOu(resposta.headers.get('retry-after'), 30),
+          },
+          503,
+        );
+      }
+      if (!resposta.ok) {
+        await registrar(`groq-${resposta.status}`, estimativa);
+        return json(
+          { erro: 'A transcricao na nuvem esta indisponivel.', detalhe: `groq-${resposta.status}` },
+          502,
+        );
+      }
+      let bruto;
+      try {
+        bruto = await resposta.json();
+      } catch {
+        await registrar('resposta-ilegivel', estimativa);
+        return json(
+          { erro: 'A transcricao na nuvem devolveu algo ilegivel.', detalhe: 'resposta-ilegivel' },
+          502,
+        );
+      }
+      const saida = normalizarTranscricao(bruto, limites.modelo);
+      const duracao = saida.duracao || estimativa;
+      await somarUso(env, chaveConta, duracao);
+      await somarUso(env, chaveTodos, duracao);
+      await registrar('ok', duracao);
+      // O AUDIO MORRE AQUI: viveu so na memoria desta requisicao.
+      return json(saida);
+    }
+
+    // ========================================================== aviso
+    //
+    // UM RECADO PARA TODO APARELHO, escrito de fora. "Estamos resolvendo
+    // um bug na exportacao" precisa chegar a quem tem o app instalado
+    // hoje, sem build novo. Quem escreve e quem tem a senha de moderacao
+    // — o mesmo canal que apaga post. Ler e publico e sem cache curto,
+    // porque o app pergunta de dez em dez minutos.
+
+    if (request.method === 'GET' && caminho === '/aviso') {
+      const bruto = await env.MURAL.get('aviso:atual');
+      return json({ aviso: bruto ? JSON.parse(bruto) : null });
+    }
+
+    if ((request.method === 'PUT' || request.method === 'DELETE') && caminho === '/aviso') {
+      const senha = (request.headers.get('x-moderacao') ?? '').trim();
+      if (!env.SENHA_DE_MODERACAO || senha !== env.SENHA_DE_MODERACAO) {
+        return erro('Sem permissao.', 401);
+      }
+      if (request.method === 'DELETE') {
+        await env.MURAL.delete('aviso:atual');
+        return json({ ok: true, aviso: null });
+      }
+      let corpo;
+      try {
+        corpo = await request.json();
+      } catch {
+        return erro('Corpo invalido.', 400);
+      }
+      const texto = String(corpo.texto ?? '').trim().slice(0, 280);
+      if (texto.length < 3) return erro('Escreva o aviso.', 422);
+      const nivel = ['info', 'atencao', 'problema'].includes(corpo.nivel)
+        ? corpo.nivel
+        : 'info';
+      const aviso = {
+        // O id e o que deixa o aparelho dispensar ESTE aviso e ainda
+        // mostrar o proximo.
+        id: crypto.randomUUID(),
+        texto,
+        nivel,
+        ...(typeof corpo.link === 'string' && corpo.link.startsWith('https://')
+          ? { link: corpo.link.slice(0, 300) }
+          : {}),
+        ...(typeof corpo.ate === 'string' && !Number.isNaN(Date.parse(corpo.ate))
+          ? { ate: new Date(corpo.ate).toISOString() }
+          : {}),
+        quando: new Date().toISOString(),
+      };
+      await env.MURAL.put('aviso:atual', JSON.stringify(aviso));
+      return json({ ok: true, aviso }, 201);
+    }
 
     if (request.method === 'GET' && (caminho === '/feed' || caminho === '/')) {
       const cache = await env.MURAL.get('cache:feed');
