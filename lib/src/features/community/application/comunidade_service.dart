@@ -8,34 +8,30 @@ import '../domain/post_da_comunidade.dart';
 
 /// A COMUNIDADE, do arquivo ate a tela.
 ///
-/// COMO ISTO FUNCIONA HOJE, sem meias palavras: o app LE um feed publico
-/// (um gist) e ESCREVE localmente. Um post escrito aqui aparece na hora
-/// para quem escreveu, marcado como "so voce ve", e vai para publicacao
-/// pelo mesmo caminho que os relatos de bug ja usam.
+/// COMO ISTO FUNCIONA: o app le e escreve num servidor proprio. Publicar
+/// e direto — sem e-mail, sem ninguem no meio.
 ///
-/// Por que assim: publicar direto do aparelho exige um servidor com
-/// conta e senha, e nao ha nenhum. A alternativa seria embutir uma chave
-/// de escrita no APK — o que, na pratica, e dar a chave para qualquer um
-/// que abra o arquivo. Ler de um endereco publico funciona hoje, para
-/// todo mundo, sem segredo nenhum.
+/// A chave de escrita mora NO SERVIDOR, e nao aqui. Um APK e um zip:
+/// qualquer chave dentro dele e publica, e quem a extrai reescreve ou
+/// apaga o mural inteiro. O aplicativo so conversa com o servidor; quem
+/// escreve e ele.
 ///
-/// O endereco e trocavel ([endereco]). No dia em que existir um
-/// servico de verdade, muda-se uma linha e o resto do app nao percebe.
+/// O FILTRO EXISTE DOS DOIS LADOS de proposito. O daqui e cortesia: diz
+/// a pessoa o que esta errado enquanto ela escreve. O de la e o que vale,
+/// porque quem chama o endereco direto nao passa por este.
+///
+/// O POST APARECE NA HORA PARA QUEM ESCREVEU, mesmo que o servidor leve
+/// ate um minuto para publica-lo para os outros (o armazenamento e
+/// distribuido e propaga nesse ritmo). A copia local some sozinha quando
+/// a do servidor chega — as duas tem o mesmo id.
 class ComunidadeService {
   ComunidadeService({HttpClient? http, this.endereco = enderecoPadrao})
     : _http = http ?? (HttpClient()..connectionTimeout = _tempoLimite);
 
   static const _tempoLimite = Duration(seconds: 10);
 
-  /// O FEED PUBLICO DO PROJETO.
-  ///
-  /// Um gist publico, e nao um arquivo no repositorio, porque o
-  /// repositorio do app e privado — de la o aparelho de ninguem
-  /// conseguiria ler. O gist e publico, serve por CDN, nao pede conta e
-  /// se edita numa linha para publicar um post novo.
-  static const enderecoPadrao =
-      'https://gist.githubusercontent.com/ueeruan/'
-      '6d8c4adf3d31d6061a54fcfc13e55487/raw/feed.json';
+  /// O SERVIDOR DO MURAL. O codigo dele esta em servidor/comunidade.
+  static const enderecoPadrao = 'https://mural-do-aurea.aureaapp.workers.dev';
 
   static final instance = ComunidadeService();
 
@@ -69,12 +65,29 @@ class ComunidadeService {
     if (daRede || _feed == null) {
       await _buscarFeed();
     }
-    return [...meus, ...(_feed ?? const [])];
+    final feed = _feed ?? const <PostDaComunidade>[];
+    // O MESMO POST NAO APARECE DUAS VEZES.
+    //
+    // Ao publicar, a copia local entra na hora e a do servidor chega ate
+    // um minuto depois — com o mesmo id, porque e o aplicativo que o
+    // gera. Sem esta limpeza, o mural mostraria o post repetido nesse
+    // intervalo, e quem escreveu acharia que publicou sem querer duas
+    // vezes.
+    final noServidor = {for (final p in feed) p.id};
+    final pendentes = [
+      for (final p in meus)
+        if (!noServidor.contains(p.id)) p,
+    ];
+    if (pendentes.length != meus.length) {
+      _meus = pendentes;
+      await _gravarMeus();
+    }
+    return [...pendentes, ...feed];
   }
 
   Future<void> _buscarFeed() async {
     try {
-      final req = await _http.getUrl(Uri.parse(endereco));
+      final req = await _http.getUrl(Uri.parse('$endereco/feed'));
       final res = await req.close().timeout(_tempoLimite);
       if (res.statusCode != 200) {
         throw HttpException('resposta ${res.statusCode}');
@@ -147,8 +160,40 @@ class ComunidadeService {
     await _gravarMeus();
   }
 
-  /// O post no formato em que ele entra no feed — e o que a pessoa manda
-  /// para publicacao.
+  /// MANDA O POST PARA O SERVIDOR.
+  ///
+  /// Devolve null se entrou, ou o motivo em portugues se nao entrou. O
+  /// motivo vem do proprio servidor quando ele recusa (ofensa, dado
+  /// pessoal, limite por hora), porque quem sabe a regra e ele — repetir
+  /// a regra aqui so criaria duas versoes da verdade.
+  Future<String?> enviar(PostDaComunidade post, String contaId) async {
+    try {
+      final req = await _http.postUrl(Uri.parse('$endereco/post'));
+      req.headers.set('content-type', 'application/json; charset=utf-8');
+      // NAO E IDENTIDADE: e so um numero para o servidor contar quantos
+      // posts vieram do mesmo lugar na ultima hora.
+      req.headers.set('x-aurea-conta', contaId);
+      req.add(utf8.encode(jsonEncode(post.toJson())));
+      final res = await req.close().timeout(_tempoLimite);
+      final corpo = await res.transform(utf8.decoder).join();
+      if (res.statusCode == 201) return null;
+      try {
+        final m = (jsonDecode(corpo) as Map).cast<String, dynamic>();
+        final erro = m['erro'];
+        if (erro is String && erro.isNotEmpty) return erro;
+      } catch (_) {}
+      return 'O mural recusou o post (${res.statusCode}).';
+    } on SocketException {
+      return 'Sem conexão. O post ficou guardado aqui e você pode '
+          'tentar de novo.';
+    } catch (_) {
+      return 'Não consegui falar com o mural agora. O post ficou '
+          'guardado aqui.';
+    }
+  }
+
+  /// O post no formato em que ele entra no feed — usado pelo caminho de
+  /// reserva, quando o servidor nao responde.
   String comoJson(PostDaComunidade post) =>
       const JsonEncoder.withIndent('  ').convert(post.toJson());
 }

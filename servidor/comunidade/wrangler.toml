@@ -11,11 +11,16 @@ main = "worker.js"
 # que este servidor faz.
 compatibility_date = "2026-09-01"
 
+# Publicar no endereco workers.dev. Ja e o padrao, mas sem esta linha o
+# wrangler avisa a cada deploy que esta decidindo sozinho — e um dia
+# alguem le esse aviso e acha que ficou algo por configurar.
+workers_dev = true
+
 # O armazenamento. `binding` e o nome pelo qual o codigo enxerga o KV
 # (env.MURAL), e `id` e qual KV da sua conta ele e.
 [[kv_namespaces]]
 binding = "MURAL"
-id = "PREENCHER_COM_configurar.mjs"
+id = "a4dbe25c9d6845e7814ae07052776fc0"
 
 # A senha de moderacao NAO fica aqui. Ela entra por
 # `npx wrangler secret put SENHA_DE_MODERACAO`, que guarda o valor no

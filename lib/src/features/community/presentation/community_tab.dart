@@ -77,17 +77,62 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
       builder: (_) => _Compositor(conta: conta),
     );
     if (post == null) return;
+    // GUARDA PRIMEIRO, MANDA DEPOIS.
+    //
+    // Nesta ordem o post nunca se perde: se a rede cair no meio, ele
+    // ficou aqui e da para tentar de novo. Na ordem contraria, uma falha
+    // apagaria o que a pessoa escreveu.
     await _s.publicar(post);
     await _atualizar(daRede: false);
     if (!mounted) return;
+    AureaSnack.show(context, 'Publicando...');
+    final erro = await _s.enviar(post, conta.id);
+    if (!mounted) return;
+    if (erro != null) {
+      // O servidor recusou (ofensa, dado pessoal, limite) ou nao
+      // respondeu. Nos dois casos o post continua aqui, marcado, e o
+      // motivo e dito com as palavras dele.
+      AureaSnack.show(context, erro, duration: const Duration(seconds: 6));
+      return;
+    }
+    await _s.marcarEnviado(post.id);
+    await _atualizar(daRede: true);
+    if (!mounted) return;
     AureaSnack.show(
       context,
-      'Post guardado. Toque em Enviar para ele entrar no mural.',
+      'No mural. Pode levar um minuto para aparecer para os outros.',
       duration: const Duration(seconds: 5),
     );
   }
 
-  Future<void> _enviar(PostDaComunidade post) async {
+  /// TENTAR DE NOVO um post que ficou para tras.
+  ///
+  /// Serve para os dois casos em que ele fica: a rede caiu na hora de
+  /// publicar, ou o servidor recusou e a pessoa corrigiu o texto por
+  /// fora. Se falhar outra vez, cai no e-mail — um post escrito e um
+  /// trabalho, e trabalho nao se joga fora por falta de sinal.
+  Future<void> _reenviar(PostDaComunidade post) async {
+    final conta = ref.read(contaDaComunidadeProvider);
+    if (conta == null) return;
+    AureaSnack.show(context, 'Publicando...');
+    final erro = await _s.enviar(post, conta.id);
+    if (!mounted) return;
+    if (erro == null) {
+      await _s.marcarEnviado(post.id);
+      await _atualizar(daRede: true);
+      if (!mounted) return;
+      AureaSnack.show(context, 'No mural.');
+      return;
+    }
+    AureaSnack.show(
+      context,
+      '$erro Mandando por e-mail.',
+      duration: const Duration(seconds: 5),
+    );
+    await _enviarPorEmail(post);
+  }
+
+  Future<void> _enviarPorEmail(PostDaComunidade post) async {
     final corpo = StringBuffer()
       ..writeln('Post para a comunidade do Aurea.')
       ..writeln()
@@ -119,7 +164,6 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     } catch (_) {
       abriu = false;
     }
-    await _s.marcarEnviado(post.id);
     await _atualizar(daRede: false);
     if (!mounted) return;
     if (!abriu) {
@@ -208,7 +252,7 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
                   child: _Cartao(
                     post: p,
                     onEnviar: p.estado == EstadoDoPost.rascunho
-                        ? () => _enviar(p)
+                        ? () => _reenviar(p)
                         : null,
                     onApagar: p.meu ? () => _apagar(p) : null,
                   ),
@@ -469,7 +513,7 @@ class _Cartao extends StatelessWidget {
                       child: _AcaoDoCartao(
                         chave: 'post-enviar-${post.id}',
                         icone: CupertinoIcons.paperplane,
-                        rotulo: 'Enviar para o mural',
+                        rotulo: 'Tentar publicar de novo',
                         destaque: true,
                         onTap: onEnviar!,
                       ),
@@ -672,7 +716,9 @@ class _Selo extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        enviado ? 'enviado' : 'só você vê',
+        // "so voce ve" e literal: enquanto nao entrou no servidor, o post
+        // existe so neste aparelho.
+        enviado ? 'no mural' : 'só você vê',
         style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
