@@ -19,6 +19,189 @@ import '../../domain/scene3d.dart';
 /// A ordenacao por triangulo (e nao por objeto) e o que permite dois
 /// cubos cruzados renderizarem a intersecao correta — exatamente o
 /// teste que a spec define como aprovacao.
+/// A CENA MUDA COM O TEMPO? Se nao muda, o quadro de um instante serve
+/// para todos os outros — e e isso que deixa o pintor de CPU guardar o
+/// desenho em vez de refaze-lo a cada repaint.
+///
+/// Conservador de proposito: qualquer propriedade animada, qualquer
+/// clipe de modelo, qualquer tomada de camera, e a resposta e "sim".
+/// Errar para o lado de "muda" custa um redesenho; errar para o outro
+/// lado deixaria um quadro velho na tela.
+bool cenaDependeDoTempo(Scene3D scene, Camera3D camera) {
+  for (final n in scene.nodes) {
+    if (n.x.isAnimated ||
+        n.y.isAnimated ||
+        n.z.isAnimated ||
+        n.rotX.isAnimated ||
+        n.rotY.isAnimated ||
+        n.rotZ.isAnimated ||
+        n.scale.isAnimated) {
+      return true;
+    }
+    final asset = n.modelAsset;
+    if (asset != null &&
+        (n.modelMotion.keys.isNotEmpty ||
+            (n.modelMotion.clip >= 0 &&
+                n.modelMotion.clip < asset.clips.length))) {
+      return true;
+    }
+  }
+  for (final l in scene.lights) {
+    if (l.intensity.isAnimated) return true;
+  }
+  // As tomadas (shots) vivem na camada, nao aqui: elas chegam ao pintor
+  // ja resolvidas em [resolvedCamera], que entra na chave por valor. O
+  // que resta conferir e a propria camera.
+  for (final c in [camera]) {
+    if (c.posX.isAnimated ||
+        c.posY.isAnimated ||
+        c.posZ.isAnimated ||
+        c.poiX.isAnimated ||
+        c.poiY.isAnimated ||
+        c.poiZ.isAnimated ||
+        c.orientX.isAnimated ||
+        c.orientY.isAnimated ||
+        c.orientZ.isAnimated ||
+        c.rotX.isAnimated ||
+        c.rotY.isAnimated ||
+        c.rotZ.isAnimated ||
+        c.focalLength.isAnimated ||
+        c.dof.focusDistance.isAnimated ||
+        c.dof.aperture.isAnimated ||
+        c.dof.blurLevel.isAnimated) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Tudo o que decide o desenho de um quadro do pintor de CPU. Duas
+/// chaves iguais = o mesmo desenho, e ai nao se desenha de novo.
+class _ChaveDoQuadro {
+  const _ChaveDoQuadro({
+    required this.scene,
+    required this.camera,
+    required this.resolvida,
+    required this.livre,
+    required this.view,
+    required this.tempoUs,
+    required this.largura,
+    required this.altura,
+    required this.ajudas,
+    required this.rig,
+    required this.selecionado,
+    required this.texturas,
+    required this.panorama,
+  });
+
+  final Scene3D scene;
+  final Camera3D camera;
+  final RenderCamera? resolvida;
+  final RenderCamera? livre;
+  final SceneView view;
+  final int tempoUs;
+  final double largura;
+  final double altura;
+  final bool ajudas;
+  final bool rig;
+  final String? selecionado;
+  final int texturas;
+  final int panorama;
+
+  // IDENTIDADE, e nao igualdade, para a cena e a camera: o editor cria
+  // objetos novos a cada mudanca real, e comparar campo a campo uma cena
+  // de setenta mil faces custaria o que o guardado quer poupar.
+  @override
+  bool operator ==(Object other) =>
+      other is _ChaveDoQuadro &&
+      identical(other.scene, scene) &&
+      identical(other.camera, camera) &&
+      other.resolvida == resolvida &&
+      other.livre == livre &&
+      other.view == view &&
+      other.tempoUs == tempoUs &&
+      other.largura == largura &&
+      other.altura == altura &&
+      other.ajudas == ajudas &&
+      other.rig == rig &&
+      other.selecionado == selecionado &&
+      other.texturas == texturas &&
+      other.panorama == panorama;
+
+  @override
+  int get hashCode => Object.hash(
+    identityHashCode(scene),
+    identityHashCode(camera),
+    resolvida,
+    livre,
+    view,
+    tempoUs,
+    largura,
+    altura,
+    ajudas,
+    rig,
+    selecionado,
+    texturas,
+    panorama,
+  );
+}
+
+class _QuadroGuardado {
+  const _QuadroGuardado(this.picture, this.frame);
+  final ui.Picture picture;
+  final SceneFrame frame;
+}
+
+/// Os ultimos quadros do pintor de CPU, poucos e descartados em ordem.
+///
+/// Tres e o bastante: o preview, o estudio e uma miniatura. Mais do que
+/// isso seria guardar desenhos que ninguem vai pedir de novo, e cada um
+/// segura memoria nativa ate ser descartado.
+class _QuadrosGuardados {
+  static final _quadros = <_ChaveDoQuadro, _QuadroGuardado>{};
+  static const _maximo = 3;
+
+  static _QuadroGuardado? pegar(_ChaveDoQuadro chave) {
+    final q = _quadros.remove(chave);
+    if (q == null) return null;
+    _quadros[chave] = q; // volta para o fim: e o mais recente
+    return q;
+  }
+
+  static void guardar(_ChaveDoQuadro chave, ui.Picture p, SceneFrame f) {
+    _quadros[chave] = _QuadroGuardado(p, f);
+    while (_quadros.length > _maximo) {
+      final primeira = _quadros.keys.first;
+      _quadros.remove(primeira)!.picture.dispose();
+    }
+  }
+
+  /// Quantos quadros foram servidos do guardado — para os testes provarem
+  /// que o segundo desenho nao custou.
+  static int servidos = 0;
+
+  @visibleForTesting
+  static void esvaziar() {
+    for (final q in _quadros.values) {
+      q.picture.dispose();
+    }
+    _quadros.clear();
+    servidos = 0;
+  }
+}
+
+/// Acesso de teste ao contador do quadro guardado.
+@visibleForTesting
+int quadrosGuardadosServidos() => _QuadrosGuardados.servidos;
+
+/// Desliga o quadro guardado — so para testes que precisam ver cada
+/// chamada de desenho no canvas.
+@visibleForTesting
+bool quadroGuardadoAtivo = true;
+
+@visibleForTesting
+void esvaziarQuadrosGuardados() => _QuadrosGuardados.esvaziar();
+
 class Scene3DPainter extends CustomPainter {
   Scene3DPainter({
     required this.scene,
@@ -87,6 +270,65 @@ class Scene3DPainter extends CustomPainter {
       return;
     }
 
+    // O QUADRO GUARDADO.
+    //
+    // Este pintor e chamado a cada repaint da composicao, e repaint
+    // acontece por mil motivos que nao mudam a cena: um botao que
+    // acende, o cabecote que anda sobre uma cena parada, uma textura
+    // que chegou noutra camada. Cada chamada refazia a cena inteira —
+    // meio segundo para um modelo de loja num desktop, um segundo num
+    // iPhone 13. O resultado era o app parecendo travado com um objeto
+    // parado na tela.
+    //
+    // Se nada do que entra no desenho mudou, o desenho e o mesmo: fica
+    // gravado como Picture e volta de graca. O tempo so entra na chave
+    // quando a cena de fato depende dele (ver cenaDependeDoTempo).
+    final chave = _ChaveDoQuadro(
+      scene: scene,
+      camera: camera,
+      resolvida: resolvedCamera,
+      livre: overrideCamera,
+      view: view,
+      tempoUs: cenaDependeDoTempo(scene, camera) ? time.inMicroseconds : -1,
+      largura: size.width,
+      altura: size.height,
+      ajudas: showHelpers,
+      rig: showModelRig,
+      selecionado: selectedNodeId,
+      texturas: TextureCache.instance.revision.value,
+      panorama: PanoramaCache.instance.revision.value,
+    );
+    // SEM O GUARDADO nos testes que espiam o canvas: eles contam
+    // drawVertices e saveLayer para provar o custo do desenho, e um
+    // drawPicture esconderia tudo atras de uma chamada so.
+    if (!quadroGuardadoAtivo) {
+      final frame = _paintCena(canvas, size, cam);
+      onMetrics?.call(frame);
+      canvas.restore();
+      return;
+    }
+    final guardado = _QuadrosGuardados.pegar(chave);
+    if (guardado != null) {
+      _QuadrosGuardados.servidos++;
+      canvas.drawPicture(guardado.picture);
+      onMetrics?.call(guardado.frame);
+      canvas.restore();
+      return;
+    }
+    final gravador = ui.PictureRecorder();
+    final gravado = Canvas(gravador);
+    final frame = _paintCena(gravado, size, cam);
+    final picture = gravador.endRecording();
+    _QuadrosGuardados.guardar(chave, picture, frame);
+    canvas.drawPicture(picture);
+    canvas.restore();
+  }
+
+  /// A cena inteira, sem o guardado: e o que era o `paint` antes.
+  SceneFrame _paintCena(Canvas canvas, Size size, RenderCamera cam) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+
     if (scene.background != null) {
       canvas.drawRect(Offset.zero & size, Paint()..color = scene.background!);
     } else if (scene.panorama.showBackground) {
@@ -135,6 +377,7 @@ class Scene3DPainter extends CustomPainter {
 
     _paintEditorHelpers(canvas, size, cam);
     canvas.restore();
+    return frame;
   }
 
   void _paintEditorHelpers(Canvas canvas, Size size, RenderCamera cam) {

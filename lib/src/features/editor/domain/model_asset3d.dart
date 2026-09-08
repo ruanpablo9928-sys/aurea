@@ -357,6 +357,46 @@ class ModelFrame3D {
   final List<Vec3?> normals;
   final List<Material3D> materials;
   final Map<int, vm.Vector3> joints;
+
+  static final _rascunhos = Expando<Map<int, ModelFrame3D>>();
+
+  /// O MESMO QUADRO COM MENOS FACES, para o pintor de CPU.
+  ///
+  /// Um modelo "simples" de loja tem setenta mil triangulos. O pintor de
+  /// CPU leva meio segundo por quadro com isso num desktop — um segundo
+  /// num iPhone 13 — e foi exatamente o "trava tudo, roda a 1 fps" do
+  /// beta. O LOD automatico nao alcanca modelo importado porque ele nao
+  /// traz malha media nem baixa: so a cheia.
+  ///
+  /// Este e o LOD que o importado nao trouxe. Pega uma face a cada N,
+  /// mantendo o material de cada uma alinhado; UVs e normais sao por
+  /// vertice, entao continuam valendo. Nao e bonito de perto — e um
+  /// rascunho, e e assim que aparece: enquanto toca, ou quando a malha
+  /// passa do que o pintor aguenta. A GPU continua desenhando tudo.
+  ///
+  /// Guardado por quadro e por teto: pedir o mesmo rascunho de novo nao
+  /// custa nada, e e o caso comum (o mesmo quadro parado na tela).
+  ModelFrame3D rascunho(int maxFaces) {
+    final faces = mesh.faces.length;
+    if (faces <= maxFaces || maxFaces <= 0) return this;
+    final guardados = _rascunhos[this] ??= {};
+    return guardados[maxFaces] ??= () {
+      final passo = (faces / maxFaces).ceil();
+      final facesNovas = <List<int>>[];
+      final materiaisNovos = <Material3D>[];
+      for (var f = 0; f < faces; f += passo) {
+        facesNovas.add(mesh.faces[f]);
+        if (f < materials.length) materiaisNovos.add(materials[f]);
+      }
+      return ModelFrame3D(
+        Element3DMesh(mesh.verts, facesNovas, normals: mesh.normals),
+        uvs,
+        normals,
+        materiaisNovos,
+        joints,
+      );
+    }();
+  }
 }
 
 class ModelPose3D {

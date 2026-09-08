@@ -43,6 +43,18 @@ class Motor3DPreferencia {
   static const _kModo = 'motor3d_modo';
   static const _kTentando = 'motor3d_tentando';
   static const _kCaiu = 'motor3d_caiu';
+  static const _kSessoesEmCpu = 'motor3d_sessoes_em_cpu';
+
+  /// Depois de quantas sessoes em CPU a GPU e tentada de novo.
+  ///
+  /// A migalha protege de uma queda repetida — mas o iOS tambem fecha o
+  /// app por memoria, sem culpa do motor, e essa morte deixa a mesma
+  /// marca. Sem prazo, uma unica morte por memoria condenava o aparelho
+  /// ao pintor de CPU para sempre, em silencio: era o "roda a 1 fps" do
+  /// beta com a GPU inteira parada ao lado. Tres sessoes em CPU e o
+  /// bastante para a queda que se repete continuar barrada; a que nao se
+  /// repete, passa.
+  static const sessoesAteTentarDeNovo = 3;
 
   static Motor3DPreferencia? _instancia;
 
@@ -51,6 +63,19 @@ class Motor3DPreferencia {
   /// voltou — marca a queda. Chamar uma vez, no inicio do app.
   static Future<Motor3DPreferencia> carregar(SharedPreferences prefs) async {
     final p = Motor3DPreferencia._(prefs);
+    if (prefs.getBool(_kCaiu) ?? false) {
+      final sessoes = (prefs.getInt(_kSessoesEmCpu) ?? 0) + 1;
+      if (sessoes >= sessoesAteTentarDeNovo) {
+        await prefs.setBool(_kCaiu, false);
+        await prefs.setInt(_kSessoesEmCpu, 0);
+        debugPrint(
+          'Motor 3D: $sessoes sessoes em CPU depois da queda; '
+          'a GPU vai ser tentada de novo.',
+        );
+      } else {
+        await prefs.setInt(_kSessoesEmCpu, sessoes);
+      }
+    }
     if (prefs.getBool(_kTentando) ?? false) {
       await prefs.setBool(_kCaiu, true);
       await prefs.setBool(_kTentando, false);
@@ -105,6 +130,7 @@ class Motor3DPreferencia {
   Future<void> marcarSucesso() async {
     await _prefs.setBool(_kTentando, false);
     await _prefs.setBool(_kCaiu, false);
+    await _prefs.setInt(_kSessoesEmCpu, 0);
   }
 }
 

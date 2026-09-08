@@ -61,6 +61,11 @@ _CanvasQueConta _pinta(Scene3D cena) {
 }
 
 void main() {
+  // Este teste conta as chamadas no canvas; com o quadro guardado ligado
+  // ele veria um unico drawPicture e nao provaria nada.
+  setUpAll(() => quadroGuardadoAtivo = false);
+  tearDownAll(() => quadroGuardadoAtivo = true);
+
   const textura = 'teste://cubo';
   setUpAll(() => TextureCache.instance.put(textura, _imagem()));
 

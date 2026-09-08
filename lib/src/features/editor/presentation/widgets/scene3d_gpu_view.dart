@@ -197,7 +197,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
           widget.time,
           rascunho: widget.rascunho || widget.view != SceneView.camera,
         );
-        return CustomPaint(
+        final quadro = CustomPaint(
           painter: _PintorGpu(
             gpu,
             widget.renderCamera,
@@ -206,6 +206,30 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
             widget.exporting,
           ),
           size: Size.infinite,
+        );
+        if (!widget.showHelpers) return quadro;
+        // AS AJUDAS POR CIMA DA GPU, como no caminho do Filament: o
+        // pintor em modo `helpersOnly` nunca avalia triangulo nenhum —
+        // desenha grade, frustum e caixa do selecionado, e so.
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            quadro,
+            IgnorePointer(
+              child: CustomPaint(
+                painter: Scene3DPainter(
+                  scene: widget.scene,
+                  camera: widget.camera,
+                  view: widget.view,
+                  time: widget.time,
+                  overrideCamera: widget.renderCamera,
+                  showHelpers: true,
+                  helpersOnly: true,
+                  selectedNodeId: widget.selectedNodeId,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

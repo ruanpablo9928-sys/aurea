@@ -226,3 +226,62 @@ Este último é o mais valioso e o mais barato: mande os arquivos que
 quebram. A bancada aceita arquivo de verdade no lugar dos sintéticos, e
 aí a tabela deixa de falar de casos que eu inventei e passa a falar dos
 seus.
+
+
+## O teste definitivo: o arquivo que travava
+
+Chegou o primeiro modelo real do relato: `iphone_12_pro.glb` (Sketchfab).
+Antes de qualquer conta, a ficha dele: 4,2 MB, **73.187 triângulos**, 44
+primitivas, 18 materiais, 4 texturas pequenas (2 MB somadas), sem
+esqueleto, sem animação, sem extensão nenhuma. É um modelo simples de
+verdade. Qualquer visualizador de glTF desenha isso a 60 fps.
+
+**A descoberta que muda a pergunta:** o Filament está **desligado em
+todo build que vai para testador**. `filamentPreviewEnabled` lê a flag
+`AUREA_FILAMENT`, e nem a IPA nem o APK a passam — só o workflow de
+validação do renderizador. É de propósito (a exportação desenha com o
+flutter_scene, e a textura do Filament não entra num `toImage`; dois
+motores seriam duas cores). Em produção, a cena 3D é o **flutter_scene**
+com o **pintor de CPU** de reserva. A auditoria inteira sobre "trocar o
+Filament" discutia um motor que não estava na tela.
+
+**Onde o 1 fps estava.** Medido no arquivo real, num desktop:
+
+| Etapa | Custo |
+| --- | ---: |
+| Importar | 124 ms, uma vez |
+| `evaluate` (pose estática) | 0 ms, em cache |
+| **Pintor de CPU, por quadro** | **484–794 ms** |
+
+Num iPhone 13 isso é um quadro por segundo. E o iPhone do testador
+estava no pintor de CPU por uma porta: `Scene3DLayer.showHelpers` nasce
+ligado em toda cena nova, e o preview exigia `!ajudas` para usar a GPU.
+**Toda cena 3D recém-criada ia para a CPU, em silêncio.**
+
+**O que foi feito, e o que mediu depois** (`test/pintor_cpu_modelo_pesado_test.dart`):
+
+| | Antes | Depois |
+| --- | ---: | ---: |
+| Quadro parado, 2º desenho em diante | 484–794 ms | **6 ms** (volta do guardado) |
+| Quadro tocando (rascunho) | 484–794 ms | **~140 ms** (10.456 faces em vez de 73.187) |
+| Primeiro quadro parado | 484–794 ms | ~500 ms, **uma vez** |
+
+1. **As ajudas não desqualificam mais a GPU.** São desenhadas por cima do
+   quadro da GPU (`helpersOnly`, sem avaliar triângulo), como o caminho
+   do Filament já fazia.
+2. **Quadro guardado no pintor de CPU.** Se nada do que entra no desenho
+   mudou, o desenho é o mesmo e volta como `Picture`. O tempo só entra
+   na chave quando a cena depende dele. `RenderCamera` ganhou igualdade
+   por valor — o preview cria uma nova a cada build, e por identidade o
+   guardado nunca acertaria onde mais importa.
+3. **O LOD que o modelo importado não trouxe.** Um teto de faces no
+   pintor de CPU (40 mil parado, 12 mil tocando), uma face a cada N com
+   o material de cada uma alinhado. A GPU não passa por isso e desenha
+   tudo.
+4. **A migalha da queda expira** depois de três sessões em CPU. O iOS
+   mata por memória e deixa a mesma marca; sem prazo, uma morte
+   condenava o aparelho ao pintor de CPU para sempre.
+
+**O que isto não prova:** nada foi medido em aparelho. Se o iPhone 13
+continuar lento com este build, o próximo suspeito é o flutter_scene não
+estar ativo lá — a folha da cena 3D mostra o motivo (`Scene3DGpu.motivo`).

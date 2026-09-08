@@ -4942,10 +4942,16 @@ class _LayerContent extends StatelessWidget {
               builder: (_, tocando, _) {
                 final rascunho = tocando && !exporting;
                 // O MOTOR EM GPU desenha a cena quando existe; sem ele
-                // (ou com as ajudas de cena ligadas, que so o pintor
-                // sabe desenhar) fica o pintor em CPU de sempre.
-                if ((filamentPreviewEnabled || !Scene3DGpu.indisponivel) &&
-                    !ajudas) {
+                // fica o pintor em CPU de sempre.
+                //
+                // AS AJUDAS NAO DESQUALIFICAM MAIS A GPU. A porta antiga
+                // exigia `!ajudas`, e `showHelpers` nasce ligado em toda
+                // cena nova: cada cena 3D recem-criada ia parar no
+                // pintor de CPU sem ninguem saber por que — e um modelo
+                // de loja no pintor de CPU e o app a 1 fps num iPhone 13.
+                // As ajudas (grade, frustum, caixa) sao desenhadas por
+                // cima do quadro da GPU, como o Filament ja fazia.
+                if (filamentPreviewEnabled || !Scene3DGpu.indisponivel) {
                   return Scene3DGpuView(
                     exporting: exporting,
                     scene: l.scene,
@@ -4956,6 +4962,7 @@ class _LayerContent extends StatelessWidget {
                     view: l.view,
                     time: localTime,
                     rascunho: rascunho,
+                    showHelpers: ajudas,
                   );
                 }
                 return CustomPaint(

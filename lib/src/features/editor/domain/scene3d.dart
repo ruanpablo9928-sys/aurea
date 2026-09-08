@@ -956,6 +956,38 @@ class RenderCamera {
       2 * math.atan(filmWidth / (2 * math.max(1e-6, focalLength)));
 
   double get fovDegrees => fovRadians * 180 / math.pi;
+
+  // IGUALDADE POR VALOR. Esta camera e recriada a cada build do preview
+  // (`cameraDaCena`), e o quadro guardado do pintor de CPU a usa na
+  // chave: comparada por identidade, duas cameras iguais eram "outra
+  // cena" e o guardado nunca acertava onde mais importa. Os componentes
+  // sao comparados um a um para nao depender de Vec3 ter igualdade.
+  @override
+  bool operator ==(Object other) =>
+      other is RenderCamera &&
+      other.position.x == position.x &&
+      other.position.y == position.y &&
+      other.position.z == position.z &&
+      other.target.x == target.x &&
+      other.target.y == target.y &&
+      other.target.z == target.z &&
+      other.up.x == up.x &&
+      other.up.y == up.y &&
+      other.up.z == up.z &&
+      other.focalLength == focalLength &&
+      other.filmWidth == filmWidth &&
+      other.orthographic == orthographic &&
+      other.orthoScale == orthoScale &&
+      other.near == near &&
+      other.far == far;
+
+  @override
+  int get hashCode => Object.hash(
+    position.x, position.y, position.z,
+    target.x, target.y, target.z,
+    up.x, up.y, up.z,
+    focalLength, filmWidth, orthographic, orthoScale, near, far,
+  );
 }
 
 /// Distancia focal a partir do angulo de visao (a volta da conta).
@@ -1214,6 +1246,15 @@ List<_RasterVertex> _clipDepth(List<_RasterVertex> input, double z, bool near) {
   return output;
 }
 
+/// O QUE O PINTOR DE CPU AGUENTA por modelo importado, em faces.
+///
+/// Parado: quarenta mil ainda fecha num quadro que se espera (uns 300 ms
+/// no iPhone 13, uma vez, porque o quadro fica guardado). Tocando: doze
+/// mil, que e o que cabe entre dois quadros com folga para o resto da
+/// composicao.
+const int tetoDeFacesCpu = 40000;
+const int tetoDeFacesCpuRascunho = 12000;
+
 SceneFrame renderScene(
   Scene3D scene,
   RenderCamera cam,
@@ -1237,7 +1278,18 @@ SceneFrame renderScene(
     if (!node.visible) continue;
     // NULO 3D so transforma os filhos; nao desenha nada.
     if (node.isNull) continue;
-    final modelFrame = node.modelAsset?.evaluate(t, node.modelMotion);
+    // O QUADRO DO MODELO, ja no tamanho que o pintor de CPU aguenta.
+    //
+    // Este renderizador roda no processador, e o processador tem teto:
+    // meio segundo por quadro para setenta mil faces num desktop, um
+    // segundo num iPhone 13. Enquanto toca, o rascunho leva uma face a
+    // cada N; parado, a malha cheia — ate um teto duro acima do qual
+    // nem parado da para esperar. A GPU nao passa por aqui e desenha
+    // tudo.
+    final bruto = node.modelAsset?.evaluate(t, node.modelMotion);
+    final modelFrame = bruto?.rascunho(
+      scene.draftMode ? tetoDeFacesCpuRascunho : tetoDeFacesCpu,
+    );
     // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
     final selectedMesh =
         switch (node.lod) {
