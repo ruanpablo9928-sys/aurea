@@ -151,3 +151,38 @@ pode pedir de uma reconstrução feita só com imagens.
 
 `test/rastreio3d_screen_test.dart` cobre a tela; `test/camera_solver3d_test.dart`
 e `test/cena_do_rastreio_test.dart` cobrem a álgebra e a ponte para a cena.
+
+## Por que o pipeline é escrito aqui, e não vendorizado
+
+A pergunta é legítima: OpenCV, COLMAP, OpenMVG, Theia, Ceres, ORB-SLAM e
+os SDKs de AR resolvem partes disto há anos. As razões de não trazer
+nenhum deles inteiro:
+
+- **ARKit e ARCore não servem para o caso principal.** Eles rastreiam o
+  movimento do *aparelho* enquanto ele filma, lendo os sensores. O vídeo
+  que chega pela galeria não tem sensores nenhum — e é esse o caso de
+  uso. Onde os metadados existirem (vídeo gravado pelo próprio aparelho),
+  eles poderiam melhorar a estimativa inicial; hoje não são lidos.
+- **COLMAP é a referência de qualidade, não de arquitetura.** Ele é
+  desenhado para reconstruir cenas a partir de centenas de fotos numa
+  máquina de mesa, com bundle adjustment global sobre milhares de
+  parâmetros. Os algoritmos servem de guia (a escolha do par inicial por
+  qualidade veio daí); o programa inteiro, não.
+- **Vendorizar uma biblioteca nativa custa nas duas lojas.** O projeto já
+  carrega o whisper com patch, e cada dependência nativa a mais é mais
+  peso no APK, mais superfície de build quebrando, e mais tempo entre
+  "achei o bug" e "o testador tem o build". O que este solver faz cabe em
+  três arquivos de Dart puro, roda em isolate e não muda o tamanho do
+  aplicativo.
+- **Dart puro roda igual no Android e no iOS**, e é testável sem
+  aparelho. As quinze filmagens sintéticas rodam em dois segundos no PC —
+  isso é o que permite mexer no solver sem medo.
+
+Nada de proprietário foi copiado. O fluxo é reconhecível para quem usa AE
+porque o problema é o mesmo, não porque o código seja.
+
+**O que uma biblioteca nativa traria, se um dia valer o custo:** bundle
+adjustment global (hoje o refinamento é alternado, pose por pose),
+descritores invariantes a escala e rotação (hoje o seguimento é NCC entre
+quadros vizinhos, que perde o ponto num corte ou numa oclusão longa), e
+GPU no casamento de features. Nenhum dos três é o gargalo hoje.
