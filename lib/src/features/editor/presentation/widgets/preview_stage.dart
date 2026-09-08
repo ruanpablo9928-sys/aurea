@@ -347,7 +347,18 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
       } else {
         final camada = project.layerById(id);
         if (camada != null) {
-          final caixa = controller.layerBoxSize(camada, t);
+          // A CAIXA SEM ESCALA, senao a conta briga consigo mesma.
+          //
+          // A escala nova e "distancia do dedo ao centro dividida pela
+          // meia diagonal da caixa". Com a caixa JA ESCALADA, a meia
+          // diagonal cresce junto com a escala que acabou de ser
+          // aplicada: o proximo evento divide por um numero maior e
+          // devolve uma escala menor, que encolhe a caixa, que devolve
+          // uma escala maior... O objeto tremia entre dois tamanhos e
+          // nunca acompanhava o dedo — era o "da ghost no zoom e nao da
+          // zoom de verdade" do beta. Contra a caixa base, a escala e
+          // funcao so de onde o dedo esta.
+          final caixa = controller.layerBoxSize(camada, t, scaled: false);
           final meia = math.max(
             1.0,
             Offset(caixa.width / 2, caixa.height / 2).distance,

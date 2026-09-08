@@ -349,11 +349,64 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                     const SizedBox(height: 4),
                   ],
                 ),
-                // Grafico + navegacao.
+                // GRAFICO GRANDE, PRESETS EMBAIXO.
+                //
+                // Os presets viviam numa coluna de 64 px a direita, com o
+                // nome em corpo 8,5 e o gráfico espremido no que sobrava
+                // — "extremamente pequeno e confuso", nas palavras do
+                // beta. Numa tela de 390 px o grafico ficava com uns 280
+                // de largura e 150 de altura, sem um rótulo sequer que
+                // dissesse o que e cada eixo. Agora o grafico toma a
+                // largura inteira; os presets viram uma faixa horizontal
+                // com miniatura legivel e nome em corpo 11.
                 Expanded(
                   child: Column(
                     children: [
-                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: 26,
+                        child: Row(
+                          children: [
+                            CupertinoButton(
+                              padding: const EdgeInsets.all(4),
+                              onPressed: () => _jumpSegment(layer, -1),
+                              child: const Icon(
+                                CupertinoIcons.chevron_left,
+                                size: 18,
+                                color: AmColors.muted,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                foraDoTrecho
+                                    ? 'Trecho ${times.indexOf(segment.$1) + 1}'
+                                          '\u2192${times.indexOf(segment.$1) + 2}'
+                                          ' \u00b7 ${ease.label}'
+                                          ' (cabecote fora)'
+                                    : 'Trecho ${times.indexOf(segment.$1) + 1}'
+                                          '\u2192${times.indexOf(segment.$1) + 2}'
+                                          ' \u00b7 ${ease.label}',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AmColors.text,
+                                ),
+                              ),
+                            ),
+                            CupertinoButton(
+                              padding: const EdgeInsets.all(4),
+                              onPressed: () => _jumpSegment(layer, 1),
+                              child: const Icon(
+                                CupertinoIcons.chevron_right,
+                                size: 18,
+                                color: AmColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       Expanded(
                         child: Opacity(
                           // Esmaecido diz "isto nao e o que esta sob o
@@ -394,79 +447,49 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                                 ),
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      // A FAIXA DE PRESETS: rola de lado, miniatura de
+                      // verdade e nome que se le. O interruptor Trecho/
+                      // Todos abre a faixa, porque e a primeira decisao.
+                      // Sessenta e quatro de altura: o bastante para a
+                      // miniatura e o nome, e nem um pixel a mais — cada
+                      // pixel aqui e pixel que o grafico perde.
                       SizedBox(
-                        height: 32,
-                        child: Row(
+                        height: 64,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.fromLTRB(4, 0, 8, 2),
                           children: [
-                            CupertinoButton(
-                              padding: const EdgeInsets.all(8),
-                              onPressed: () => _jumpSegment(layer, -1),
-                              child: const Icon(
-                                CupertinoIcons.chevron_left,
-                                size: 18,
-                                color: AmColors.muted,
+                            SizedBox(
+                              width: 74,
+                              child: _ScopeToggle(
+                                todos: _aplicarEmTodos,
+                                onChanged: (v) =>
+                                    setState(() => _aplicarEmTodos = v),
                               ),
                             ),
-                            Expanded(
-                              child: Text(
-                                foraDoTrecho
-                                    ? 'Trecho ${times.indexOf(segment.$1) + 1}'
-                                          '\u2192${times.indexOf(segment.$1) + 2}'
-                                          ' \u00b7 ${ease.label}'
-                                          ' (cabecote fora)'
-                                    : 'Efeito Ease de ${ease.label}',
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AmColors.muted,
-                                ),
+                            const SizedBox(width: 8),
+                            for (final preset in _presets)
+                              _PresetTile(
+                                ease: preset.ease,
+                                label: preset.nome,
+                                selected: _samePreset(ease, preset.ease),
+                                onTap: () => _aplicarEmTodos
+                                    ? controller.applyEaseToAllSegments(
+                                        id,
+                                        widget.prop,
+                                        preset.ease,
+                                      )
+                                    : controller.setSegmentEase(
+                                        id,
+                                        widget.prop,
+                                        segment!.$1,
+                                        preset.ease,
+                                      ),
                               ),
-                            ),
-                            CupertinoButton(
-                              padding: const EdgeInsets.all(8),
-                              onPressed: () => _jumpSegment(layer, 1),
-                              child: const Icon(
-                                CupertinoIcons.chevron_right,
-                                size: 18,
-                                color: AmColors.muted,
-                              ),
-                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                // Thumbnails de preset a direita.
-                SizedBox(
-                  width: 64,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
-                    children: [
-                      _ScopeToggle(
-                        todos: _aplicarEmTodos,
-                        onChanged: (v) => setState(() => _aplicarEmTodos = v),
-                      ),
-                      const SizedBox(height: 8),
-                      for (final preset in _presets)
-                        _PresetTile(
-                          ease: preset.ease,
-                          label: preset.nome,
-                          selected: _samePreset(ease, preset.ease),
-                          onTap: () => _aplicarEmTodos
-                              ? controller.applyEaseToAllSegments(
-                                  id,
-                                  widget.prop,
-                                  preset.ease,
-                                )
-                              : controller.setSegmentEase(
-                                  id,
-                                  widget.prop,
-                                  segment!.$1,
-                                  preset.ease,
-                                ),
-                        ),
                     ],
                   ),
                 ),
@@ -654,7 +677,7 @@ Future<void> showTrackCurveSheet(
                         )
                       else ...[
                         SizedBox(
-                          height: 150,
+                          height: 220,
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -691,7 +714,7 @@ Future<void> showTrackCurveSheet(
                         ),
                         const SizedBox(height: 6),
                         SizedBox(
-                          height: 70,
+                          height: 84,
                           child: ListView(
                             scrollDirection: Axis.horizontal,
                             children: [
@@ -809,8 +832,17 @@ class _CurveGraph extends StatefulWidget {
   /// 0..1: onde o cabecote esta dentro do trecho. Nulo = esta fora.
   final double? percorrido;
 
-  static const double _yMin = -0.5;
-  static const double _yMax = 1.5;
+  /// A FAIXA VERTICAL SEGUE A CURVA.
+  ///
+  /// Era sempre de -0,5 a 1,5 — metade da altura reservada para um
+  /// overshoot que quase nunca existe, e a curva normal espremida no
+  /// meio. Sem overshoot, a faixa fecha em volta de 0..1 e a curva
+  /// ocupa o grafico; com overshoot ligado, ou com uma alca que ja
+  /// passou dos limites, a faixa abre para caber.
+  double get _yMin =>
+      overshootEnabled || ease.y1 < 0 || ease.y2 < 0 ? -0.5 : -0.12;
+  double get _yMax =>
+      overshootEnabled || ease.y1 > 1 || ease.y2 > 1 ? 1.5 : 1.12;
 
   Offset _toPlot(Size size, double x, double y) => Offset(
     x * size.width,
@@ -894,8 +926,8 @@ class _CurveGraphState extends State<_CurveGraph> {
             size: size,
             painter: _AmCurvePainter(
               ease: ease,
-              yMin: _CurveGraph._yMin,
-              yMax: _CurveGraph._yMax,
+              yMin: widget._yMin,
+              yMax: widget._yMax,
               percorrido: widget.percorrido,
             ),
           ),
@@ -1163,7 +1195,10 @@ class _AmCurvePainter extends CustomPainter {
         canvas.drawLine(Offset(x, y), Offset(x + 2.5, y), grid);
       }
     }
-    // Limites (y=0 / y=1) tracejados claros.
+    // Limites (y=0 / y=1) tracejados claros — e NOMEADOS. Um grafico
+    // com duas linhas tracejadas sem legenda e o que fazia a pessoa
+    // perguntar "o que e isso?": aqui e o valor de partida (0%) e o de
+    // chegada (100%); embaixo, o tempo do trecho, do inicio ao fim.
     final dash = Paint()
       ..color = Colors.white54
       ..strokeWidth = 1;
@@ -1173,6 +1208,44 @@ class _AmCurvePainter extends CustomPainter {
         canvas.drawLine(Offset(x, py), Offset(x + 4.5, py), dash);
       }
     }
+    void rotulo(String texto, Offset onde, {bool direita = false}) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: texto,
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: Colors.white70,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final dx = direita ? onde.dx - tp.width : onde.dx;
+      tp.paint(canvas, Offset(dx, onde.dy));
+    }
+
+    rotulo('100%', Offset(4, _pt(size, 0, 1).dy - 14));
+    rotulo('0%', Offset(4, _pt(size, 0, 0).dy + 3));
+    rotulo('início', Offset(4, size.height - 14));
+    rotulo('fim', Offset(size.width - 4, size.height - 14), direita: true);
+
+    // O PREENCHIMENTO SOB A CURVA da leitura de "quanto ja andou": a area
+    // clara e o valor acumulado, e o olho entende a aceleracao sem
+    // pensar em derivada.
+    final base = _pt(size, 0, 0).dy;
+    final area = Path()..moveTo(0, base);
+    for (var i = 0; i <= 72; i++) {
+      final t = i / 72;
+      final q = _pt(size, t, ease.transform(t));
+      area.lineTo(q.dx, q.dy);
+    }
+    area
+      ..lineTo(size.width, base)
+      ..close();
+    canvas.drawPath(
+      area,
+      Paint()..color = AmColors.accent.withValues(alpha: 0.10),
+    );
 
     // Curva: branca com o miolo verde (estilo AM).
     Path buildPath(double from, double to) {
@@ -1231,15 +1304,35 @@ class _AmCurvePainter extends CustomPainter {
       );
     }
 
-    // Pontos das extremidades + alcas.
+    // Pontos das extremidades + alcas, COM A TANGENTE DESENHADA.
+    //
+    // Duas bolinhas brancas soltas no grafico nao dizem de que ponta
+    // sao. A linha da ponta ate a alca e o que todo editor de bezier
+    // mostra, e e o que faz a pessoa entender que puxar a alca da
+    // esquerda muda a SAIDA do keyframe e a da direita a CHEGADA.
     final endDot = Paint()..color = AmColors.accent;
-    canvas.drawCircle(_pt(size, 0, 0), 5, endDot);
-    canvas.drawCircle(_pt(size, 1, 1), 5, endDot);
+    final p0 = _pt(size, 0, 0), p1 = _pt(size, 1, 1);
     if (ease.type == EasingType.cubicBezier) {
+      final h1 = _pt(size, ease.x1, ease.y1);
+      final h2 = _pt(size, ease.x2, ease.y2);
+      final tangente = Paint()
+        ..color = Colors.white.withValues(alpha: 0.55)
+        ..strokeWidth = 1.5;
+      canvas.drawLine(p0, h1, tangente);
+      canvas.drawLine(p1, h2, tangente);
       final handle = Paint()..color = Colors.white;
-      canvas.drawCircle(_pt(size, ease.x1, ease.y1), 13, handle);
-      canvas.drawCircle(_pt(size, ease.x2, ease.y2), 13, handle);
+      final borda = Paint()
+        ..color = const Color(0xFF12151A)
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+      for (final h in [h1, h2]) {
+        canvas.drawCircle(h, 15, handle);
+        canvas.drawCircle(h, 15, borda);
+        canvas.drawCircle(h, 4, Paint()..color = AmColors.accent);
+      }
     }
+    canvas.drawCircle(p0, 6, endDot);
+    canvas.drawCircle(p1, 6, endDot);
   }
 
   @override
@@ -1265,8 +1358,8 @@ class _PresetTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 60,
-        margin: const EdgeInsets.only(bottom: 8),
+        width: 74,
+        margin: const EdgeInsets.only(right: 6),
         decoration: BoxDecoration(
           color: selected ? AmColors.panelHigh : AmColors.bg,
           borderRadius: BorderRadius.circular(10),
@@ -1283,15 +1376,20 @@ class _PresetTile extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(3, 0, 3, 4),
+              padding: const EdgeInsets.fromLTRB(3, 0, 3, 3),
               child: Text(
                 label,
-                maxLines: 2,
+                // UMA LINHA. Duas linhas de corpo 11 nao cabem nos 64 px
+                // da faixa junto com a miniatura — estouravam por dois
+                // pixels — e um nome cortado com reticencias ainda se le;
+                // uma faixa amarela de estouro, nao.
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 8.5,
-                  height: 1,
+                  fontSize: 11,
+                  height: 1.05,
+                  fontWeight: FontWeight.w600,
                   color: selected ? AmColors.accent : AmColors.muted,
                 ),
               ),
@@ -1322,16 +1420,18 @@ class _ScopeToggle extends StatelessWidget {
       onTap: () => onChanged(value),
       child: Container(
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+        // Vertical 5: duas destas empilhadas tem de caber nos 64 px da
+        // faixa de presets. Com 7 estouravam por dois pixels.
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         decoration: BoxDecoration(
           color: todos == value ? AmColors.accent : AmColors.bg,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           text,
           maxLines: 1,
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
             color: todos == value ? AmColors.bg : AmColors.muted,
           ),
