@@ -118,6 +118,27 @@ void main() {
     input.dispose();
   });
   test(
+    'Pixelar creates square blocks without flipping or losing alpha',
+    () async {
+      final input = await fixture();
+      final output = await render(input, PixelEffectFrame(11, [8]));
+      final bytes = await rgba(output);
+      List<int> pixel(int x, int y) =>
+          bytes.sublist((y * 128 + x) * 4, (y * 128 + x) * 4 + 4);
+      expect(pixel(1, 34), pixel(14, 46), reason: 'same 16px square');
+      expect(
+        pixel(1, 34),
+        isNot(pixel(18, 34)),
+        reason: 'adjacent block samples another color',
+      );
+      expect(pixel(8, 4)[3], 0, reason: 'transparent top stays at the top');
+      expect(pixel(8, 20)[3], closeTo(128, 1));
+      expect(pixel(8, 60)[3], 255);
+      output.dispose();
+      input.dispose();
+    },
+  );
+  test(
     'glow threshold removes dark alpha; tone mapping and dirt are live',
     () async {
       final input = await fixture(solid: true);

@@ -31,14 +31,27 @@ void main() {
     expect(3840 * r, closeTo(2160, 1e-6));
   });
 
-  test('preview minusculo nao vira foto de quatro pixels', () {
+  test('preview pequeno respeita os pixels realmente exibidos', () {
     final r = previewRasterRatio(
       compWidth: 1080,
       compHeight: 1920,
       stageScale: 0.05,
       devicePixelRatio: 2,
     );
-    expect(r, 0.25);
+    expect(r, 0.1);
+  });
+
+  test('8K e 16K respeitam o teto mesmo abaixo de um quarto', () {
+    for (final side in [7680.0, 15360.0]) {
+      final r = previewRasterRatio(
+        compWidth: side,
+        compHeight: side / 2,
+        stageScale: .2,
+        devicePixelRatio: 3,
+        maxSidePx: 1080,
+      );
+      expect(side * r, closeTo(1080, 1e-6));
+    }
   });
 
   test('composicao pequena numa tela grande nao passa do natural', () {

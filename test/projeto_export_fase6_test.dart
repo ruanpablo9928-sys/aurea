@@ -4,7 +4,6 @@ import 'package:aurea/src/core/theme/app_theme.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/project_store.dart';
-import 'package:aurea/src/features/editor/presentation/shell/onboarding.dart';
 import 'package:aurea/src/features/settings/application/settings_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -99,8 +98,7 @@ void main() {
 
     // Pro: guias, motion blur e paleta.
     c.read(proModeProvider.notifier).set(true);
-    await tester.tap(find.text('Projeto').first);
-    await tester.pumpAndSettle();
+
     // Reabre a folha para ver as secoes Pro.
     await tester.tapAt(const Offset(10, 10));
     await tester.pumpAndSettle();
@@ -110,7 +108,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('projeto-areas-seguras')));
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).guides.showSafeAreas, isTrue);
-    await tester.ensureVisible(find.byKey(const ValueKey('projeto-motion-blur')));
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('projeto-motion-blur')), 180, scrollable: find.descendant(of: find.byType(BottomSheet), matching: find.byType(Scrollable)).first);
     await tester.tap(find.byKey(const ValueKey('projeto-motion-blur')));
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).motionBlur.enabled, isTrue);
@@ -118,15 +116,7 @@ void main() {
 
   testWidgets('as dicas de primeiro uso aparecem uma vez e o estado vazio tem a chamada', (tester) async {
     final c = await openEditor(tester);
-    expect(find.byKey(const ValueKey('editor-dica')), findsOneWidget);
-    for (var i = 0; i < dicasDoEditor.length - 1; i++) {
-      await tester.tap(find.byKey(const ValueKey('editor-dica-proxima')));
-      await tester.pumpAndSettle();
-    }
-    expect(find.byKey(const ValueKey('editor-dica-proxima')), findsNothing, reason: 'ultima dica');
-    await tester.tap(find.byKey(const ValueKey('editor-dica-entendi')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('editor-dica')), findsNothing);
+    expect(find.byKey(const ValueKey('editor-dica')), findsNothing, reason: 'help no longer covers editing');
 
     // Estado vazio: sem camadas, a chamada "+ Adicione uma midia".
     final e = c.read(editorControllerProvider.notifier);
@@ -139,8 +129,9 @@ void main() {
     expect(find.byKey(const ValueKey('estado-vazio-cta')), findsOneWidget);
     // A barra de adicionar (com o chip de ajuda) so vem pelo "+".
     expect(find.byKey(const ValueKey('projeto-ajuda')), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('editor-fab')));
+    await tester.tap(find.byKey(const ValueKey('editor-settings')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('projeto-ajuda')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('projeto-ajuda')));
+    expect(find.byKey(const ValueKey('projeto-ajuda')).hitTestable(), findsOneWidget);
   });
 }

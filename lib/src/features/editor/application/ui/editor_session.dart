@@ -36,9 +36,6 @@ enum EditorPanel {
   editPoints,
 }
 
-/// As tres alturas do painel contextual, como fracao do espaco util.
-enum SheetLevel { peek, half, full }
-
 /// O ESTADO DE SESSAO DO EDITOR — o que era `setState` privado da tela.
 ///
 /// Mora num provider para que a barra de cima, o transporte, a timeline
@@ -54,10 +51,6 @@ class EditorSession {
     this.pointsReturn = EditorPanel.editShape,
     this.pointsItemId,
     this.previewExpanded = false,
-    this.previewFraction = 0.401,
-    this.previewAjustado = false,
-    this.sheetLevel = SheetLevel.half,
-    this.sheetFraction,
     this.timelineExpanded = false,
     this.inPoint,
     this.outPoint,
@@ -81,39 +74,26 @@ class EditorSession {
   /// Preview em tela cheia (esconde o resto).
   final bool previewExpanded;
 
-  /// Altura do preview como fracao da altura da TELA (a alca entre o
-  /// preview e o transporte muda isto). 0.30..0.60.
-  final double previewFraction;
-
-  /// A pessoa ja mexeu na alca do preview?
-  ///
-  /// Enquanto NAO mexeu, a altura do preview vem da PROPORCAO DA
-  /// COMPOSICAO: e o que faz o quadro encostar nas duas laterais em vez
-  /// de boiar num vazio preto com tarjas em cima e embaixo. Depois que
-  /// mexeu, manda o que ela escolheu — a alca perderia o sentido se o
-  /// tamanho voltasse sozinho.
-  final bool previewAjustado;
-
-  /// Nivel do painel contextual, e a fracao livre quando a alca foi
-  /// arrastada para um ponto entre niveis.
-  final SheetLevel sheetLevel;
-  final double? sheetFraction;
-
   /// Timeline em tela cheia (preview vira janela pequena).
   final bool timelineExpanded;
 
+  /// AS ALTURAS NAO SE ARRASTAM MAIS.
+  ///
+  /// O painel tinha tres niveis e uma alca que ia de um ao outro, e o
+  /// preview tinha outra alca. Na mao dos testadores isso virou o
+  /// contrario do que prometia: cada toque perto da borda mudava o
+  /// tamanho de tudo, a pessoa perdia o lugar onde estava e nao achava
+  /// mais o botao que tinha acabado de ver. Um editor de video nao pede
+  /// que se escolha o tamanho do painel — ele pede que o painel esteja
+  /// SEMPRE no mesmo lugar, como no Alight Motion.
+  ///
+  /// O preview continua se ajustando sozinho, mas pela PROPORCAO DA
+  /// COMPOSICAO (a tela resolve isso), e nunca pelo dedo.
+  static const double alturaDoPreview = 0.50;
+  static const double alturaDaFolha = 0.40;
+
   bool get panelOpen => panel != EditorPanel.none && panel != EditorPanel.add;
   bool get adding => panel == EditorPanel.add;
-
-  /// A fracao efetiva do painel contextual.
-  double get effectiveSheetFraction =>
-      sheetFraction ?? fractionOfLevel(sheetLevel);
-
-  static double fractionOfLevel(SheetLevel level) => switch (level) {
-    SheetLevel.peek => 0.22,
-    SheetLevel.half => 0.40,
-    SheetLevel.full => 0.60,
-  };
 
   EditorSession copyWith({
     EditorPanel? panel,
@@ -125,11 +105,6 @@ class EditorSession {
     String? pointsItemId,
     bool clearPointsItem = false,
     bool? previewExpanded,
-    double? previewFraction,
-    bool? previewAjustado,
-    SheetLevel? sheetLevel,
-    double? sheetFraction,
-    bool clearSheetFraction = false,
     bool? timelineExpanded,
     Duration? inPoint,
     Duration? outPoint,
@@ -143,12 +118,6 @@ class EditorSession {
     pointsReturn: pointsReturn ?? this.pointsReturn,
     pointsItemId: clearPointsItem ? null : (pointsItemId ?? this.pointsItemId),
     previewExpanded: previewExpanded ?? this.previewExpanded,
-    previewFraction: previewFraction ?? this.previewFraction,
-    previewAjustado: previewAjustado ?? this.previewAjustado,
-    sheetLevel: sheetLevel ?? this.sheetLevel,
-    sheetFraction: clearSheetFraction
-        ? null
-        : (sheetFraction ?? this.sheetFraction),
     timelineExpanded: timelineExpanded ?? this.timelineExpanded,
     inPoint: clearInOut ? null : (inPoint ?? this.inPoint),
     outPoint: clearInOut ? null : (outPoint ?? this.outPoint),
@@ -171,27 +140,16 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
   void reset() => state = const EditorSession();
 
   void openPanel(EditorPanel panel) {
-    state = state.copyWith(
-      panel: panel,
-      // Categoria aberta pede espaco: sobe para a metade no minimo.
-      sheetLevel: state.sheetLevel == SheetLevel.peek
-          ? SheetLevel.half
-          : state.sheetLevel,
-      clearSheetFraction: true,
-    );
+    state = state.copyWith(panel: panel);
   }
 
   void closePanel() => state = state.copyWith(panel: EditorPanel.none);
 
-  void openAdd() => state = state.copyWith(
-    panel: EditorPanel.add,
-    sheetLevel: SheetLevel.full,
-    clearSheetFraction: true,
-  );
+  void openAdd() => state = state.copyWith(panel: EditorPanel.add);
 
   void closeAdd() {
     if (state.panel == EditorPanel.add) {
-      state = state.copyWith(panel: EditorPanel.none, sheetLevel: SheetLevel.half);
+      state = state.copyWith(panel: EditorPanel.none);
     }
   }
 
@@ -202,20 +160,10 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
   void openTransform([TransformTool? tool]) => state = state.copyWith(
     panel: EditorPanel.transform,
     tool: tool ?? state.tool,
-    sheetLevel: state.sheetLevel == SheetLevel.peek
-        ? SheetLevel.half
-        : state.sheetLevel,
-    clearSheetFraction: true,
   );
 
-  void openShape(ShapeTool tool) => state = state.copyWith(
-    panel: EditorPanel.editShape,
-    shapeTool: tool,
-    sheetLevel: state.sheetLevel == SheetLevel.peek
-        ? SheetLevel.half
-        : state.sheetLevel,
-    clearSheetFraction: true,
-  );
+  void openShape(ShapeTool tool) =>
+      state = state.copyWith(panel: EditorPanel.editShape, shapeTool: tool);
 
   void openCurve(LayerProp prop) => state = state.copyWith(
     curveProp: prop,
@@ -232,10 +180,6 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
         pointsItemId: itemId,
         pointsReturn: returnTo,
         panel: EditorPanel.editPoints,
-        sheetLevel: state.sheetLevel == SheetLevel.peek
-            ? SheetLevel.half
-            : state.sheetLevel,
-        clearSheetFraction: true,
       );
 
   void backFromEditPoints() =>
@@ -260,37 +204,6 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
 
   void clearInOut() => state = state.copyWith(clearInOut: true);
 
-  void setPreviewFraction(double f) => state = state.copyWith(
-    previewFraction: f.clamp(0.14, 0.60),
-    previewAjustado: true,
-  );
-
-  /// Volta a altura do preview a ser decidida pela proporcao da
-  /// composicao (o "Redefinir" da alca).
-  void soltarPreview() =>
-      state = state.copyWith(previewFraction: 0.401, previewAjustado: false);
-
-  void setSheetLevel(SheetLevel level) =>
-      state = state.copyWith(sheetLevel: level, clearSheetFraction: true);
-
-  /// A alca arrastada para um ponto qualquer entre os niveis.
-  void setSheetFraction(double f) =>
-      state = state.copyWith(sheetFraction: f.clamp(0.12, 0.60));
-
-  /// Solta a alca: encaixa no nivel mais proximo.
-  void snapSheet() {
-    final f = state.effectiveSheetFraction;
-    var melhor = SheetLevel.half;
-    var dist = double.infinity;
-    for (final l in SheetLevel.values) {
-      final d = (EditorSession.fractionOfLevel(l) - f).abs();
-      if (d < dist) {
-        dist = d;
-        melhor = l;
-      }
-    }
-    setSheetLevel(melhor);
-  }
 }
 
 /// AUTO-DISPOSE: sem ninguem escutando (o editor fechou), a sessao some

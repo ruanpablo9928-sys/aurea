@@ -1045,11 +1045,13 @@ class EditorController extends Notifier<VideoProject> {
   // ------------------------------------------------ precisao e layout
 
   /// Caixa renderizada da camada (px logicos).
-  Size layerBoxSize(Layer layer, Duration t) => measureLayerBox(
-    layer,
-    layer.localTime(t),
-    fallbackWidth: state.outputWidth.toDouble(),
-  );
+  Size layerBoxSize(Layer layer, Duration t, {bool scaled = true}) =>
+      measureLayerBox(
+        layer,
+        layer.localTime(t),
+        fallbackWidth: state.outputWidth.toDouble(),
+        scaled: scaled,
+      );
 
   List<LayoutBox> _layoutBoxes(Iterable<String> ids, Duration t) => [
     for (final id in ids)
@@ -2471,9 +2473,7 @@ class EditorController extends Notifier<VideoProject> {
       final caixa = caminho[q]!;
       // Instante no video, e dai o instante LOCAL da camada de destino:
       // as duas camadas raramente comecam juntas.
-      final noVideo = Duration(
-        microseconds: (q * 1000000 / dados.fps).round(),
-      );
+      final noVideo = Duration(microseconds: (q * 1000000 / dados.fps).round());
       final absoluto = video.startTime + noVideo;
       final local = absoluto - alvo.startTime;
       if (local < Duration.zero || local > alvo.duration) continue;
@@ -2522,7 +2522,12 @@ class EditorController extends Notifier<VideoProject> {
   /// pessoa, depois de ver se o rastreio pegou. Um rastreio que ja
   /// entrasse criando camadas obrigaria a desfazer toda vez que saisse
   /// ruim — e sai ruim com frequencia, porque depende do plano filmado.
-  Future<SolucaoCamera3D> rastrearCamera3D(String layerId, {int fps = 8}) async {
+  Future<SolucaoCamera3D> rastrearCamera3D(
+    String layerId, {
+    ModoDoSolve modo = ModoDoSolve.equilibrado,
+    TipoDeTomada tipoDeTomada = TipoDeTomada.auto,
+    int? fps,
+  }) async {
     final layer = _layer(layerId);
     if (layer is! VideoLayer) {
       throw const RastreioException(
@@ -2535,6 +2540,8 @@ class EditorController extends Notifier<VideoProject> {
       sourcePath: layer.sourcePath,
       start: layer.sourceOffset,
       duration: layer.sourceSpan,
+      modo: modo,
+      tipoDeTomada: tipoDeTomada,
       fps: fps,
     );
   }

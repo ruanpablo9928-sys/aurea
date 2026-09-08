@@ -101,7 +101,7 @@ void main() {
           'lib/src/features/editor/presentation/am/transform_panel.dart');
       final codigo = _semComentarios(f);
       expect(codigo.contains('_menuMais'), isFalse);
-      expect(codigo, contains('AmMenuIcon(ativo:'),
+      expect(codigo, matches(RegExp(r'AmMenuIcon\(\s*ativo:')),
           reason: 'o botao do menu tem de mostrar que ha modo ligado');
       expect(codigo, contains('ref.watch(autoKeyframeProvider)'),
           reason: 'sem watch, o icone nao reage quando o modo muda');
@@ -129,7 +129,7 @@ void main() {
       final codigoEstudio = _semComentarios(estudio);
       expect(codigoEstudio.contains('CupertinoIcons.ellipsis'), isFalse,
           reason: 'o Estudio usa o AmMenuIcon, que carrega o estado');
-      expect(codigoEstudio.contains('AmMenuIcon(ativo:'), isTrue);
+      expect(RegExp(r'AmMenuIcon\(\s*ativo:').hasMatch(codigoEstudio), isTrue);
       expect(codigoEstudio.contains("ValueKey('estudio-cena')"), isTrue,
           reason: 'a cena (hierarquia) tem acao rapida fora do menu');
       final culpados = <String>[];

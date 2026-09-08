@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/snack.dart';
@@ -10,6 +11,7 @@ import '../../domain/camera_solver3d.dart';
 import '../../domain/effect.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import 'rastreio3d_screen.dart';
 
 /// RASTREAR — as duas perguntas que a pessoa realmente faz.
 ///
@@ -263,10 +265,33 @@ class _RastreioState extends State<_Rastreio> {
                     ),
                   ],
                   const SizedBox(height: 10),
+                  // A TELA DOS PONTOS VEM ANTES DE CRIAR A CENA.
+                  //
+                  // Criar a cena direto funciona, mas entrega uma camada
+                  // 3D com a orientacao que o solver escolheu — e ai a
+                  // pessoa descobre que o chao esta torto so depois de
+                  // montar tudo em cima. Ver os pontos, escolher o chao e
+                  // pousar o objeto na superficie e a ordem que evita
+                  // refazer.
+                  _Botao(
+                    chave: 'rastreio-abrir-pontos',
+                    texto: 'Ver os pontos e montar a cena',
+                    destaque: true,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => Rastreio3DScreen(
+                            layerId: widget.layerId,
+                            solucao: solucao,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   _Botao(
                     chave: 'rastreio-criar-cena',
                     texto: 'Criar a cena 3D em cima do vídeo',
-                    destaque: true,
                     onTap: () {
                       _c.criarCenaDoRastreio(widget.layerId, solucao);
                       Navigator.of(context).maybePop();

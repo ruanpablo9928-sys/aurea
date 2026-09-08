@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'dart:convert';
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
@@ -177,15 +178,15 @@ void main() {
     final e = c.read(editorControllerProvider.notifier);
     final id = c.read(editorControllerProvider).layers.first.id;
     expect(find.byKey(ValueKey('olho-$id')), findsOneWidget);
-    expect(find.byKey(ValueKey('cadeado-$id')), findsOneWidget);
     expect(find.byKey(ValueKey('kf-$id')), findsOneWidget);
+
 
     await tester.tap(find.byKey(ValueKey('olho-$id')));
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).isHidden(id), isTrue);
     expect(find.byTooltip('Mostrar camada'), findsOneWidget);
 
-    await tester.tap(find.byKey(ValueKey('cadeado-$id')));
+    await tester.longPress(find.byKey(ValueKey('kf-$id')));
     await tester.pumpAndSettle();
     expect(e.isLocked(id), isTrue);
 
@@ -198,7 +199,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).layerById(id)!.startTime, antes, reason: 'cadeado segura');
 
-    await tester.tap(find.byKey(ValueKey('cadeado-$id')));
+    await tester.longPress(find.byKey(ValueKey('kf-$id')));
     await tester.pumpAndSettle();
     await tester.dragFrom(Offset(linha.left + 30, linha.top + kAmBarHeight / 2), const Offset(120, 0));
     await tester.pumpAndSettle();
@@ -269,8 +270,10 @@ void main() {
     final e = c.read(editorControllerProvider.notifier);
     e.groupLayers(c.read(editorControllerProvider).layers.map((l) => l.id).toList());
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('acao-entrar')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('acao-entrar')));
+    await openLayerActions(tester);
+    expect(find.byKey(const ValueKey('mais-entrar')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('mais-entrar')));
+    await tester.tap(find.byKey(const ValueKey('mais-entrar')));
     await tester.pumpAndSettle();
     expect(e.dentroDeGrupo, isTrue);
     await tester.tap(find.byKey(const ValueKey('editor-back')));

@@ -1,3 +1,5 @@
+import 'composition_frame.dart';
+
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -34,6 +36,7 @@ import '../../domain/mask.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/scene3d.dart';
 import '../../domain/shape.dart';
+import '../../domain/selection_geometry.dart';
 import '../../domain/video_project.dart';
 import 'animated_text.dart';
 import 'blend_mask.dart';
@@ -149,26 +152,28 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
       if (!l.activeAt(t)) continue;
       if (project.isHidden(l.id)) continue;
       if (project.metaOf(l.id).locked) continue;
-      final eff = effectiveTransform(project, l, t);
-      final tamanho = controller.layerBoxSize(l, t);
+      final tamanho = controller.layerBoxSize(l, t, scaled: false);
       if (tamanho.isEmpty) continue;
-      final pivot = l.pivot.valueAt(l.localTime(t));
-      // Desfaz o que o palco fez: leva o ponto para o espaco da camada.
-      var p = comp - eff.pos - pivot;
-      final r = -eff.rot * math.pi / 180;
-      p = Offset(
-        p.dx * math.cos(r) - p.dy * math.sin(r),
-        p.dx * math.sin(r) + p.dy * math.cos(r),
-      );
-      final k = eff.scale.abs() < 1e-6 ? 1.0 : eff.scale;
-      p = Offset(p.dx / k, p.dy / k) + pivot;
+      final matrix = selectionTransform(project, l, t);
+      final inverse = Matrix4.tryInvert(matrix);
+      if (inverse == null) continue;
+      final p = MatrixUtils.transformPoint(inverse, comp);
       // Uma folga de 12 px: alvo pequeno tambem tem de dar para pegar.
       final caixa = Rect.fromCenter(
         center: Offset.zero,
         width: tamanho.width,
         height: tamanho.height,
-      ).inflate(12 / (_stageScale <= 0 ? 1 : _stageScale));
+      );
       if (caixa.contains(p)) return l.id;
+      final nearest = Offset(
+        p.dx.clamp(caixa.left, caixa.right),
+        p.dy.clamp(caixa.top, caixa.bottom),
+      );
+      if ((MatrixUtils.transformPoint(matrix, nearest) - comp).distance *
+              _stageScale <=
+          12) {
+        return l.id;
+      }
     }
     return null;
   }
@@ -182,12 +187,14 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     if (l == null || l is AudioLayer) return null;
     final t = widget.playback.time.value;
     if (!l.activeAt(t)) return null;
-    final eff = effectiveTransform(project, l, t);
-    final tamanho = ref.read(editorControllerProvider.notifier).layerBoxSize(l, t);
+    final matrix = selectionTransform(project, l, t);
+    final tamanho = ref
+        .read(editorControllerProvider.notifier)
+        .layerBoxSize(l, t, scaled: false);
     if (tamanho.isEmpty) return null;
-    final meia = Offset(tamanho.width / 2, tamanho.height / 2) * eff.scale.abs();
-    final r = eff.rot * math.pi / 180;
-    final centro = _stageOrigin + eff.pos * _stageScale;
+    final centro =
+        _stageOrigin +
+        MatrixUtils.transformPoint(matrix, Offset.zero) * _stageScale;
 
     // AS DUAS ALCAS NUNCA ENCOSTAM UMA NA OUTRA.
     //
@@ -200,8 +207,6 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     // caminho. Um afastamento minimo em pixels DE TELA resolve, e nao
     // mexe em objeto grande, onde os cantos ja estao longe.
     const afastamentoMinimo = 30.0;
-    final meiaX = math.max(meia.dx * _stageScale, afastamentoMinimo);
-    final meiaY = math.max(meia.dy * _stageScale, afastamentoMinimo);
 
     // AS ALCAS FICAM DENTRO DO PALCO, sempre.
     //
@@ -217,20 +222,33 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
           );
 
     Offset noPalco(Offset canto) {
-      final girado = Offset(
-        canto.dx * math.cos(r) - canto.dy * math.sin(r),
-        canto.dx * math.sin(r) + canto.dy * math.cos(r),
-      );
-      return presa(centro + girado);
+      var delta =
+          (MatrixUtils.transformPoint(matrix, canto) * _stageScale +
+              _stageOrigin) -
+          centro;
+      if (delta.distance < afastamentoMinimo && delta.distance > 1e-6) {
+        delta *= afastamentoMinimo / delta.distance;
+      }
+      return presa(centro + delta);
     }
 
+    var escala = noPalco(Offset(tamanho.width / 2, tamanho.height / 2));
+    var giro = noPalco(Offset(tamanho.width / 2, -tamanho.height / 2));
+    if ((escala - giro).distance < 60) {
+      final middle = (escala + giro) / 2;
+      escala = presa(middle + const Offset(0, 30));
+      giro = presa(middle - const Offset(0, 30));
+    }
     return (
-      escala: noPalco(Offset(meiaX, meiaY)),
-      giro: noPalco(Offset(meiaX, -meiaY)),
-      quadro: Rect.fromCenter(
-        center: _stageOrigin + eff.pos * _stageScale,
-        width: tamanho.width * eff.scale.abs() * _stageScale,
-        height: tamanho.height * eff.scale.abs() * _stageScale,
+      escala: escala,
+      giro: giro,
+      quadro: MatrixUtils.transformRect(
+        matrix,
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: tamanho.width,
+          height: tamanho.height,
+        ),
       ),
     );
   }
@@ -420,15 +438,13 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
             color: Colors.black,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final scale = math.min(
-                  constraints.maxWidth / compW,
-                  constraints.maxHeight / compH,
+                final frame = compositionRect(
+                  constraints.biggest,
+                  Size(compW, compH),
                 );
+                final scale = frame.width / compW;
                 _stageScale = scale;
-                _stageOrigin = Offset(
-                  (constraints.maxWidth - compW * scale) / 2,
-                  (constraints.maxHeight - compH * scale) / 2,
-                );
+                _stageOrigin = frame.topLeft;
                 _tamanhoDoPalco = Size(
                   constraints.maxWidth,
                   constraints.maxHeight,
@@ -437,7 +453,8 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                   child: SizedBox(
                     width: compW * scale,
                     height: compH * scale,
-                    child: ClipRect(
+                    child: CompositionFrame(
+                      key: const ValueKey('composition-frame'),
                       // O filho precisa ter também a área de toque da
                       // composição. Transform + OverflowBox só escalava a
                       // pintura e descartava gestos fora do canto superior.
@@ -471,105 +488,111 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                             child: ColoredBox(
                               color: project.backgroundColor,
                               child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                // Automatic dithering is only a live GPU pass
-                                // for graphics. Never snapshot the preview:
-                                // asynchronous image decoding and nested video
-                                // textures must repaint without a clock change.
-                                // Export still dithers fully decoded frames.
-                                ValueListenableBuilder<Duration>(
-                                  valueListenable: widget.playback.time,
-                                  builder: (context, t, child) => !useDither
-                                      ? child!
-                                      : DitherLayer(
-                                          time: t,
-                                          // Escala do palco x DPR de verdade: e o
-                                          // tamanho da textura do filtro.
-                                          pixelRatio:
-                                              scale *
-                                              MediaQuery.devicePixelRatioOf(
-                                                context,
-                                              ),
-                                          child: child!,
-                                        ),
-                                  child: CompositionView(
-                                    time: widget.playback.time,
-                                    videos: widget.videos,
-                                    selectedId: selectedId,
+                                clipBehavior: Clip.none,
+                                children: [
+                                  // Automatic dithering is only a live GPU pass
+                                  // for graphics. Never snapshot the preview:
+                                  // asynchronous image decoding and nested video
+                                  // textures must repaint without a clock change.
+                                  // Export still dithers fully decoded frames.
+                                  ValueListenableBuilder<Duration>(
+                                    valueListenable: widget.playback.time,
+                                    builder: (context, t, child) => !useDither
+                                        ? child!
+                                        : DitherLayer(
+                                            time: t,
+                                            // Escala do palco x DPR de verdade: e o
+                                            // tamanho da textura do filtro.
+                                            pixelRatio:
+                                                scale *
+                                                MediaQuery.devicePixelRatioOf(
+                                                  context,
+                                                ),
+                                            child: child!,
+                                          ),
+                                    child: CompositionView(
+                                      time: widget.playback.time,
+                                      videos: widget.videos,
+                                      selectedId: selectedId,
+                                    ),
                                   ),
-                                ),
-                                // CASCA DE CEBOLA: os quadros vizinhos,
-                                // fantasmas, ATRAS do quadro atual. Passado
-                                // puxado para o vermelho, futuro para o
-                                // verde — e como se sabe de que lado esta.
-                                if (onion > 0)
+                                  // CASCA DE CEBOLA: os quadros vizinhos,
+                                  // fantasmas, ATRAS do quadro atual. Passado
+                                  // puxado para o vermelho, futuro para o
+                                  // verde — e como se sabe de que lado esta.
+                                  if (onion > 0)
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: ValueListenableBuilder<Duration>(
+                                          valueListenable: widget.playback.time,
+                                          builder: (context, t, _) {
+                                            final passo = Duration(
+                                              microseconds:
+                                                  1000000 ~/
+                                                  (project.fps < 1
+                                                      ? 30
+                                                      : project.fps),
+                                            );
+                                            return Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                for (var k = onion; k >= 1; k--)
+                                                  for (final lado in const [
+                                                    -1,
+                                                    1,
+                                                  ])
+                                                    _Fantasma(
+                                                      time:
+                                                          t +
+                                                          passo * (k * lado),
+                                                      videos: widget.videos,
+                                                      opacity: 0.34 / k,
+                                                      futuro: lado > 0,
+                                                    ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  // GUIAS, GRADE, AREAS SEGURAS e mascara de
+                                  // enquadramento (PR-X3): vivem ACIMA da
+                                  // composicao e nunca entram no render final.
                                   Positioned.fill(
                                     child: IgnorePointer(
-                                      child: ValueListenableBuilder<Duration>(
-                                        valueListenable: widget.playback.time,
-                                        builder: (context, t, _) {
-                                          final passo = Duration(
-                                            microseconds:
-                                                1000000 ~/
-                                                (project.fps < 1
-                                                    ? 30
-                                                    : project.fps),
-                                          );
-                                          return Stack(
-                                            clipBehavior: Clip.none,
-                                            children: [
-                                              for (var k = onion; k >= 1; k--)
-                                                for (final lado in const [
-                                                  -1,
-                                                  1,
-                                                ])
-                                                  _Fantasma(
-                                                    time:
-                                                        t + passo * (k * lado),
-                                                    videos: widget.videos,
-                                                    opacity: 0.34 / k,
-                                                    futuro: lado > 0,
-                                                  ),
-                                            ],
-                                          );
-                                        },
+                                      child: CustomPaint(
+                                        key: const ValueKey(
+                                          'composition-guides',
+                                        ),
+                                        painter: _GuidesPainter(
+                                          previewScale: scale,
+                                          guides: project.guides,
+                                          compSize: Size(compW, compH),
+                                          centerLines: selectedId != null,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                // GUIAS, GRADE, AREAS SEGURAS e mascara de
-                                // enquadramento (PR-X3): vivem ACIMA da
-                                // composicao e nunca entram no render final.
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: CustomPaint(
-                                      painter: _GuidesPainter(
-                                        guides: project.guides,
-                                        compSize: Size(compW, compH),
-                                      ),
+                                  // NOS DA MASCARA: quando alguem esta editando
+                                  // o caminho, o dedo passa a mexer nos nos em
+                                  // vez de mover a camada. Fora disso o widget
+                                  // nao existe e nao intercepta nada.
+                                  Positioned.fill(
+                                    child: MaskNodeEditor(
+                                      time: widget.playback.time,
+                                      stageScale: () => _stageScale,
                                     ),
                                   ),
-                                ),
-                                // NOS DA MASCARA: quando alguem esta editando
-                                // o caminho, o dedo passa a mexer nos nos em
-                                // vez de mover a camada. Fora disso o widget
-                                // nao existe e nao intercepta nada.
-                                Positioned.fill(
-                                  child: MaskNodeEditor(
-                                    time: widget.playback.time,
-                                    stageScale: () => _stageScale,
+                                  // DESENHO LIVRE: por cima de tudo enquanto o
+                                  // pedido do menu estiver ligado.
+                                  Positioned.fill(
+                                    child: FreehandOverlay(
+                                      key: ValueKey(project.id),
+                                      playback: widget.playback,
+                                    ),
                                   ),
-                                ),
-                                // DESENHO LIVRE: por cima de tudo enquanto o
-                                // pedido do menu estiver ligado.
-                                Positioned.fill(
-                                  child: FreehandOverlay(
-                                    key: ValueKey(project.id),
-                                    playback: widget.playback,
-                                  ),
-                                ),
-                              ],
-                            ), // fechado-bg
+                                ],
+                              ), // fechado-bg
                             ),
                           ),
                         ),
@@ -588,28 +611,33 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
               builder: (context) {
                 final a = _alcasDaSelecao();
                 if (a == null) return const SizedBox.shrink();
-                Widget alca(Offset p, IconData icone, String chave) => Positioned(
-                  left: p.dx - 15,
-                  top: p.dy - 15,
-                  child: IgnorePointer(
-                    child: Container(
-                      key: ValueKey(chave),
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: .35),
-                            blurRadius: 4,
+                Widget alca(Offset p, IconData icone, String chave) =>
+                    Positioned(
+                      left: p.dx - 15,
+                      top: p.dy - 15,
+                      child: IgnorePointer(
+                        child: Container(
+                          key: ValueKey(chave),
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: .35),
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
-                        ],
+                          child: Icon(
+                            icone,
+                            size: 17,
+                            color: const Color(0xFF12151A),
+                          ),
+                        ),
                       ),
-                      child: Icon(icone, size: 17, color: const Color(0xFF12151A)),
-                    ),
-                  ),
-                );
+                    );
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -618,7 +646,11 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                       CupertinoIcons.arrow_up_left_arrow_down_right,
                       'alca-escala',
                     ),
-                    alca(a.giro, CupertinoIcons.arrow_2_circlepath, 'alca-giro'),
+                    alca(
+                      a.giro,
+                      CupertinoIcons.arrow_2_circlepath,
+                      'alca-giro',
+                    ),
                   ],
                 );
               },
@@ -700,7 +732,8 @@ class _GrainTile {
   static final Map<String, ui.Image> _cache = {};
 
   static ui.Image para(int seed, double step, double amount) {
-    final chave = '$seed|${step.toStringAsFixed(2)}|'
+    final chave =
+        '$seed|${step.toStringAsFixed(2)}|'
         '${amount.toStringAsFixed(3)}';
     final pronto = _cache[chave];
     if (pronto != null) return pronto;
@@ -838,15 +871,29 @@ class _FractalNoisePainter extends CustomPainter {
 /// de enquadramento que mostra como o quadro fica cortado noutra
 /// proporcao — sem alterar o projeto.
 class _GuidesPainter extends CustomPainter {
-  const _GuidesPainter({required this.guides, required this.compSize});
+  const _GuidesPainter({
+    required this.guides,
+    required this.compSize,
+    this.centerLines = false,
+    this.previewScale = 1,
+  });
 
   final GuidesSpec guides;
   final Size compSize;
+  final bool centerLines;
+  final double previewScale;
 
   @override
   void paint(Canvas canvas, Size size) {
     final w = compSize.width;
     final h = compSize.height;
+    if (centerLines) {
+      final paint = Paint()
+        ..color = const Color(0x99FF6B6B)
+        ..strokeWidth = 1 / math.max(previewScale, .001);
+      canvas.drawLine(Offset(w / 2, 0), Offset(w / 2, h), paint);
+      canvas.drawLine(Offset(0, h / 2), Offset(w, h / 2), paint);
+    }
 
     // Grade de layout.
     if (guides.columns > 0) {
@@ -920,7 +967,10 @@ class _GuidesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GuidesPainter old) =>
-      old.guides != guides || old.compSize != compSize;
+      old.guides != guides ||
+      old.compSize != compSize ||
+      old.centerLines != centerLines ||
+      old.previewScale != previewScale;
 }
 
 /// Estado do portao de recomposicao — um por app (ha um preview). Vive
@@ -1063,45 +1113,45 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
     return ValueListenableBuilder<bool>(
       valueListenable: PlaybackController.tocandoAgora,
       builder: (context, _, _) => ValueListenableBuilder<Duration>(
-      valueListenable: time,
-      builder: (context, t, _) {
-        if (exporting) {
-          return Stack(
-            clipBehavior: Clip.none,
-            children: _buildLayers(
-              project,
-              project.layers,
-              t,
-              resolveLinks: true,
-            ),
+        valueListenable: time,
+        builder: (context, t, _) {
+          if (exporting) {
+            return Stack(
+              clipBehavior: Clip.none,
+              children: _buildLayers(
+                project,
+                project.layers,
+                t,
+                resolveLinks: true,
+              ),
+            );
+          }
+          // MARCHA (PR-G1): o classificador e ESTRUTURAL — roda quando a
+          // cena muda (identidade do projeto), nunca por quadro.
+          //
+          // O QUE SAIU DAQUI, E POR QUE: existia um cache que reusava a
+          // arvore composta enquanto "nada parecesse evoluir no tempo".
+          // Decidir isso exige manter a lista de tudo que varia com o
+          // tempo, e essa lista nunca fica completa — ficaram de fora os
+          // efeitos com fase propria, o rastreio, o pulso na batida, o
+          // corte de camera. E o preco do erro e o pior que existe: o
+          // preview congela, e sem preview vivo nao da para animar, que e
+          // para o que o aplicativo serve. Montar a arvore e barato;
+          // congelar o preview nao tem preco que pague.
+          if (!identical(project, _gate.project)) {
+            _gate.project = project;
+            _gate.decision = classifyGear(project);
+            PreviewStats.setGear(_gate.decision!);
+          }
+          final kids = _buildLayers(
+            project,
+            project.layers,
+            t,
+            resolveLinks: true,
           );
-        }
-        // MARCHA (PR-G1): o classificador e ESTRUTURAL — roda quando a
-        // cena muda (identidade do projeto), nunca por quadro.
-        //
-        // O QUE SAIU DAQUI, E POR QUE: existia um cache que reusava a
-        // arvore composta enquanto "nada parecesse evoluir no tempo".
-        // Decidir isso exige manter a lista de tudo que varia com o
-        // tempo, e essa lista nunca fica completa — ficaram de fora os
-        // efeitos com fase propria, o rastreio, o pulso na batida, o
-        // corte de camera. E o preco do erro e o pior que existe: o
-        // preview congela, e sem preview vivo nao da para animar, que e
-        // para o que o aplicativo serve. Montar a arvore e barato;
-        // congelar o preview nao tem preco que pague.
-        if (!identical(project, _gate.project)) {
-          _gate.project = project;
-          _gate.decision = classifyGear(project);
-          PreviewStats.setGear(_gate.decision!);
-        }
-        final kids = _buildLayers(
-          project,
-          project.layers,
-          t,
-          resolveLinks: true,
-        );
-        PreviewStats.tick(kids.length);
-        return Stack(clipBehavior: Clip.none, children: kids);
-      },
+          PreviewStats.tick(kids.length);
+          return Stack(clipBehavior: Clip.none, children: kids);
+        },
       ),
     );
   }

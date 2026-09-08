@@ -24,57 +24,87 @@ void main() {
     }
   });
 
-  testWidgets('o painel tem um Voltar com alvo de toque, e ele volta', (tester) async {
+  testWidgets('o painel tem um Voltar com alvo de toque, e ele volta', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
     final id = c.read(editorControllerProvider).layers.first.id;
     c.read(selectedLayerProvider.notifier).state = id;
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mover e\ntransf.'));
     await tester.pumpAndSettle();
-    expect(find.text('Girar'), findsOneWidget, reason: 'o painel abriu');
+    expect(find.byTooltip('Girar'), findsOneWidget, reason: 'o painel abriu');
 
     final voltar = find.byKey(const ValueKey('painel-voltar'));
     expect(voltar, findsOneWidget);
     await tester.tap(voltar);
     await tester.pumpAndSettle();
-    expect(find.text('Girar'), findsNothing, reason: 'o painel fechou');
-    expect(find.text('Mover e\ntransf.'), findsOneWidget, reason: 'as ferramentas voltaram');
+    expect(find.byTooltip('Girar'), findsNothing, reason: 'o painel fechou');
+    expect(
+      find.text('Mover e\ntransf.'),
+      findsOneWidget,
+      reason: 'as ferramentas voltaram',
+    );
   });
 
-  testWidgets('tocar na barra da camada com um painel aberto volta as ferramentas', (tester) async {
-    final c = await openEditor(tester);
-    final id = c.read(editorControllerProvider).layers.first.id;
-    c.read(selectedLayerProvider.notifier).state = id;
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mover e\ntransf.'));
-    await tester.pumpAndSettle();
-    expect(find.text('Girar'), findsOneWidget);
+  testWidgets(
+    'tocar na barra da camada com um painel aberto volta as ferramentas',
+    (tester) async {
+      final c = await openEditor(tester);
+      final id = c.read(editorControllerProvider).layers.first.id;
+      c.read(selectedLayerProvider.notifier).state = id;
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mover e\ntransf.'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Girar'), findsOneWidget);
 
-    // A barra fica no comeco da linha (a camada comeca em 0 s).
-    final linha = tester.getRect(find.byKey(ValueKey(id)));
-    await tester.tapAt(Offset(linha.left + 30, linha.top + kAmBarHeight / 2));
-    await tester.pumpAndSettle();
-    expect(find.text('Girar'), findsNothing, reason: 'o toque na barra fechou o painel');
-    expect(c.read(selectedLayerProvider), id, reason: 'a camada continua selecionada');
-    expect(find.text('Mover e\ntransf.'), findsOneWidget);
-  });
+      // A barra fica no comeco da linha (a camada comeca em 0 s).
+      final linha = tester.getRect(find.byKey(ValueKey(id)));
+      await tester.tapAt(Offset(linha.left + 30, linha.top + kAmBarHeight / 2));
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('Girar'),
+        findsNothing,
+        reason: 'o toque na barra fechou o painel',
+      );
+      expect(
+        c.read(selectedLayerProvider),
+        id,
+        reason: 'a camada continua selecionada',
+      );
+      expect(find.text('Mover e\ntransf.'), findsOneWidget);
+    },
+  );
 
-  testWidgets('tocar no vazio da timeline tira a selecao e fecha as ferramentas', (tester) async {
-    final c = await openEditor(tester);
-    final id = c.read(editorControllerProvider).layers.first.id;
-    c.read(selectedLayerProvider.notifier).state = id;
-    await tester.pumpAndSettle();
-    expect(find.text('Mover e\ntransf.'), findsOneWidget);
+  testWidgets(
+    'tocar no vazio da timeline tira a selecao e fecha as ferramentas',
+    (tester) async {
+      final c = await openEditor(tester);
+      final id = c.read(editorControllerProvider).layers.first.id;
+      c.read(selectedLayerProvider.notifier).state = id;
+      await tester.pumpAndSettle();
+      expect(find.text('Mover e\ntransf.'), findsOneWidget);
 
-    // A faixa de baixo da linha, fora da barra (a barra tem 30 dos 38 px).
-    final linha = tester.getRect(find.byKey(ValueKey(id)));
-    await tester.tapAt(Offset(linha.left + 30, linha.top + kAmRowHeight - 3));
-    await tester.pumpAndSettle();
-    expect(c.read(selectedLayerProvider), isNull, reason: 'o vazio tirou a selecao');
-    expect(find.text('Mover e\ntransf.'), findsNothing, reason: 'sem selecao, sem ferramentas');
-  });
+      // A faixa de baixo da linha, fora da barra (a barra tem 30 dos 38 px).
+      final linha = tester.getRect(find.byKey(ValueKey(id)));
+      await tester.tapAt(Offset(linha.left + 30, linha.top + kAmRowHeight - 3));
+      await tester.pumpAndSettle();
+      expect(
+        c.read(selectedLayerProvider),
+        isNull,
+        reason: 'o vazio tirou a selecao',
+      );
+      expect(
+        find.text('Mover e\ntransf.'),
+        findsNothing,
+        reason: 'sem selecao, sem ferramentas',
+      );
+    },
+  );
 
-  testWidgets('arrastar a barra selecionada para cima sobe a camada na pilha', (tester) async {
+  testWidgets('arrastar a barra selecionada para cima sobe a camada na pilha', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
     final camadas = c.read(editorControllerProvider).layers;
     expect(camadas.length, greaterThanOrEqualTo(2));
@@ -98,8 +128,11 @@ void main() {
     }
     await dedo.up();
     await tester.pumpAndSettle();
-    expect(c.read(editorControllerProvider).layers.first.id, deBaixo,
-        reason: 'a camada de baixo virou a de cima');
+    expect(
+      c.read(editorControllerProvider).layers.first.id,
+      deBaixo,
+      reason: 'a camada de baixo virou a de cima',
+    );
 
     // E para baixo, de volta.
     final linhaNova = tester.getRect(find.byKey(ValueKey(deBaixo)));
@@ -115,7 +148,9 @@ void main() {
     expect(c.read(editorControllerProvider).layers[1].id, deBaixo);
   });
 
-  testWidgets('o painel de mescla diz com o que a mescla conta', (tester) async {
+  testWidgets('o painel de mescla diz com o que a mescla conta', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
     final id = c.read(editorControllerProvider).layers.first.id;
     c.read(selectedLayerProvider.notifier).state = id;

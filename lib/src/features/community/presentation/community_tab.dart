@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
@@ -12,6 +13,11 @@ import 'package:video_player/video_player.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/snack.dart';
 import '../../about/presentation/report_sheet.dart' show AureaAutor;
+import '../../editor/application/editor_controller.dart';
+import '../../editor/domain/template_pack.dart';
+import '../../editor/domain/video_project.dart';
+import '../../editor/presentation/editor_screen.dart';
+import '../../projects/application/projects_controller.dart';
 import '../application/comunidade_service.dart';
 import '../application/conta_da_comunidade.dart';
 import '../domain/moderacao.dart';
@@ -35,7 +41,7 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
   List<PostDaComunidade> _posts = const [];
   bool _carregando = true;
 
-  ComunidadeService get _s => ComunidadeService.instance;
+  ComunidadeService get _s => ref.read(comunidadeServiceProvider);
 
   @override
   void initState() {
@@ -66,7 +72,10 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     return criou == true && ref.read(contaDaComunidadeProvider) != null;
   }
 
-  Future<void> _compor() async {
+  Future<void> _compor({
+    PostDaComunidade? responderA,
+    PostDaComunidade? repostar,
+  }) async {
     if (!await _garantirConta()) return;
     if (!mounted) return;
     final conta = ref.read(contaDaComunidadeProvider)!;
@@ -74,19 +83,75 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _Compositor(conta: conta),
+      builder: (_) => _Compositor(
+        conta: conta,
+        responderA: responderA,
+        repostar: repostar,
+      ),
     );
     if (post == null) return;
-    // GUARDA PRIMEIRO, MANDA DEPOIS.
-    //
-    // Nesta ordem o post nunca se perde: se a rede cair no meio, ele
-    // ficou aqui e da para tentar de novo. Na ordem contraria, uma falha
-    // apagaria o que a pessoa escreveu.
+    await _publicar(
+      post,
+      respondeA: responderA?.id,
+      repostaDe: repostar?.id,
+    );
+  }
+
+  /// PUBLICA DE VERDADE: guarda aqui, sobe o arquivo, manda o post.
+  ///
+  /// GUARDA PRIMEIRO, MANDA DEPOIS. Nesta ordem o post nunca se perde: se
+  /// a rede cair no meio, ele ficou aqui e da para tentar de novo. Na
+  /// ordem contraria, uma falha apagaria o que a pessoa escreveu.
+  Future<void> _publicar(
+    PostDaComunidade post, {
+    String? respondeA,
+    String? repostaDe,
+  }) async {
+    final conta = ref.read(contaDaComunidadeProvider);
+    if (conta == null) return;
     await _s.publicar(post);
     await _atualizar(daRede: false);
     if (!mounted) return;
+
+    // O ARQUIVO SOBE ANTES DO POST, e nao junto.
+    //
+    // O post e um JSON de alguns kilobytes; a foto tem megabytes. Mandar
+    // os dois na mesma requisicao faria o mural recusar o post inteiro
+    // por causa do tamanho — e obrigaria a escrever tudo de novo.
+    var paraOServidor = post;
+    if (post.imagem != null && post.imagemLocal) {
+      AureaSnack.show(
+        context,
+        post.temProjeto ? 'Enviando o projeto...' : 'Enviando o arquivo...',
+        duration: const Duration(seconds: 20),
+      );
+      final r = await _s.subirArquivo(
+        File(post.imagem!),
+        tipoDoArquivo(post.imagem!, post.tipoDeMidia),
+        conta.codigo,
+      );
+      if (!mounted) return;
+      if (!r.deuCerto) {
+        // O post CONTINUA AQUI como rascunho. Quando o arquivo nao sobe,
+        // publicar so o texto entregaria um post que fala de uma imagem
+        // que ninguem vai ver.
+        AureaSnack.show(
+          context,
+          '${r.erro} O post ficou guardado — dá para tentar de novo.',
+          duration: const Duration(seconds: 7),
+        );
+        return;
+      }
+      paraOServidor = post.copyWith(imagem: r.url, imagemLocal: false);
+    }
+
     AureaSnack.show(context, 'Publicando...');
-    final erro = await _s.enviar(post, conta.id);
+    final erro = await _s.enviar(
+      paraOServidor,
+      conta.codigo,
+      respondeA: respondeA,
+      repostaDe: repostaDe,
+    );
     if (!mounted) return;
     if (erro != null) {
       // O servidor recusou (ofensa, dado pessoal, limite) ou nao
@@ -100,9 +165,62 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     if (!mounted) return;
     AureaSnack.show(
       context,
-      'No mural. Pode levar um minuto para aparecer para os outros.',
+      respondeA != null
+          ? 'Respondido.'
+          : 'No mural. Pode levar um minuto para aparecer para os outros.',
       duration: const Duration(seconds: 5),
     );
+  }
+
+  /// REPOSTAR sem escrever nada e o caso comum — por isso a folha abre
+  /// com o texto vazio ja valendo como publicacao.
+  Future<void> _repostar(PostDaComunidade post) =>
+      _compor(repostar: post.ehRepost ? (post.original ?? post) : post);
+
+  Future<void> _abrirConversa(PostDaComunidade post) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _Conversa(
+          post: post,
+          aoResponder: () => _compor(responderA: post),
+        ),
+      ),
+    );
+    if (mounted) await _atualizar(daRede: true);
+  }
+
+  /// ABRE UM PROJETO PUBLICADO como projeto novo deste aparelho.
+  ///
+  /// Id novo, sempre. Sem isso, abrir o mesmo projeto do mural duas vezes
+  /// sobrescreveria o que a pessoa fez na primeira — e ela perderia o
+  /// trabalho sem entender por que.
+  Future<void> _abrirProjeto(PostDaComunidade post) async {
+    final url = post.imagem;
+    if (url == null) return;
+    AureaSnack.show(context, 'Baixando o projeto...');
+    final arquivo = await _s.baixarArquivo(url, 'projeto-${post.id}.json');
+    if (!mounted) return;
+    if (arquivo == null) {
+      AureaSnack.show(context, 'Não consegui baixar esse projeto.');
+      return;
+    }
+    TemplatePack? pack;
+    try {
+      pack = TemplatePack.decode(await arquivo.readAsString());
+    } catch (_) {
+      pack = null;
+    }
+    if (!mounted) return;
+    if (pack == null) {
+      AureaSnack.show(context, 'Esse arquivo não é um projeto do Aurea.');
+      return;
+    }
+    final novo = pack.project.copyWith(name: pack.name).comIdNovo();
+    ref.read(projectsControllerProvider.notifier).add(novo);
+    ref.read(editorControllerProvider.notifier).openProject(novo);
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const EditorScreen()));
   }
 
   /// TENTAR DE NOVO um post que ficou para tras.
@@ -115,7 +233,7 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     final conta = ref.read(contaDaComunidadeProvider);
     if (conta == null) return;
     AureaSnack.show(context, 'Publicando...');
-    final erro = await _s.enviar(post, conta.id);
+    final erro = await _s.enviar(post, conta.codigo);
     if (!mounted) return;
     if (erro == null) {
       await _s.marcarEnviado(post.id);
@@ -179,9 +297,45 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     AureaSnack.show(context, 'Abrindo seu app de e-mail');
   }
 
+  /// APAGA nos dois lugares: aqui e, se ja tiver entrado, no mural.
+  ///
+  /// A copia local sai primeiro. Se a rede falhar, o post ja sumiu da
+  /// tela de quem pediu para apagar — que e o que ele espera — e o mural
+  /// continua com a versao dele ate a proxima tentativa.
   Future<void> _apagar(PostDaComunidade post) async {
     await _s.apagar(post.id);
     await _atualizar(daRede: false);
+    final conta = ref.read(contaDaComunidadeProvider);
+    if (conta == null || post.estado == EstadoDoPost.rascunho) return;
+    final erro = await _s.apagarNoServidor(post.id, conta.codigo);
+    if (!mounted) return;
+    if (erro != null) {
+      AureaSnack.show(context, 'Saiu daqui, mas não do mural: $erro');
+      return;
+    }
+    await _atualizar(daRede: true);
+  }
+
+  /// Apagar um post que ja esta no mural, tocado no cartao de outra tela.
+  Future<void> _apagarPublicado(PostDaComunidade post) async {
+    final conta = ref.read(contaDaComunidadeProvider);
+    if (conta == null) return;
+    final erro = await _s.apagarNoServidor(post.id, conta.codigo);
+    if (!mounted) return;
+    if (erro != null) {
+      AureaSnack.show(context, erro);
+      return;
+    }
+    await _atualizar(daRede: true);
+    if (mounted) AureaSnack.show(context, 'Apagado.');
+  }
+
+  /// O post e meu quando a conta deste aparelho o assinou. O `autorId`
+  /// vem do servidor: comparar apelidos deixaria qualquer um apagar o
+  /// post de outro so trocando o proprio nome.
+  bool _euEscrevi(PostDaComunidade post) {
+    final conta = ref.read(contaDaComunidadeProvider);
+    return conta != null && post.autorId != null && post.autorId == conta.id;
   }
 
   @override
@@ -254,7 +408,19 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
                     onEnviar: p.estado == EstadoDoPost.rascunho
                         ? () => _reenviar(p)
                         : null,
-                    onApagar: p.meu ? () => _apagar(p) : null,
+                    // Rascunho so apaga daqui; publicado tambem sai do
+                    // mural, e so quem escreveu ve o botao.
+                    onApagar: p.meu
+                        ? () => _apagar(p)
+                        : (_euEscrevi(p) ? () => _apagarPublicado(p) : null),
+                    // O que ainda nao entrou no mural nao pode receber
+                    // resposta nem repost: o post nao existe la.
+                    onResponder: p.meu ? null : () => _compor(responderA: p),
+                    onRepostar: p.meu ? null : () => _repostar(p),
+                    onAbrir: p.meu ? null : () => _abrirConversa(p),
+                    onProjeto: p.temProjeto && !p.imagemLocal
+                        ? () => _abrirProjeto(p)
+                        : null,
                   ),
                 ),
           ],
@@ -386,14 +552,42 @@ class _BotaoPublicar extends StatelessWidget {
 }
 
 class _Cartao extends StatelessWidget {
-  const _Cartao({required this.post, this.onEnviar, this.onApagar});
+  const _Cartao({
+    required this.post,
+    this.onEnviar,
+    this.onApagar,
+    this.onResponder,
+    this.onRepostar,
+    this.onAbrir,
+    this.onProjeto,
+    this.dentroDaConversa = false,
+  });
 
   final PostDaComunidade post;
   final VoidCallback? onEnviar;
   final VoidCallback? onApagar;
+  final VoidCallback? onResponder;
+  final VoidCallback? onRepostar;
+  final VoidCallback? onAbrir;
+  final VoidCallback? onProjeto;
+
+  /// Na conversa o cartao ja esta aberto: repetir "abrir" ali levaria a
+  /// mesma tela de novo, empilhada.
+  final bool dentroDaConversa;
 
   @override
   Widget build(BuildContext context) {
+    final corpo = _corpo(context);
+    // O CARTAO INTEIRO ABRE A CONVERSA, e nao so um botao pequeno. Num
+    // mural, tocar no post e o gesto que todo mundo ja faz.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onAbrir,
+      child: corpo,
+    );
+  }
+
+  Widget _corpo(BuildContext context) {
     return Container(
       key: ValueKey('post-${post.id}'),
       decoration: BoxDecoration(
@@ -404,6 +598,28 @@ class _Cartao extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (post.ehRepost)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.arrow_2_squarepath,
+                    size: 13,
+                    color: AppColors.muted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Repostou',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Row(
@@ -438,18 +654,32 @@ class _Cartao extends StatelessWidget {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-            child: Text(
-              post.texto,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                color: AppColors.onDark,
+          // No repost sem comentario nao ha texto: um espaco vazio de
+          // doze pixels entre o nome e a citacao so faria o cartao
+          // parecer quebrado.
+          if (post.texto.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              child: Text(
+                post.texto,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: AppColors.onDark,
+                ),
               ),
+            )
+          else
+            const SizedBox(height: 10),
+          if (post.original != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: _Citacao(original: post.original!),
             ),
-          ),
-          if (post.imagem != null) _Midia(post: post),
+          if (post.temProjeto)
+            _CartaoDeProjeto(post: post, onAbrir: onProjeto)
+          else if (post.imagem != null)
+            _Midia(post: post),
           if (post.etiquetas.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -530,10 +760,342 @@ class _Cartao extends StatelessWidget {
                 ],
               ),
             ),
+          if (onResponder != null || onRepostar != null)
+            _BarraDoCartao(
+              post: post,
+              onResponder: onResponder,
+              onRepostar: onRepostar,
+              onAbrir: dentroDaConversa ? null : onAbrir,
+            ),
         ],
       ),
     );
   }
+}
+
+/// A BARRA DE BAIXO: responder, repostar, e quantas respostas ha.
+class _BarraDoCartao extends StatelessWidget {
+  const _BarraDoCartao({
+    required this.post,
+    this.onResponder,
+    this.onRepostar,
+    this.onAbrir,
+  });
+
+  final PostDaComunidade post;
+  final VoidCallback? onResponder;
+  final VoidCallback? onRepostar;
+  final VoidCallback? onAbrir;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(6, 4, 6, 6),
+    child: Row(
+      children: [
+        if (onResponder != null)
+          Expanded(
+            child: _BotaoDaBarra(
+              chave: 'post-responder-${post.id}',
+              icone: CupertinoIcons.bubble_left,
+              rotulo: 'Responder',
+              onTap: onResponder!,
+            ),
+          ),
+        if (onRepostar != null)
+          Expanded(
+            child: _BotaoDaBarra(
+              chave: 'post-repostar-${post.id}',
+              icone: CupertinoIcons.arrow_2_squarepath,
+              rotulo: 'Repostar',
+              onTap: onRepostar!,
+            ),
+          ),
+        // NAO HA BOTAO DE ABRIR. O cartao inteiro ja abre a conversa, e
+        // uma seta ao lado de "Responder" so ensinaria a tocar no lugar
+        // menor para fazer o que o toque grande ja faz.
+      ],
+    ),
+  );
+}
+
+class _BotaoDaBarra extends StatelessWidget {
+  const _BotaoDaBarra({
+    required this.chave,
+    required this.icone,
+    required this.rotulo,
+    required this.onTap,
+  });
+
+  final String chave;
+  final IconData icone;
+  final String rotulo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    key: ValueKey(chave),
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Padding(
+      // ALVO DE 44 px de altura, mesmo com o icone pequeno. Um botao de
+      // barra com a altura do texto so acerta quem tem dedo fino.
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icone, size: 16, color: AppColors.muted),
+          const SizedBox(width: 5),
+          // O ROTULO ENCOLHE ANTES DE ESTOURAR. Numa tela estreita, ou
+          // com a fonte do sistema aumentada, "Responder" e "Repostar"
+          // lado a lado nao cabem — e um cartao com a faixa amarela de
+          // overflow e pior do que um rotulo cortado.
+          Flexible(
+            child: Text(
+              rotulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.muted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// O POST CITADO dentro de um repost.
+///
+/// Ele vem GUARDADO no proprio repost, e nao buscado de novo: o original
+/// pode ser antigo demais para estar no feed, ou ter sido apagado. Uma
+/// citacao que some quando o original some nao e uma citacao.
+class _Citacao extends StatelessWidget {
+  const _Citacao({required this.original});
+  final PostDaComunidade original;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: ValueKey('citacao-${original.id}'),
+    decoration: BoxDecoration(
+      color: AppColors.surfaceHigh,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          child: Row(
+            children: [
+              _Avatar(nome: original.autor, raio: 11),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  original.autor,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onDark,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                original.quandoEmPalavras(),
+                style: TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
+            ],
+          ),
+        ),
+        if (original.texto.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+            child: Text(
+              original.texto,
+              maxLines: 6,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: AppColors.onDark,
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 10),
+        if (original.imagem != null && !original.temProjeto)
+          _Midia(post: original),
+      ],
+    ),
+  );
+}
+
+/// UM PROJETO PUBLICADO. O cartao diz o nome e abre como projeto novo.
+class _CartaoDeProjeto extends StatelessWidget {
+  const _CartaoDeProjeto({required this.post, this.onAbrir});
+
+  final PostDaComunidade post;
+  final VoidCallback? onAbrir;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+    child: GestureDetector(
+      key: ValueKey('post-projeto-${post.id}'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onAbrir,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.accentDim,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(CupertinoIcons.cube_box, size: 22, color: AppColors.lime),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    post.nomeDoProjeto ?? 'Projeto do Aurea',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    onAbrir == null
+                        ? 'Anexado — vai subir junto com o post.'
+                        : 'Toque para abrir como um projeto seu.',
+                    style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            if (onAbrir != null)
+              Icon(
+                CupertinoIcons.arrow_down_circle,
+                size: 18,
+                color: AppColors.lime,
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// A CONVERSA: o post em cima, as respostas embaixo.
+///
+/// As respostas SO SAO BUSCADAS AQUI. Traze-las junto com o feed seria
+/// baixar as respostas de duzentos posts para ler as de um.
+class _Conversa extends ConsumerStatefulWidget {
+  const _Conversa({required this.post, required this.aoResponder});
+
+  final PostDaComunidade post;
+  final Future<void> Function() aoResponder;
+
+  @override
+  ConsumerState<_Conversa> createState() => _ConversaState();
+}
+
+class _ConversaState extends ConsumerState<_Conversa> {
+  List<PostDaComunidade> _respostas = const [];
+  bool _carregando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _buscar();
+  }
+
+  Future<void> _buscar() async {
+    if (mounted) setState(() => _carregando = true);
+    final r = await ref
+        .read(comunidadeServiceProvider)
+        .respostas(widget.post.id);
+    if (!mounted) return;
+    setState(() {
+      _respostas = r;
+      _carregando = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.background,
+    appBar: AppBar(
+      backgroundColor: AppColors.background,
+      elevation: 0,
+      title: const Text('Conversa'),
+    ),
+    body: RefreshIndicator(
+      onRefresh: _buscar,
+      color: AppColors.lime,
+      backgroundColor: AppColors.surface,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          _Cartao(
+            post: widget.post,
+            dentroDaConversa: true,
+            onResponder: () async {
+              await widget.aoResponder();
+              await _buscar();
+            },
+          ),
+          const SizedBox(height: 18),
+          Text(
+            _carregando
+                ? 'Carregando as respostas...'
+                : _respostas.isEmpty
+                ? 'Ninguém respondeu ainda. Seja o primeiro.'
+                : '${_respostas.length} '
+                      '${_respostas.length == 1 ? "resposta" : "respostas"}',
+            style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+          ),
+          const SizedBox(height: 12),
+          for (final r in _respostas)
+            Padding(
+              padding: const EdgeInsets.only(left: 14, bottom: 12),
+              child: _Cartao(post: r, dentroDaConversa: true),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// O TIPO DO ARQUIVO PELO NOME. O servidor so aceita o que reconhece, e
+/// e o nome do arquivo escolhido na galeria que diz o que ele e.
+String tipoDoArquivo(String caminho, TipoDeMidia tipo) {
+  final ext = caminho.toLowerCase().split('.').last;
+  return switch (ext) {
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'mp4' => 'video/mp4',
+    'mov' || 'qt' => 'video/quicktime',
+    'json' || 'aurea' => 'application/json',
+    _ => switch (tipo) {
+      TipoDeMidia.video => 'video/mp4',
+      TipoDeMidia.projeto => 'application/json',
+      TipoDeMidia.imagem => 'image/jpeg',
+    },
+  };
 }
 
 /// A MIDIA DO POST: imagem direto, video com play.
@@ -871,6 +1433,9 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
   late final TextEditingController _apelido;
   String? _avatar;
   String? _erro;
+  bool _salvando = false;
+  bool _entrando = false;
+  final _codigo = TextEditingController();
 
   @override
   void initState() {
@@ -883,6 +1448,7 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
   @override
   void dispose() {
     _apelido.dispose();
+    _codigo.dispose();
     super.dispose();
   }
 
@@ -893,6 +1459,7 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
         maxWidth: 512,
       );
       if (x == null) return;
+      if (!mounted) return;
       setState(() => _avatar = x.path);
     } catch (_) {
       if (!mounted) return;
@@ -900,12 +1467,21 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
     }
   }
 
-  void _salvar() {
+  Future<void> _salvar() async {
+    if (_salvando) return;
+    setState(() {
+      _salvando = true;
+      _erro = null;
+    });
     final n = ref.read(contaDaComunidadeProvider.notifier);
     final existe = ref.read(contaDaComunidadeProvider) != null;
-    final erro = existe
+    final erro = await (_entrando && !existe
+        ? n.entrar(_codigo.text)
+        : existe
         ? n.atualizar(apelido: _apelido.text, avatar: _avatar)
-        : n.criar(_apelido.text, avatar: _avatar);
+        : n.criar(_apelido.text, avatar: _avatar));
+    if (!mounted) return;
+    setState(() => _salvando = false);
     if (erro != null) {
       setState(() => _erro = erro);
       return;
@@ -917,64 +1493,74 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
   Widget build(BuildContext context) {
     final conta = ref.watch(contaDaComunidadeProvider);
     return _Folha(
-      titulo: conta == null ? 'Criar minha conta' : 'Minha conta',
+      titulo: conta == null
+          ? (_entrando ? 'Entrar na minha conta' : 'Criar minha conta')
+          : 'Minha conta',
       subtitulo: conta == null
-          ? 'É uma conta local: sem senha e sem e-mail. Serve para o '
-                'mural saber quem falou.'
+          ? 'Sua conta fica no mural. Guarde o código de acesso para '
+                'entrar em outro aparelho.'
           : 'Trocar o apelido não muda os posts que você já publicou.',
       filhos: [
-        Row(
-          children: [
-            GestureDetector(
-              key: const ValueKey('conta-foto'),
-              onTap: _escolherFoto,
-              child: Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  _Avatar(
-                    nome: _apelido.text,
-                    arquivo: _avatar,
-                    raio: 30,
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: AppColors.lime,
-                      shape: BoxShape.circle,
+        if (_entrando && conta == null)
+          TextField(
+            key: const ValueKey('conta-codigo'),
+            controller: _codigo,
+            autocorrect: false,
+            enableSuggestions: false,
+            obscureText: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _salvar(),
+            decoration: const InputDecoration(labelText: 'Código de acesso'),
+          )
+        else
+          Row(
+            children: [
+              GestureDetector(
+                key: const ValueKey('conta-foto'),
+                onTap: _escolherFoto,
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    _Avatar(nome: _apelido.text, arquivo: _avatar, raio: 30),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: AppColors.lime,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.camera_fill,
+                        size: 12,
+                        color: Color(0xFF0B0E12),
+                      ),
                     ),
-                    child: const Icon(
-                      CupertinoIcons.camera_fill,
-                      size: 12,
-                      color: Color(0xFF0B0E12),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: TextField(
-                key: const ValueKey('conta-apelido'),
-                controller: _apelido,
-                maxLength: 20,
-                autofocus: conta == null,
-                onChanged: (_) => setState(() => _erro = null),
-                style: TextStyle(fontSize: 15, color: AppColors.onDark),
-                decoration: InputDecoration(
-                  hintText: 'Seu apelido no mural',
-                  hintStyle: TextStyle(color: AppColors.muted),
-                  counterText: '',
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+              const SizedBox(width: 14),
+              Expanded(
+                child: TextField(
+                  key: const ValueKey('conta-apelido'),
+                  controller: _apelido,
+                  maxLength: 20,
+                  autofocus: conta == null,
+                  onChanged: (_) => setState(() => _erro = null),
+                  style: TextStyle(fontSize: 15, color: AppColors.onDark),
+                  decoration: InputDecoration(
+                    hintText: 'Seu apelido no mural',
+                    hintStyle: TextStyle(color: AppColors.muted),
+                    counterText: '',
+                    filled: true,
+                    fillColor: AppColors.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         if (_erro != null) ...[
           const SizedBox(height: 10),
           _Aviso(
@@ -984,6 +1570,35 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
           ),
         ],
         const SizedBox(height: 12),
+        if (conta == null)
+          TextButton(
+            key: const ValueKey('conta-alternar-entrada'),
+            onPressed: _salvando
+                ? null
+                : () => setState(() {
+                    _entrando = !_entrando;
+                    _erro = null;
+                  }),
+            child: Text(
+              _entrando
+                  ? 'Criar uma nova conta'
+                  : 'Já tenho um código de acesso',
+            ),
+          ),
+        if (conta != null)
+          TextButton.icon(
+            key: const ValueKey('conta-copiar-codigo'),
+            icon: const Icon(CupertinoIcons.doc_on_doc),
+            label: const Text('Copiar meu código de acesso'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: conta.codigo));
+              if (!context.mounted) return;
+              AureaSnack.show(
+                context,
+                'Código copiado. Guarde para entrar novamente.',
+              );
+            },
+          ),
         Row(
           children: [
             if (conta != null)
@@ -991,7 +1606,7 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
                 child: _AcaoDoCartao(
                   chave: 'conta-sair',
                   icone: CupertinoIcons.person_badge_minus,
-                  rotulo: 'Apagar conta',
+                  rotulo: 'Sair da conta',
                   onTap: () {
                     ref.read(contaDaComunidadeProvider.notifier).sair();
                     Navigator.of(context).pop(false);
@@ -1003,7 +1618,11 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
               child: _AcaoDoCartao(
                 chave: 'conta-salvar',
                 icone: CupertinoIcons.check_mark,
-                rotulo: conta == null ? 'Criar conta' : 'Salvar',
+                rotulo: _salvando
+                    ? 'Salvando…'
+                    : conta == null
+                    ? (_entrando ? 'Entrar' : 'Criar conta')
+                    : 'Salvar',
                 destaque: true,
                 onTap: _salvar,
               ),
@@ -1017,22 +1636,32 @@ class _FolhaDaContaState extends ConsumerState<_FolhaDaConta> {
 
 // -------------------------------------------------------- o compositor
 
-class _Compositor extends StatefulWidget {
-  const _Compositor({required this.conta});
+class _Compositor extends ConsumerStatefulWidget {
+  const _Compositor({required this.conta, this.responderA, this.repostar});
+
   final ContaDaComunidade conta;
 
+  /// A quem isto responde, ou o que isto reposta. No maximo um dos dois:
+  /// responder a um post repostando outro nao quer dizer nada.
+  final PostDaComunidade? responderA;
+  final PostDaComunidade? repostar;
+
   @override
-  State<_Compositor> createState() => _CompositorState();
+  ConsumerState<_Compositor> createState() => _CompositorState();
 }
 
-class _CompositorState extends State<_Compositor> {
+class _CompositorState extends ConsumerState<_Compositor> {
   final _texto = TextEditingController();
   final _etiquetas = TextEditingController();
   String? _midia;
   TipoDeMidia _tipo = TipoDeMidia.imagem;
   Duration? _duracao;
+  String? _nomeDoProjeto;
   String? _erro;
   bool _apenasAviso = false;
+
+  /// No repost o texto e opcional — repostar sem comentar e o uso normal.
+  bool get _repostando => widget.repostar != null;
 
   @override
   void dispose() {
@@ -1041,17 +1670,67 @@ class _CompositorState extends State<_Compositor> {
     super.dispose();
   }
 
+  /// ANEXAR UM PROJETO: escolhe da lista e empacota como template.
+  ///
+  /// O que sobe e o PROJETO, e nao os videos e as fotos que ele usa —
+  /// esses ficam no aparelho de quem fez. Quem abrir recebe as camadas,
+  /// as animacoes e a cena 3D, e os lugares onde havia midia aparecem
+  /// vazios. Dizer isso antes evita a pergunta depois.
+  Future<void> _anexarProjeto() async {
+    final projetos = ref.read(projectsControllerProvider);
+    if (projetos.isEmpty) {
+      setState(() => _erro = 'Você ainda não tem nenhum projeto para publicar.');
+      return;
+    }
+    final escolhido = await showModalBottomSheet<VideoProject>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EscolherProjeto(projetos: projetos),
+    );
+    if (escolhido == null || !mounted) return;
+    try {
+      final pacote = TemplatePack(
+        name: escolhido.name,
+        author: widget.conta.apelido,
+        project: escolhido,
+      );
+      final pasta = await getTemporaryDirectory();
+      final arquivo = File(
+        '${pasta.path}/aurea-${escolhido.id}-para-o-mural.json',
+      );
+      await arquivo.writeAsString(pacote.encode(), flush: true);
+      if (!mounted) return;
+      setState(() {
+        _midia = arquivo.path;
+        _tipo = TipoDeMidia.projeto;
+        _nomeDoProjeto = escolhido.name;
+        _duracao = null;
+        _erro = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _erro = 'Não consegui empacotar esse projeto.');
+    }
+  }
+
   Future<void> _escolherImagem() async {
     try {
+      // COMPRIMIDA AQUI, e nao no servidor. Uma foto de celular sai com
+      // oito megabytes; o mural aceita dois. Reduzir antes de sair do
+      // aparelho poupa a internet de quem publica e faz caber.
       final x = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         maxWidth: 1600,
+        imageQuality: 82,
       );
       if (x == null) return;
+      if (!mounted) return;
       setState(() {
         _midia = x.path;
         _tipo = TipoDeMidia.imagem;
         _duracao = null;
+        _nomeDoProjeto = null;
       });
     } catch (_) {
       if (!mounted) return;
@@ -1076,7 +1755,8 @@ class _CompositorState extends State<_Compositor> {
       if (duracao != null && duracao.inSeconds > 120) {
         if (!mounted) return;
         setState(
-          () => _erro = 'Vídeo de até 2 minutos no mural. '
+          () => _erro =
+              'Vídeo de até 2 minutos no mural. '
               'Corte o trecho que interessa e anexe de novo.',
         );
         return;
@@ -1086,6 +1766,7 @@ class _CompositorState extends State<_Compositor> {
         _midia = x.path;
         _tipo = TipoDeMidia.video;
         _duracao = duracao;
+        _nomeDoProjeto = null;
         _erro = null;
       });
     } catch (_) {
@@ -1095,6 +1776,12 @@ class _CompositorState extends State<_Compositor> {
   }
 
   void _pronto() {
+    // REPOST SEM COMENTARIO passa direto pelo filtro de texto: nao ha
+    // texto para filtrar, e o original ja passou pelo dele.
+    if (_repostando && _texto.text.trim().isEmpty) {
+      _entregar();
+      return;
+    }
     final veredito = moderarTexto(_texto.text);
     // BLOQUEIO E AVISO SAO COISAS DIFERENTES na tela: um impede, o outro
     // so recomenda. Tratar os dois igual faria a pessoa achar que o app
@@ -1114,16 +1801,22 @@ class _CompositorState extends State<_Compositor> {
       });
       return;
     }
+    _entregar();
+  }
+
+  void _entregar() {
     Navigator.of(context).pop(
       PostDaComunidade(
         id: const Uuid().v4(),
         autor: widget.conta.apelido,
+        autorId: widget.conta.id,
         texto: _texto.text.trim(),
         quando: DateTime.now(),
         imagem: _midia,
         imagemLocal: _midia != null,
         tipoDeMidia: _tipo,
         duracaoDaMidia: _duracao,
+        nomeDoProjeto: _nomeDoProjeto,
         etiquetas: [
           for (final e in _etiquetas.text.split(RegExp(r'[,\s]+')))
             if (e.trim().isNotEmpty) e.trim().replaceAll('#', ''),
@@ -1135,10 +1828,23 @@ class _CompositorState extends State<_Compositor> {
 
   @override
   Widget build(BuildContext context) {
+    final citado = widget.repostar ?? widget.responderA;
     return _Folha(
-      titulo: 'Publicar no mural',
-      subtitulo: 'Assinado como ${widget.conta.apelido}.',
+      titulo: _repostando
+          ? 'Repostar'
+          : widget.responderA != null
+          ? 'Responder'
+          : 'Publicar no mural',
+      subtitulo: _repostando
+          ? 'Comente se quiser — dá para repostar sem escrever nada.'
+          : widget.responderA != null
+          ? 'Respondendo ${widget.responderA!.autor}.'
+          : 'Assinado como ${widget.conta.apelido}.',
       filhos: [
+        if (citado != null) ...[
+          _Citacao(original: citado),
+          const SizedBox(height: 12),
+        ],
         TextField(
           key: const ValueKey('comunidade-texto'),
           controller: _texto,
@@ -1148,7 +1854,11 @@ class _CompositorState extends State<_Compositor> {
           onChanged: (_) => setState(() => _erro = null),
           style: TextStyle(fontSize: 14, color: AppColors.onDark),
           decoration: InputDecoration(
-            hintText: 'O que você fez no Aurea?',
+            hintText: _repostando
+                ? 'Comentar (opcional)'
+                : widget.responderA != null
+                ? 'Sua resposta'
+                : 'O que você fez no Aurea?',
             hintStyle: TextStyle(color: AppColors.muted),
             filled: true,
             fillColor: AppColors.surface,
@@ -1180,12 +1890,27 @@ class _CompositorState extends State<_Compositor> {
             icone: _apenasAviso
                 ? CupertinoIcons.info_circle
                 : CupertinoIcons.exclamationmark_triangle,
-            texto: _apenasAviso ? '$_erro Toque de novo para publicar assim.'
+            texto: _apenasAviso
+                ? '$_erro Toque de novo para publicar assim.'
                 : _erro!,
             alerta: !_apenasAviso,
           ),
         ],
-        if (_midia != null) ...[
+        if (_midia != null && _tipo == TipoDeMidia.projeto) ...[
+          const SizedBox(height: 10),
+          _CartaoDeProjeto(
+            post: PostDaComunidade(
+              id: 'previa',
+              autor: widget.conta.apelido,
+              texto: '',
+              quando: DateTime.now(),
+              imagem: _midia,
+              imagemLocal: true,
+              tipoDeMidia: TipoDeMidia.projeto,
+              nomeDoProjeto: _nomeDoProjeto,
+            ),
+          ),
+        ] else if (_midia != null) ...[
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
@@ -1253,18 +1978,92 @@ class _CompositorState extends State<_Compositor> {
             const SizedBox(width: 8),
             Expanded(
               child: _AcaoDoCartao(
-                chave: 'comunidade-guardar',
-                icone: CupertinoIcons.check_mark,
-                rotulo: 'Pronto',
-                destaque: true,
-                onTap: _pronto,
+                chave: 'comunidade-projeto',
+                icone: CupertinoIcons.cube_box,
+                rotulo: 'Projeto',
+                onTap: _anexarProjeto,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        // PUBLICAR SOZINHO NA LINHA. Ele estava espremido entre os
+        // anexos, do mesmo tamanho deles — a acao principal da folha
+        // parecia mais um anexo.
+        SizedBox(
+          width: double.infinity,
+          child: _AcaoDoCartao(
+            chave: 'comunidade-guardar',
+            icone: CupertinoIcons.check_mark,
+            rotulo: _repostando
+                ? 'Repostar'
+                : widget.responderA != null
+                ? 'Responder'
+                : 'Publicar',
+            destaque: true,
+            onTap: _pronto,
+          ),
+        ),
       ],
     );
   }
+}
+
+/// A LISTA DE PROJETOS na hora de anexar um ao post.
+class _EscolherProjeto extends StatelessWidget {
+  const _EscolherProjeto({required this.projetos});
+  final List<VideoProject> projetos;
+
+  @override
+  Widget build(BuildContext context) => _Folha(
+    titulo: 'Publicar um projeto',
+    subtitulo:
+        'Vai o projeto: camadas, animações e cena 3D. Os vídeos e as '
+        'fotos que você importou ficam no seu aparelho.',
+    filhos: [
+      for (final p in projetos.take(60))
+        GestureDetector(
+          key: ValueKey('escolher-projeto-${p.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(p),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.cube_box,
+                  size: 18,
+                  color: AppColors.muted,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    p.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${p.layers.length} '
+                  '${p.layers.length == 1 ? "camada" : "camadas"}',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 /// A casca das folhas desta aba: alca, titulo, subtitulo e o conteudo.

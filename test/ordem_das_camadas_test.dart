@@ -1,5 +1,4 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -81,8 +80,8 @@ void main() {
     c.read(selectedLayerProvider.notifier).state = deBaixo;
     await tester.pumpAndSettle();
 
-    final frente = find.byIcon(CupertinoIcons.arrow_up_to_line);
-    final tras = find.byIcon(CupertinoIcons.arrow_down_to_line);
+    final frente = find.byTooltip('Subir camada');
+    final tras = find.byTooltip('Descer camada');
     expect(frente, findsOneWidget, reason: 'o botao de trazer para frente');
     expect(tras, findsOneWidget, reason: 'o botao de enviar para tras');
 

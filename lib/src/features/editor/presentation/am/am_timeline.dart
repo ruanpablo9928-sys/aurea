@@ -394,9 +394,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       _revealedSelection = selectedId;
       _revealedKeyCount = keyCount;
       _revealedSingleLayer = widget.singleLayerId;
-      final index = trilhas.indexWhere(
-        (t) => t.any((l) => l.id == selectedId),
-      );
+      final index = trilhas.indexWhere((t) => t.any((l) => l.id == selectedId));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             !_rowsScroll.hasClients ||
@@ -429,399 +427,404 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
         }
       },
       child: SizedBox(
-      height: widget.height,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final pad = constraints.maxWidth / 2;
-          return GestureDetector(
-            onScaleStart: (d) {
-              _ppsAtGestureStart = _pps;
-              _scrollAtGestureStart = _scroll.hasClients ? _scroll.offset : 0;
-              _focalAtGestureStart = d.localFocalPoint.dx;
-            },
-            onScaleUpdate: (d) {
-              if (d.pointerCount < 2) return;
-              setState(() {
-                // Zoom ancorado no CENTROIDE da pinca (AUREA §3.1-5):
-                // o conteudo sob os dedos fica sob os dedos.
-                final newPps = (_ppsAtGestureStart * d.scale).clamp(
-                  16.0,
-                  400.0,
-                );
-                final k = newPps / _ppsAtGestureStart;
-                final contentAtFocal =
-                    _scrollAtGestureStart + (_focalAtGestureStart - pad);
-                final newOffset =
-                    contentAtFocal * k - (_focalAtGestureStart - pad);
-                _pps = newPps;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scroll.hasClients) {
-                    // Sem suprimir o seek: o tempo sob o playhead central
-                    // continua verdadeiro durante o zoom.
-                    _scroll.jumpTo(
-                      newOffset.clamp(0.0, _scroll.position.maxScrollExtent),
-                    );
-                  }
+        height: widget.height,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final pad = constraints.maxWidth / 2;
+            return GestureDetector(
+              onScaleStart: (d) {
+                _ppsAtGestureStart = _pps;
+                _scrollAtGestureStart = _scroll.hasClients ? _scroll.offset : 0;
+                _focalAtGestureStart = d.localFocalPoint.dx;
+              },
+              onScaleUpdate: (d) {
+                if (d.pointerCount < 2) return;
+                setState(() {
+                  // Zoom ancorado no CENTROIDE da pinca (AUREA §3.1-5):
+                  // o conteudo sob os dedos fica sob os dedos.
+                  final newPps = (_ppsAtGestureStart * d.scale).clamp(
+                    16.0,
+                    400.0,
+                  );
+                  final k = newPps / _ppsAtGestureStart;
+                  final contentAtFocal =
+                      _scrollAtGestureStart + (_focalAtGestureStart - pad);
+                  final newOffset =
+                      contentAtFocal * k - (_focalAtGestureStart - pad);
+                  _pps = newPps;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_scroll.hasClients) {
+                      // Sem suprimir o seek: o tempo sob o playhead central
+                      // continua verdadeiro durante o zoom.
+                      _scroll.jumpTo(
+                        newOffset.clamp(0.0, _scroll.position.maxScrollExtent),
+                      );
+                    }
+                  });
                 });
-              });
-            },
-            child: Stack(
-              children: [
-                // Conteudo rolavel: regua + linhas de camada.
-                NotificationListener<ScrollNotification>(
-                  onNotification: _onScroll,
-                  child: SingleChildScrollView(
-                    controller: _scroll,
-                    scrollDirection: Axis.horizontal,
-                    // Rubber-band nas pontas em vez de parede seca
-                    // (AUREA §3.1-4: "parecer iOS").
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: pad),
-                      child: SizedBox(
-                        width: totalWidth,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              height: 20,
-                              width: totalWidth,
-                              // As marcas vivem NA REGUA: e onde a pessoa
-                              // olha para achar o instante.
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Positioned.fill(
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      // TOQUE DUPLO cria a marca onde o
-                                      // dedo esta — nao no cabecote. Quem
-                                      // ouve a musica aponta o lugar; ter
-                                      // de levar o cabecote ate la antes
-                                      // e um passo a mais no meio do
-                                      // ritmo.
-                                      onDoubleTapDown: (d) =>
-                                          _xDoDuploToque = d.localPosition.dx,
-                                      onDoubleTap: () {
-                                        final t = Duration(
-                                          microseconds:
-                                              (_xDoDuploToque / _pps * 1e6)
-                                                  .round(),
-                                        );
-                                        ref
+              },
+              child: Stack(
+                children: [
+                  // Conteudo rolavel: regua + linhas de camada.
+                  NotificationListener<ScrollNotification>(
+                    onNotification: _onScroll,
+                    child: SingleChildScrollView(
+                      controller: _scroll,
+                      scrollDirection: Axis.horizontal,
+                      // Rubber-band nas pontas em vez de parede seca
+                      // (AUREA §3.1-4: "parecer iOS").
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: pad),
+                        child: SizedBox(
+                          width: totalWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                height: 20,
+                                width: totalWidth,
+                                // As marcas vivem NA REGUA: e onde a pessoa
+                                // olha para achar o instante.
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned.fill(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        // TOQUE DUPLO cria a marca onde o
+                                        // dedo esta — nao no cabecote. Quem
+                                        // ouve a musica aponta o lugar; ter
+                                        // de levar o cabecote ate la antes
+                                        // e um passo a mais no meio do
+                                        // ritmo.
+                                        onDoubleTapDown: (d) =>
+                                            _xDoDuploToque = d.localPosition.dx,
+                                        onDoubleTap: () {
+                                          final t = Duration(
+                                            microseconds:
+                                                (_xDoDuploToque / _pps * 1e6)
+                                                    .round(),
+                                          );
+                                          ref
+                                              .read(
+                                                editorControllerProvider
+                                                    .notifier,
+                                              )
+                                              .toggleMarker(t);
+                                          HapticFeedback.selectionClick();
+                                        },
+                                        child: CustomPaint(
+                                          painter: _AmRulerPainter(pps: _pps),
+                                          // BATIDAS: risquinhos finos, e nao
+                                          // bandeiras. Sao centenas contra
+                                          // as poucas marcas postas a mao —
+                                          // desenhadas iguais, apagariam
+                                          // justamente as que alguem
+                                          // escolheu.
+                                          foregroundPainter: _BeatsPainter(
+                                            beats: project.beats,
+                                            pps: _pps,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    for (final (rotulo, tempo) in [
+                                      ('I', sessao.inPoint),
+                                      ('O', sessao.outPoint),
+                                    ])
+                                      if (tempo != null)
+                                        Positioned(
+                                          key: ValueKey('marca-$rotulo'),
+                                          left: _timeToPx(tempo) - 1,
+                                          top: 0,
+                                          bottom: 0,
+                                          child: IgnorePointer(
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Container(
+                                                  width: 2,
+                                                  color: AmColors.action,
+                                                ),
+                                                Text(
+                                                  rotulo,
+                                                  style: const TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: AmColors.action,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    for (final m in project.markers)
+                                      _MarcaNaRegua(
+                                        marca: m,
+                                        pps: _pps,
+                                        onMover: (dx) => ref
                                             .read(
                                               editorControllerProvider.notifier,
                                             )
-                                            .toggleMarker(t);
-                                        HapticFeedback.selectionClick();
-                                      },
-                                      child: CustomPaint(
-                                        painter: _AmRulerPainter(pps: _pps),
-                                        // BATIDAS: risquinhos finos, e nao
-                                        // bandeiras. Sao centenas contra
-                                        // as poucas marcas postas a mao —
-                                        // desenhadas iguais, apagariam
-                                        // justamente as que alguem
-                                        // escolheu.
-                                        foregroundPainter: _BeatsPainter(
-                                          beats: project.beats,
-                                          pps: _pps,
-                                        ),
+                                            .moveMarker(
+                                              m.time,
+                                              m.time +
+                                                  Duration(
+                                                    microseconds:
+                                                        (dx / _pps * 1e6)
+                                                            .round(),
+                                                  ),
+                                            ),
+                                        onMenu: () =>
+                                            _menuDaMarca(context, ref, m),
                                       ),
-                                    ),
-                                  ),
-                                  for (final (rotulo, tempo) in [
-                                    ('I', sessao.inPoint),
-                                    ('O', sessao.outPoint),
-                                  ])
-                                    if (tempo != null)
-                                      Positioned(
-                                        key: ValueKey('marca-$rotulo'),
-                                        left: _timeToPx(tempo) - 1,
-                                        top: 0,
-                                        bottom: 0,
-                                        child: IgnorePointer(
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Container(
-                                                width: 2,
-                                                color: AmColors.action,
-                                              ),
-                                              Text(
-                                                rotulo,
-                                                style: const TextStyle(
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: AmColors.action,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                  for (final m in project.markers)
-                                    _MarcaNaRegua(
-                                      marca: m,
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+                              Expanded(
+                                child: ListView.builder(
+                                  controller: _rowsScroll,
+                                  padding: EdgeInsets.zero,
+                                  itemExtent: kAmRowHeight,
+                                  itemCount: trilhas.length,
+                                  itemBuilder: (context, index) {
+                                    final trilha = trilhas[index];
+                                    return _AmLayerRow(
+                                      key: ValueKey(trilha.first.id),
+                                      trilha: trilha,
                                       pps: _pps,
-                                      onMover: (dx) => ref
-                                          .read(
-                                            editorControllerProvider.notifier,
-                                          )
-                                          .moveMarker(
-                                            m.time,
-                                            m.time +
-                                                Duration(
-                                                  microseconds:
-                                                      (dx / _pps * 1e6).round(),
-                                                ),
-                                          ),
-                                      onMenu: () =>
-                                          _menuDaMarca(context, ref, m),
-                                    ),
-                                ],
+                                      totalWidth: totalWidth,
+                                      selectedIds: selecionadas,
+                                      compact: widget.singleLayerId != null,
+                                      playback: widget.playback,
+                                      onTapLayer: widget.onTapLayer,
+                                      activeTimesUs: widget.activeTimesUs,
+                                      onForeignKeyframe:
+                                          widget.onForeignKeyframe,
+                                      onKeyframeTap: widget.onKeyframeTap,
+                                      onEditStart: () => _editingBar = true,
+                                      onEditEnd: () => _editingBar = false,
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 30),
-                            Expanded(
-                              child: ListView.builder(
-                                controller: _rowsScroll,
-                                padding: EdgeInsets.zero,
-                                itemExtent: kAmRowHeight,
-                                itemCount: trilhas.length,
-                                itemBuilder: (context, index) {
-                                  final trilha = trilhas[index];
-                                  return _AmLayerRow(
-                                    key: ValueKey(trilha.first.id),
-                                    trilha: trilha,
-                                    pps: _pps,
-                                    totalWidth: totalWidth,
-                                    selectedIds: selecionadas,
-                                    compact: widget.singleLayerId != null,
-                                    playback: widget.playback,
-                                    onTapLayer: widget.onTapLayer,
-                                    activeTimesUs: widget.activeTimesUs,
-                                    onForeignKeyframe: widget.onForeignKeyframe,
-                                    onKeyframeTap: widget.onKeyframeTap,
-                                    onEditStart: () => _editingBar = true,
-                                    onEditEnd: () => _editingBar = false,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                // Relogio central sob a regua.
-                Positioned(
-                  top: 16,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: ValueListenableBuilder<Duration>(
-                      valueListenable: widget.playback.time,
-                      // O TEMPO NUMA CAIXA SOBRE O CABECOTE, nao num
-                      // canto: ele acompanha a posicao do cabecote, e e o
-                      // que faz ler a hora sem procurar.
-                      builder: (context, t, _) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AmColors.bg,
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Text(
-                          formatTimecode(t, project.fps),
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontFeatures: [FontFeature.tabularFigures()],
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                // Playhead central.
-                IgnorePointer(
-                  child: Center(
-                    child: Container(width: 1.6, color: widget.playheadColor),
-                  ),
-                ),
-                if (widget.playheadColor != Colors.white)
-                  IgnorePointer(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(top: 0),
-                        decoration: BoxDecoration(
-                          color: widget.playheadColor,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  ),
-                // Dividir e Congelar moram nas acoes rapidas da camada (E2);
-                // nada flutua sobre as linhas da timeline (Fase 2).
-                // CANTO ESQUERDO DA REGUA: o ima (encaixe, com estado a
-                // vista) e, no Pro, a busca de camadas.
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  height: 22,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _BotaoDaRegua(
-                        key: const ValueKey('timeline-ima'),
-                        tooltip: ima ? 'Encaixe ligado' : 'Encaixe desligado',
-                        ativo: ima,
-                        onTap: () => alternarIma(ref),
-                        child: CustomPaint(
-                          size: const Size(14, 14),
-                          painter: _ImaPainter(
-                            ima ? AmColors.action : AmColors.muted,
-                          ),
-                        ),
-                      ),
-                      if (pro) ...[
-                        _BotaoDaRegua(
-                          key: const ValueKey('timeline-buscar'),
-                          tooltip: 'Buscar camada',
-                          onTap: () => _buscarCamada(context),
-                          child: const Icon(
-                            CupertinoIcons.search,
-                            size: 14,
-                            color: AmColors.text,
-                          ),
-                        ),
-                        // ENTRADA / SAIDA (edicao de 3 pontos): toque marca
-                        // no cabecote; toque longo tira.
-                        _BotaoDaRegua(
-                          key: const ValueKey('timeline-entrada'),
-                          tooltip: 'Entrada no cabecote (toque longo: tirar)',
-                          ativo: sessao.inPoint != null,
-                          onTap: () => ref
-                              .read(editorSessionProvider.notifier)
-                              .setInPoint(widget.playback.time.value),
-                          onLongPress: () => ref
-                              .read(editorSessionProvider.notifier)
-                              .setInPoint(null),
-                          child: Text(
-                            'I',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: sessao.inPoint != null
-                                  ? AmColors.action
-                                  : AmColors.text,
-                            ),
-                          ),
-                        ),
-                        _BotaoDaRegua(
-                          key: const ValueKey('timeline-saida'),
-                          tooltip: 'Saida no cabecote (toque longo: tirar)',
-                          ativo: sessao.outPoint != null,
-                          onTap: () => ref
-                              .read(editorSessionProvider.notifier)
-                              .setOutPoint(widget.playback.time.value),
-                          onLongPress: () => ref
-                              .read(editorSessionProvider.notifier)
-                              .setOutPoint(null),
-                          child: Text(
-                            'O',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: sessao.outPoint != null
-                                  ? AmColors.action
-                                  : AmColors.text,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                // CANTO DIREITO: expandir a timeline (preview vira janela).
-                if (widget.onExpand != null)
+                  // Relogio central sob a regua.
                   Positioned(
+                    top: 16,
+                    left: 0,
                     right: 0,
+                    child: Center(
+                      child: ValueListenableBuilder<Duration>(
+                        valueListenable: widget.playback.time,
+                        // O TEMPO NUMA CAIXA SOBRE O CABECOTE, nao num
+                        // canto: ele acompanha a posicao do cabecote, e e o
+                        // que faz ler a hora sem procurar.
+                        builder: (context, t, _) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AmColors.panelHigh,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            formatTimecode(t, project.fps),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Playhead central.
+                  IgnorePointer(
+                    child: Center(
+                      child: Container(width: 1.6, color: widget.playheadColor),
+                    ),
+                  ),
+                  if (widget.playheadColor != Colors.white)
+                    IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 0),
+                          decoration: BoxDecoration(
+                            color: widget.playheadColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Dividir e Congelar moram nas acoes rapidas da camada (E2);
+                  // nada flutua sobre as linhas da timeline (Fase 2).
+                  // CANTO ESQUERDO DA REGUA: o ima (encaixe, com estado a
+                  // vista) e, no Pro, a busca de camadas.
+                  Positioned(
+                    left: 0,
                     top: 0,
                     height: 22,
-                    child: _BotaoDaRegua(
-                      key: const ValueKey('timeline-expandir'),
-                      tooltip: widget.expanded
-                          ? 'Recolher timeline'
-                          : 'Expandir timeline',
-                      ativo: widget.expanded,
-                      onTap: widget.onExpand!,
-                      child: Icon(
-                        widget.expanded
-                            ? CupertinoIcons.arrow_down_right_arrow_up_left
-                            : CupertinoIcons.arrow_up_left_arrow_down_right,
-                        size: 14,
-                        color: widget.expanded ? AmColors.action : AmColors.text,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _BotaoDaRegua(
+                          key: const ValueKey('timeline-ima'),
+                          tooltip: ima ? 'Encaixe ligado' : 'Encaixe desligado',
+                          ativo: ima,
+                          onTap: () => alternarIma(ref),
+                          child: CustomPaint(
+                            size: const Size(14, 14),
+                            painter: _ImaPainter(
+                              ima ? AmColors.action : AmColors.muted,
+                            ),
+                          ),
+                        ),
+                        if (pro) ...[
+                          _BotaoDaRegua(
+                            key: const ValueKey('timeline-buscar'),
+                            tooltip: 'Buscar camada',
+                            onTap: () => _buscarCamada(context),
+                            child: const Icon(
+                              CupertinoIcons.search,
+                              size: 14,
+                              color: AmColors.text,
+                            ),
+                          ),
+                          // ENTRADA / SAIDA (edicao de 3 pontos): toque marca
+                          // no cabecote; toque longo tira.
+                          _BotaoDaRegua(
+                            key: const ValueKey('timeline-entrada'),
+                            tooltip: 'Entrada no cabecote (toque longo: tirar)',
+                            ativo: sessao.inPoint != null,
+                            onTap: () => ref
+                                .read(editorSessionProvider.notifier)
+                                .setInPoint(widget.playback.time.value),
+                            onLongPress: () => ref
+                                .read(editorSessionProvider.notifier)
+                                .setInPoint(null),
+                            child: Text(
+                              'I',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: sessao.inPoint != null
+                                    ? AmColors.action
+                                    : AmColors.text,
+                              ),
+                            ),
+                          ),
+                          _BotaoDaRegua(
+                            key: const ValueKey('timeline-saida'),
+                            tooltip: 'Saida no cabecote (toque longo: tirar)',
+                            ativo: sessao.outPoint != null,
+                            onTap: () => ref
+                                .read(editorSessionProvider.notifier)
+                                .setOutPoint(widget.playback.time.value),
+                            onLongPress: () => ref
+                                .read(editorSessionProvider.notifier)
+                                .setOutPoint(null),
+                            child: Text(
+                              'O',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: sessao.outPoint != null
+                                    ? AmColors.action
+                                    : AmColors.text,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                // CAMINHO DO GRUPO: Projeto › Grupo. Tocar em Projeto sai.
-                if (caminho.isNotEmpty)
+                  // CANTO DIREITO: expandir a timeline (preview vira janela).
+                  if (widget.onExpand != null)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      height: 22,
+                      child: _BotaoDaRegua(
+                        key: const ValueKey('timeline-expandir'),
+                        tooltip: widget.expanded
+                            ? 'Recolher timeline'
+                            : 'Expandir timeline',
+                        ativo: widget.expanded,
+                        onTap: widget.onExpand!,
+                        child: Icon(
+                          widget.expanded
+                              ? CupertinoIcons.arrow_down_right_arrow_up_left
+                              : CupertinoIcons.arrow_up_left_arrow_down_right,
+                          size: 14,
+                          color: widget.expanded
+                              ? AmColors.action
+                              : AmColors.text,
+                        ),
+                      ),
+                    ),
+                  // CAMINHO DO GRUPO: Projeto › Grupo. Tocar em Projeto sai.
+                  if (caminho.isNotEmpty)
+                    Positioned(
+                      left: 4,
+                      top: 25,
+                      height: 24,
+                      width: constraints.maxWidth / 2 - 56,
+                      child: _Breadcrumb(
+                        key: const ValueKey('timeline-breadcrumb'),
+                        caminho: caminho,
+                        onNivel: (nivel) {
+                          // nivel 0 = Projeto; n = o grupo n (1-based).
+                          var sair = caminho.length - nivel;
+                          while (sair-- > 0) {
+                            controller.exitGroup();
+                          }
+                        },
+                      ),
+                    ),
+                  // COLUNA ESQUERDA FIXA: olho, cadeado, keyframe — uma por
+                  // linha (Fase 2). A miniatura mora dentro da barra.
                   Positioned(
-                    left: 4,
-                    top: 25,
-                    height: 24,
-                    width: constraints.maxWidth / 2 - 56,
-                    child: _Breadcrumb(
-                      key: const ValueKey('timeline-breadcrumb'),
-                      caminho: caminho,
-                      onNivel: (nivel) {
-                        // nivel 0 = Projeto; n = o grupo n (1-based).
-                        var sair = caminho.length - nivel;
-                        while (sair-- > 0) {
-                          controller.exitGroup();
-                        }
+                    left: 0,
+                    top: 50,
+                    bottom: 0,
+                    width: 60,
+                    child: ListView.builder(
+                      controller: _pillsScroll,
+                      padding: EdgeInsets.zero,
+                      itemExtent: kAmRowHeight,
+                      itemCount: trilhas.length,
+                      itemBuilder: (context, index) {
+                        final trilha = trilhas[index];
+                        return _ControlesDaTrilha(
+                          trilha: trilha,
+                          playback: widget.playback,
+                          isMatteSource: trilha.any(
+                            (l) => matteSourceIds.contains(l.id),
+                          ),
+                        );
                       },
                     ),
                   ),
-                // COLUNA ESQUERDA FIXA: olho, cadeado, keyframe — uma por
-                // linha (Fase 2). A miniatura mora dentro da barra.
-                Positioned(
-                  left: 0,
-                  top: 50,
-                  bottom: 0,
-                  width: 92,
-                  child: ListView.builder(
-                    controller: _pillsScroll,
-                    padding: EdgeInsets.zero,
-                    itemExtent: kAmRowHeight,
-                    itemCount: trilhas.length,
-                    itemBuilder: (context, index) {
-                      final trilha = trilhas[index];
-                      return _ControlesDaTrilha(
-                        trilha: trilha,
-                        playback: widget.playback,
-                        isMatteSource: trilha.any(
-                          (l) => matteSourceIds.contains(l.id),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -837,7 +840,6 @@ class _ControlesDaTrilha extends ConsumerWidget {
     required this.playback,
     required this.isMatteSource,
   });
-
   final List<Layer> trilha;
   final PlaybackController playback;
   final bool isMatteSource;
@@ -845,94 +847,77 @@ class _ControlesDaTrilha extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(editorControllerProvider.notifier);
-    final ids = [for (final l in trilha) l.id];
-    final principal = trilha.first;
-    final (oculta, bloqueada) = ref.watch(
-      editorControllerProvider.select(
-        (p) => (
-          ids.every((id) => p.metaOf(id).hidden),
-          ids.every((id) => p.metaOf(id).locked),
-        ),
-      ),
-    );
-    final comKeyframe = trilha.where((l) => l.hasAnimation).firstOrNull;
-
-    Widget botao({
-      required String key,
-      required IconData icon,
-      required Color cor,
-      required String tooltip,
-      required VoidCallback onTap,
-    }) => Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        key: ValueKey(key),
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: SizedBox(
-          width: 30,
-          height: kAmRowHeight,
-          child: Icon(icon, size: 16, color: cor),
-        ),
-      ),
-    );
-
-    return Semantics(
-      label: isMatteSource ? 'Fonte de recorte por camada' : null,
+    final project = ref.watch(editorControllerProvider);
+    final layer = trilha.first;
+    final hidden = trilha.every((l) => project.metaOf(l.id).hidden);
+    final locked = trilha.every((l) => project.metaOf(l.id).locked);
+    return Align(
+      alignment: Alignment.centerLeft,
       child: Container(
-        height: kAmRowHeight,
-        width: 92,
+        height: 28,
+        width: 60,
         decoration: BoxDecoration(
-          color: AmColors.panel,
-          border: isMatteSource
-              ? const Border(left: BorderSide(color: AmColors.accent, width: 3))
-              : null,
+          color: AmColors.panelHigh,
+          borderRadius: const BorderRadius.horizontal(
+            right: Radius.circular(14),
+          ),
         ),
         child: Row(
           children: [
-            botao(
-              key: 'olho-${principal.id}',
-              icon: oculta ? CupertinoIcons.eye_slash : CupertinoIcons.eye,
-              cor: oculta ? AmColors.muted : AmColors.text,
-              tooltip: oculta ? 'Mostrar camada' : 'Ocultar camada',
-              onTap: () => controller.runAsOneUndo(() {
-                for (final id in ids) {
-                  controller.toggleHidden(id);
-                }
-              }),
+            Tooltip(
+              message: hidden ? 'Mostrar camada' : 'Ocultar camada',
+              child: GestureDetector(
+                key: ValueKey('olho-${layer.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => controller.runAsOneUndo(() {
+                  for (final l in trilha) {
+                    controller.toggleHidden(l.id);
+                  }
+                }),
+                child: SizedBox(
+                  width: 30,
+                  height: kAmRowHeight,
+                  child: Icon(
+                    hidden ? CupertinoIcons.eye_slash : CupertinoIcons.eye,
+                    size: 17,
+                    color: AmColors.text,
+                  ),
+                ),
+              ),
             ),
-            botao(
-              key: 'cadeado-${principal.id}',
-              icon: bloqueada ? CupertinoIcons.lock_fill : CupertinoIcons.lock_open,
-              cor: bloqueada ? AmColors.action : AmColors.muted,
-              tooltip: bloqueada ? 'Desbloquear camada' : 'Bloquear camada',
-              onTap: () => controller.runAsOneUndo(() {
-                for (final id in ids) {
-                  controller.toggleLocked(id);
-                }
-              }),
-            ),
-            botao(
-              key: 'kf-${principal.id}',
-              icon: comKeyframe != null
-                  ? CupertinoIcons.rhombus_fill
-                  : CupertinoIcons.rhombus,
-              cor: comKeyframe != null
-                  ? AmColors.accent
-                  : AmColors.muted.withValues(alpha: 0.45),
-              tooltip: comKeyframe != null
-                  ? 'Ir ao primeiro keyframe'
-                  : 'Sem keyframes',
-              onTap: () {
-                final alvo = comKeyframe ?? principal;
-                ref.read(multiSelectProvider.notifier).state = const {};
-                ref.read(selectedLayerProvider.notifier).state = alvo.id;
-                final times = alvo.keyframeTimes;
-                if (times.isNotEmpty) {
-                  playback.pause();
-                  playback.seek(alvo.startTime + times.first);
-                }
-              },
+            Tooltip(
+              message: locked
+                  ? 'Bloqueada · segure para desbloquear'
+                  : 'Selecionar · segure para bloquear',
+              child: GestureDetector(
+                key: ValueKey('kf-${layer.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  ref.read(multiSelectProvider.notifier).state = const {};
+                  ref.read(selectedLayerProvider.notifier).state = layer.id;
+                },
+                onLongPress: () => controller.runAsOneUndo(() {
+                  for (final l in trilha) {
+                    controller.toggleLocked(l.id);
+                  }
+                }),
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: layerTypeColor(layer),
+                    borderRadius: BorderRadius.circular(4),
+                    border: isMatteSource
+                        ? Border.all(color: AmColors.accent)
+                        : null,
+                  ),
+                  child: Icon(
+                    locked ? CupertinoIcons.lock_fill : layerTypeIcon(layer),
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -970,7 +955,9 @@ class _BotaoDaRegua extends StatelessWidget {
         height: 22,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: ativo ? AmColors.actionDim : AmColors.bg.withValues(alpha: .85),
+          color: ativo
+              ? AmColors.actionDim
+              : AmColors.bg.withValues(alpha: .85),
           borderRadius: BorderRadius.circular(6),
         ),
         child: child,
@@ -994,9 +981,23 @@ class _ImaPainter extends CustomPainter {
       ..strokeCap = StrokeCap.butt;
     final r = size.width * 0.36;
     final c = Offset(size.width / 2, size.height * 0.42);
-    canvas.drawArc(Rect.fromCircle(center: c, radius: r), 3.14159, 3.14159, false, p);
-    canvas.drawLine(Offset(c.dx - r, c.dy), Offset(c.dx - r, size.height - 1), p);
-    canvas.drawLine(Offset(c.dx + r, c.dy), Offset(c.dx + r, size.height - 1), p);
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: r),
+      3.14159,
+      3.14159,
+      false,
+      p,
+    );
+    canvas.drawLine(
+      Offset(c.dx - r, c.dy),
+      Offset(c.dx - r, size.height - 1),
+      p,
+    );
+    canvas.drawLine(
+      Offset(c.dx + r, c.dy),
+      Offset(c.dx + r, size.height - 1),
+      p,
+    );
   }
 
   @override
@@ -1509,7 +1510,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
   @override
   void didUpdateWidget(_AmBar old) {
     super.didUpdateWidget(old);
-    if (_arrastandoBarra && !(selected && !compact)) _terminarArrasto();
+    if (_arrastandoBarra && !selected) _terminarArrasto();
   }
 
   @override
@@ -1626,7 +1627,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
     final hidden = meta.hidden;
     final locked = meta.locked;
     // Bloqueada: nem move, nem apara, nem reordena pelo arrasto.
-    final podeMover = selected && !compact && !locked;
+    final podeMover = selected && !locked;
 
     return Positioned.fill(
       child: Stack(
@@ -1692,10 +1693,10 @@ class _AmBarState extends ConsumerState<_AmBar> {
                     },
               // ARRASTO VERTICAL na barra selecionada: sobe ou desce a
               // camada na pilha, um degrau por linha.
-              onVerticalDragStart: podeMover
+              onVerticalDragStart: podeMover && !compact
                   ? (_) => _acumuladoVertical = 0
                   : null,
-              onVerticalDragUpdate: podeMover
+              onVerticalDragUpdate: podeMover && !compact
                   ? (d) => _reordenarPorArrasto(d.delta.dy)
                   : null,
               onHorizontalDragStart: podeMover
@@ -1714,19 +1715,15 @@ class _AmBarState extends ConsumerState<_AmBar> {
                       controller.moveLayer(layer.id, snapped);
                     }
                   : null,
-              onHorizontalDragEnd: podeMover
-                  ? (_) => _terminarArrasto()
-                  : null,
-              onHorizontalDragCancel: podeMover
-                  ? _terminarArrasto
-                  : null,
+              onHorizontalDragEnd: podeMover ? (_) => _terminarArrasto() : null,
+              onHorizontalDragCancel: podeMover ? _terminarArrasto : null,
               child: CustomPaint(
                 painter: _AmBarPainter(
                   selected: selected,
                   color: hidden
                       ? layerTypeColor(layer).withValues(alpha: 0.35)
                       : layerTypeColor(layer),
-                  stripeColor: layerTypeStripe(layer),
+                  stripeColor: layerTypeColor(layer),
                 ),
                 // FORMA DE ONDA e TIRA DE MINIATURAS dentro da barra:
                 // sem elas, achar o corte e tatear.
@@ -1737,91 +1734,91 @@ class _AmBarState extends ConsumerState<_AmBar> {
                   // estourar a linha (o projeto importado esta cheio deles).
                   child: ClipRect(
                     child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      width < 46 ? 3 : 12,
-                      0,
-                      width < 46 ? 3 : 12,
-                      // O espaco de baixo e dos keyframes.
-                      kAmFaixaKeyframes,
-                    ),
-                    child: Row(
-                      children: [
-                        // ICONE DO TIPO na ponta: reconhecer sem ler.
-                        if (width > 28)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Icon(
-                            layerTypeIcon(layer),
-                            size: 11,
-                            color: Colors.white.withValues(
-                              alpha: hidden ? 0.45 : 0.85,
-                            ),
-                          ),
-                        ),
-                        if (locked && width > 70)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 5),
-                            child: Icon(
-                              CupertinoIcons.lock_fill,
-                              size: 10,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        if (width > 52)
-                        Flexible(
-                          child: Text(
-                            layer.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        if (layer.hasAnimation && width > 120) ...[
-                          const SizedBox(width: 6),
-                          const Icon(
-                            CupertinoIcons.rhombus,
-                            size: 12,
-                            color: Colors.white,
-                          ),
-                        ],
-                        // GRUPO: a contagem de filhos, e o toque duplo
-                        // entra.
-                        if (layer is GroupLayer && width > 100) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            key: ValueKey('grupo-contagem-${layer.id}'),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: .35),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${(layer as GroupLayer).children.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
+                      padding: EdgeInsets.fromLTRB(
+                        width < 46 ? 3 : 12,
+                        0,
+                        width < 46 ? 3 : 12,
+                        // O espaco de baixo e dos keyframes.
+                        kAmFaixaKeyframes,
+                      ),
+                      child: Row(
+                        children: [
+                          // ICONE DO TIPO na ponta: reconhecer sem ler.
+                          if (width > 28)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: Icon(
+                                layerTypeIcon(layer),
+                                size: 11,
+                                color: Colors.white.withValues(
+                                  alpha: hidden ? 0.45 : 0.85,
+                                ),
                               ),
                             ),
-                          ),
+                          if (locked && width > 70)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 5),
+                              child: Icon(
+                                CupertinoIcons.lock_fill,
+                                size: 10,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          if (width > 52)
+                            Flexible(
+                              child: Text(
+                                layer.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          if (layer.hasAnimation && width > 120) ...[
+                            const SizedBox(width: 6),
+                            const Icon(
+                              CupertinoIcons.rhombus,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                          ],
+                          // GRUPO: a contagem de filhos, e o toque duplo
+                          // entra.
+                          if (layer is GroupLayer && width > 100) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              key: ValueKey('grupo-contagem-${layer.id}'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: .35),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${(layer as GroupLayer).children.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          if (!compact && width > 150)
+                            const Icon(
+                              CupertinoIcons.line_horizontal_3,
+                              size: 14,
+                              color: Colors.white70,
+                            ),
                         ],
-                        const Spacer(),
-                        if (!compact && width > 150)
-                          const Icon(
-                            CupertinoIcons.line_horizontal_3,
-                            size: 14,
-                            color: Colors.white70,
-                          ),
-                      ],
+                      ),
                     ),
-                  ),
                   ),
                 ),
               ),

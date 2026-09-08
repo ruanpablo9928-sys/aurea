@@ -259,16 +259,13 @@ List<ClipTransitionContext> transitionContextsAt(
   Duration globalTime,
 ) {
   final contexts = <ClipTransitionContext>[];
-  for (final incoming in layers.whereType<VideoLayer>()) {
+  // Resolve participants once, instead of scanning the entire timeline
+  // for every cut on every preview frame.
+  final videos = {for (final l in layers.whereType<VideoLayer>()) l.id: l};
+  for (final incoming in videos.values) {
     final transition = incoming.transitionIn;
     if (transition == null || !transition.enabled) continue;
-    VideoLayer? outgoing;
-    for (final l in layers.whereType<VideoLayer>()) {
-      if (l.id == transition.outgoingLayerId) {
-        outgoing = l;
-        break;
-      }
-    }
+    final outgoing = videos[transition.outgoingLayerId];
     if (outgoing == null) continue;
     // A referencia mora em B, mas nao transforma um vinculo deslocado
     // numa transicao eterna. Ripple/split que deixaram A e B separados

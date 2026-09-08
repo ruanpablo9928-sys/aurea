@@ -28,7 +28,11 @@ class _HomeShellState extends State<HomeShell> {
     // A COMUNIDADE FICA EM SEGUNDO, ao lado do Inicio: e para onde se
     // vai depois de terminar um trabalho, e nao um canto de ajustes.
     (CupertinoIcons.person_2, CupertinoIcons.person_2_fill, 'Comunidade'),
-    (CupertinoIcons.slider_horizontal_3, CupertinoIcons.slider_horizontal_3, 'Ajustes'),
+    (
+      CupertinoIcons.slider_horizontal_3,
+      CupertinoIcons.slider_horizontal_3,
+      'Ajustes',
+    ),
     (CupertinoIcons.person, CupertinoIcons.person_fill, 'Usuario'),
     (CupertinoIcons.info_circle, CupertinoIcons.info_circle_fill, 'Sobre'),
   ];
@@ -116,13 +120,17 @@ class _TabItem extends StatelessWidget {
         children: [
           Icon(selected ? activeIcon : icon, size: 24, color: color),
           const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.1,
-              color: color,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+                color: color,
+              ),
             ),
           ),
         ],

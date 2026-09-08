@@ -7,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../domain/camera_solver3d.dart';
 import '../domain/pontos_seguidos.dart';
-import '../domain/tracker2d.dart';
 import 'tracking_service.dart';
 
 /// O RASTREIO DE CAMERA 3D, do arquivo ate a solucao.
@@ -33,13 +32,27 @@ class CameraTrackService {
   /// Avisa a interface quando uma analise termina.
   final ValueNotifier<int> revision = ValueNotifier(0);
 
-  /// Progresso 0..1 e o que esta acontecendo agora, em palavras. Um
-  /// rastreio leva dezenas de segundos: barra sem legenda parece travada.
+  /// Progresso 0..1 e em que ETAPA a analise esta. Um rastreio leva
+  /// dezenas de segundos: barra sem legenda parece travada, e "por
+  /// favor aguarde" nao diz se falta muito.
   final ValueNotifier<double> progress = ValueNotifier(0);
   final ValueNotifier<String> etapa = ValueNotifier('');
+  final ValueNotifier<EtapaDoRastreio?> fase = ValueNotifier(null);
+
+  /// O QUE FOI SEGUIDO, guardado para o RE-SOLVE.
+  ///
+  /// Sem isto, mexer numa opcao e mandar recalcular obrigaria a ler o
+  /// video de novo — dezenas de segundos para repetir a parte que nao
+  /// mudou. Com os rastros na memoria, refazer a conta e quase imediato,
+  /// e e isso que torna "apagar os pontos ruins e resolver de novo" um
+  /// gesto usavel em vez de uma ameaca.
+  final Map<String, _Rastros> _rastros = {};
 
   SolucaoCamera3D? dataFor(String layerId) => _cache[layerId];
   bool isRunning(String layerId) => _emAndamento.contains(layerId);
+
+  /// Da para recalcular sem reler o video?
+  bool podeResolverDeNovo(String layerId) => _rastros.containsKey(layerId);
 
   Future<Directory> _pasta() async {
     final base = await getApplicationSupportDirectory();
@@ -72,8 +85,10 @@ class CameraTrackService {
     required String sourcePath,
     required Duration start,
     required Duration duration,
-    int fps = 8,
-    int maximoDePontos = 110,
+    ModoDoSolve modo = ModoDoSolve.equilibrado,
+    TipoDeTomada tipoDeTomada = TipoDeTomada.auto,
+    int? fps,
+    int? maximoDePontos,
     double? focalPx,
   }) async {
     if (_emAndamento.contains(layerId)) {
@@ -83,15 +98,16 @@ class CameraTrackService {
       );
     }
     _emAndamento.add(layerId);
-    progress.value = 0;
-    etapa.value = 'Lendo o vídeo...';
+    final taxa = fps ?? modo.fps;
+    final quantos = maximoDePontos ?? modo.pontos;
+    _dizer(EtapaDoRastreio.lendo, 0);
     try {
       final frames = await TrackingService.instance.grayFrames(
         sourcePath,
         start: start,
         duration: duration,
-        fps: fps,
-        maxFrames: 240,
+        fps: taxa,
+        maxFrames: modo.maximoDeQuadros,
       );
       if (frames.length < 8) {
         throw const RastreioException(
@@ -101,37 +117,117 @@ class CameraTrackService {
         );
       }
 
-      progress.value = .3;
-      etapa.value = 'Seguindo ${frames.length} quadros...';
+      _dizer(EtapaDoRastreio.achandoPontos, .22);
 
       // O RESTO SAI DA THREAD DA INTERFACE. Seguir cem pontos por duzentos
       // quadros e depois resolver a camera sao segundos de conta pura; na
       // thread principal isso e o app congelado, e app congelado a pessoa
       // fecha.
-      final solucao = await Isolate.run(
-        () => _seguirEResolver(
+      final seguidos = await Isolate.run(
+        () => seguirPontos(
           frames,
-          maximoDePontos: maximoDePontos,
+          maximoDePontos: quantos,
+          distanciaMinima: 8,
+          duracaoMinima: 6,
+        ),
+      );
+      _rastros[layerId] = _Rastros(
+        pontos: seguidos,
+        largura: frames.first.width,
+        altura: frames.first.height,
+        quadros: frames.length,
+        fps: taxa,
+      );
+
+      _dizer(EtapaDoRastreio.lendoACena, .45);
+      final leitura = lerCena(
+        seguidos,
+        largura: frames.first.width,
+        quadros: frames.length,
+      );
+      if (leitura == LeituraDaCena.tripeOuGiro &&
+          tipoDeTomada == TipoDeTomada.auto) {
+        // A recusa vem aqui, e nao depois de resolver: nada do que vem
+        // adiante mudaria a resposta, e a pessoa esperaria por nada.
+        throw const RastreioException(
+          FalhaDoRastreio.semParalaxe,
+          'Essa filmagem nao da rastreio 3D: a camera gira, mas nao anda. '
+          'Sem deslocamento nao ha profundidade para medir. Filme andando '
+          'alguns passos, com coisas perto e longe no quadro.',
+        );
+      }
+
+      _dizer(EtapaDoRastreio.resolvendo, .55);
+      final solucao = await Isolate.run(
+        () => resolverCamera3D(
+          seguidos,
+          largura: frames.first.width,
+          altura: frames.first.height,
+          quadros: frames.length,
+          fps: taxa,
           focalPx: focalPx,
-          fps: fps,
+          tipoDeTomada: tipoDeTomada,
+          rodadasDeRefino: modo.refinos,
         ),
       );
 
-      progress.value = 1;
-      etapa.value = 'Pronto';
-      _cache[layerId] = solucao;
-      try {
-        await File('${(await _pasta()).path}/$layerId.json')
-            .writeAsString(jsonEncode(solucao.toJson()), flush: true);
-      } catch (_) {
-        // Nao poder gravar nao invalida o que ja foi resolvido.
-      }
-      revision.value++;
+      _dizer(EtapaDoRastreio.pronto, 1);
+      await guardar(layerId, solucao);
       return solucao;
     } finally {
       _emAndamento.remove(layerId);
       etapa.value = '';
+      fase.value = null;
     }
+  }
+
+  /// RESOLVE DE NOVO com o que ja foi lido do video.
+  ///
+  /// Serve para depois de apagar pontos ruins ou trocar uma opcao. Sem
+  /// os rastros guardados nao da: ai a resposta e null, e quem chamou
+  /// manda rastrear do comeco.
+  Future<SolucaoCamera3D?> resolverDeNovo(
+    String layerId, {
+    Set<int> pontosApagados = const {},
+    ModoDoSolve modo = ModoDoSolve.equilibrado,
+    TipoDeTomada tipoDeTomada = TipoDeTomada.auto,
+    double? focalPx,
+  }) async {
+    final r = _rastros[layerId];
+    if (r == null || _emAndamento.contains(layerId)) return null;
+    _emAndamento.add(layerId);
+    _dizer(EtapaDoRastreio.resolvendo, .5);
+    try {
+      final usados = [
+        for (final p in r.pontos)
+          if (!pontosApagados.contains(p.id)) p,
+      ];
+      final solucao = await Isolate.run(
+        () => resolverCamera3D(
+          usados,
+          largura: r.largura,
+          altura: r.altura,
+          quadros: r.quadros,
+          fps: r.fps,
+          focalPx: focalPx,
+          tipoDeTomada: tipoDeTomada,
+          rodadasDeRefino: modo.refinos,
+        ),
+      );
+      _dizer(EtapaDoRastreio.pronto, 1);
+      await guardar(layerId, solucao);
+      return solucao;
+    } finally {
+      _emAndamento.remove(layerId);
+      etapa.value = '';
+      fase.value = null;
+    }
+  }
+
+  void _dizer(EtapaDoRastreio e, double p) {
+    fase.value = e;
+    etapa.value = e.emPalavras;
+    progress.value = p;
   }
 
   /// Joga fora a solucao — para rastrear de novo com outros ajustes.
@@ -155,28 +251,41 @@ class CameraTrackService {
   }
 }
 
-/// O trabalho pesado, num isolate. Precisa ser uma funcao de topo: o que
-/// atravessa para o outro isolate nao pode carregar `this` junto.
-SolucaoCamera3D _seguirEResolver(
-  List<GrayFrame> frames, {
-  required int maximoDePontos,
-  required int fps,
-  double? focalPx,
-}) {
-  final pontos = seguirPontos(
-    frames,
-    maximoDePontos: maximoDePontos,
-    // A analise roda em 240 px de largura: 8 px de distancia entre
-    // pontos e o equivalente a espalhar trinta por linha.
-    distanciaMinima: 8,
-    duracaoMinima: 6,
-  );
-  return resolverCamera3D(
-    pontos,
-    largura: frames.first.width,
-    altura: frames.first.height,
-    quadros: frames.length,
-    fps: fps,
-    focalPx: focalPx,
-  );
+/// AS ETAPAS, com o nome que aparece na tela.
+///
+/// Nomear cada uma nao e enfeite: um rastreio que fica trinta segundos
+/// em "Analisando..." parece travado, e a pessoa fecha o aplicativo
+/// antes de terminar. Vendo "Seguindo os pontos" virar "Reconstruindo a
+/// cena", ela sabe que ha progresso mesmo quando a barra anda devagar.
+enum EtapaDoRastreio {
+  lendo,
+  achandoPontos,
+  lendoACena,
+  resolvendo,
+  pronto;
+
+  String get emPalavras => switch (this) {
+    EtapaDoRastreio.lendo => 'Lendo o vídeo...',
+    EtapaDoRastreio.achandoPontos => 'Achando e seguindo os pontos...',
+    EtapaDoRastreio.lendoACena => 'Vendo que tipo de cena é...',
+    EtapaDoRastreio.resolvendo => 'Reconstruindo o movimento da câmera...',
+    EtapaDoRastreio.pronto => 'Pronto',
+  };
+}
+
+/// Os rastros 2D guardados para o re-solve.
+class _Rastros {
+  const _Rastros({
+    required this.pontos,
+    required this.largura,
+    required this.altura,
+    required this.quadros,
+    required this.fps,
+  });
+
+  final List<PontoSeguido> pontos;
+  final int largura;
+  final int altura;
+  final int quadros;
+  final int fps;
 }

@@ -24,7 +24,6 @@ import '../../domain/shape.dart';
 import '../../domain/shape_ops.dart';
 import 'am_colors.dart';
 import '../../application/ui/pro_mode.dart';
-import '../context/layer_header.dart';
 import '../context/parameter_row.dart';
 import '../context/quick_actions.dart';
 import 'audio_sheet.dart';
@@ -72,54 +71,29 @@ class LayerToolsDock extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pro = ref.watch(proModeProvider);
     // Observa o projeto: mudo, vinculo e 3D mudam o rotulo das acoes.
-    ref.watch(editorControllerProvider);
+    final project = ref.watch(editorControllerProvider);
     final acoes = quickActionsFor(
       context,
       ref,
       layer,
       playback,
-      pro: pro,
-      onAnimarTexto: onAnimarTexto ?? () => onAction(LayerMenuAction.textAnimators),
+      pro: true,
+      onAnimarTexto:
+          onAnimarTexto ?? () => onAction(LayerMenuAction.textAnimators),
     );
     return ColoredBox(
       color: AmColors.panel,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // FOLHA BAIXA DEMAIS PARA A GRADE.
-          //
-          // O cabecalho e a fileira de acoes rapidas somam 104 px. Numa
-          // tela pequena, com a folha no nivel mais baixo, sobra menos
-          // que isso — e o Column estourava por 38 px, deixando a faixa
-          // amarela de estouro por cima do painel. Aqui a grade cede: o
-          // cabecalho e as acoes rapidas sao o que se usa primeiro, e as
-          // categorias voltam assim que a folha sobe.
-          if (constraints.maxHeight < 116) {
-            return SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  LayerHeader(
-                    layer: layer,
-                    onMore: () => showAllActionsSheet(context, acoes),
-                  ),
-                  QuickActionsRow(actions: acoes),
-                ],
-              ),
-            );
-          }
-          final sobra = constraints.maxHeight - 44 - 60 - 12;
-          final tileHeight = (sobra / 2).clamp(44.0, 64.0);
+          // A grade principal vem primeiro; comandos ocasionais ficam em Mais.
+          final tileHeight = ((constraints.maxHeight - 54) / 2).clamp(
+            52.0,
+            76.0,
+          );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              LayerHeader(
-                layer: layer,
-                onMore: () => showAllActionsSheet(context, acoes),
-              ),
-              QuickActionsRow(actions: acoes),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
@@ -142,6 +116,91 @@ class LayerToolsDock extends ConsumerWidget {
                       tileHeight: tileHeight,
                     ),
                   ),
+                ),
+              ),
+              SizedBox(
+                height: 44,
+                child: Row(
+                  children: [
+                    for (final (key, icon, label, action)
+                        in <(String, IconData, String, VoidCallback)>[
+                          (
+                            'camada-inicio-aqui',
+                            CupertinoIcons.arrow_right_to_line,
+                            'Mover início para o cabeçote',
+                            () {
+                              playback.pause();
+                              ref
+                                  .read(editorControllerProvider.notifier)
+                                  .moveLayer(layer.id, playback.time.value);
+                            },
+                          ),
+                          (
+                            'camada-fim-aqui',
+                            CupertinoIcons.arrow_left_to_line,
+                            'Mover fim para o cabeçote',
+                            () {
+                              playback.pause();
+                              final start =
+                                  playback.time.value - layer.duration;
+                              ref
+                                  .read(editorControllerProvider.notifier)
+                                  .moveLayer(
+                                    layer.id,
+                                    start < Duration.zero
+                                        ? Duration.zero
+                                        : start,
+                                  );
+                            },
+                          ),
+                          (
+                            'camada-subir',
+                            CupertinoIcons.arrow_up,
+                            'Subir camada',
+                            () => ref
+                                .read(editorControllerProvider.notifier)
+                                .reorderLayer(layer.id, -1),
+                          ),
+                          (
+                            'camada-descer',
+                            CupertinoIcons.arrow_down,
+                            'Descer camada',
+                            () => ref
+                                .read(editorControllerProvider.notifier)
+                                .reorderLayer(layer.id, 1),
+                          ),
+                        ])
+                      IconButton(
+                        key: ValueKey(key),
+                        tooltip: label,
+                        onPressed: project.metaOf(layer.id).locked
+                            ? null
+                            : action,
+                        icon: Icon(icon, size: 19, color: AmColors.text),
+                      ),
+                    Expanded(
+                      child: TextButton.icon(
+                        key: const ValueKey('camada-mais'),
+                        onPressed: () => showAllActionsSheet(
+                          context,
+                          acoes
+                              .where(
+                                (a) => a.key != 'subir' && a.key != 'descer',
+                              )
+                              .toList(),
+                        ),
+                        icon: const Icon(
+                          CupertinoIcons.square_grid_2x2,
+                          size: 17,
+                          color: AmColors.muted,
+                        ),
+                        label: const Text(
+                          'Mais',
+                          style: TextStyle(color: AmColors.muted),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -3995,101 +4054,102 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
     double value,
     Duration t,
     Duration local,
-  ) =>
-      Padding(
-        padding: const EdgeInsets.fromLTRB(2, 6, 10, 10),
-        child: Column(
-          children: [
-            ParameterRow(
-              label: 'Opacidade',
-              value: value * 100,
-              min: 0,
-              max: 100,
-              unitsPerPixel: 0.35,
-              decimals: 0,
-              unit: '%',
-              valueKey: const ValueKey('opacidade-valor'),
-              keyframe: KeyframeState(
-                animated: layer.opacity.isAnimated,
-                here: layer.opacity.hasKeyframeAt(local),
-                onToggle: () => c.toggleKeyframe(id, t, LayerProp.opacity),
-                onCurve: layer.opacity.isAnimated
-                    ? () => widget.onOpenCurve(LayerProp.opacity)
-                    : null,
-              ),
-              onReset: () => c.resetProp(id, LayerProp.opacity),
-              onChanged: (v) => c.editOpacity(id, t, v / 100),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: AmTickRuler(
-                value: value * 100,
-                min: 0,
-                max: 100,
-                unitsPerPixel: 0.35,
-                height: double.infinity,
-                onChanged: (v) => c.editOpacity(id, t, v / 100),
-              ),
-            ),
-          ],
-        ),
-      );
-
-  Widget _blending(EditorController c, String id, Layer layer) {
-    final pro = ref.watch(proModeProvider);
-    return Padding(
-    padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
+  ) => Padding(
+    padding: const EdgeInsets.fromLTRB(2, 6, 10, 10),
     child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 68,
-          // Row em rolagem (nao lista preguicosa): os chips sao poucos e
-          // todos montados ficam achaveis.
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-            children: [
-              // SIMPLES: os seis modos mais usados. PRO: os 17 nativos e os
-              // 10 da Aurea, todos com miniatura.
-              for (final (label, mode) in amBlendModes)
-                if (pro || kBlendModesSimples.contains(mode))
-                  _BlendChip(
-                    key: ValueKey('mescla-${mode.name}'),
-                    label: label,
-                    mode: mode,
-                    aceso: layer.customBlend == null && layer.blendMode == mode,
-                    onTap: () => c.setBlendMode(id, mode),
-                  ),
-              if (pro)
-                for (final extra in AureaBlend.values)
-                  _BlendChip(
-                    key: ValueKey('mescla-${extra.name}'),
-                    label: aureaBlendLabel(extra),
-                    aceso: layer.customBlend == extra,
-                    onTap: () => c.setCustomBlend(id, extra),
-                  ),
-            ],
-            ),
+        ParameterRow(
+          label: 'Opacidade',
+          value: value * 100,
+          min: 0,
+          max: 100,
+          unitsPerPixel: 0.35,
+          decimals: 0,
+          unit: '%',
+          valueKey: const ValueKey('opacidade-valor'),
+          keyframe: KeyframeState(
+            animated: layer.opacity.isAnimated,
+            here: layer.opacity.hasKeyframeAt(local),
+            onToggle: () => c.toggleKeyframe(id, t, LayerProp.opacity),
+            onCurve: layer.opacity.isAnimated
+                ? () => widget.onOpenCurve(LayerProp.opacity)
+                : null,
           ),
+          onReset: () => c.resetProp(id, LayerProp.opacity),
+          onChanged: (v) => c.editOpacity(id, t, v / 100),
         ),
         const SizedBox(height: 6),
-        // A MESCLA AGE SOBRE O QUE ESTA POR BAIXO. Sem isto escrito, uma
-        // camada sozinha em Multiplicar (que some no preto) ou em Tela
-        // (que nao muda) vira "a mesclagem nao funciona" — o relato do
-        // beta. A conta esta certa; faltava dizer com o que ela conta.
-        const Text(
-          'A mescla age sobre as camadas por baixo desta. Sozinha sobre o '
-          'fundo, Multiplicar escurece e Tela nao muda nada: ponha uma '
-          'forma ou imagem atras (Enviar para tras) para ver o efeito.',
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 11, height: 1.3, color: AmColors.muted),
+        Expanded(
+          child: AmTickRuler(
+            value: value * 100,
+            min: 0,
+            max: 100,
+            unitsPerPixel: 0.35,
+            height: double.infinity,
+            onChanged: (v) => c.editOpacity(id, t, v / 100),
+          ),
         ),
       ],
     ),
   );
+
+  Widget _blending(EditorController c, String id, Layer layer) {
+    final pro = ref.watch(proModeProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 16, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 68,
+            // Row em rolagem (nao lista preguicosa): os chips sao poucos e
+            // todos montados ficam achaveis.
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  // SIMPLES: os seis modos mais usados. PRO: os 17 nativos e os
+                  // 10 da Aurea, todos com miniatura.
+                  for (final (label, mode) in amBlendModes)
+                    if (pro || kBlendModesSimples.contains(mode))
+                      _BlendChip(
+                        key: ValueKey('mescla-${mode.name}'),
+                        label: label,
+                        mode: mode,
+                        aceso:
+                            layer.customBlend == null &&
+                            layer.blendMode == mode,
+                        onTap: () => c.setBlendMode(id, mode),
+                      ),
+                  if (pro)
+                    for (final extra in AureaBlend.values)
+                      _BlendChip(
+                        key: ValueKey('mescla-${extra.name}'),
+                        label: aureaBlendLabel(extra),
+                        aceso: layer.customBlend == extra,
+                        onTap: () => c.setCustomBlend(id, extra),
+                      ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          // A MESCLA AGE SOBRE O QUE ESTA POR BAIXO. Sem isto escrito, uma
+          // camada sozinha em Multiplicar (que some no preto) ou em Tela
+          // (que nao muda) vira "a mesclagem nao funciona" — o relato do
+          // beta. A conta esta certa; faltava dizer com o que ela conta.
+          const Text(
+            'A mescla age sobre as camadas por baixo desta. Sozinha sobre o '
+            'fundo, Multiplicar escurece e Tela nao muda nada: ponha uma '
+            'forma ou imagem atras (Enviar para tras) para ver o efeito.',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, height: 1.3, color: AmColors.muted),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _depth(_N4Depth current, ValueChanged<_N4Depth> set) => Row(
@@ -5288,7 +5348,7 @@ class _ShapeOperators extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Row(
+        Wrap(
           children: [
             CupertinoButton(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

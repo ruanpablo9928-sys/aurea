@@ -23,7 +23,7 @@ class FontService {
   static const _indice = 'fontes.json';
 
   final Map<String, String> _familias = {};
-  bool _carregado = false;
+  Future<void>? _loading;
 
   /// Avisa a interface quando uma fonte nova ficou pronta.
   final ValueNotifier<int> revision = ValueNotifier(0);
@@ -54,9 +54,9 @@ class FontService {
 
   /// Re-registra tudo o que ja foi importado. Roda uma vez, no comeco:
   /// o registro do Flutter vive so enquanto o processo vive.
-  Future<void> loadAll() async {
-    if (_carregado) return;
-    _carregado = true;
+  Future<void> loadAll() => _loading ??= _loadAll();
+
+  Future<void> _loadAll() async {
     try {
       final dir = await _pasta();
       final idx = File('${dir.path}/$_indice');
@@ -88,6 +88,7 @@ class FontService {
   /// Devolve o nome da familia (que e o nome do arquivo sem extensao —
   /// e o que a pessoa reconhece na lista) ou null se nao deu.
   Future<String?> import(String caminhoOrigem) async {
+    await loadAll();
     try {
       final origem = File(caminhoOrigem);
       if (!origem.existsSync()) return null;
@@ -120,6 +121,24 @@ class FontService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Import sequentially so registering and saving one font cannot race
+  /// with another. A broken file does not discard the rest of the selection.
+  Future<({List<String> imported, int failed})> importMany(
+    Iterable<String> paths,
+  ) async {
+    final imported = <String>[];
+    var failed = 0;
+    for (final path in paths) {
+      final family = await import(path);
+      if (family == null) {
+        failed++;
+      } else {
+        imported.add(family);
+      }
+    }
+    return (imported: imported, failed: failed);
   }
 
   /// Tira a fonte da lista e apaga o arquivo. O registro no Flutter so

@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/presentation/am/transform_panel.dart';
 import 'package:aurea/src/features/editor/presentation/editor_screen.dart';
@@ -92,9 +93,7 @@ void main() {
         'Pivo',
         'Opacid.',
       ]) {
-        final alvo = find.text(aba);
-        if (alvo.evaluate().isEmpty) continue;
-        await tester.tap(alvo.first);
+        await selectTransformTool(tester, aba);
         await tester.pumpAndSettle();
         if (tamanho.height >= 844) {
           expect(
@@ -109,7 +108,7 @@ void main() {
   }
 
   for (final MapEntry(key: nome, value: tamanho) in aparelhos.entries) {
-    testWidgets('o trilho mostra as seis abas de uma vez no $nome', (
+    testWidgets('o trilho mostra as quatro ferramentas principais de uma vez no $nome', (
       tester,
     ) async {
       await abrirEditor(tester, tamanho);
@@ -121,10 +120,8 @@ void main() {
         'Girar',
         'Escalar',
         'Inclinar',
-        'Pivo',
-        'Opacid.',
       ]) {
-        final alvo = find.text(aba);
+        final alvo = find.byTooltip(aba);
         expect(alvo, findsWidgets, reason: '$aba sumiu do trilho no $nome');
         final caixa = tester.getRect(alvo.first);
         // Existir na arvore nao basta: uma aba abaixo da borda so

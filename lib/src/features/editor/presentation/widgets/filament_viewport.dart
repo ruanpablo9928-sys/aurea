@@ -44,6 +44,7 @@ class _FilamentViewportState extends State<FilamentViewport>
   Object? _failure;
   Size _size = Size.zero;
   bool _resumed = true, _closing = false;
+  bool _visible = true;
   Timer? _retry;
 
   @override
@@ -65,7 +66,7 @@ class _FilamentViewportState extends State<FilamentViewport>
   }
 
   void _timings(List<FrameTiming> timings) {
-    if (!_resumed || _texture == null || _failure != null) return;
+    if (!_resumed || !_visible || _texture == null || _failure != null) return;
     var changed = false;
     for (final timing in timings) {
       // This is compositor/UI pressure, not a fabricated native GPU counter.
@@ -79,6 +80,13 @@ class _FilamentViewportState extends State<FilamentViewport>
       );
     }
     if (changed && mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // An editor below another full-screen route must not submit GPU work.
+    _visible = TickerMode.valuesOf(context).enabled;
   }
 
   @override
@@ -102,7 +110,7 @@ class _FilamentViewportState extends State<FilamentViewport>
 
   Future<void> _render(_Frame frame) async {
     await _initialization;
-    if (_closing || !_resumed || _failure != null) return;
+    if (_closing || !_resumed || !_visible || _failure != null) return;
     final factor =
         math.min(1.0, 1080 / math.max(frame.size.width, frame.size.height)) *
         _quality.scale;
@@ -137,7 +145,7 @@ class _FilamentViewportState extends State<FilamentViewport>
       // Keep the previous surface and retry the current document next frame.
       _retry?.cancel();
       _retry = Timer(const Duration(milliseconds: 16), () {
-        if (mounted && !_closing && _resumed) setState(() {});
+        if (mounted && !_closing && _resumed && _visible) setState(() {});
       });
       return;
     }
@@ -177,7 +185,11 @@ class _FilamentViewportState extends State<FilamentViewport>
     builder: (context, constraints) {
       _size = constraints.biggest;
       if (_failure != null) return widget.fallback;
-      if (_size.isFinite && !_size.isEmpty && _resumed) {
+      if (_size.isFinite &&
+          !_size.isEmpty &&
+          _resumed &&
+          _visible &&
+          !_closing) {
         final frame = (
           scene: widget.scene,
           camera: widget.camera,
@@ -185,7 +197,9 @@ class _FilamentViewportState extends State<FilamentViewport>
           size: _size,
         );
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _queue.submit(frame);
+          if (mounted && !_closing && _resumed && _visible) {
+            _queue.submit(frame);
+          }
         });
       }
       return _publishedTexture == null

@@ -98,42 +98,62 @@ List<LottieIssue> validateForLottie(
   void check(Layer l, String feature, String message) {
     final level = support.of(feature);
     if (level == LottieSupportLevel.full) return;
-    issues.add(LottieIssue(
-      layerId: l.id,
-      layerName: l.name,
-      feature: feature,
-      level: level,
-      message: message,
-    ));
+    issues.add(
+      LottieIssue(
+        layerId: l.id,
+        layerName: l.name,
+        feature: feature,
+        level: level,
+        message: message,
+      ),
+    );
   }
 
   void visit(Layer l) {
     switch (l) {
       case VideoLayer _:
-        check(l, 'video', 'Camada de video nao existe em Lottie — '
-            'rasterize em imagens ou remova.');
+        check(
+          l,
+          'video',
+          'Camada de video nao existe em Lottie — '
+              'rasterize em imagens ou remova.',
+        );
       case AudioLayer _:
         check(l, 'audio', 'Audio nao faz parte do Lottie.');
       case ParticlesLayer _:
-        check(l, 'particles',
-            'Particulas sao geradas em tempo real; Lottie nao tem '
-            'equivalente.');
+        check(
+          l,
+          'particles',
+          'Particulas sao geradas em tempo real; Lottie nao tem '
+              'equivalente.',
+        );
       case Element3DLayer _:
-        check(l, 'element3d',
-            'Malha 3D nao sobrevive: rasterize ou troque por forma.');
+        check(
+          l,
+          'element3d',
+          'Malha 3D nao sobrevive: rasterize ou troque por forma.',
+        );
       case AdjustmentLayer _:
-        check(l, 'adjustment',
-            'Camada de ajuste depende de ler o composto abaixo.');
+        check(
+          l,
+          'adjustment',
+          'Camada de ajuste depende de ler o composto abaixo.',
+        );
       case ImageLayer _:
-        check(l, 'image',
-            'Imagem vira asset embutido — o arquivo cresce.');
+        check(l, 'image', 'Imagem vira asset embutido — o arquivo cresce.');
       case TextLayer t:
-        check(l, 'text',
-            'Texto exporta como texto Lottie; a fonte precisa existir '
-            'no destino.');
+        check(
+          l,
+          'text',
+          'Texto exporta como texto Lottie; a fonte precisa existir '
+              'no destino.',
+        );
         if (t.animators.isNotEmpty) {
-          check(l, 'textAnimator',
-              'Animadores de texto viram aproximacao por keyframe.');
+          check(
+            l,
+            'textAnimator',
+            'Animadores de texto viram aproximacao por keyframe.',
+          );
         }
       case GroupLayer g:
         for (final c in g.children) {
@@ -141,27 +161,39 @@ List<LottieIssue> validateForLottie(
         }
       case NullLayer n:
         if (n.grid != null) {
-          check(l, 'grid',
-              'O modulo Grade e procedural: exporte precompondo o '
-              'resultado.');
+          check(
+            l,
+            'grid',
+            'O modulo Grade e procedural: exporte precompondo o '
+                'resultado.',
+          );
         }
       case Scene3DLayer _:
-        check(l, 'element3d',
-            'Cena 3D e renderizada em tempo real; Lottie nao tem '
-            'equivalente — rasterize.');
+        check(
+          l,
+          'element3d',
+          'Cena 3D e renderizada em tempo real; Lottie nao tem '
+              'equivalente — rasterize.',
+        );
       case ShapeLayer _:
       case CaptionLayer _:
         break;
     }
 
     if (l.blendMode != BlendMode.srcOver) {
-      check(l, 'blend.exotic',
-          'Modo de mesclagem sem equivalente confiavel em Lottie.');
+      check(
+        l,
+        'blend.exotic',
+        'Modo de mesclagem sem equivalente confiavel em Lottie.',
+      );
     }
     for (final e in l.effects) {
       if (!e.enabled) continue;
-      check(l, 'effect.raster',
-          'O efeito "${e.type.name}" e de raster e nao sobrevive.');
+      check(
+        l,
+        'effect.raster',
+        'O efeito "${e.type.name}" e de raster e nao sobrevive.',
+      );
     }
   }
 
@@ -173,8 +205,7 @@ List<LottieIssue> validateForLottie(
 
 // --------------------------------------------------------- conversao
 
-List<double> _color(Color c) =>
-    [c.r, c.g, c.b];
+List<double> _color(Color c) => [c.r, c.g, c.b];
 
 /// Valor animado -> propriedade Lottie (com ou sem keyframes).
 Map<String, dynamic> _lv(AnimatedDouble a, int fps, {double scale = 1}) {
@@ -190,8 +221,14 @@ Map<String, dynamic> _lv(AnimatedDouble a, int fps, {double scale = 1}) {
           's': [a.keyframes[i].value * scale],
           if (i < a.keyframes.length - 1)
             'e': [a.keyframes[i + 1].value * scale],
-          'i': {'x': [0.66], 'y': [1.0]},
-          'o': {'x': [0.33], 'y': [0.0]},
+          'i': {
+            'x': [0.66],
+            'y': [1.0],
+          },
+          'o': {
+            'x': [0.33],
+            'y': [0.0],
+          },
         },
     ],
   };
@@ -212,11 +249,7 @@ Map<String, dynamic> _lo(AnimatedOffset a, int fps) {
           't': a.keyframes[i].time.inMicroseconds * fps / 1000000,
           's': [a.keyframes[i].value.dx, a.keyframes[i].value.dy, 0],
           if (i < a.keyframes.length - 1)
-            'e': [
-              a.keyframes[i + 1].value.dx,
-              a.keyframes[i + 1].value.dy,
-              0
-            ],
+            'e': [a.keyframes[i + 1].value.dx, a.keyframes[i + 1].value.dy, 0],
           'i': {'x': 0.66, 'y': 1.0},
           'o': {'x': 0.33, 'y': 0.0},
         },
@@ -239,13 +272,11 @@ Map<String, dynamic> _transform(Layer l, int fps) {
           ? [
               for (var i = 0; i < scale.keyframes.length; i++)
                 {
-                  't': scale.keyframes[i].time.inMicroseconds *
-                      fps /
-                      1000000,
+                  't': scale.keyframes[i].time.inMicroseconds * fps / 1000000,
                   's': [
                     scale.keyframes[i].value,
                     scale.keyframes[i].value,
-                    100
+                    100,
                   ],
                   'i': {'x': 0.66, 'y': 1.0},
                   'o': {'x': 0.33, 'y': 0.0},
@@ -278,8 +309,12 @@ Map<String, dynamic> _pathData(Path path) {
   return {
     'a': 0,
     'k': {
-      'i': [for (var _ in vertices) [0.0, 0.0]],
-      'o': [for (var _ in vertices) [0.0, 0.0]],
+      'i': [
+        for (var _ in vertices) [0.0, 0.0],
+      ],
+      'o': [
+        for (var _ in vertices) [0.0, 0.0],
+      ],
       'v': vertices,
       'c': closed,
     },
@@ -290,10 +325,7 @@ List<Map<String, dynamic>> _shapeItems(ShapeLayer l, Duration t, int fps) {
   final out = <Map<String, dynamic>>[];
   final draws = evaluateShape(l.contents, t);
   for (final d in draws) {
-    out.add({
-      'ty': 'sh',
-      'ks': _pathData(d.path),
-    });
+    out.add({'ty': 'sh', 'ks': _pathData(d.path)});
     if (d.paint.style == PaintingStyle.stroke) {
       out.add({
         'ty': 'st',
@@ -313,8 +345,7 @@ List<Map<String, dynamic>> _shapeItems(ShapeLayer l, Duration t, int fps) {
 }
 
 /// Uma camada Lottie ("layers[]").
-Map<String, dynamic>? _layerJson(
-    VideoProject p, Layer l, int index, int fps) {
+Map<String, dynamic>? _layerJson(VideoProject p, Layer l, int index, int fps) {
   final ip = l.startTime.inMicroseconds * fps / 1000000;
   final op = l.endTime.inMicroseconds * fps / 1000000;
   final base = <String, dynamic>{
@@ -342,9 +373,18 @@ Map<String, dynamic>? _layerJson(
               ..._shapeItems(s, Duration.zero, fps),
               {
                 'ty': 'tr',
-                'p': {'a': 0, 'k': [0, 0]},
-                'a': {'a': 0, 'k': [0, 0]},
-                's': {'a': 0, 'k': [100, 100]},
+                'p': {
+                  'a': 0,
+                  'k': [0, 0],
+                },
+                'a': {
+                  'a': 0,
+                  'k': [0, 0],
+                },
+                's': {
+                  'a': 0,
+                  'k': [100, 100],
+                },
                 'r': {'a': 0, 'k': 0},
                 'o': {'a': 0, 'k': 100},
               },
@@ -375,7 +415,10 @@ Map<String, dynamic>? _layerJson(
           'p': <String, dynamic>{},
           'm': {
             'g': 1,
-            'a': {'a': 0, 'k': [0, 0]},
+            'a': {
+              'a': 0,
+              'k': [0, 0],
+            },
           },
           'a': <dynamic>[],
         },
@@ -456,8 +499,7 @@ LottieExport exportLottie(
     }
   }
 
-  final durationFrames =
-      project.duration.inMicroseconds * fps / 1000000;
+  final durationFrames = project.duration.inMicroseconds * fps / 1000000;
 
   return (
     json: <String, dynamic>{
@@ -481,45 +523,99 @@ LottieExport exportLottie(
 /// SVG ANIMADO (PR-X25): mesmo motor, saida diferente — util para web
 /// sem biblioteca. Anima transform por SMIL, que todo navegador le.
 String exportAnimatedSvg(VideoProject project) {
-  final w = project.outputWidth;
-  final h = project.outputHeight;
-  final dur = project.duration.inMilliseconds / 1000;
-  final buf = StringBuffer()
-    ..writeln('<svg xmlns="http://www.w3.org/2000/svg" '
-        'viewBox="0 0 $w $h" width="$w" height="$h">');
+  final w = project.outputWidth, h = project.outputHeight;
+  final durUs = math.max(1, project.duration.inMicroseconds);
+  final seconds = durUs / 1e6;
+  final out = StringBuffer(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $w $h" width="$w" height="$h">\n',
+  );
+  for (final layer in project.layers.reversed) {
+    if (layer is! ShapeLayer || !project.rendersInPreview(layer.id)) continue;
+    final animated =
+        layer.keyframeTimes.isNotEmpty ||
+        layer.startTime > Duration.zero ||
+        layer.duration < project.duration;
+    final count = animated ? (seconds * project.fps).ceil().clamp(1, 1800) : 1;
+    final times = [
+      for (var i = 0; i <= count; i++)
+        Duration(microseconds: (durUs * i / count).round()),
+    ];
+    final local = [for (final t in times) layer.localTime(t)];
+    final initialDraws = evaluateShape(layer.contents, local.first);
+    final draws = layer.moduleTimesUs.isEmpty
+        ? List.filled(local.length, initialDraws)
+        : [for (final t in local) evaluateShape(layer.contents, t)];
+    final pathCache = <ShapeDraw, String>{};
+    final transforms = [
+      for (final t in times) effectiveTransform(project, layer, t),
+    ];
+    final keyTimes = [
+      for (var i = 0; i <= count; i++) (i / count).toStringAsFixed(8),
+    ].join(';');
+    String anim(
+      String attribute,
+      List<String> values, {
+      String? type,
+      bool discrete = false,
+    }) {
+      if (values.every((v) => v == values.first)) return '';
+      final tag = type == null ? 'animate' : 'animateTransform';
+      return '<$tag attributeName="$attribute" ${type == null ? '' : 'type="$type"'} '
+          'values="${values.join(';')}" keyTimes="$keyTimes" dur="${seconds}s" '
+          'calcMode="${discrete ? 'discrete' : 'linear'}" repeatCount="indefinite" />';
+    }
 
-  for (final l in project.layers.reversed) {
-    if (l is! ShapeLayer) continue;
-    final draws = evaluateShape(l.contents, Duration.zero);
-    final pos = l.position.base;
-    buf.writeln('  <g transform="translate(${pos.dx},${pos.dy})">');
-    for (final d in draws) {
-      final c = d.paint.color;
-      final rgb = 'rgb(${(c.r * 255).round()},'
-          '${(c.g * 255).round()},${(c.b * 255).round()})';
-      final isStroke = d.paint.style == PaintingStyle.stroke;
-      buf.writeln('    <path d="${_svgPath(d.path)}" '
-          '${isStroke ? 'fill="none" stroke="$rgb" '
-              'stroke-width="${d.paint.strokeWidth}"' : 'fill="$rgb"'} />');
+    final positions = [for (final t in transforms) '${t.pos.dx} ${t.pos.dy}'];
+    final rotations = [for (final t in transforms) '${t.rot}'];
+    final scales = [
+      for (var i = 0; i < times.length; i++)
+        '${transforms[i].scale} ${layer.scaleY.valueAt(local[i]) * (layer.scaleX.valueAt(local[i]).abs() < 1e-9 ? 1 : transforms[i].scale / layer.scaleX.valueAt(local[i]))}',
+    ];
+    final opacity = [
+      for (var i = 0; i < times.length; i++)
+        '${layer.activeAt(times[i]) ? layer.opacity.valueAt(local[i]).clamp(0.0, 1.0) : 0}',
+    ];
+    final pivots = [for (final t in local) layer.pivot.valueAt(t)];
+    final pivotValues = [for (final p in pivots) '${p.dx} ${p.dy}'];
+    final inversePivot = [for (final p in pivots) '${-p.dx} ${-p.dy}'];
+    out.writeln(
+      '<g opacity="${opacity.first}">${anim('opacity', opacity, discrete: true)}',
+    );
+    void group(String type, List<String> values) => out.writeln(
+      '<g transform="$type(${values.first})">${anim('transform', values, type: type)}',
+    );
+    group('translate', positions);
+    group('translate', pivotValues);
+    group('rotate', rotations);
+    group('scale', scales);
+    group('translate', inversePivot);
+    final centers = [for (final d in draws) shapeBounds(d).center];
+    group('translate', [for (final c in centers) '${-c.dx} ${-c.dy}']);
+    final maxDraws = draws.fold<int>(0, (n, d) => math.max(n, d.length));
+    for (var index = 0; index < maxDraws; index++) {
+      final exemplar = draws.firstWhere((d) => d.length > index)[index];
+      final paint = exemplar.paint;
+      final color = paint.color;
+      final rgb =
+          'rgb(${(color.r * 255).round()},${(color.g * 255).round()},${(color.b * 255).round()})';
+      final paths = [
+        for (final d in draws)
+          index < d.length
+              ? pathCache.putIfAbsent(d[index], () => _svgPath(d[index].path))
+              : 'M0,0',
+      ];
+      final style = paint.style == PaintingStyle.stroke
+          ? 'fill="none" stroke="$rgb" stroke-width="${paint.strokeWidth}" stroke-opacity="${color.a}" stroke-linecap="${paint.strokeCap.name}" stroke-linejoin="${paint.strokeJoin.name}" stroke-miterlimit="${paint.strokeMiterLimit}"'
+          : 'fill="$rgb" fill-opacity="${color.a}"';
+      out.writeln(
+        '<path d="${paths.first}" $style fill-rule="${exemplar.path.fillType == PathFillType.evenOdd ? 'evenodd' : 'nonzero'}">'
+        '${anim('d', paths, discrete: true)}</path>',
+      );
     }
-    // Posicao animada vira animateTransform.
-    if (l.position.isAnimated) {
-      final values = l.position.keyframes
-          .map((k) => '${k.value.dx},${k.value.dy}')
-          .join(';');
-      final times = l.position.keyframes
-          .map((k) =>
-              (k.time.inMilliseconds / 1000 / (dur == 0 ? 1 : dur))
-                  .toStringAsFixed(4))
-          .join(';');
-      buf.writeln('    <animateTransform attributeName="transform" '
-          'type="translate" values="$values" keyTimes="$times" '
-          'dur="${dur}s" repeatCount="indefinite" />');
-    }
-    buf.writeln('  </g>');
+    out.writeln('</g></g></g></g></g></g></g>');
   }
-  buf.writeln('</svg>');
-  return buf.toString();
+  out.writeln('</svg>');
+  return out.toString();
 }
 
 String _svgPath(Path path) {
@@ -530,11 +626,13 @@ String _svgPath(Path path) {
       final tan = m.getTangentForOffset(m.length * i / steps);
       if (tan == null) continue;
       final p = tan.position;
-      buf.write(i == 0
-          ? 'M${p.dx.toStringAsFixed(2)},${p.dy.toStringAsFixed(2)}'
-          : ' L${p.dx.toStringAsFixed(2)},${p.dy.toStringAsFixed(2)}');
+      buf.write(
+        i == 0
+            ? 'M${p.dx.toStringAsFixed(2)},${p.dy.toStringAsFixed(2)}'
+            : ' L${p.dx.toStringAsFixed(2)},${p.dy.toStringAsFixed(2)}',
+      );
     }
-    buf.write(' Z');
+    if (m.isClosed) buf.write(' Z');
   }
   return buf.toString();
 }

@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
@@ -33,10 +34,7 @@ void main() {
     // Na primeira abertura o lugar da dica e das QUATRO DICAS de estreia:
     // elas moram na folha, e nao mais por cima do palco (la cobriam a
     // alca de girar). Depois de "Entendi", a linha de dica assume.
-    expect(find.byKey(const ValueKey('editor-dica')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('editor-dica-entendi')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('dica-palco')), findsOneWidget);
+    expect(find.byKey(const ValueKey('editor-dica')), findsNothing, reason: 'preview remains unobstructed');
 
     final id = c.read(editorControllerProvider).layers.first.id;
     c.read(selectedLayerProvider.notifier).state = id;
@@ -54,8 +52,7 @@ void main() {
     await openEditor(tester);
     for (final k in [
       'editor-back', 'editor-undo', 'editor-redo', 'editor-settings', 'editor-export',
-      'transport-start', 'transport-play', 'transport-end', 'transport-loop',
-      'transport-keyframe', 'transport-marker', 'editor-fab',
+      'transport-start', 'transport-play', 'transport-end', 'camada-duplicar', 'transport-expand', 'editor-fab',
     ]) {
       final r = tester.getSize(find.byKey(ValueKey(k)));
       expect(r.height, greaterThanOrEqualTo(44), reason: '$k altura ${r.height}');
@@ -76,14 +73,18 @@ void main() {
     playback.seek(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     final antes = c.read(editorControllerProvider).layers.length;
-    await tester.tap(find.byKey(const ValueKey('acao-dividir')));
+    await openLayerActions(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('mais-dividir')));
+    await tester.tap(find.byKey(const ValueKey('mais-dividir')));
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).layers.length, antes + 1);
     // Descobrir uma categoria: selecionar + olhar o grid (ja visivel).
     expect(find.text('Efeitos'), findsOneWidget);
     // Keyframe: 1 toque no ◆ da transporte.
     final sel = c.read(selectedLayerProvider)!;
-    await tester.tap(find.byKey(const ValueKey('transport-keyframe')));
+    await tester.tap(find.text('Mover e\ntransf.'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Adicionar keyframe neste instante'));
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).layerById(sel)!.keyframeTimes, isNotEmpty);
   });
@@ -113,8 +114,7 @@ void main() {
       e.trimLayerEnd(id, const Duration(seconds: 4));
       c.read(selectedLayerProvider.notifier).state = id;
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('acao-extrair')), findsOneWidget);
-      expect(find.byKey(const ValueKey('acao-levantar')), findsOneWidget);
+
 
       final playback = tester.widget<PreviewStage>(find.byType(PreviewStage)).playback;
       playback.seek(const Duration(seconds: 1));
@@ -129,7 +129,10 @@ void main() {
       expect(find.byKey(const ValueKey('marca-I')), findsOneWidget);
       expect(find.byKey(const ValueKey('marca-O')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('acao-extrair')));
+      await openLayerActions(tester);
+      expect(find.byKey(const ValueKey('mais-levantar')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('mais-extrair')));
+      await tester.tap(find.byKey(const ValueKey('mais-extrair')));
       await tester.pumpAndSettle();
       final total = c.read(editorControllerProvider).layers
           .where((l) => l.name.startsWith('Título'))

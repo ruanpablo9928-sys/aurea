@@ -1,36 +1,44 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../core/storage/prefs.dart';
 import '../domain/moderacao.dart';
+import 'comunidade_service.dart';
 
-/// A MINI CONTA DO MURAL.
+/// A CONTA DO MURAL.
 ///
-/// Mini porque nao tem senha, nao tem servidor e nao tem recuperacao: e
-/// uma identidade LOCAL, criada uma vez, que assina os posts. Isso e o
-/// que um mural de beta precisa — saber quem falou — e nada do que ele
-/// nao precisa.
+/// Ela vive NO SERVIDOR, e nao mais so no aparelho. O que muda com isso
+/// nao e burocracia, e uma coisa so: o autor de um post deixa de ser um
+/// texto que o aplicativo manda junto e passa a sair do CODIGO DE
+/// ACESSO. Antes, quem montasse a requisicao a mao assinava com o nome
+/// de quem quisesse.
 ///
-/// O que ela resolve, e por isso existe em vez de so um campo de nome:
+/// Nao ha senha nem e-mail, de proposito. Senha pede recuperacao,
+/// recuperacao pede e-mail, e-mail pede caixa de saida: tres pecas novas
+/// num mural de beta. O codigo faz o mesmo papel, cabe num bloco de
+/// notas, e serve para entrar noutro aparelho.
 ///
-///   1. QUEM ASSINA APARECE ANTES DE PUBLICAR. Sem conta, a pessoa
-///      escrevia e so descobria como tinha assinado depois.
-///   2. O APELIDO PASSA PELO FILTRO uma vez, na criacao, e nao a cada
-///      post. Sem isso, o mural fica limpo e a lista de autores nao.
-///   3. O ID SOBREVIVE A TROCA DE APELIDO. Um dia o mural vai ter
-///      servidor; quando tiver, os posts ja sabem de quem sao.
+/// O CODIGO E O QUE NAO PODE SE PERDER. Ele fica gravado aqui, e a tela
+/// da conta mostra para copiar. Perder o codigo e perder o apelido: sem
+/// e-mail, nao ha para onde mandar um "esqueci".
 class ContaDaComunidade {
   const ContaDaComunidade({
     required this.id,
     required this.apelido,
+    required this.codigo,
     required this.criadaEm,
     this.avatar,
   });
 
   final String id;
   final String apelido;
+
+  /// O que prova quem e. Nunca sai daqui a nao ser no cabecalho de uma
+  /// requisicao para o proprio mural.
+  final String codigo;
+
   final DateTime criadaEm;
 
   /// Caminho de um arquivo no aparelho. Nulo = usa a inicial do apelido.
@@ -42,6 +50,7 @@ class ContaDaComunidade {
   Map<String, dynamic> toJson() => {
     'id': id,
     'apelido': apelido,
+    'codigo': codigo,
     'criadaEm': criadaEm.toUtc().toIso8601String(),
     if (avatar != null) 'avatar': avatar,
   };
@@ -50,12 +59,14 @@ class ContaDaComunidade {
     try {
       final m = (jsonDecode(fonte) as Map).cast<String, dynamic>();
       final apelido = '${m['apelido'] ?? ''}';
-      if (apelido.trim().isEmpty) return null;
+      final codigo = '${m['codigo'] ?? ''}';
+      if (apelido.trim().isEmpty || codigo.trim().isEmpty) return null;
       return ContaDaComunidade(
-        id: '${m['id'] ?? const Uuid().v4()}',
+        id: '${m['id'] ?? ''}',
         apelido: apelido,
-        criadaEm: DateTime.tryParse('${m['criadaEm']}')?.toLocal() ??
-            DateTime.now(),
+        codigo: codigo,
+        criadaEm:
+            DateTime.tryParse('${m['criadaEm']}')?.toLocal() ?? DateTime.now(),
         avatar: m['avatar'] as String?,
       );
     } catch (_) {
@@ -67,6 +78,7 @@ class ContaDaComunidade {
       ContaDaComunidade(
         id: id,
         apelido: apelido ?? this.apelido,
+        codigo: codigo,
         criadaEm: criadaEm,
         avatar: avatar ?? this.avatar,
       );
@@ -81,19 +93,27 @@ class ContaDaComunidadeController extends Notifier<ContaDaComunidade?> {
       final bruto = ref.read(sharedPreferencesProvider).getString(_chave);
       return bruto == null ? null : ContaDaComunidade.deJson(bruto);
     } catch (_) {
-      // Sem prefs (teste, primeira execucao): simplesmente nao ha conta.
       return null;
     }
   }
 
-  /// Cria a conta. Devolve o motivo da recusa, ou null se deu certo.
-  String? criar(String apelido, {String? avatar}) {
+  ComunidadeService get _servico => ref.read(comunidadeServiceProvider);
+
+  /// CRIA A CONTA NO SERVIDOR. Devolve o motivo da recusa, ou null.
+  ///
+  /// O filtro roda aqui antes de chamar a rede — nao para valer (o que
+  /// vale e o do servidor), mas para a pessoa saber na hora que o
+  /// apelido nao serve, sem esperar a viagem.
+  Future<String?> criar(String apelido, {String? avatar}) async {
     final veredito = moderarApelido(apelido);
     if (veredito.bloqueia) return veredito.motivo;
+    final resposta = await _servico.criarConta(apelido);
+    if (resposta.erro != null) return resposta.erro;
     _gravar(
       ContaDaComunidade(
-        id: const Uuid().v4(),
-        apelido: apelido.trim(),
+        id: resposta.id!,
+        apelido: resposta.apelido!,
+        codigo: resposta.codigo!,
         criadaEm: DateTime.now(),
         avatar: avatar,
       ),
@@ -101,21 +121,45 @@ class ContaDaComunidadeController extends Notifier<ContaDaComunidade?> {
     return null;
   }
 
-  /// Troca apelido e/ou foto. Devolve o motivo da recusa, ou null.
-  String? atualizar({String? apelido, String? avatar}) {
-    final atual = state;
-    if (atual == null) return 'Crie a conta primeiro.';
-    if (apelido != null) {
-      final veredito = moderarApelido(apelido);
-      if (veredito.bloqueia) return veredito.motivo;
+  /// ENTRA COM O CODIGO, noutro aparelho. Devolve o motivo, ou null.
+  Future<String?> entrar(String codigo) async {
+    final limpo = codigo.trim().toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{48}$').hasMatch(limpo)) {
+      return 'Esse código não tem a cara de um código de acesso. '
+          'São 48 caracteres, entre 0 e 9 e a e f.';
     }
-    _gravar(atual.copyWith(apelido: apelido?.trim(), avatar: avatar));
+    final resposta = await _servico.entrarComCodigo(limpo);
+    if (resposta.erro != null) return resposta.erro;
+    _gravar(
+      ContaDaComunidade(
+        id: resposta.id!,
+        apelido: resposta.apelido!,
+        codigo: limpo,
+        criadaEm: DateTime.now(),
+      ),
+    );
     return null;
   }
 
-  /// Apaga a conta DESTE APARELHO. Os posts ja publicados continuam no
-  /// mural — o mural e de todos, e apagar a conta nao apaga o que a
-  /// pessoa disse aos outros.
+  /// Troca o apelido no servidor, ou so a foto (que e local).
+  Future<String?> atualizar({String? apelido, String? avatar}) async {
+    final atual = state;
+    if (atual == null) return 'Crie a conta primeiro.';
+    if (apelido != null && apelido.trim() != atual.apelido) {
+      final veredito = moderarApelido(apelido);
+      if (veredito.bloqueia) return veredito.motivo;
+      final resposta = await _servico.trocarApelido(atual.codigo, apelido);
+      if (resposta.erro != null) return resposta.erro;
+      _gravar(atual.copyWith(apelido: resposta.apelido, avatar: avatar));
+      return null;
+    }
+    _gravar(atual.copyWith(avatar: avatar));
+    return null;
+  }
+
+  /// Sai DESTE APARELHO. A conta continua no servidor, e o codigo faz
+  /// voltar — apagar a conta de verdade e outra conversa, e nao cabe
+  /// atras de um botao que qualquer toque errado alcanca.
   void sair() {
     state = null;
     try {
@@ -129,9 +173,7 @@ class ContaDaComunidadeController extends Notifier<ContaDaComunidade?> {
       ref
           .read(sharedPreferencesProvider)
           .setString(_chave, jsonEncode(conta.toJson()));
-    } catch (_) {
-      // Sem prefs a conta vale para esta sessao; melhor que travar.
-    }
+    } catch (_) {}
   }
 }
 
@@ -139,3 +181,44 @@ final contaDaComunidadeProvider =
     NotifierProvider<ContaDaComunidadeController, ContaDaComunidade?>(
       ContaDaComunidadeController.new,
     );
+
+final comunidadeServiceProvider = Provider<ComunidadeService>(
+  (ref) => ComunidadeService.instance,
+);
+
+/// O que o servidor devolve ao criar conta ou entrar.
+class RespostaDaConta {
+  const RespostaDaConta({this.id, this.apelido, this.codigo, this.erro});
+
+  final String? id;
+  final String? apelido;
+  final String? codigo;
+
+  /// Em portugues, vindo do proprio servidor quando ele recusa.
+  final String? erro;
+
+  static RespostaDaConta falha(String motivo) => RespostaDaConta(erro: motivo);
+
+  static RespostaDaConta lerOuFalhar(int status, String corpo) {
+    try {
+      final m = (jsonDecode(corpo) as Map).cast<String, dynamic>();
+      if (status == 200 || status == 201) {
+        return RespostaDaConta(
+          id: '${m['id']}',
+          apelido: '${m['apelido']}',
+          codigo: m['codigo'] as String?,
+        );
+      }
+      final erro = m['erro'];
+      if (erro is String && erro.isNotEmpty) return RespostaDaConta.falha(erro);
+    } catch (_) {}
+    return RespostaDaConta.falha(
+      'O mural respondeu de um jeito estranho ($status).',
+    );
+  }
+}
+
+/// Traduz uma falha de rede para uma frase que ajuda.
+String erroDeRede(Object e) => e is SocketException
+    ? 'Sem conexão com o mural.'
+    : 'Não consegui falar com o mural agora.';

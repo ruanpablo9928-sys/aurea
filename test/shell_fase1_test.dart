@@ -81,7 +81,10 @@ void main() {
       expect(m.timeline, lessThan(EditorLayoutMetrics.timelineMin));
       // O menu toma tudo que sobra abaixo do preview (que nao cede).
       expect(m.preview, closeTo(640 * 0.45, 0.01));
-      expect(m.sheet, closeTo(EditorLayoutMetrics.workspace(640) - m.preview, 0.01));
+      expect(
+        m.sheet,
+        closeTo(EditorLayoutMetrics.workspace(640) - m.preview, 0.01),
+      );
     });
 
     test('preview expandido toma tudo menos o transporte', () {
@@ -126,36 +129,30 @@ void main() {
       return c;
     }
 
-    test('nasce sem painel, na metade, preview a 40%', () {
+    test('nasce sem painel', () {
       final c = container();
       final s = c.read(editorSessionProvider);
       expect(s.panel, EditorPanel.none);
-      expect(s.sheetLevel, SheetLevel.half);
-      expect(s.previewFraction, closeTo(0.401, 1e-9));
       expect(s.panelOpen, isFalse);
       expect(s.adding, isFalse);
     });
 
-    test('abrir categoria a partir do espiar sobe para a metade', () {
+    test('abrir e fechar o painel nao mexe em altura nenhuma', () {
+      // AS ALTURAS SAO CONSTANTES. Este teste existe para que ninguem
+      // reintroduza um nivel de painel sem perceber: a queixa que fez o
+      // arrasto sair foi justamente a de que a tela mudava de tamanho
+      // sozinha a cada toque.
       final c = container();
       final n = c.read(editorSessionProvider.notifier);
-      n.setSheetLevel(SheetLevel.peek);
       n.openPanel(EditorPanel.effects);
-      final s = c.read(editorSessionProvider);
-      expect(s.panel, EditorPanel.effects);
-      expect(s.sheetLevel, SheetLevel.half);
-      expect(s.panelOpen, isTrue);
-    });
-
-    test('adicionar abre cheio e fechar volta a metade', () {
-      final c = container();
-      final n = c.read(editorSessionProvider.notifier);
+      expect(c.read(editorSessionProvider).panel, EditorPanel.effects);
+      expect(c.read(editorSessionProvider).panelOpen, isTrue);
       n.openAdd();
       expect(c.read(editorSessionProvider).adding, isTrue);
-      expect(c.read(editorSessionProvider).sheetLevel, SheetLevel.full);
       n.closeAdd();
       expect(c.read(editorSessionProvider).panel, EditorPanel.none);
-      expect(c.read(editorSessionProvider).sheetLevel, SheetLevel.half);
+      expect(EditorSession.alturaDaFolha, closeTo(0.40, 1e-9));
+      expect(EditorSession.alturaDoPreview, closeTo(0.50, 1e-9));
     });
 
     test('a curva volta para o painel de onde veio', () {
@@ -182,37 +179,16 @@ void main() {
       expect(c.read(editorSessionProvider).pointsItemId, isNull);
     });
 
-    test('a alca do painel encaixa no nivel mais proximo', () {
-      final c = container();
-      final n = c.read(editorSessionProvider.notifier);
-      n.setSheetFraction(0.25);
-      n.snapSheet();
-      expect(c.read(editorSessionProvider).sheetLevel, SheetLevel.peek);
-      expect(c.read(editorSessionProvider).sheetFraction, isNull);
-      n.setSheetFraction(0.55);
-      n.snapSheet();
-      expect(c.read(editorSessionProvider).sheetLevel, SheetLevel.full);
-      expect(
-        c.read(editorSessionProvider).effectiveSheetFraction,
-        EditorSession.fractionOfLevel(SheetLevel.full),
-      );
-    });
-
-    test('a fracao do preview e presa', () {
-      final c = container();
-      final n = c.read(editorSessionProvider.notifier);
-      n.setPreviewFraction(0.9);
-      expect(c.read(editorSessionProvider).previewFraction, 0.60);
-      n.setPreviewFraction(0.1);
-      expect(c.read(editorSessionProvider).previewFraction, 0.14);
-    });
   });
 
   group('parseTimecodeInput', () {
     test('segundos, minutos e quadros', () {
       expect(parseTimecodeInput('1.5', 30), const Duration(milliseconds: 1500));
       expect(parseTimecodeInput('1,5', 30), const Duration(milliseconds: 1500));
-      expect(parseTimecodeInput('1:02.5', 30), const Duration(seconds: 62, milliseconds: 500));
+      expect(
+        parseTimecodeInput('1:02.5', 30),
+        const Duration(seconds: 62, milliseconds: 500),
+      );
       expect(parseTimecodeInput('00:01:02', 30), const Duration(seconds: 62));
       expect(
         parseTimecodeInput('00:00:01:15', 30),
@@ -223,10 +199,18 @@ void main() {
     });
   });
 
-  testWidgets('a barra de cima tem um estado so: Exportar sempre a vista', (tester) async {
+  testWidgets('o cabecalho acompanha a camada e mantem voltar e ajustes', (
+    tester,
+  ) async {
     final c = await openEditor(tester);
     void barra(String momento) {
-      for (final k in ['editor-back', 'editor-project-name', 'editor-undo', 'editor-redo', 'editor-settings', 'editor-pro', 'editor-export']) {
+      for (final k in [
+        'editor-back',
+        'editor-project-name',
+        'editor-undo',
+        'editor-redo',
+        'editor-settings',
+      ]) {
         expect(find.byKey(ValueKey(k)), findsOneWidget, reason: '$k $momento');
       }
     }
@@ -234,11 +218,15 @@ void main() {
     barra('sem selecao');
     // A barra de adicionar so aparece pelo "+": sem selecao o painel fica
     // fechado e a timeline fica com o espaco.
-    expect(find.byKey(const ValueKey('adicionar-midia')), findsNothing);
+    expect(find.byKey(const ValueKey('add-tab-midia')), findsNothing);
     expect(find.byKey(const ValueKey('editor-fab')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('editor-fab')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('adicionar-midia')), findsOneWidget, reason: 'E1 pelo +');
+    expect(
+      find.byKey(const ValueKey('add-tab-midia')),
+      findsOneWidget,
+      reason: 'E1 pelo +',
+    );
     await tester.tap(find.byKey(const ValueKey('editor-back')));
     await tester.pumpAndSettle();
 
@@ -246,8 +234,12 @@ void main() {
     c.read(selectedLayerProvider.notifier).state = id;
     await tester.pumpAndSettle();
     barra('com selecao');
-    expect(find.byKey(const ValueKey('quick-actions')), findsOneWidget, reason: 'E2 com selecao');
-    expect(find.byKey(const ValueKey('camada-nome')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('camada-mais')),
+      findsOneWidget,
+      reason: 'E2 com selecao',
+    );
+    expect(find.byKey(const ValueKey('editor-project-name')), findsOneWidget);
 
     await tester.tap(find.text('Mover e\ntransf.'));
     await tester.pumpAndSettle();
@@ -255,109 +247,132 @@ void main() {
     expect(find.text('Transformar · Posição'), findsOneWidget);
   });
 
-  testWidgets('o timecode e tocavel: digitar o tempo leva o cabecote', (tester) async {
+  testWidgets('segurar o fim permite digitar o tempo exato', (tester) async {
     await openEditor(tester);
-    await tester.tap(find.byKey(const ValueKey('transport-timecode')));
+    await tester.longPress(find.byKey(const ValueKey('transport-end')));
     await tester.pumpAndSettle();
     final campo = find.byKey(const ValueKey('transport-timecode-campo'));
     expect(campo, findsOneWidget);
     await tester.enterText(campo, '1.5');
     await tester.tap(find.text('Ir'));
     await tester.pumpAndSettle();
-    // 1.5 s a 30 fps: 00:01:15.
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('transport-timecode')),
-        matching: find.textContaining('00:01:15'),
-      ),
-      findsOneWidget,
+      tester.widget<AmTimeline>(find.byType(AmTimeline)).playback.time.value,
+      const Duration(milliseconds: 1500),
     );
   });
 
-  testWidgets('o ◆ do transporte crava e tira o keyframe da propriedade ativa', (tester) async {
-    final c = await openEditor(tester);
-    final id = c.read(editorControllerProvider).layers.first.id;
-    c.read(selectedLayerProvider.notifier).state = id;
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Mover e\ntransf.'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'o ◆ da ferramenta crava e tira o keyframe da propriedade ativa',
+    (tester) async {
+      final c = await openEditor(tester);
+      final id = c.read(editorControllerProvider).layers.first.id;
+      c.read(selectedLayerProvider.notifier).state = id;
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mover e\ntransf.'));
+      await tester.pumpAndSettle();
 
-    Layer camada() => c.read(editorControllerProvider).layerById(id)!;
-    expect(camada().keyframeTimes, isEmpty);
+      Layer camada() => c.read(editorControllerProvider).layerById(id)!;
+      expect(camada().keyframeTimes, isEmpty);
 
-    final losango = find.byKey(const ValueKey('transport-keyframe'));
-    expect(losango, findsOneWidget);
-    await tester.tap(losango);
-    await tester.pumpAndSettle();
-    expect(camada().keyframeTimes, isNotEmpty, reason: 'um keyframe em 0 s');
-    expect(find.byTooltip('Keyframe: remover aqui'), findsOneWidget);
+      final losango = find.byTooltip('Adicionar keyframe neste instante');
+      expect(losango, findsOneWidget);
+      await tester.tap(losango);
+      await tester.pumpAndSettle();
+      expect(camada().keyframeTimes, isNotEmpty, reason: 'um keyframe em 0 s');
+      expect(find.byTooltip('Remover keyframe neste instante'), findsOneWidget);
 
-    await tester.tap(losango);
-    await tester.pumpAndSettle();
-    expect(camada().keyframeTimes, isEmpty, reason: 'o mesmo toque tira');
-    expect(find.byTooltip('Keyframe: adicionar aqui'), findsOneWidget);
-  });
+      await tester.tap(find.byTooltip('Remover keyframe neste instante'));
+      await tester.pumpAndSettle();
+      expect(camada().keyframeTimes, isEmpty, reason: 'o mesmo toque tira');
+      expect(
+        find.byTooltip('Adicionar keyframe neste instante'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('Simples/Pro: o interruptor so acrescenta acoes', (tester) async {
-    final c = await openEditor(tester);
-    // Projeto em memoria vazio na lista: nasce Simples.
-    expect(c.read(proModeProvider), isFalse);
-    final id = c.read(editorControllerProvider).layers.first.id;
-    c.read(selectedLayerProvider.notifier).state = id;
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('acao-dividir')), findsOneWidget);
-    expect(find.byKey(const ValueKey('acao-alinhar')), findsNothing, reason: 'Alinhar e Pro');
+  testWidgets(
+    'controles avancados ficam nos ajustes sem esconder as ferramentas',
+    (tester) async {
+      final c = await openEditor(tester);
+      expect(c.read(proModeProvider), isFalse);
+      c.read(selectedLayerProvider.notifier).state = c
+          .read(editorControllerProvider)
+          .layers
+          .first
+          .id;
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
+      expect(find.byKey(const ValueKey('editor-pro')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('editor-settings')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('editor-pro')));
+      await tester.pumpAndSettle();
+      expect(c.read(proModeProvider), isTrue);
+      expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
+    },
+  );
 
-    await tester.tap(find.byKey(const ValueKey('editor-pro')));
-    await tester.pumpAndSettle();
-    expect(c.read(proModeProvider), isTrue);
-    expect(find.byKey(const ValueKey('acao-dividir')), findsOneWidget, reason: 'nada saiu do lugar');
-    expect(find.byKey(const ValueKey('acao-alinhar')), findsOneWidget, reason: 'Pro acrescenta');
-  });
+  testWidgets(
+    'o + abre a barra; Texto cria em um toque; Midia abre o seletor',
+    (tester) async {
+      final c = await openEditor(tester);
+      final antes = c.read(editorControllerProvider).layers.length;
 
-  testWidgets('o + abre a barra; Texto cria em um toque; Midia abre o seletor', (tester) async {
-    final c = await openEditor(tester);
-    final antes = c.read(editorControllerProvider).layers.length;
+      await tester.tap(find.byKey(const ValueKey('editor-fab')));
+      await tester.pumpAndSettle();
+      expect(
+        c.read(editorSessionProvider).adding,
+        isTrue,
+        reason: 'o + e o unico lugar de adicionar',
+      );
+      await tester.tap(find.text('Texto'));
+      await tester.pumpAndSettle();
+      final camadas = c.read(editorControllerProvider).layers;
+      expect(camadas.length, antes + 1);
+      expect(
+        camadas.any((l) => l is TextLayer),
+        isTrue,
+        reason: 'um toque, um texto',
+      );
 
-    await tester.tap(find.byKey(const ValueKey('editor-fab')));
-    await tester.pumpAndSettle();
-    expect(c.read(editorSessionProvider).adding, isTrue, reason: 'o + e o unico lugar de adicionar');
-    await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
-    await tester.pumpAndSettle();
-    final camadas = c.read(editorControllerProvider).layers;
-    expect(camadas.length, antes + 1);
-    expect(camadas.any((l) => l is TextLayer), isTrue, reason: 'um toque, um texto');
-
-    c.read(selectedLayerProvider.notifier).state = null;
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('editor-fab')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('adicionar-midia')));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('Fechar adicionar'), findsOneWidget);
-    // Fechar o seletor volta um passo, para a barra do "+".
-    await tester.tap(find.byTooltip('Fechar adicionar'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('adicionar-midia')), findsOneWidget, reason: 'voltou a barra');
-    expect(c.read(editorSessionProvider).adding, isTrue);
-
-    // Tocar no vazio da timeline fecha tudo.
-    final linha = tester.getRect(find.byType(AmTimeline));
-    await tester.tapAt(Offset(linha.left + 20, linha.bottom - 10));
-    await tester.pumpAndSettle();
-    expect(c.read(editorSessionProvider).adding, isFalse, reason: 'a timeline fecha');
-    expect(find.byKey(const ValueKey('adicionar-midia')), findsNothing);
-  });
+      c.read(selectedLayerProvider.notifier).state = null;
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('editor-fab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('add-tab-midia')));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Fechar adicionar'), findsOneWidget);
+      // Closing the selector returns directly to the timeline.
+      await tester.tap(find.byTooltip('Fechar adicionar'));
+      await tester.pumpAndSettle();
+      expect(c.read(editorSessionProvider).adding, isFalse);
+      expect(find.byKey(const ValueKey('add-tab-midia')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('editor-fab')).hitTestable(),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('selecao multipla mostra a barra do conjunto', (tester) async {
     final c = await openEditor(tester);
-    final ids = c.read(editorControllerProvider).layers.map((l) => l.id).toList();
+    final ids = c
+        .read(editorControllerProvider)
+        .layers
+        .map((l) => l.id)
+        .toList();
     c.read(selectedLayerProvider.notifier).state = ids[0];
     c.read(multiSelectProvider.notifier).state = {ids[0], ids[1]};
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('selecao-contagem')), findsOneWidget);
     expect(find.byKey(const ValueKey('selecao-agrupar')), findsOneWidget);
-    expect(find.byKey(const ValueKey('quick-actions')), findsNothing, reason: 'E2 e de uma camada so');
+    expect(
+      find.byKey(const ValueKey('camada-mais')),
+      findsNothing,
+      reason: 'E2 e de uma camada so',
+    );
     await tester.tap(find.byKey(const ValueKey('selecao-limpar')));
     await tester.pumpAndSettle();
     expect(c.read(multiSelectProvider), isEmpty);

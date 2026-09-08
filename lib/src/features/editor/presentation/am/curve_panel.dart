@@ -12,7 +12,6 @@ import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
-import '../../application/ui/pro_mode.dart';
 
 /// Painel "Curva de gradacao": grafico tempo->tempo com grade, alcas
 /// grandes, thumbnails de preset a direita e navegacao entre segmentos.
@@ -189,95 +188,6 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
     }
 
     final ease = segment == null ? null : _easeOf(layer, segment.$1);
-    final pro = ref.watch(proModeProvider);
-
-    // SIMPLES (E5): a grade de presets com miniatura, grande, e a
-    // navegacao entre trechos. O editor de curva e Pro.
-    if (!pro && segment != null && ease != null) {
-      return ColoredBox(
-        color: AmColors.panel,
-        child: Column(
-          children: [
-            SizedBox(
-              height: 32,
-              child: Row(
-                children: [
-                  CupertinoButton(
-                    padding: const EdgeInsets.all(8),
-                    onPressed: () => _jumpSegment(layer, -1),
-                    child: const Icon(
-                      CupertinoIcons.chevron_left,
-                      size: 18,
-                      color: AmColors.muted,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Trecho ${times.indexOf(segment.$1) + 1}'
-                      '\u2192${times.indexOf(segment.$1) + 2}'
-                      ' \u00b7 ${ease.label}',
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      style: const TextStyle(fontSize: 12, color: AmColors.muted),
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: const EdgeInsets.all(8),
-                    onPressed: () => _jumpSegment(layer, 1),
-                    child: const Icon(
-                      CupertinoIcons.chevron_right,
-                      size: 18,
-                      color: AmColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: _ScopeToggle(
-                todos: _aplicarEmTodos,
-                horizontal: true,
-                onChanged: (v) => setState(() => _aplicarEmTodos = v),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: GridView.count(
-                key: const ValueKey('curve-presets-grid'),
-                crossAxisCount: 4,
-                childAspectRatio: 1.35,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 8,
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                children: [
-                  for (final preset in _presets)
-                    _PresetTile(
-                      key: ValueKey('curva-preset-${preset.nome}'),
-                      ease: preset.ease,
-                      label: preset.nome,
-                      selected: _samePreset(ease, preset.ease),
-                      onTap: () => _aplicarEmTodos
-                          ? controller.applyEaseToAllSegments(
-                              id,
-                              widget.prop,
-                              preset.ease,
-                            )
-                          : controller.setSegmentEase(
-                              id,
-                              widget.prop,
-                              segment!.$1,
-                              preset.ease,
-                            ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return ColoredBox(
       color: AmColors.panel,
       child: segment == null || ease == null
@@ -307,6 +217,15 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                 // Trilho esquerdo: voltar / inverter / menu.
                 Column(
                   children: [
+                    AmRailButton(
+                      key: const ValueKey('curve-back'),
+                      onTap: widget.onBack,
+                      child: const Icon(
+                        CupertinoIcons.chevron_back,
+                        size: 23,
+                        color: AmColors.text,
+                      ),
+                    ),
                     const Spacer(),
                     Flexible(
                       child: AmRailButton(
@@ -557,11 +476,6 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
   }
 
   static const _presets = <({String nome, Easing ease})>[
-    (nome: 'Apple padrão', ease: Easing.appleStandard),
-    (nome: 'Apple entrada', ease: Easing.appleEntrance),
-    (nome: 'Apple saída', ease: Easing.appleExit),
-    (nome: 'Mola interface', ease: Easing.interfaceSpring),
-    (nome: 'Mola suave', ease: Easing.softSpring),
     (nome: 'Linear', ease: Easing.linear),
     (nome: 'Ease in', ease: Easing.easeIn),
     (nome: 'Ease out', ease: Easing.easeOut),
@@ -571,6 +485,11 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
     (nome: 'Elástico', ease: Easing.elastic),
     (nome: 'Degraus', ease: Easing(type: EasingType.steps)),
     (nome: 'Cíclico', ease: Easing(type: EasingType.cyclic)),
+    (nome: 'Apple padrão', ease: Easing.appleStandard),
+    (nome: 'Apple entrada', ease: Easing.appleEntrance),
+    (nome: 'Apple saída', ease: Easing.appleExit),
+    (nome: 'Mola interface', ease: Easing.interfaceSpring),
+    (nome: 'Mola suave', ease: Easing.softSpring),
   ];
 
   static bool _samePreset(Easing a, Easing b) {
@@ -1043,8 +962,9 @@ class _SpeedGraphState extends State<_SpeedGraph> {
 
         void inicio(DragStartDetails d) {
           final p = d.localPosition;
-          _ponto =
-              (p - pIni).distanceSquared <= (p - pFim).distanceSquared ? 1 : 2;
+          _ponto = (p - pIni).distanceSquared <= (p - pFim).distanceSquared
+              ? 1
+              : 2;
           widget.onGestoInicio?.call();
         }
 
@@ -1054,11 +974,8 @@ class _SpeedGraphState extends State<_SpeedGraph> {
           final p = d.localPosition;
           final pertoIni = ponto == 1;
           final x = (p.dx / size.width).clamp(0.02, 0.98);
-          final v =
-              ((size.height - p.dy) / size.height * _SpeedGraph._vMax).clamp(
-                0.0,
-                _SpeedGraph._vMax,
-              );
+          final v = ((size.height - p.dy) / size.height * _SpeedGraph._vMax)
+              .clamp(0.0, _SpeedGraph._vMax);
           if (x.isNaN || v.isNaN || !x.isFinite || !v.isFinite) return;
           if (pertoIni) {
             // influencia = x1; velocidade inicial = y1/x1 -> y1 = v * x1.
@@ -1332,7 +1249,6 @@ class _AmCurvePainter extends CustomPainter {
 
 class _PresetTile extends StatelessWidget {
   const _PresetTile({
-    super.key,
     required this.ease,
     required this.label,
     required this.selected,

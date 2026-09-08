@@ -14,8 +14,6 @@ class ContextSheet extends StatelessWidget {
     super.key,
     required this.height,
     required this.child,
-    required this.onDrag,
-    required this.onDragEnd,
     this.title,
     this.subtitle,
     this.onBack,
@@ -26,24 +24,14 @@ class ContextSheet extends StatelessWidget {
   final double height;
   final Widget child;
 
-  /// Delta vertical do dedo na alca, em pixels (para cima = negativo).
-  final ValueChanged<double> onDrag;
-  final VoidCallback onDragEnd;
-
   /// Cabecalho opcional: `‹ titulo` (categoria aberta) e a trilha.
   final String? title;
   final String? subtitle;
   final VoidCallback? onBack;
   final Widget? trailing;
 
-  /// A FAIXA DO CABECALHO DA FOLHA.
-  ///
-  /// Eram 18 px, e dentro deles cabia um chevron de 16 com a palavra
-  /// "Voltar" em corpo 10 — que e o que o beta chamou de "MUITO
-  /// pequena". Um alvo de toque nao existe em 18 px: o dedo cobre a
-  /// faixa inteira e ainda pega a alca de arrastar. Em 34 cabe um
-  /// simbolo de 26 com folga, e a folha perde 16 px uma vez so.
-  static const double handleHeight = 26;
+  static const double handleHeight = 12;
+  static const double titleHeight = 44;
 
   @override
   Widget build(BuildContext context) {
@@ -58,104 +46,47 @@ class ContextSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // A ALCA E O CABECALHO SAO UMA LINHA SO (18 px): a alca no
-          // meio; a esquerda, o voltar e a trilha "Projeto › Camada ·
-          // Categoria" quando ha categoria aberta. Cada pixel aqui e
-          // pixel que o painel de transformacao perde.
-          GestureDetector(
+          SizedBox(
             key: const ValueKey('context-sheet-handle'),
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
-            onVerticalDragEnd: (_) => onDragEnd(),
-            child: SizedBox(
-              height: handleHeight,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: t.muted.withValues(alpha: .45),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  if (title != null)
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      right: 60,
-                      child: Row(
-                        children: [
-                          if (onBack != null)
-                            // VOLTAR SO COM O SIMBOLO, E GRANDE.
-                            //
-                            // A palavra ao lado do chevron obrigava os
-                            // dois a encolher para caber na faixa, e o
-                            // resultado era um alvo que ninguem acerta.
-                            // Um chevron de 26 num quadrado de 44 e
-                            // maior que o par inteiro era antes, e o
-                            // gesto de voltar ja e conhecido.
-                            Tooltip(
-                              message: 'Voltar às ferramentas da camada',
-                              child: GestureDetector(
-                                key: const ValueKey('painel-voltar'),
-                                behavior: HitTestBehavior.opaque,
-                                onTap: onBack,
-                                child: SizedBox(
-                                  width: 44,
-                                  height: handleHeight,
-                                  child: Icon(
-                                    Icons.chevron_left,
-                                    size: 22,
-                                    color: t.text,
-                                  ),
-                                ),
-                              ),
-                            )
-                          else
-                            const SizedBox(width: 10),
-                          if (subtitle != null)
-                            Flexible(
-                              child: Text(
-                                subtitle!,
-                                key: const ValueKey('editor-context'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  height: 1.1,
-                                  color: t.muted,
-                                ),
-                              ),
+            height: handleHeight,
+            // SEM PUXADOR quando nao ha titulo. A pilula cinza convidava
+            // a arrastar; agora nada se arrasta, e um convite que nao
+            // leva a lugar nenhum e pior do que nao convidar.
+            child: title == null
+                  ? const SizedBox.shrink()
+                  : Row(
+                      children: [
+                        if (onBack != null)
+                          IconButton(
+                            key: const ValueKey('painel-voltar'),
+                            tooltip: 'Voltar às ferramentas da camada',
+                            onPressed: onBack,
+                            icon: Icon(
+                              Icons.chevron_left,
+                              size: 26,
+                              color: t.text,
                             ),
-                          if (subtitle != null)
-                            Text(
-                              ' · ',
-                              style: TextStyle(fontSize: 10, color: t.muted),
-                            ),
-                          Flexible(
+                          ),
+                        Expanded(
+                          child: Tooltip(
+                            message: subtitle ?? title!,
                             child: Text(
                               title!,
+                              key: const ValueKey('editor-context'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 10,
-                                height: 1.1,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: t.text,
                               ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        ?trailing,
+                        const SizedBox(width: 12),
+                      ],
                     ),
-                  if (trailing != null)
-                    Positioned(right: 4, top: 0, bottom: 0, child: trailing!),
-                ],
-              ),
-            ),
           ),
           Expanded(child: child),
         ],
@@ -169,39 +100,27 @@ class ContextSheet extends StatelessWidget {
 class PreviewResizeHandle extends StatelessWidget {
   const PreviewResizeHandle({
     super.key,
-    required this.onDrag,
-    required this.onReset,
     required this.onExpand,
     required this.expanded,
   });
 
-  final ValueChanged<double> onDrag;
-  final VoidCallback onReset;
   final VoidCallback onExpand;
   final bool expanded;
 
   @override
   Widget build(BuildContext context) {
     final t = AureaTokens.of(context);
-    return GestureDetector(
+    // A FAIXA NAO ARRASTA MAIS. A altura do preview sai da proporcao da
+    // composicao, e o unico botao aqui e o de tela cheia. O que sobrou
+    // e a linha que separa o preview do transporte.
+    return SizedBox(
       key: const ValueKey('preview-resize-handle'),
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
-      onDoubleTap: onReset,
       child: Container(
         height: EditorLayoutMetrics.handleHeight,
         color: t.surface,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: t.muted.withValues(alpha: .45),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
             Positioned(
               right: 4,
               child: Tooltip(

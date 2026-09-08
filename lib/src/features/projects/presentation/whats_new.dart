@@ -16,6 +16,29 @@ class NewsItem {
 /// de PR. A lista completa abre no toque.
 const aureaNews = <NewsItem>[
   NewsItem(
+    CupertinoIcons.cube_box,
+    'Rastreio de camera 3D, do video ate o texto na calcada',
+    'Depois de analisar, os pontos aparecem em cima do video. Toque ou '
+        'arraste para escolher uma superficie, defina o chao, crie a camera '
+        'e pouse texto, forma ou nulo em cima — ja com posicao, giro e '
+        'tamanho certos. A ficha mostra erro de reprojecao, pontos bons e '
+        'a lente resolvida; os pontos ruins dao para apagar e recalcular.',
+  ),
+  NewsItem(
+    CupertinoIcons.rectangle_stack,
+    'As abas pararam de subir e descer',
+    'O painel de baixo e a previa tem sempre a mesma altura. Nada mais '
+        'muda de tamanho quando o dedo passa perto da borda, e o botao que '
+        'voce acabou de ver continua onde estava.',
+  ),
+  NewsItem(
+    CupertinoIcons.person_2,
+    'Comunidade com conta, resposta e repost',
+    'Conta de verdade com codigo de acesso, para entrar em outro aparelho. '
+        'Da para responder, repostar, publicar imagem e publicar um projeto '
+        'inteiro — quem ve abre como projeto novo.',
+  ),
+  NewsItem(
     CupertinoIcons.photo,
     'Mídia importada com prévia ao vivo',
     'Fotos e vídeos, inclusive dentro de grupos, não passam mais pela '

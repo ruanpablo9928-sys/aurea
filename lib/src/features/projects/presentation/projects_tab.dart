@@ -385,14 +385,23 @@ class ProjectsTab extends ConsumerWidget {
             // com o nome escrito, em vez de espremerem o principal.
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final apertado = constraints.maxWidth < 340;
+                // Reserve room for both labels, icons and button padding.
+                // At 411 logical pixels, the four-button row squeezed AutoEdit.
+                final apertado =
+                    constraints.maxWidth <
+                    460 * MediaQuery.textScalerOf(context).scale(1);
                 Widget principais() => Row(
                   children: [
                     Expanded(
                       child: SizedBox(
                         height: 48,
                         child: FilledButton.icon(
-                          icon: const Icon(CupertinoIcons.plus, size: 19),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          icon: constraints.maxWidth < 320
+                              ? null
+                              : const Icon(CupertinoIcons.plus, size: 19),
                           label: const Text('Novo projeto'),
                           onPressed: () => _createProject(context, ref),
                         ),
@@ -403,6 +412,9 @@ class ProjectsTab extends ConsumerWidget {
                       child: SizedBox(
                         height: 48,
                         child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
                           icon: const Icon(CupertinoIcons.sparkles, size: 18),
                           label: const Text('AutoEdit'),
                           onPressed: () => Navigator.of(context).push(
@@ -592,11 +604,8 @@ class ProjectsTab extends ConsumerWidget {
                     imagem: 'assets/templates/mao-enterrada.png',
                     titulo: 'MÃO ENTERRADA · Deserto ao entardecer',
                     detalhe: '15 s · 4 câmeras · malha orgânica e céu',
-                    onTap: () => _abrirModelo(
-                      context,
-                      ref,
-                      buildMaoEnterradaTemplate(),
-                    ),
+                    onTap: () =>
+                        _abrirModelo(context, ref, buildMaoEnterradaTemplate()),
                   ),
                   _CartaoModelo(
                     imagem: 'assets/templates/abyss.jpg',

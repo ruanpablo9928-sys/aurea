@@ -263,5 +263,11 @@ bool _nomeOfensivo(String autor) {
 /// O de cima protege quem escreve daqui. Este protege quem le: o feed
 /// vem de fora, e um dia vai vir com coisa que nao passou por este app.
 /// Post reprovado nao aparece, e ninguem precisa saber que ele existiu.
-bool podeMostrar(String texto, String autor) =>
-    !moderarTexto(texto).bloqueia && !_nomeOfensivo(autor);
+/// [permiteVazio] e para o REPOST SEM COMENTARIO: la o texto vazio e o
+/// caso normal, e o filtro de "escreva alguma coisa" — que existe para
+/// quem esta digitando — sumiria com o cartao.
+bool podeMostrar(String texto, String autor, {bool permiteVazio = false}) {
+  if (_nomeOfensivo(autor)) return false;
+  if (permiteVazio && texto.trim().isEmpty) return true;
+  return !moderarTexto(texto).bloqueia;
+}

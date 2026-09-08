@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -56,6 +57,16 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
             chevron: true,
             onTap: () async {
               await renomearProjeto(context, ref);
+              atualiza();
+            },
+          ),
+          LinhaDoEstudio(
+            key: const ValueKey('editor-pro'),
+            icone: CupertinoIcons.slider_horizontal_3,
+            titulo: 'Controles avançados',
+            subtitulo: pro ? 'Ativados' : 'Desativados',
+            onTap: () {
+              ref.read(proModeProvider.notifier).toggle();
               atualiza();
             },
           ),
@@ -367,7 +378,8 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
             key: const ValueKey('projeto-dicas'),
             icone: CupertinoIcons.lightbulb,
             titulo: 'Ver as dicas de novo',
-            subtitulo: 'As quatro dicas de primeiro uso voltam ao abrir o editor',
+            subtitulo:
+                'As quatro dicas de primeiro uso voltam ao abrir o editor',
             onTap: () async {
               await OnboardingPrefs.marcar(ref, false);
               if (ctx.mounted) Navigator.of(ctx).pop();
@@ -378,7 +390,8 @@ Future<void> showProjectSettingsSheet(BuildContext context, WidgetRef ref) {
               key: const ValueKey('projeto-diagnostico'),
               icone: CupertinoIcons.waveform_path_ecg,
               titulo: 'Diagnostico na tela',
-              subtitulo: 'Marcha, composicoes por segundo, memoria e o motor 3D.',
+              subtitulo:
+                  'Marcha, composicoes por segundo, memoria e o motor 3D.',
               ligado: diag,
               onTap: () {
                 ref.read(debugOverlayProvider.notifier).state = !diag;

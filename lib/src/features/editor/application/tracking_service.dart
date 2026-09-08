@@ -75,6 +75,73 @@ class TrackingService {
     return out;
   }
 
+  /// OS QUADROS QUE A PESSOA VE, em cor e um pouco maiores.
+  ///
+  /// Sao outros arquivos, e nao os do rastreio: aqueles sao cinza e de
+  /// 240 px porque e o que a conta precisa, e mostrar isso na tela seria
+  /// devolver uma miniatura sem cor de um video que a pessoa acabou de
+  /// filmar. Aqui o que importa e reconhecer a cena para saber ONDE
+  /// pousar o objeto — e para isso a imagem precisa parecer o video.
+  ///
+  /// Devolve os arquivos em ordem de tempo. Uma lista vazia nao e erro:
+  /// a tela mostra os pontos sobre o fundo e segue funcionando.
+  Future<List<File>> quadrosParaMostrar(
+    String path, {
+    required Duration start,
+    required Duration duration,
+    required String chave,
+    int quantos = 24,
+    int largura = 480,
+  }) async {
+    final segundos = duration.inMilliseconds / 1000.0;
+    if (segundos <= 0 || quantos < 2) return const [];
+    final base = await getApplicationSupportDirectory();
+    final dir = Directory('${base.path}/track_view/${_nomeSeguro(chave)}');
+    // JA EXTRAIDO E JA SERVE. Reabrir a tela do rastreio nao pode
+    // significar rodar o ffmpeg de novo em cima do mesmo trecho.
+    if (dir.existsSync()) {
+      final antigos = _pngsDe(dir);
+      if (antigos.length >= quantos - 1) return antigos;
+      dir.deleteSync(recursive: true);
+    }
+    dir.createSync(recursive: true);
+    // A taxa sai da conta "quantos quadros eu quero neste trecho": pedir
+    // fps fixo daria trinta imagens num clipe de um segundo e duas num
+    // de trinta.
+    final taxa = (quantos / segundos).clamp(0.5, 30.0);
+    try {
+      final session = await FFmpegKit.executeWithArguments([
+        '-y',
+        '-ss', (start.inMilliseconds / 1000.0).toStringAsFixed(3),
+        '-t', segundos.toStringAsFixed(3),
+        '-i', path,
+        '-vf', 'fps=$taxa,scale=$largura:-2',
+        '-frames:v', '$quantos',
+        '-start_number', '0',
+        '${dir.path}/%05d.jpg',
+      ]);
+      if (!ReturnCode.isSuccess(await session.getReturnCode())) {
+        return const [];
+      }
+    } catch (_) {
+      return const [];
+    }
+    return _pngsDe(dir);
+  }
+
+  static List<File> _pngsDe(Directory d) =>
+      d.listSync().whereType<File>().where((f) {
+        final p = f.path.toLowerCase();
+        return p.endsWith('.jpg') || p.endsWith('.png');
+      }).toList()..sort((a, b) => a.path.compareTo(b.path));
+
+  /// O id da camada vira nome de pasta, e um id vindo de fora poderia
+  /// trazer "../" e escrever onde nao deve.
+  static String _nomeSeguro(String bruto) {
+    final limpo = bruto.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '');
+    return limpo.isEmpty ? 'clipe' : limpo;
+  }
+
   Future<GrayFrame?> _paraCinza(File f) async {
     try {
       final codec = await ui.instantiateImageCodec(await f.readAsBytes());

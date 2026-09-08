@@ -525,9 +525,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     hasColor: true,
     montar: ['radius', 'exposure', 'threshold'],
     presets: [
-      EffectPronto('Suave', {'radius': 0.03, 'exposure': 0.6, 'threshold': 1.2}),
-      EffectPronto('Medio', {'radius': 0.05, 'exposure': 1.0, 'threshold': 1.0}),
-      EffectPronto('Intenso', {'radius': 0.09, 'exposure': 1.8, 'threshold': 0.8}),
+      EffectPronto('Suave', {
+        'radius': 0.03,
+        'exposure': 0.6,
+        'threshold': 1.2,
+      }),
+      EffectPronto('Medio', {
+        'radius': 0.05,
+        'exposure': 1.0,
+        'threshold': 1.0,
+      }),
+      EffectPronto('Intenso', {
+        'radius': 0.09,
+        'exposure': 1.8,
+        'threshold': 0.8,
+      }),
     ],
   ),
   // Tremor de camera: aleatorio e REPETIVEL, com fase integrada — animar
@@ -687,7 +699,11 @@ const effectSpecs = <EffectType, EffectSpec>{
     presets: [
       EffectPronto('Sutil', {'quantidade': 0.4, 'velocidade': 0.6, 'rgb': 0.3}),
       EffectPronto('Medio', {'quantidade': 1.0, 'velocidade': 1.0, 'rgb': 0.5}),
-      EffectPronto('Caotico', {'quantidade': 2.0, 'velocidade': 4.0, 'rgb': 1.0}),
+      EffectPronto('Caotico', {
+        'quantidade': 2.0,
+        'velocidade': 4.0,
+        'rgb': 1.0,
+      }),
     ],
   ),
   EffectType.rgbSplit: EffectSpec(
@@ -1067,9 +1083,17 @@ const effectSpecs = <EffectType, EffectSpec>{
   ),
   EffectType.mosaic: EffectSpec(
     id: 'mosaic',
-    name: 'Mosaic',
+    name: 'Pixelar (Mosaico)',
     category: 'Stylize',
-    synonyms: ['mosaico', 'mosaic', 'pixelate', 'pixel', 'censura'],
+    synonyms: [
+      'mosaico',
+      'mosaic',
+      'pixelate',
+      'pixel',
+      'pixelar',
+      'pixelizar',
+      'censura',
+    ],
     params: {'blocos': EffectParam('Blocos', 24.0, 3.0, 160.0)},
     montar: ['blocos'],
     presets: [
@@ -1122,9 +1146,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     hasColor: true,
     montar: ['escala', 'complexidade', 'opacidade'],
     presets: [
-      EffectPronto('Suave', {'escala': 0.4, 'complexidade': 2, 'opacidade': 0.4}),
-      EffectPronto('Medio', {'escala': 0.25, 'complexidade': 3, 'opacidade': 0.6}),
-      EffectPronto('Denso', {'escala': 0.12, 'complexidade': 5, 'opacidade': 0.8}),
+      EffectPronto('Suave', {
+        'escala': 0.4,
+        'complexidade': 2,
+        'opacidade': 0.4,
+      }),
+      EffectPronto('Medio', {
+        'escala': 0.25,
+        'complexidade': 3,
+        'opacidade': 0.6,
+      }),
+      EffectPronto('Denso', {
+        'escala': 0.12,
+        'complexidade': 5,
+        'opacidade': 0.8,
+      }),
     ],
   ),
   EffectType.digitalDamage: EffectSpec(
@@ -1157,9 +1193,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['blocos', 'deslocamento', 'intervalo'],
     presets: [
-      EffectPronto('Sutil', {'blocos': 3, 'deslocamento': 0.08, 'intervalo': 0.8}),
-      EffectPronto('Medio', {'blocos': 6, 'deslocamento': 0.15, 'intervalo': 0.4}),
-      EffectPronto('Pesado', {'blocos': 14, 'deslocamento': 0.4, 'intervalo': 0.15}),
+      EffectPronto('Sutil', {
+        'blocos': 3,
+        'deslocamento': 0.08,
+        'intervalo': 0.8,
+      }),
+      EffectPronto('Medio', {
+        'blocos': 6,
+        'deslocamento': 0.15,
+        'intervalo': 0.4,
+      }),
+      EffectPronto('Pesado', {
+        'blocos': 14,
+        'deslocamento': 0.4,
+        'intervalo': 0.15,
+      }),
     ],
   ),
   EffectType.zoomWarp: EffectSpec(
@@ -1180,6 +1228,7 @@ const effectSpecs = <EffectType, EffectSpec>{
       EffectPronto('Forte', {'quantidade': 0.5, 'rastro': 0.6}),
     ],
   ),
+
   /// RECORTE POR CROMA — o fundo verde (ou azul) que vira transparencia.
   ///
   /// A distancia e medida no plano de croma, sem a luminancia: fundo
@@ -1271,8 +1320,14 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['tolerancia', 'suavidade'],
     presets: [
-      EffectPronto('Verde', {'tolerancia': .15, 'suavidade': .08}, cor: Color(0xFF1FD41F)),
-      EffectPronto('Azul', {'tolerancia': .15, 'suavidade': .08}, cor: Color(0xFF1F5FD4)),
+      EffectPronto('Verde', {
+        'tolerancia': .15,
+        'suavidade': .08,
+      }, cor: Color(0xFF1FD41F)),
+      EffectPronto('Azul', {
+        'tolerancia': .15,
+        'suavidade': .08,
+      }, cor: Color(0xFF1F5FD4)),
       EffectPronto('Preciso', {'tolerancia': .06, 'suavidade': .04}),
     ],
   ),
@@ -1463,9 +1518,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['threshold', 'sort_angle', 'blend_with_original'],
     presets: [
-      EffectPronto('Sutil', {'threshold': 0.6, 'sort_angle': 0, 'blend_with_original': 0.5}),
-      EffectPronto('Medio', {'threshold': 0.3, 'sort_angle': 0, 'blend_with_original': 0.0}),
-      EffectPronto('Extremo', {'threshold': 0.1, 'sort_angle': 90, 'blend_with_original': 0.0}),
+      EffectPronto('Sutil', {
+        'threshold': 0.6,
+        'sort_angle': 0,
+        'blend_with_original': 0.5,
+      }),
+      EffectPronto('Medio', {
+        'threshold': 0.3,
+        'sort_angle': 0,
+        'blend_with_original': 0.0,
+      }),
+      EffectPronto('Extremo', {
+        'threshold': 0.1,
+        'sort_angle': 90,
+        'blend_with_original': 0.0,
+      }),
     ],
   ),
 
@@ -1606,9 +1673,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['threshold', 'sensitivity', 'max_blobs'],
     presets: [
-      EffectPronto('Poucos', {'threshold': 50, 'sensitivity': 40, 'max_blobs': 5}),
-      EffectPronto('Medio', {'threshold': 35, 'sensitivity': 50, 'max_blobs': 20}),
-      EffectPronto('Muitos', {'threshold': 20, 'sensitivity': 70, 'max_blobs': 60}),
+      EffectPronto('Poucos', {
+        'threshold': 50,
+        'sensitivity': 40,
+        'max_blobs': 5,
+      }),
+      EffectPronto('Medio', {
+        'threshold': 35,
+        'sensitivity': 50,
+        'max_blobs': 20,
+      }),
+      EffectPronto('Muitos', {
+        'threshold': 20,
+        'sensitivity': 70,
+        'max_blobs': 60,
+      }),
     ],
   ),
 
@@ -1635,9 +1714,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['quantidade', 'tamanho', 'complexidade'],
     presets: [
-      EffectPronto('Leve', {'quantidade': 15, 'tamanho': 80, 'complexidade': 2}),
-      EffectPronto('Medio', {'quantidade': 40, 'tamanho': 60, 'complexidade': 2}),
-      EffectPronto('Forte', {'quantidade': 120, 'tamanho': 40, 'complexidade': 4}),
+      EffectPronto('Leve', {
+        'quantidade': 15,
+        'tamanho': 80,
+        'complexidade': 2,
+      }),
+      EffectPronto('Medio', {
+        'quantidade': 40,
+        'tamanho': 60,
+        'complexidade': 2,
+      }),
+      EffectPronto('Forte', {
+        'quantidade': 120,
+        'tamanho': 40,
+        'complexidade': 4,
+      }),
     ],
   ),
 
@@ -1726,7 +1817,11 @@ const effectSpecs = <EffectType, EffectSpec>{
     presets: [
       EffectPronto('Ladrilho 2x2', {'tile_width': 50, 'tile_height': 50}),
       EffectPronto('Ladrilho 3x3', {'tile_width': 33.3, 'tile_height': 33.3}),
-      EffectPronto('Espelhado', {'tile_width': 50, 'tile_height': 50, 'mirror_edges': 1}),
+      EffectPronto('Espelhado', {
+        'tile_width': 50,
+        'tile_height': 50,
+        'mirror_edges': 1,
+      }),
     ],
   ),
 
@@ -1902,9 +1997,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['intensidade', 'blocos', 'deslocamento'],
     presets: [
-      EffectPronto('Sutil', {'intensidade': 0.3, 'blocos': 4, 'deslocamento': 20}),
-      EffectPronto('Medio', {'intensidade': 0.6, 'blocos': 8, 'deslocamento': 60}),
-      EffectPronto('Caotico', {'intensidade': 1.0, 'blocos': 20, 'deslocamento': 200}),
+      EffectPronto('Sutil', {
+        'intensidade': 0.3,
+        'blocos': 4,
+        'deslocamento': 20,
+      }),
+      EffectPronto('Medio', {
+        'intensidade': 0.6,
+        'blocos': 8,
+        'deslocamento': 60,
+      }),
+      EffectPronto('Caotico', {
+        'intensidade': 1.0,
+        'blocos': 20,
+        'deslocamento': 200,
+      }),
     ],
   ),
 
@@ -2069,9 +2176,21 @@ const effectSpecs = <EffectType, EffectSpec>{
     },
     montar: ['exposicao', 'contraste', 'saturacao'],
     presets: [
-      EffectPronto('Suave', {'exposicao': 0.2, 'contraste': 0.1, 'saturacao': 0.1}),
-      EffectPronto('Medio', {'exposicao': 0.4, 'contraste': 0.25, 'saturacao': 0.2}),
-      EffectPronto('Forte', {'exposicao': 0.8, 'contraste': 0.5, 'saturacao': 0.4}),
+      EffectPronto('Suave', {
+        'exposicao': 0.2,
+        'contraste': 0.1,
+        'saturacao': 0.1,
+      }),
+      EffectPronto('Medio', {
+        'exposicao': 0.4,
+        'contraste': 0.25,
+        'saturacao': 0.2,
+      }),
+      EffectPronto('Forte', {
+        'exposicao': 0.8,
+        'contraste': 0.5,
+        'saturacao': 0.4,
+      }),
     ],
   ),
 

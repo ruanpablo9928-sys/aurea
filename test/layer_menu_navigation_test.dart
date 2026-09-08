@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/effect_preset_store.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
@@ -127,6 +128,7 @@ void main() {
         await tester.pumpAndSettle();
         // Acao rapida e tile podem ter o mesmo rotulo (Volume): o primeiro
         // serve — os dois abrem a mesma ficha.
+        if (['Câmeras', 'Fonte', 'Caminho', 'Tempo'].contains(button)) await openLayerActions(tester);
         final target = find.text(button).evaluate().isNotEmpty
             ? find.text(button).first
             : find.byTooltip(button).first;

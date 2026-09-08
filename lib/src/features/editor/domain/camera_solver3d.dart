@@ -93,6 +93,10 @@ class SolucaoCamera3D {
     required this.erroPixels,
     required this.quadros,
     required this.fps,
+    this.errosPorPonto = const {},
+    this.vistasPorPonto = const {},
+    this.pontosSeguidos = 0,
+    this.tipoDeTomada = TipoDeTomada.auto,
   });
 
   /// Tamanho do quadro ANALISADO (nao o do video).
@@ -116,6 +120,98 @@ class SolucaoCamera3D {
   /// Quantos quadros a analise tinha, e a que taxa.
   final int quadros;
   final int fps;
+
+  /// O ERRO DE CADA PONTO, em pixels do quadro analisado.
+  ///
+  /// O erro medio da cena esconde o caso que interessa: uma solucao com
+  /// 0,9 px de media pode ter dez pontos com 6 px cada, e sao esses que
+  /// fazem o objeto tremer. Guardado por ponto, da para MOSTRAR quais
+  /// sao ruins e deixar apaga-los.
+  final Map<int, double> errosPorPonto;
+
+  /// Em quantos quadros cada ponto foi visto. Um ponto com erro baixo
+  /// visto em tres quadros e sorte, nao qualidade.
+  final Map<int, int> vistasPorPonto;
+
+  /// Quantos pontos a etapa de seguimento achou, antes de a
+  /// reconstrucao descartar os que nao fecharam.
+  final int pontosSeguidos;
+
+  /// O tipo de tomada com que a analise foi feita.
+  final TipoDeTomada tipoDeTomada;
+
+  /// A QUALIDADE DE UM PONTO, do jeito que a tela mostra.
+  ///
+  /// Erro e permanencia contam juntos porque um sozinho engana: um ponto
+  /// visto em tres quadros quase sempre fecha (ha poucas observacoes
+  /// para contraria-lo), e um ponto visto no video inteiro com dois
+  /// pixels de erro ainda sustenta a cena.
+  QualidadeDoPonto qualidadeDoPonto(int id) {
+    final e = errosPorPonto[id];
+    final v = vistasPorPonto[id] ?? 0;
+    if (e == null) return QualidadeDoPonto.ruim;
+    final poucasVistas = v < math.max(4, quadros ~/ 6);
+    if (e > 4) return QualidadeDoPonto.ruim;
+    if (e > 2 || poucasVistas) return QualidadeDoPonto.fraco;
+    if (e > 1) return QualidadeDoPonto.bom;
+    return QualidadeDoPonto.excelente;
+  }
+
+  List<int> pontosDaQualidade(Set<QualidadeDoPonto> quais) => [
+    for (final id in nuvem.keys)
+      if (quais.contains(qualidadeDoPonto(id))) id,
+  ];
+
+  /// De uma a cinco estrelas, o que a ficha do solve mostra.
+  ///
+  /// Nao e so o erro: uma cena com erro baixo e vinte pontos e fragil, e
+  /// uma com erro medio e seiscentos pontos sustenta. As duas coisas
+  /// entram, e a menor manda.
+  int get estrelas {
+    final porErro = switch (erroPixels) {
+      < 0.5 => 5,
+      < 1.0 => 4,
+      < 2.0 => 3,
+      < 4.0 => 2,
+      _ => 1,
+    };
+    final porPontos = switch (nuvem.length) {
+      >= 300 => 5,
+      >= 150 => 4,
+      >= 60 => 3,
+      >= 25 => 2,
+      _ => 1,
+    };
+    return math.min(porErro, porPontos);
+  }
+
+  /// Quantos pontos aguentam segurar um objeto.
+  int get pontosBons => pontosDaQualidade({
+    QualidadeDoPonto.excelente,
+    QualidadeDoPonto.bom,
+  }).length;
+
+  SolucaoCamera3D copiarCom({
+    List<PoseCamera>? poses,
+    Map<int, List<double>>? nuvem,
+    Map<int, double>? errosPorPonto,
+    Map<int, int>? vistasPorPonto,
+    double? erroPixels,
+    TipoDeTomada? tipoDeTomada,
+  }) => SolucaoCamera3D(
+    largura: largura,
+    altura: altura,
+    focalPx: focalPx,
+    poses: poses ?? this.poses,
+    nuvem: nuvem ?? this.nuvem,
+    erroPixels: erroPixels ?? this.erroPixels,
+    quadros: quadros,
+    fps: fps,
+    errosPorPonto: errosPorPonto ?? this.errosPorPonto,
+    vistasPorPonto: vistasPorPonto ?? this.vistasPorPonto,
+    pontosSeguidos: pontosSeguidos,
+    tipoDeTomada: tipoDeTomada ?? this.tipoDeTomada,
+  );
 
   bool get isEmpty => poses.isEmpty || nuvem.isEmpty;
 
@@ -151,6 +247,10 @@ class SolucaoCamera3D {
       for (final p in poses) [p.quadro, ...p.rotacao.m, ...p.translacao],
     ],
     'n': {for (final e in nuvem.entries) '${e.key}': e.value},
+    'ep': {for (final e in errosPorPonto.entries) '${e.key}': e.value},
+    'vp': {for (final e in vistasPorPonto.entries) '${e.key}': e.value},
+    'ps': pontosSeguidos,
+    'tt': tipoDeTomada.name,
   };
 
   static SolucaoCamera3D? decode(String fonte) {
@@ -177,6 +277,22 @@ class SolucaoCamera3D {
               for (final v in (e.value as List)) (v as num).toDouble(),
             ],
         },
+        // Solucao gravada por uma versao antiga nao tem estes campos. Ela
+        // continua valendo: sem eles a cena e a camera sao as mesmas, e o
+        // que se perde e so a ficha de qualidade.
+        errosPorPonto: {
+          for (final e in ((m['ep'] as Map?) ?? const {}).entries)
+            int.parse(e.key as String): (e.value as num).toDouble(),
+        },
+        vistasPorPonto: {
+          for (final e in ((m['vp'] as Map?) ?? const {}).entries)
+            int.parse(e.key as String): (e.value as num).toInt(),
+        },
+        pontosSeguidos: ((m['ps'] as num?) ?? 0).toInt(),
+        tipoDeTomada: TipoDeTomada.values.firstWhere(
+          (t) => t.name == m['tt'],
+          orElse: () => TipoDeTomada.auto,
+        ),
       );
     } catch (_) {
       // Solucao antiga ou estragada nao pode impedir de rastrear de novo.
@@ -191,6 +307,125 @@ enum FalhaDoRastreio {
   poucosPontos,
   semParalaxe,
   naoConvergiu,
+}
+
+/// QUANTO SE PODE CONFIAR NUM PONTO.
+///
+/// Um ponto ruim nao estraga a media da cena — estraga o objeto colado
+/// nele. Por isso a qualidade e por ponto, e nao so do solve.
+enum QualidadeDoPonto {
+  excelente,
+  bom,
+  fraco,
+  ruim;
+
+  String get emPalavras => switch (this) {
+    QualidadeDoPonto.excelente => 'Excelente',
+    QualidadeDoPonto.bom => 'Bom',
+    QualidadeDoPonto.fraco => 'Fraco',
+    QualidadeDoPonto.ruim => 'Ruim',
+  };
+}
+
+/// COMO A TOMADA FOI FEITA.
+///
+/// Saber isto ANTES muda a conta. Uma lente fixa deixa a focal ser
+/// resolvida uma vez para o clipe inteiro (mais estavel); um zoom pede
+/// que ela varie; um tripe nao tem paralaxe nenhuma e nao da rastreio
+/// 3D — nesse caso o certo e dizer isso, e nao devolver uma cena
+/// inventada. Quem nao sabe deixa em [auto], que e o padrao.
+enum TipoDeTomada {
+  auto,
+  lenteFixa,
+  zoomVariavel,
+  tripe;
+
+  String get emPalavras => switch (this) {
+    TipoDeTomada.auto => 'Detectar sozinho',
+    TipoDeTomada.lenteFixa => 'Lente fixa',
+    TipoDeTomada.zoomVariavel => 'Zoom durante a tomada',
+    TipoDeTomada.tripe => 'Tripé / panorâmica',
+  };
+}
+
+/// O QUE A ANALISE VE DA FILMAGEM, antes de tentar resolver.
+///
+/// E o "Auto Detect" da referencia: olhar o movimento dos pontos e dizer
+/// que tipo de cena e aquela. O numero que decide e o residuo da
+/// homografia — quanto de todo o deslocamento uma unica transformacao
+/// plana ja explica. Perto de zero: ou a camera girou no lugar, ou tudo
+/// esta na mesma distancia. Longe: ha profundidade de verdade.
+enum LeituraDaCena {
+  /// Camera girando no lugar. Nao da rastreio 3D.
+  tripeOuGiro,
+
+  /// Ha movimento, mas tudo quase no mesmo plano: da para resolver, e a
+  /// profundidade sai fraca.
+  quaseChata,
+
+  /// O caso bom: coisas perto e longe, camera andando.
+  profundidadeBoa;
+
+  String get emPalavras => switch (this) {
+    LeituraDaCena.tripeOuGiro => 'Tripé ou giro no lugar',
+    LeituraDaCena.quaseChata => 'Cena quase plana',
+    LeituraDaCena.profundidadeBoa => 'Cena com profundidade',
+  };
+}
+
+/// O ACERTO QUE SE PEDE, e o tempo que se aceita esperar por ele.
+///
+/// Sao DOIS PASSES, e nao tres algoritmos: o rapido serve para ver na
+/// hora se a filmagem da rastreio; o preciso e para fechar o projeto. O
+/// que muda entre eles e a quantidade de quadros lidos, de pontos
+/// seguidos e de rodadas de refinamento — nao a matematica.
+enum ModoDoSolve {
+  rapido,
+  equilibrado,
+  preciso;
+
+  String get emPalavras => switch (this) {
+    ModoDoSolve.rapido => 'Rápido',
+    ModoDoSolve.equilibrado => 'Equilibrado',
+    ModoDoSolve.preciso => 'Preciso',
+  };
+
+  String get explicacao => switch (this) {
+    ModoDoSolve.rapido =>
+      'Poucos segundos. Serve para ver se a filmagem dá rastreio.',
+    ModoDoSolve.equilibrado => 'O padrão: bom resultado sem esperar demais.',
+    ModoDoSolve.preciso => 'Mais quadros e mais pontos. Demora, e gruda.',
+  };
+
+  /// Quadros por segundo lidos do video.
+  int get fps => switch (this) {
+    ModoDoSolve.rapido => 5,
+    ModoDoSolve.equilibrado => 8,
+    ModoDoSolve.preciso => 12,
+  };
+
+  /// Quantos pontos seguir.
+  int get pontos => switch (this) {
+    ModoDoSolve.rapido => 70,
+    ModoDoSolve.equilibrado => 110,
+    ModoDoSolve.preciso => 220,
+  };
+
+  /// Teto de quadros lidos. Um video longo nao pode virar RAM: mil
+  /// quadros em tons de cinza a 240 px ja sao setenta megabytes, e num
+  /// iPhone 13 isso e o app fechado.
+  int get maximoDeQuadros => switch (this) {
+    ModoDoSolve.rapido => 120,
+    ModoDoSolve.equilibrado => 240,
+    ModoDoSolve.preciso => 400,
+  };
+
+  /// Rodadas de refinamento alternado (pose e pontos).
+  int get refinos => switch (this) {
+    ModoDoSolve.rapido => 1,
+    ModoDoSolve.equilibrado => 2,
+    ModoDoSolve.preciso => 4,
+  };
 }
 
 class RastreioException implements Exception {
@@ -665,38 +900,75 @@ class _Preparado {
   }
 }
 
-/// Escolhe o SEGUNDO quadro do par inicial.
+/// A NOTA DE UM PAR DE QUADROS como semente da reconstrucao.
 ///
 /// O criterio nao e "o mais longe": longe demais e nao ha pontos em
 /// comum. E o que tem muitos pontos em comum E deslocamento suficiente —
 /// sem deslocamento a essencial e indeterminada, e a cena sai plana.
-int? _melhorParceiro(
+/// Paralaxe pesa mais do que quantidade: dobrar o deslocamento melhora a
+/// triangulacao mais do que dobrar o numero de pontos.
+double _notaDoPar(
   List<PontoSeguido> pontos,
-  int base,
+  int a,
+  int b, {
+  required double paralaxeMinima,
+}) {
+  final desloc = <double>[];
+  for (final p in pontos) {
+    final pa = p.em(a), pb = p.em(b);
+    if (pa != null && pb != null) desloc.add((pb - pa).distance);
+  }
+  if (desloc.length < 12) return 0;
+  final par = mediana(desloc);
+  if (par < paralaxeMinima) return 0;
+  return desloc.length * math.sqrt(par);
+}
+
+/// ESCOLHE O PAR INICIAL — os dois quadros de onde a cena nasce.
+///
+/// O PRIMEIRO QUADRO NAO E SAGRADO, e essa foi a licao cara. Enquanto a
+/// base era sempre o quadro zero, tres filmagens comuns nao fechavam:
+///
+///   - o chicote, em que a camera fica quase parada no comeco e so
+///     entao dispara: o par (0, k) nao tem deslocamento nenhum ate o
+///     movimento comecar, e quando comeca os pontos do quadro zero ja
+///     sairam do enquadramento;
+///   - a filmagem escura, em que o ruido do primeiro quadro define a
+///     geometria de tudo o que vem depois;
+///   - a que comeca com borrao e so estabiliza depois de um segundo.
+///
+/// Em todas, ha um par excelente no meio do clipe. Procurar a base entre
+/// varios candidatos custa algumas contas de mediana e resolve as tres —
+/// e e o que qualquer reconstrucao seria faz: a semente escolhe a si
+/// mesma, pela qualidade, e nao pela posicao na fila.
+({int base, int parceiro})? _melhorPar(
+  List<PontoSeguido> pontos,
   List<int> quadros, {
   required double paralaxeMinima,
 }) {
-  var melhor = -1;
+  if (quadros.length < 2) return null;
+  // Candidatos a base espalhados pela primeira metade: a base precisa
+  // de quadros DEPOIS dela para a reconstrucao crescer para os dois
+  // lados, entao nao adianta procurar perto do fim.
+  final candidatos = <int>{quadros.first};
+  final ate = math.max(1, quadros.length ~/ 2);
+  for (var i = 0; i < 6; i++) {
+    candidatos.add(quadros[(i * ate / 6).floor().clamp(0, quadros.length - 1)]);
+  }
+
+  ({int base, int parceiro})? melhor;
   var melhorNota = 0.0;
-  for (final q in quadros) {
-    if (q <= base) continue;
-    final desloc = <double>[];
-    for (final p in pontos) {
-      final a = p.em(base), b = p.em(q);
-      if (a != null && b != null) desloc.add((b - a).distance);
-    }
-    if (desloc.length < 12) continue;
-    final par = mediana(desloc);
-    if (par < paralaxeMinima) continue;
-    // Muitos pontos pesam, mas paralaxe pesa mais: dobrar a paralaxe
-    // melhora a triangulacao mais do que dobrar o numero de pontos.
-    final nota = desloc.length * math.sqrt(par);
-    if (nota > melhorNota) {
-      melhorNota = nota;
-      melhor = q;
+  for (final base in candidatos) {
+    for (final q in quadros) {
+      if (q <= base) continue;
+      final nota = _notaDoPar(pontos, base, q, paralaxeMinima: paralaxeMinima);
+      if (nota > melhorNota) {
+        melhorNota = nota;
+        melhor = (base: base, parceiro: q);
+      }
     }
   }
-  return melhor < 0 ? null : melhor;
+  return melhor;
 }
 
 /// O SOLVER, com a distancia focal ja conhecida.
@@ -716,14 +988,10 @@ SolucaoCamera3D? _resolverComFocal(
   final cx = largura / 2, cy = altura / 2;
   final prep = _Preparado(pontos, cx, cy, focalPx);
 
-  final base = quadros.first;
-  final parceiro = _melhorParceiro(
-    pontos,
-    base,
-    quadros,
-    paralaxeMinima: largura * 0.012,
-  );
-  if (parceiro == null) return null;
+  final par = _melhorPar(pontos, quadros, paralaxeMinima: largura * 0.012);
+  if (par == null) return null;
+  final base = par.base;
+  final parceiro = par.parceiro;
 
   // --- 1. par inicial
   final ids = <int>[];
@@ -866,12 +1134,16 @@ SolucaoCamera3D? _resolverComFocal(
       ..addAll(novaNuvem);
   }
 
-  // --- 4. erro final, em pixels
+  // --- 4. erro final, em pixels - no total E POR PONTO
   var soma = 0.0;
   var n = 0;
+  final errosPorPonto = <int, double>{};
+  final vistasPorPonto = <int, int>{};
   for (final p in pontos) {
     final x = nuvem[p.id];
     if (x == null) continue;
+    var somaDoPonto = 0.0;
+    var vistas = 0;
     for (final e in poses.entries) {
       final o = p.em(e.key);
       if (o == null) continue;
@@ -879,9 +1151,14 @@ SolucaoCamera3D? _resolverComFocal(
       if (proj == null) continue;
       final dx = (proj[0] - (o.dx - cx) / focalPx) * focalPx;
       final dy = (proj[1] - (o.dy - cy) / focalPx) * focalPx;
-      soma += dx * dx + dy * dy;
-      n++;
+      somaDoPonto += dx * dx + dy * dy;
+      vistas++;
     }
+    if (vistas == 0) continue;
+    soma += somaDoPonto;
+    n += vistas;
+    errosPorPonto[p.id] = math.sqrt(somaDoPonto / vistas);
+    vistasPorPonto[p.id] = vistas;
   }
   if (n == 0) return null;
 
@@ -945,6 +1222,9 @@ SolucaoCamera3D? _resolverComFocal(
     erroPixels: math.sqrt(soma / n),
     quadros: totalDeQuadros,
     fps: fps,
+    errosPorPonto: errosPorPonto,
+    vistasPorPonto: vistasPorPonto,
+    pontosSeguidos: pontos.length,
   );
 }
 
@@ -956,6 +1236,59 @@ SolucaoCamera3D? _resolverComFocal(
 /// vistas sozinhas nao decidem a focal (uma focal errada e absorvida
 /// pela geometria); TRES ou mais decidem, e por isso a varredura usa um
 /// punhado de quadros espalhados e nao so o par inicial.
+/// O QUANTO UMA TRANSFORMACAO PLANA JA EXPLICA O MOVIMENTO.
+///
+/// E a medida que separa uma filmagem que da rastreio 3D de uma que nao
+/// da, e ela se tira ANTES de qualquer conta de camera — sem sequer
+/// saber a distancia focal. Perto de zero significa que uma homografia
+/// (giro puro, ou tudo na mesma distancia) descreve o que os pontos
+/// fizeram; e ai a profundidade simplesmente nao esta na imagem.
+///
+/// Devolve o residuo em pixels do quadro analisado, ou null quando nao
+/// ha pares suficientes para medir.
+double? residuoPlanoDaCena(List<PontoSeguido> pontos, int quadros) {
+  final marcos =
+      <int>{
+        0,
+        quadros ~/ 4,
+        quadros ~/ 2,
+        (quadros * 3) ~/ 4,
+        quadros - 1,
+      }.toList()
+        ..sort();
+  final residuos = <double>[];
+  for (var i = 0; i < marcos.length; i++) {
+    for (var j = i + 1; j < marcos.length; j++) {
+      final pares = <(Offset, Offset)>[];
+      for (final p in pontos) {
+        final a = p.em(marcos[i]), b = p.em(marcos[j]);
+        if (a != null && b != null) pares.add((a, b));
+      }
+      if (pares.length < 8) continue;
+      final r = residuoDeHomografia(pares);
+      if (r.isFinite) residuos.add(r);
+    }
+  }
+  return residuos.isEmpty ? null : mediana(residuos);
+}
+
+/// O "AUTO DETECT": que tipo de cena e esta, em uma palavra.
+///
+/// Os dois limiares sao a mesma medida em escalas diferentes: abaixo de
+/// 0,33% da largura o movimento e plano demais para haver profundidade;
+/// entre isso e 1% ha profundidade, mas pouca, e o solve sai fraco.
+LeituraDaCena lerCena(
+  List<PontoSeguido> pontos, {
+  required int largura,
+  required int quadros,
+}) {
+  final r = residuoPlanoDaCena(pontos, quadros);
+  if (r == null) return LeituraDaCena.quaseChata;
+  if (r < largura * 0.0033) return LeituraDaCena.tripeOuGiro;
+  if (r < largura * 0.01) return LeituraDaCena.quaseChata;
+  return LeituraDaCena.profundidadeBoa;
+}
+
 SolucaoCamera3D resolverCamera3D(
   List<PontoSeguido> pontos, {
   required int largura,
@@ -964,6 +1297,8 @@ SolucaoCamera3D resolverCamera3D(
   int fps = 12,
   double? focalPx,
   int? semente,
+  TipoDeTomada tipoDeTomada = TipoDeTomada.auto,
+  int rodadasDeRefino = 3,
 }) {
   if (pontos.length < 12) {
     throw const RastreioException(
@@ -985,27 +1320,20 @@ SolucaoCamera3D resolverCamera3D(
   // com as cameras todas no mesmo ponto e erro de reprojecao zero. E
   // exatamente por parecer certa que essa solucao e perigosa, e por isso
   // a recusa vem antes, e nao depois.
-  final marcos = <int>{
-    0,
-    quadros ~/ 4,
-    quadros ~/ 2,
-    (quadros * 3) ~/ 4,
-    quadros - 1,
-  }.toList()..sort();
-  final residuos = <double>[];
-  for (var i = 0; i < marcos.length; i++) {
-    for (var j = i + 1; j < marcos.length; j++) {
-      final pares = <(Offset, Offset)>[];
-      for (final p in pontos) {
-        final a = p.em(marcos[i]), b = p.em(marcos[j]);
-        if (a != null && b != null) pares.add((a, b));
-      }
-      if (pares.length < 8) continue;
-      final r = residuoDeHomografia(pares);
-      if (r.isFinite) residuos.add(r);
-    }
+  // QUEM DIZ QUE FILMOU NO TRIPE JA SABE A RESPOSTA. Nao ha o que
+  // resolver: sem deslocamento nao existe profundidade a medir, e
+  // devolver uma cena seria devolver uma invencao.
+  if (tipoDeTomada == TipoDeTomada.tripe) {
+    throw const RastreioException(
+      FalhaDoRastreio.semParalaxe,
+      'Tomada de tripe nao tem paralaxe: a camera gira, mas nao anda. '
+      'Para prender um objeto 3D no chao e preciso que a camera se '
+      'desloque. Para uma panoramica, use o rastreio 2D de objeto.',
+    );
   }
-  if (residuos.isNotEmpty && mediana(residuos) < largura * 0.0033) {
+
+  final residuo = residuoPlanoDaCena(pontos, quadros);
+  if (residuo != null && residuo < largura * 0.0033) {
     throw const RastreioException(
       FalhaDoRastreio.semParalaxe,
       'Esse plano nao da rastreio 3D: uma unica transformacao plana ja '
@@ -1025,6 +1353,7 @@ SolucaoCamera3D resolverCamera3D(
       totalDeQuadros: quadros,
       fps: fps,
       semente: semente,
+      rodadasDeRefino: rodadasDeRefino,
     );
     if (s == null) {
       throw const RastreioException(
@@ -1032,7 +1361,7 @@ SolucaoCamera3D resolverCamera3D(
         'Nao consegui fechar a conta da camera nesse plano.',
       );
     }
-    return _arrumarMundo(s);
+    return _arrumarMundo(s).copiarCom(tipoDeTomada: tipoDeTomada);
   }
 
   // Varredura de focal num subconjunto de quadros — o suficiente para
@@ -1100,7 +1429,7 @@ SolucaoCamera3D resolverCamera3D(
       'Nao consegui fechar a conta da camera nesse plano.',
     );
   }
-  return _arrumarMundo(s);
+  return _arrumarMundo(s).copiarCom(tipoDeTomada: tipoDeTomada);
 }
 
 /// PONHA O MUNDO EM PE E NUM TAMANHO UTIL.
@@ -1182,15 +1511,12 @@ SolucaoCamera3D _arrumarMundo(SolucaoCamera3D s) {
     novasPoses.add(PoseCamera(p.quadro, novaR, [-rt[0], -rt[1], -rt[2]]));
   }
 
-  return SolucaoCamera3D(
-    largura: s.largura,
-    altura: s.altura,
-    focalPx: s.focalPx,
+  // O GIRO NAO MEXE NO ERRO. Rodar e mover o mundo inteiro nao muda onde
+  // cada ponto cai na imagem - e por isso a ficha de qualidade atravessa
+  // esta funcao intacta.
+  return s.copiarCom(
     poses: novasPoses,
     nuvem: {for (final e in girados.entries) e.key: mover(e.value)},
-    erroPixels: s.erroPixels,
-    quadros: s.quadros,
-    fps: s.fps,
   );
 }
 
@@ -1270,14 +1596,8 @@ SolucaoCamera3D definirChao(SolucaoCamera3D s, List<int> idsDoChao) {
     novasPoses.add(PoseCamera(p.quadro, novaR, [-rt[0], -rt[1], -rt[2]]));
   }
 
-  return SolucaoCamera3D(
-    largura: s.largura,
-    altura: s.altura,
-    focalPx: s.focalPx,
+  return s.copiarCom(
     poses: novasPoses,
     nuvem: {for (final e in s.nuvem.entries) e.key: mover(e.value)},
-    erroPixels: s.erroPixels,
-    quadros: s.quadros,
-    fps: s.fps,
   );
 }

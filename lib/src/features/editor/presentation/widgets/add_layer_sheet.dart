@@ -27,6 +27,7 @@ import '../am/am_colors.dart';
 import '../am/am_widgets.dart';
 import 'element3d_painter.dart';
 import 'gallery_panel.dart';
+import '../context/add_toolbar.dart' show AddTarget;
 
 /// Sheet "+" do editor: escolher o tipo de camada.
 Future<void> showAddLayerSheet(
@@ -762,7 +763,7 @@ class _AddOption extends StatelessWidget {
 }
 
 /// As abas do menu de adicionar (modelo Alight Motion).
-enum _AbaAdd { forma, midia, audio, objeto, modelo }
+enum _AbaAdd { forma, midia, audio, objeto, mais }
 
 /// MENU DE ADICIONAR NO MODELO AM: abas horizontais (Forma · Midia ·
 /// Audio · Objeto · Modelo) e um trilho vertical a direita com os MODOS
@@ -777,11 +778,13 @@ class AddLayerPanel extends ConsumerStatefulWidget {
     required this.onClose,
     required this.playhead,
     this.initialTab,
+    this.onProjectAction,
   });
 
   final VoidCallback onClose;
   final Duration playhead;
   final AddTab? initialTab;
+  final ValueChanged<AddTarget>? onProjectAction;
 
   @override
   ConsumerState<AddLayerPanel> createState() => _AddMenuAmState();
@@ -848,20 +851,13 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // Every category shares the space below the ruler. Only the contents
-    // scroll: changing tabs never moves transport, preview or close control.
     return ColoredBox(
       color: AmColors.panel,
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // OS MODOS DE COMECAR (desenho, texto, legendas) e o Fechar numa
-          // faixa horizontal em cima: cabem em qualquer altura de painel
-          // e o Fechar nunca sai da tela.
-          _trilho(),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _abas(),
                 Expanded(
@@ -872,14 +868,53 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
                           child: _conteudo(),
                         ),
                 ),
+                if (_abaVisivel == _AbaAdd.objeto && _explicando != null)
+                  _faixaDeDescricao(),
               ],
             ),
           ),
-          // A faixa so existe onde ha o que explicar. "Objeto conceitual
-          // precisa de explicacao; forma nao precisa" — o icone da forma ja
-          // diz tudo, e uma faixa vazia ali so empurraria a folha por cima
-          // da linha do tempo.
-          if (_abaVisivel == _AbaAdd.objeto) _faixaDeDescricao(),
+          SizedBox(
+            width: 52,
+            child: Column(
+              children: [
+                _atalho(CupertinoIcons.scribble, 'Desenho à\nmão livre', () {
+                  _fecha();
+                  ref.read(freehandRequestProvider.notifier).state = true;
+                }),
+                _atalho(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
+                  final id = _criaForma(
+                    () => [
+                      ShapeStroke(
+                        color: const Color(0xFFFFFFFF),
+                        width: AnimatedDouble(10),
+                      ),
+                    ],
+                    'Desenho',
+                  );
+                  _fecha();
+                  if (id != null) {
+                    ref.read(editPointsRequestProvider.notifier).state = id;
+                  }
+                }),
+                _atalho(CupertinoIcons.textformat, 'Texto', () {
+                  _fecha();
+                  _controller.addTextLayer(widget.playhead);
+                }),
+                SizedBox(
+                  height: 44,
+                  child: IconButton(
+                    tooltip: 'Fechar adicionar',
+                    onPressed: _fecha,
+                    icon: const Icon(
+                      CupertinoIcons.xmark,
+                      size: 20,
+                      color: AmColors.text,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -894,7 +929,7 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
       _AbaAdd.midia: 'Video, imagem e legenda do seu aparelho.',
       _AbaAdd.audio: 'Musica e locucao.',
       _AbaAdd.objeto: 'Controladores, cena 3D e solidos.',
-      _AbaAdd.modelo: 'Projetos prontos, camada por camada.',
+      _AbaAdd.mais: 'Desenho e ferramentas do projeto.',
     };
     final texto = _explicando ?? nomes[_abaVisivel]!;
     return Padding(
@@ -938,15 +973,16 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
       _AbaAdd.midia: ('Midia', CupertinoIcons.photo_on_rectangle),
       _AbaAdd.audio: ('Audio', CupertinoIcons.music_note),
       _AbaAdd.objeto: ('Objeto', CupertinoIcons.cube),
-      _AbaAdd.modelo: ('Modelo', CupertinoIcons.rectangle_grid_2x2),
+      _AbaAdd.mais: ('Mais', CupertinoIcons.square_grid_2x2),
     };
     return SizedBox(
-      height: 50,
+      height: 56,
       child: Row(
         children: [
           for (final a in _abasVisiveis)
             Expanded(
               child: GestureDetector(
+                key: ValueKey('add-tab-${a.name}'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () => setState(() {
                   _aba = a;
@@ -987,87 +1023,76 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
     );
   }
 
-  Widget _trilho() {
-    Widget item(IconData icon, String label, VoidCallback onTap) =>
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Container(
-            margin: const EdgeInsets.only(right: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: AmColors.chip,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 16, color: AmColors.text),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    height: 1.05,
-                    color: AmColors.text,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-    return SizedBox(
-      height: 40,
-      child: Row(
+  Widget _atalho(IconData icon, String label, VoidCallback onTap) => Expanded(
+    child: InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
-              child: Row(
-                children: [
-            item(CupertinoIcons.scribble, 'Desenho\nlivre', () {
-              _fecha();
-              ref.read(freehandRequestProvider.notifier).state = true;
-            }),
-            item(CupertinoIcons.pencil_outline, 'Desenho\nvetorial', () {
-              final id = _criaForma(
-                () => [
-                  ShapeStroke(
-                    color: const Color(0xFFFFFFFF),
-                    width: AnimatedDouble(10),
-                  ),
-                ],
-                'Desenho',
-              );
-              _fecha();
-              if (id != null) {
-                ref.read(editPointsRequestProvider.notifier).state = id;
-              }
-            }),
-            item(CupertinoIcons.doc_text, 'Arquivo\nSVG', _importarSvg),
-            item(CupertinoIcons.textformat, 'Texto', () {
-              _fecha();
-              _controller.addTextLayer(widget.playhead);
-            }),
-            item(CupertinoIcons.captions_bubble, 'Legendas', () {
-              final host = context;
-              showCaptionCreationSheet(host, ref);
-            }),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 4, 8, 4),
-            child: Tooltip(
-              message: 'Fechar adicionar',
-              child: item(CupertinoIcons.xmark, 'Fechar', _fecha),
+          Icon(icon, size: 18, color: AmColors.text),
+          const SizedBox(height: 2),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 9, color: AmColors.text),
             ),
           ),
         ],
       ),
+    ),
+  );
+
+  Widget _mais() {
+    Widget item(IconData icon, String label, VoidCallback onTap) => ListTile(
+      dense: true,
+      leading: Icon(icon, color: AmColors.text, size: 21),
+      title: Text(
+        label,
+        style: const TextStyle(color: AmColors.text, fontSize: 14),
+      ),
+      onTap: onTap,
+    );
+    return Column(
+      children: [
+        item(CupertinoIcons.scribble, 'Desenho livre', () {
+          _fecha();
+          ref.read(freehandRequestProvider.notifier).state = true;
+        }),
+        item(CupertinoIcons.pencil_outline, 'Desenho vetorial', () {
+          final id = _criaForma(
+            () => [
+              ShapeStroke(
+                color: const Color(0xFFFFFFFF),
+                width: AnimatedDouble(10),
+              ),
+            ],
+            'Desenho',
+          );
+          _fecha();
+          if (id != null) {
+            ref.read(editPointsRequestProvider.notifier).state = id;
+          }
+        }),
+        item(CupertinoIcons.doc_text, 'Importar SVG', _importarSvg),
+        item(
+          CupertinoIcons.captions_bubble,
+          'Legendas',
+          () => showCaptionCreationSheet(context, ref),
+        ),
+        if (widget.onProjectAction != null)
+          for (final entry in const [
+            (AddTarget.efeito, CupertinoIcons.wand_stars, 'Camada de ajuste'),
+            (AddTarget.grupo, CupertinoIcons.folder, 'Agrupar camadas'),
+            (AddTarget.marcas, CupertinoIcons.bookmark, 'Marcas'),
+            (AddTarget.batidas, CupertinoIcons.metronome, 'Detectar batidas'),
+            (AddTarget.autoEdit, CupertinoIcons.sparkles, 'AutoEdit'),
+            (AddTarget.ajuda, CupertinoIcons.question_circle, 'Como editar'),
+          ])
+            item(entry.$2, entry.$3, () => widget.onProjectAction!(entry.$1)),
+      ],
     );
   }
 
@@ -1155,16 +1180,8 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
         );
       case _AbaAdd.objeto:
         return _objetos();
-      case _AbaAdd.modelo:
-        return const Padding(
-          padding: EdgeInsets.only(top: 6),
-          child: Text(
-            'Modelos prontos abrem pela tela inicial (Modelos) como um '
-            'projeto novo, camada por camada. Templates em arquivo (.json) '
-            'tambem entram por la.',
-            style: TextStyle(fontSize: 13, color: AmColors.muted, height: 1.4),
-          ),
-        );
+      case _AbaAdd.mais:
+        return _mais();
     }
   }
 

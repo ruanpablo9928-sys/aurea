@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' show Offset;
 
 import 'package:aurea/src/features/editor/domain/element3d.dart';
 import 'package:aurea/src/features/editor/domain/estresse3d.dart';
@@ -74,7 +73,7 @@ List<double> _uvRef(
   return [caixa.faixa(p[0], 0), caixa.faixa(p[1], 1)];
 }
 
-Map<Material3D, _GrupoRef> referencia({
+Map<Material3D, _GrupoRef> _referencia({
   required Element3DMesh malha,
   required List<Material3D> materiais,
   List<Vec3?>? normais,
@@ -154,7 +153,7 @@ void main() {
     const m = Material3D();
     final materiais = List<Material3D>.filled(cubo.faces.length, m);
     iguais(
-      referencia(malha: cubo, materiais: materiais),
+      _referencia(malha: cubo, materiais: materiais),
       montarGruposGpu(malha: cubo, materiais: materiais),
     );
   });
@@ -174,7 +173,7 @@ void main() {
       for (var f = 0; f < esfera.faces.length; f++) f.isEven ? a : b,
     ];
     iguais(
-      referencia(malha: esfera, materiais: materiais, normais: normais, uvs: uvs),
+      _referencia(malha: esfera, materiais: materiais, normais: normais, uvs: uvs),
       montarGruposGpu(malha: esfera, materiais: materiais, normais: normais, uvs: uvs),
     );
   });
@@ -196,7 +195,7 @@ void main() {
     );
     final materiais = List<Material3D>.filled(m.faces.length, const Material3D());
     iguais(
-      referencia(malha: m, materiais: materiais),
+      _referencia(malha: m, materiais: materiais),
       montarGruposGpu(malha: m, materiais: materiais),
     );
   });

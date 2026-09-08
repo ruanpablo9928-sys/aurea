@@ -1,145 +1,121 @@
 # Comunidade
 
-Beta 54 (2026-09-07). Aba **Comunidade**, segunda na barra de baixo.
+Aba **Comunidade**, segunda na barra de baixo. O mural do beta: quem está
+testando mostra o que fez, quem instalou o app vê, responde e reposta.
 
-## O que é
+## O que existe
 
-O mural do beta: quem está testando mostra o que fez, quem instalou o app
-vê. Sem curtida, sem seguidor, sem notificação — isso é infraestrutura
-social que só faz sentido depois que existe gente postando.
+- **Conta de verdade**, no servidor. Um apelido único e um **código de
+  acesso** de 48 caracteres. Sem senha e sem e-mail.
+- **Publicar** texto, **imagem**, **vídeo** e **projeto do Aurea**.
+- **Responder** a um post (uma conversa por post) e **repostar**, com ou
+  sem comentário.
+- **Apagar** o próprio post, aqui e no mural.
+- **Abrir um projeto publicado** como projeto novo deste aparelho.
+- **Filtro de conteúdo** dos dois lados.
 
-## Como funciona hoje, sem meias palavras
+## A conta, e por que ela é assim
 
-**Ler é automático e vale para todo mundo.** O app busca um feed JSON
-público e mostra. Funciona sem conta, sem login e sem nada embutido no
-APK. O que chegou fica gravado no aparelho, então o mural continua
-legível sem internet.
+Quem assina um post é o **código de acesso**, e não um nome no corpo da
+requisição. O aplicativo manda o código no cabeçalho; o servidor olha de
+quem ele é e escreve o autor. Enquanto o autor vinha no corpo, qualquer
+um que montasse a chamada à mão postava com o nome de outra pessoa.
 
-**Escrever passa por uma revisão.** O post é gravado no aparelho na hora
-e aparece no topo com o selo "só você vê". O botão **Enviar para o mural**
-abre o e-mail já com o texto e o JSON prontos.
+Não há senha nem e-mail **de propósito**. Senha pede recuperação,
+recuperação pede e-mail, e-mail pede caixa de saída: três peças novas
+para um mural de beta. O código faz o mesmo papel, cabe num bloco de
+notas e serve para entrar noutro aparelho.
 
-Por que não publica direto: publicar exigiria uma credencial de escrita
-dentro do aplicativo. Uma credencial dentro de um APK é uma credencial
-pública — qualquer pessoa que abra o arquivo pode escrever no mural de
-todo mundo. Enquanto não houver um servidor com contas de verdade, a
-revisão humana é a única forma honesta.
+**O código é o que não pode se perder.** Ele fica gravado no aparelho, e
+a tela da conta mostra para copiar. Perder o código é perder o apelido:
+sem e-mail, não há para onde mandar um "esqueci".
 
-## Onde mora o feed
+Sair do aparelho não apaga a conta — o código faz voltar. Apagar a conta
+de verdade é outra conversa, e não cabe atrás de um botão que qualquer
+toque errado alcança.
 
-Um **gist público** na conta `ueeruan`:
+## O filtro, dos dois lados
 
-```
-https://gist.github.com/ueeruan/6d8c4adf3d31d6061a54fcfc13e55487
-```
+O do aplicativo é **cortesia**: diz à pessoa o que está errado enquanto
+ela escreve, sem esperar a viagem até o servidor. O do servidor é o que
+**vale**, porque quem chama o endereço direto não passa pelo primeiro.
 
-O app lê a versão crua:
+O filtro é curto de propósito: lista longa vira censura de conversa
+normal, e "que porcaria de render" não é o problema que este mural tem. O
+que se bloqueia é ofensa a alguém, ameaça, e dado pessoal (telefone,
+e-mail, endereço) que a pessoa publicaria sem pensar.
 
-```
-https://gist.githubusercontent.com/ueeruan/6d8c4adf3d31d6061a54fcfc13e55487/raw/feed.json
-```
+Bloqueio e aviso são coisas diferentes na tela: um impede, o outro só
+recomenda. Insistir num aviso é um direito de quem escreve — quem quer
+escrever em caixa alta, escreve.
 
-Gist e não um arquivo do repositório porque o repositório do app é
-privado: de lá, o aparelho de ninguém conseguiria ler.
+Há ainda um filtro **na hora de mostrar**: o feed vem de fora, e um dia
+vem com coisa que não passou por este app. Post reprovado não aparece, e
+ninguém precisa saber que ele existiu. No repost, o filtro olha o texto
+do original também — filtrar só o comentário deixaria passar exatamente
+o que se quer barrar.
 
-## Publicar um post que chegou
+## Resposta e repost
 
-Cole o bloco JSON do e-mail dentro de `posts` e salve o gist:
+- A resposta **não aparece no mural de cima**: ela vive na conversa do
+  post que respondeu. Um mural em que toda resposta vira post é um mural
+  ilegível depois de uma semana.
+- As respostas são buscadas **só quando a conversa abre**. Trazê-las com
+  o feed seria baixar as respostas de duzentos posts para ler as de um.
+- O repost guarda uma **cópia** do original, e não só o id. O feed
+  devolve duzentos posts; o original pode ser mais antigo que isso, e aí
+  o cartão apareceria vazio. Com a cópia, o repost continua legível para
+  sempre — inclusive se o original for apagado depois, que é o que se
+  espera de uma citação.
+- **Não se reposta um repost.** O botão aponta para o original.
+- Repostar **sem escrever nada** é o uso normal: obrigar a escrever faria
+  todo mundo digitar um ponto.
 
-```bash
-gh gist edit 6d8c4adf3d31d6061a54fcfc13e55487
-```
+## Imagem, vídeo e projeto
 
-O post aparece para todo mundo no próximo puxão para atualizar.
+Os três sobem pelo mesmo caminho (`POST /midia`), porque para o servidor
+são a mesma coisa: bytes com um tipo declarado. É ele quem decide onde
+cada um mora.
 
-## O formato
+- **Imagem**: comprimida no aparelho antes de sair (1600 px, qualidade
+  82). Uma foto de celular sai com oito megabytes; o mural aceita dois.
+  Reduzir antes poupa a internet de quem publica e faz caber.
+- **Projeto**: vira um `TemplatePack` (JSON) e sobe. Quem abre recebe as
+  camadas, as animações e a cena 3D — **os vídeos e as fotos importadas
+  ficam no aparelho de quem fez**, e isso é dito na tela antes de anexar.
+- **Vídeo**: precisa do R2 ligado no painel da Cloudflare. Sem ele, o
+  servidor responde 501 explicando o que falta. Trinta megabytes num KV
+  que cobra leitura de valor inteiro seria a ferramenta errada.
 
-```json
-{
-  "posts": [
-    {
-      "id": "único",
-      "autor": "Nome",
-      "texto": "O que a pessoa escreveu.",
-      "quando": "2026-09-07T18:00:00Z",
-      "imagem": "https://…  (opcional)",
-      "link": "https://…  (opcional)",
-      "etiquetas": ["3d", "motion"]
-    }
-  ]
-}
-```
+O arquivo sobe **antes** do post, e não junto: o post é um JSON de alguns
+kilobytes e a foto tem megabytes; mandar os dois na mesma requisição faria
+o mural recusar o post inteiro por tamanho.
 
-Um item quebrado não derruba o mural: o leitor descarta o item e mostra o
-resto. Só `texto` é obrigatório; o que faltar ganha um padrão.
+Se o arquivo não sobe, o post **continua guardado como rascunho**.
+Publicar só o texto entregaria um post que fala de uma imagem que ninguém
+vai ver.
 
-## Trocar de servidor depois
+## Guarda primeiro, manda depois
 
-`ComunidadeService.enderecoPadrao` é o único lugar que sabe onde o feed
-está. Quando existir um serviço com contas, a aba não precisa mudar: ela
-já lê uma lista de posts e escreve através do serviço.
+O post é gravado no aparelho antes de sair. Nesta ordem ele nunca se
+perde: se a rede cair no meio, ficou aqui e dá para tentar de novo. Na
+ordem contrária, uma falha apagaria o que a pessoa escreveu.
 
----
+O **id quem dá é o servidor**. Ao publicar, a cópia local recebe o id da
+publicada — sem isso o mural mostraria o post repetido durante o minuto
+que o armazenamento leva para propagar, e quem escreveu acharia que
+publicou duas vezes sem querer.
 
-## Conta, filtro e mídia (beta 55)
+## O servidor
 
-### A mini conta
+Código, endpoints e como subir: [`docs/servidor-da-comunidade.md`](servidor-da-comunidade.md).
+Fonte em `servidor/comunidade/`, testes em `servidor/comunidade/teste.mjs`
+(rodam sem nuvem: `node servidor/comunidade/teste.mjs`).
 
-Local, sem senha e sem e-mail. Guarda um **id**, um **apelido** e uma
-**foto** opcional. Existe por três motivos, e nenhum é burocracia:
+## Quando o servidor muda
 
-1. **Quem assina aparece antes de publicar.** Sem conta, a pessoa
-   escrevia e só descobria como tinha assinado depois.
-2. **O apelido passa pelo filtro uma vez**, na criação, e não a cada
-   post. Sem isso o mural fica limpo e a lista de autores não: quem quer
-   ofender escreve a ofensa no apelido e posta "oi".
-3. **O id sobrevive à troca de apelido.** Quando houver servidor, os
-   posts já sabem de quem são.
-
-Apagar a conta some com a identidade neste aparelho. **Não** apaga o que
-a pessoa já publicou: o mural é dos outros também.
-
-Apelidos reservados (`aurea`, `admin`, `suporte`, `oficial`, `equipe`)
-são recusados — passar-se pela equipe é o golpe mais barato num mural de
-beta.
-
-### O filtro
-
-Roda **duas vezes**: antes de publicar, e ao ler o feed. A segunda é a
-que importa, porque o feed vem de fora e um dia vem com coisa que não
-passou por este app.
-
-| Veredito | O que acontece |
-|---|---|
-| **Bloqueado** | Ofensa, ameaça, ataque a grupo. Dado pessoal (telefone, e-mail, CPF). Texto vazio, com menos de 3 letras ou mais de 1200. |
-| **Ajustar** | Caixa alta, letra repetida demais, mais de dois links. Avisa uma vez; tocar de novo publica assim. |
-| **Liberado** | O resto. Na dúvida, passa. |
-
-A comparação é feita depois de **normalizar**: minúsculas, sem acento,
-sem disfarce de número (`v1@d0`) e com letra repetida três ou mais vezes
-reduzida a uma (`viiiiado` → `viado`). Duas letras iguais sobrevivem,
-senão "carro" e "nossa" virariam outra coisa.
-
-A lista de palavras é **curta de propósito**. Lista longa vira censura de
-conversa normal, e "que porcaria de render" não é o problema que este
-mural tem. O que se bloqueia é ofensa a alguém, não palavrão.
-
-Bloquear telefone, e-mail e CPF não é bom-tom: é impedir que alguém
-publique o próprio número num mural que qualquer um lê.
-
-### Imagem e vídeo
-
-Um post carrega **no máximo uma mídia**. Não é limitação técnica: um
-mural de trabalho é sobre mostrar uma coisa bem feita, e uma galeria
-dentro do cartão rouba a leitura do que a pessoa escreveu.
-
-- **Imagem**: até 1600 px de largura, reduzida na hora de escolher.
-- **Vídeo**: até **2 minutos**. A duração é lida **antes** de anexar —
-  recusar depois de a pessoa já ter publicado seria pior.
-
-No mural, o vídeo **só carrega quando alguém toca**. Dez vídeos que se
-inicializam sozinhos ocupam dez decodificadores e travam o aparelho, e
-ninguém assiste dez vídeos de uma vez.
-
-O campo do endereço continua sendo `imagem` no JSON, com `midia:
-"video"` ao lado. Assim um feed escrito antes disto continua valendo.
+Trocar o servidor **quebra os aplicativos antigos**. O beta 56 mandava o
+autor no corpo e sem código de acesso; com o servidor de contas no ar,
+esses aparelhos passaram a receber 401 ao publicar. Ler continuou
+funcionando. Quem for atualizar o servidor: avise os testadores de que
+precisam do build novo, antes de publicar a mudança.

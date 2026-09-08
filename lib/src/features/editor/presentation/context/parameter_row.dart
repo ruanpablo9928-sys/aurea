@@ -129,6 +129,7 @@ class ParameterPointRow extends StatelessWidget {
     required this.y,
     required this.onX,
     required this.onY,
+    this.compact = false,
     this.z,
     this.onZ,
     this.decimals = 1,
@@ -137,6 +138,7 @@ class ParameterPointRow extends StatelessWidget {
     this.height = AureaTokens.minTap,
   });
 
+  final bool compact;
   final String label;
   final double x;
   final double y;
@@ -168,6 +170,22 @@ class ParameterPointRow extends StatelessWidget {
             },
           ),
         );
+    if (compact) {
+      return SizedBox(
+        height: height,
+        child: Row(
+          children: [
+            eixo('X', x, onX),
+            const SizedBox(width: 6),
+            eixo('Y', y, onY),
+            if (z != null && onZ != null) ...[
+              const SizedBox(width: 6),
+              eixo('Z', z!, onZ!),
+            ],
+          ],
+        ),
+      );
+    }
     return ParameterFrame(
       label: label,
       keyframe: keyframe,
@@ -346,9 +364,13 @@ class ParameterFrame extends StatelessWidget {
                   width: 30,
                   height: height,
                   child: Icon(
-                    kf.here ? CupertinoIcons.rhombus_fill : CupertinoIcons.rhombus,
+                    kf.here
+                        ? CupertinoIcons.rhombus_fill
+                        : CupertinoIcons.rhombus,
                     size: 15,
-                    color: kf.animated ? t.keyframe : t.muted.withValues(alpha: .6),
+                    color: kf.animated
+                        ? t.keyframe
+                        : t.muted.withValues(alpha: .6),
                   ),
                 ),
               ),

@@ -15,11 +15,7 @@ import '../../../domain/layer_meta.dart';
 /// E3 · EDITAR TEXTO (Fase 3): conteudo, fonte, tamanho, negrito, cor e
 /// a porta para as animacoes. Tudo em `ParameterRow`, sem folha modal.
 class TextPanel extends ConsumerWidget {
-  const TextPanel({
-    super.key,
-    required this.playback,
-    required this.onAnimar,
-  });
+  const TextPanel({super.key, required this.playback, required this.onAnimar});
 
   final PlaybackController playback;
   final VoidCallback onAnimar;
@@ -245,7 +241,11 @@ class TextPanel extends ConsumerWidget {
 /// O CONTEUDO: campo que escreve na camada a cada letra e acompanha o
 /// desfazer (o texto de fora muda, o campo segue).
 class _CampoDeTexto extends StatefulWidget {
-  const _CampoDeTexto({super.key, required this.texto, required this.onChanged});
+  const _CampoDeTexto({
+    super.key,
+    required this.texto,
+    required this.onChanged,
+  });
 
   final String texto;
   final ValueChanged<String> onChanged;
@@ -282,6 +282,19 @@ class _CampoDeTextoState extends State<_CampoDeTexto> {
     return CupertinoTextField(
       key: const ValueKey('texto-conteudo'),
       controller: _ctrl,
+      textInputAction: TextInputAction.done,
+      onSubmitted: (_) => FocusScope.of(context).unfocus(),
+      onTapOutside: (_) => FocusScope.of(context).unfocus(),
+      suffixMode: OverlayVisibilityMode.editing,
+      suffix: CupertinoButton(
+        key: const ValueKey('texto-fechar-teclado'),
+        padding: const EdgeInsets.all(8),
+        onPressed: () => FocusScope.of(context).unfocus(),
+        child: const Icon(
+          CupertinoIcons.keyboard_chevron_compact_down,
+          size: 22,
+        ),
+      ),
       maxLines: 3,
       minLines: 1,
       style: TextStyle(fontSize: 15, color: t.text),

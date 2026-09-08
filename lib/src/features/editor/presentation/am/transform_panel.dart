@@ -96,6 +96,7 @@ class TransformPanel extends ConsumerStatefulWidget {
 class _TransformPanelState extends ConsumerState<TransformPanel> {
   bool _scaleLinked = true;
   final _bodyScroll = ScrollController();
+  final _positionKey = GlobalKey<_PositionControlState>();
 
   @override
   void dispose() {
@@ -105,50 +106,94 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
 
   LayerProp get _prop => propOfTool(widget.tool);
 
-  Widget _options(
-    EditorController controller,
-    String id,
-    Layer layer,
-  ) {
+  Widget _options(EditorController controller, String id, Layer layer) {
     final autoKey = ref.watch(autoKeyframeProvider);
+    final linked =
+        ref.watch(editorControllerProvider).linkFor(id, LayerProp.position) !=
+        null;
     return PopupMenuButton<String>(
       tooltip: autoKey
           ? 'Opções de transformação · auto-key ligado'
           : 'Opções de transformação',
-      icon: AmMenuIcon(ativo: autoKey),
-    color: AmColors.panelHigh,
-    itemBuilder: (_) => [
-      CheckedPopupMenuItem(
-        value: 'auto',
-        checked: ref.read(autoKeyframeProvider),
-        child: const Text('Auto-key'),
+      icon: AmMenuIcon(
+        ativo:
+            autoKey ||
+            layer.is3D ||
+            linked ||
+            widget.tool == TransformTool.pivot,
       ),
-      const PopupMenuItem(value: 'previous', child: Text('Keyframe anterior')),
-      const PopupMenuItem(value: 'next', child: Text('Próximo keyframe')),
-      const PopupMenuItem(value: 'reset', child: Text('Resetar propriedade')),
-    ],
-    onSelected: (value) {
-      if (value == 'auto') {
-        final setting = ref.read(autoKeyframeProvider.notifier);
-        setting.state = !setting.state;
-      } else if (value == 'reset') {
-        controller.resetProp(id, _prop);
-      } else {
-        final times = keyframeTimesForProp(layer, _prop).toList()..sort();
-        final local = layer
-            .localTime(widget.playback.time.value)
-            .inMicroseconds;
-        final target = value == 'previous'
-            ? times.where((us) => us < local - 8000).lastOrNull
-            : times.where((us) => us > local + 8000).firstOrNull;
-        if (target != null) {
-          widget.playback.pause();
-          widget.playback.seek(
-            layer.startTime + Duration(microseconds: target),
-          );
+      color: AmColors.panelHigh,
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(
+          value: '3d',
+          checked: layer.is3D,
+          child: const Text('Transformação 3D'),
+        ),
+        if (widget.tool == TransformTool.position)
+          PopupMenuItem(
+            value: 'link',
+            child: Text(linked ? 'Desvincular posição' : 'Vincular posição'),
+          ),
+        CheckedPopupMenuItem(
+          value: 'auto',
+          checked: ref.read(autoKeyframeProvider),
+          child: const Text('Auto-key'),
+        ),
+        const PopupMenuItem(
+          value: 'previous',
+          child: Text('Keyframe anterior'),
+        ),
+        const PopupMenuItem(value: 'next', child: Text('Próximo keyframe')),
+        const PopupMenuItem(value: 'reset', child: Text('Resetar propriedade')),
+        CheckedPopupMenuItem(
+          value: 'pivot',
+          checked: widget.tool == TransformTool.pivot,
+          child: const Text('Editar pivô'),
+        ),
+        CheckedPopupMenuItem(
+          value: 'opacity',
+          checked: widget.tool == TransformTool.opacity,
+          child: const Text('Opacidade'),
+        ),
+      ],
+      onSelected: (value) {
+        if (value == 'auto') {
+          final setting = ref.read(autoKeyframeProvider.notifier);
+          setting.state = !setting.state;
+        } else if (value == '3d') {
+          controller.toggle3D(id);
+        } else if (value == 'link') {
+          if (linked) {
+            controller.unlinkProperty(id, LayerProp.position);
+          } else {
+            _positionKey.currentState?._pickLinkSource(
+              context,
+              ref,
+              widget.playback.time.value,
+            );
+          }
+        } else if (value == 'pivot') {
+          widget.onToolChanged(TransformTool.pivot);
+        } else if (value == 'opacity') {
+          widget.onToolChanged(TransformTool.opacity);
+        } else if (value == 'reset') {
+          controller.resetProp(id, _prop);
+        } else {
+          final times = keyframeTimesForProp(layer, _prop).toList()..sort();
+          final local = layer
+              .localTime(widget.playback.time.value)
+              .inMicroseconds;
+          final target = value == 'previous'
+              ? times.where((us) => us < local - 8000).lastOrNull
+              : times.where((us) => us > local + 8000).firstOrNull;
+          if (target != null) {
+            widget.playback.pause();
+            widget.playback.seek(
+              layer.startTime + Duration(microseconds: target),
+            );
+          }
         }
-      }
-    },
+      },
     );
   }
 
@@ -246,20 +291,10 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
                 icone: CupertinoIcons.rectangle_expand_vertical,
                 animated: layer.skewX.isAnimated || layer.skewY.isAnimated,
               ),
-              ParamTab(
-                id: TransformTool.pivot.name,
-                label: 'Pivo',
-                icone: CupertinoIcons.smallcircle_circle,
-                animated: layer.pivot.isAnimated,
-              ),
-              ParamTab(
-                id: TransformTool.opacity.name,
-                label: 'Opacid.',
-                icone: CupertinoIcons.circle_lefthalf_fill,
-                animated: layer.opacity.isAnimated,
-              ),
             ],
-            abaAtiva: widget.tool.name,
+            abaAtiva: widget.tool == TransformTool.pivot
+                ? TransformTool.position.name
+                : widget.tool.name,
             onAba: (nome) => widget.onToolChanged(
               TransformTool.values.firstWhere((e) => e.name == nome),
             ),
@@ -279,6 +314,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
                       padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
                       child: switch (widget.tool) {
                         TransformTool.position => _PositionControl(
+                          key: _positionKey,
                           layer: layer,
                           playback: widget.playback,
                         ),
@@ -321,7 +357,11 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
 }
 
 class _PositionControl extends ConsumerStatefulWidget {
-  const _PositionControl({required this.layer, required this.playback});
+  const _PositionControl({
+    super.key,
+    required this.layer,
+    required this.playback,
+  });
 
   final Layer layer;
   final PlaybackController playback;
@@ -415,17 +455,16 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
   @override
   Widget build(BuildContext context) {
     final ref = this.ref;
-    final project = ref.watch(editorControllerProvider);
     final t = playback.time.value;
     final local = layer.localTime(t);
     final pos = layer.position.valueAt(local);
     final z = layer.positionZ.valueAt(local);
     final controller = ref.read(editorControllerProvider.notifier);
-    final link = project.linkFor(layer.id, LayerProp.position);
 
     return Column(
       children: [
         ParameterPointRow(
+          compact: true,
           label: 'Posição',
           x: pos.dx,
           y: pos.dy,
@@ -450,10 +489,7 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
             },
             onUpdate: (_, delta) => _onPadUpdate(delta),
             child: Container(
-              decoration: BoxDecoration(
-                color: AmColors.bg.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-              ),
+              decoration: BoxDecoration(color: AmColors.panel),
               child: const Center(
                 child: Text(
                   'Deslize aqui para mover a camada',
@@ -467,52 +503,6 @@ class _PositionControlState extends ConsumerState<_PositionControl> {
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            const SizedBox(width: 4),
-            const Text(
-              '3D',
-              style: TextStyle(fontSize: 12, color: AmColors.muted),
-            ),
-            Transform.scale(
-              scale: 0.72,
-              child: CupertinoSwitch(
-                value: layer.is3D,
-                activeTrackColor: AmColors.accent,
-                onChanged: (_) => controller.toggle3D(layer.id),
-              ),
-            ),
-            const Spacer(),
-            // Pickwhip: seguir a posicao de outra camada.
-            GestureDetector(
-              onTap: link != null
-                  ? () =>
-                        controller.unlinkProperty(layer.id, LayerProp.position)
-                  : () => _pickLinkSource(context, ref, t),
-              child: Row(
-                children: [
-                  Icon(
-                    link != null
-                        ? CupertinoIcons.link_circle_fill
-                        : CupertinoIcons.link,
-                    size: 18,
-                    color: link != null ? AmColors.accent : AmColors.muted,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    link != null ? 'Vinculado' : 'Vincular',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: link != null ? AmColors.accent : AmColors.muted,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-              ),
-            ),
-          ],
         ),
         if (layer.is3D)
           AmTickRuler(
@@ -544,6 +534,7 @@ class _PivotControl extends ConsumerWidget {
     return Column(
       children: [
         ParameterPointRow(
+          compact: true,
           label: 'Pivô',
           x: pivot.dx,
           y: pivot.dy,
@@ -560,10 +551,7 @@ class _PivotControl extends ConsumerWidget {
                 controller.editPivot(layer.id, t, pivot + delta * 2),
             onDoubleTap: () => controller.editPivot(layer.id, t, Offset.zero),
             child: Container(
-              decoration: BoxDecoration(
-                color: AmColors.bg.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(14),
-              ),
+              decoration: BoxDecoration(color: AmColors.panel),
               child: const Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -660,7 +648,9 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
     final alvo = anguloMaisProximo(a, atual);
     _anguloDoDedo = a;
     _acumulado = alvo;
-    ref.read(editorControllerProvider.notifier).editRotation(widget.layer.id, t, alvo);
+    ref
+        .read(editorControllerProvider.notifier)
+        .editRotation(widget.layer.id, t, alvo);
   }
 
   @override
@@ -708,24 +698,24 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
                   if (v != null) controller.editRotation(layer.id, t, v);
                 },
                 child: Container(
-                width: 190,
-                height: 62,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AmColors.chip,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  turns == 0
-                      ? '${amNumber(deg, 0)}°'
-                      : '${amNumber(deg % 360, 0)}°, ${turns}x',
-                  style: const TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.w600,
-                    color: AmColors.accent,
+                  width: 190,
+                  height: 62,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AmColors.chip,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    turns == 0
+                        ? '${amNumber(deg, 0)}°'
+                        : '${amNumber(deg % 360, 0)}°, ${turns}x',
+                    style: const TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w600,
+                      color: AmColors.accent,
+                    ),
                   ),
                 ),
-              ),
               ),
               Transform.translate(
                 offset: Offset(
@@ -749,23 +739,24 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
 
     // VOLTAS E QUARTOS sem circular o dedo: e o que faz "gira duas
     // vezes" caber em dois toques.
-    Widget volta(String rotulo, double delta, {String? chave}) => GestureDetector(
-      key: chave == null ? null : ValueKey(chave),
-      behavior: HitTestBehavior.opaque,
-      onTap: () => controller.editRotation(layer.id, t, deg + delta),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: AmColors.chip,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          rotulo,
-          style: const TextStyle(fontSize: 12, color: AmColors.accent),
-        ),
-      ),
-    );
+    Widget volta(String rotulo, double delta, {String? chave}) =>
+        GestureDetector(
+          key: chave == null ? null : ValueKey(chave),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => controller.editRotation(layer.id, t, deg + delta),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: AmColors.chip,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              rotulo,
+              style: const TextStyle(fontSize: 12, color: AmColors.accent),
+            ),
+          ),
+        );
     // FittedBox: em tela estreita a fileira encolhe em vez de estourar.
     final voltas = FittedBox(
       fit: BoxFit.scaleDown,
@@ -932,7 +923,13 @@ class _ScaleControl extends ConsumerWidget {
                 valueKey: const ValueKey('scale-width-valor'),
                 keyframe: _kf(ref, layer, LayerProp.scale, t, null),
                 expression: layer.scaleX.expression,
-                onExpression: _expressao(context, ref, layer, LayerProp.scale, 'Escala'),
+                onExpression: _expressao(
+                  context,
+                  ref,
+                  layer,
+                  LayerProp.scale,
+                  'Escala',
+                ),
                 onReset: () => controller.resetProp(layer.id, LayerProp.scale),
                 onChanged: (v) => aplicar(true, v),
               ),
@@ -1005,7 +1002,13 @@ class _SkewControl extends ConsumerWidget {
           accentCenter: true,
           keyframe: _kf(ref, layer, LayerProp.skew, t, null),
           expression: layer.skewX.expression,
-          onExpression: _expressao(context, ref, layer, LayerProp.skew, 'Inclinar'),
+          onExpression: _expressao(
+            context,
+            ref,
+            layer,
+            LayerProp.skew,
+            'Inclinar',
+          ),
           onReset: () => controller.resetProp(layer.id, LayerProp.skew),
           onChanged: (v) => controller.editSkewX(layer.id, t, v),
         ),
@@ -1052,7 +1055,13 @@ class _OpacityControl extends ConsumerWidget {
           valueKey: const ValueKey('opacidade-valor'),
           keyframe: _kf(ref, layer, LayerProp.opacity, t, null),
           expression: layer.opacity.expression,
-          onExpression: _expressao(context, ref, layer, LayerProp.opacity, 'Opacidade'),
+          onExpression: _expressao(
+            context,
+            ref,
+            layer,
+            LayerProp.opacity,
+            'Opacidade',
+          ),
           onReset: () => controller.resetProp(layer.id, LayerProp.opacity),
           onChanged: (v) => controller.editOpacity(
             layer.id,

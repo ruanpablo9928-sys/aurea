@@ -38,16 +38,18 @@ class EffectsPanel extends ConsumerStatefulWidget {
 class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   String? _selectedParam;
 
-  /// Efeitos RECOLHIDOS (nao os expandidos): assim todo efeito nasce
-  /// aberto — inclusive os que chegam depois por addEffect/applyPreset —
-  /// sem precisar semear o conjunto a cada build.
-  final Set<String> _recolhidos = <String>{};
+  // Um efeito por vez: abrir outro preserva a pilha sem empurrar
+  // dezenas de parâmetros para fora da tela.
+  String? _openEffectId;
+  String? _layerId;
+  Set<String> _knownEffects = {};
 
-  bool _expandido(String effectId) => !_recolhidos.contains(effectId);
+  bool _expandido(String effectId) => _openEffectId == effectId;
 
   void _alternarExpandido(String effectId) {
     setState(() {
-      if (!_recolhidos.remove(effectId)) _recolhidos.add(effectId);
+      _openEffectId = _openEffectId == effectId ? null : effectId;
+      _selectedParam = null;
     });
   }
 
@@ -144,6 +146,22 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
     if (layer == null || id == null) {
       return const ColoredBox(color: AmColors.panel);
     }
+    final effectIds = layer.effects.map((e) => e.id).toSet();
+    if (_layerId != id) {
+      _layerId = id;
+      _openEffectId = layer.effects.firstOrNull?.id;
+      _selectedParam = null;
+    } else {
+      final added = effectIds.difference(_knownEffects);
+      if (added.isNotEmpty) {
+        _openEffectId = added.last;
+        _selectedParam = null;
+      } else if (_openEffectId != null && !effectIds.contains(_openEffectId)) {
+        _openEffectId = null;
+        _selectedParam = null;
+      }
+    }
+    _knownEffects = effectIds;
     final controller = ref.read(editorControllerProvider.notifier);
     final pro = ref.watch(proModeProvider);
 
@@ -282,7 +300,12 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                           ),
                       const SizedBox(height: 8),
                       GestureDetector(
-                        onTap: () => showEffectGallery(context, ref, id, widget.playback),
+                        onTap: () => showEffectGallery(
+                          context,
+                          ref,
+                          id,
+                          widget.playback,
+                        ),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           alignment: Alignment.center,

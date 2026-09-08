@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'dart:typed_data';
 
 import '../../application/editor_controller.dart';
 import '../../../export/domain/export_settings.dart';
@@ -111,10 +111,8 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
                 fullscreenDialog: true,
-                builder: (_) => ExportVideoScreen(
-                  quality: s.quality,
-                  settings: s,
-                ),
+                builder: (_) =>
+                    ExportVideoScreen(quality: s.quality, settings: s),
               ),
             );
           });
@@ -127,41 +125,51 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
         ) async {
           setSheetState(() => busy = true);
           try {
-            // ONDE SALVAR e a pessoa quem diz. Antes ia sempre para a
-            // pasta interna do app e a tela oferecia "copiar caminho" —
-            // num celular isso nao leva a lugar nenhum. O seletor de
-            // pasta nao existe em toda plataforma (iOS nao tem); sem
-            // ele, ou se a pessoa cancelar, fica a pasta de sempre.
-            String? escolhida;
-            try {
-              escolhida = await FilePicker.platform.getDirectoryPath(
-                dialogTitle: 'Onde salvar $label',
-              );
-            } catch (_) {
-              escolhida = null;
+            final safeName = name.replaceAll(
+              RegExp(r'[<>:"/\\|?*\x00-\x1f]'),
+              '_',
+            );
+            final bytes = Uint8List.fromList(utf8.encode(content));
+            final path = await FilePicker.platform.saveFile(
+              dialogTitle: 'Salvar $label',
+              fileName: safeName,
+              type: FileType.custom,
+              allowedExtensions: [safeName.split('.').last],
+              bytes: bytes,
+            );
+            if (path != null && !Platform.isAndroid && !Platform.isIOS) {
+              await File(path).writeAsBytes(bytes, flush: true);
             }
-            final Directory out;
-            if (escolhida != null && escolhida.isNotEmpty) {
-              out = Directory(escolhida);
-            } else {
-              final dir = await getApplicationDocumentsDirectory();
-              out = Directory('${dir.path}/exports');
-            }
-            if (!out.existsSync()) out.createSync(recursive: true);
-            final file = File('${out.path}/$name');
-            await file.writeAsString(content);
-            await Clipboard.setData(ClipboardData(text: file.path));
+            if (!sheetContext.mounted) return;
             setSheetState(() {
               busy = false;
-              status =
-                  '$label salvo em ${file.path}\n'
-                  '(caminho copiado para a area de transferencia)';
+              status = path == null ? 'Exportação cancelada' : '$label salvo';
             });
           } catch (e) {
+            if (!sheetContext.mounted) return;
             setSheetState(() {
               busy = false;
-              status = 'Falhou: $e';
+              status = 'Não foi possível salvar: $e';
             });
+          }
+        }
+
+        Future<void> exportSvg() async {
+          try {
+            final svg = exportAnimatedSvg(project);
+            if (!svg.contains('<path')) {
+              setSheetState(
+                () => status = 'Adicione uma forma vetorial para exportar SVG.',
+              );
+              return;
+            }
+            await writeFile('${project.name}.svg', svg, 'SVG animado');
+          } catch (_) {
+            if (sheetContext.mounted) {
+              setSheetState(
+                () => status = 'Não foi possível gerar o SVG deste projeto.',
+              );
+            }
           }
         }
 
@@ -172,16 +180,6 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Exportar',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
                 // EXPORTAR EM DOIS TOQUES (criterio 10): um preset e o
                 // video sai — MP4, na taxa do projeto.
                 Row(
@@ -231,7 +229,9 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                                   style: TextStyle(
                                     fontSize: 10.5,
                                     color: rotulo == '1080p'
-                                        ? AmColors.onAction.withValues(alpha: .8)
+                                        ? AmColors.onAction.withValues(
+                                            alpha: .8,
+                                          )
                                         : AmColors.muted,
                                   ),
                                 ),
@@ -275,7 +275,8 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
 
                 if (completo) ...[
                   // LEGENDAS (.srt): uma por camada de legenda (Pro).
-                  for (final legenda in project.layers.whereType<CaptionLayer>())
+                  for (final legenda
+                      in project.layers.whereType<CaptionLayer>())
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
                       child: SizedBox(
@@ -288,11 +289,19 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                           onPressed: busy
                               ? null
                               : () {
-                                  final srt = controller.exportCaptionsSrt(legenda.id);
+                                  final srt = controller.exportCaptionsSrt(
+                                    legenda.id,
+                                  );
                                   if (srt == null) return;
-                                  final nome = legenda.name
-                                      .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_');
-                                  writeFile('$nome.srt', srt, 'legendas (.srt)');
+                                  final nome = legenda.name.replaceAll(
+                                    RegExp(r'[^A-Za-z0-9_-]+'),
+                                    '_',
+                                  );
+                                  writeFile(
+                                    '$nome.srt',
+                                    srt,
+                                    'legendas (.srt)',
+                                  );
                                 },
                           child: Text(
                             'Legendas (.srt) · ${legenda.name}',
@@ -588,13 +597,7 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                     child: CupertinoButton(
                       color: AmColors.chip,
                       borderRadius: BorderRadius.circular(12),
-                      onPressed: busy
-                          ? null
-                          : () => writeFile(
-                              '${project.name}.svg',
-                              exportAnimatedSvg(project),
-                              'SVG animado',
-                            ),
+                      onPressed: busy ? null : exportSvg,
                       child: const Text(
                         'Exportar SVG animado',
                         style: TextStyle(

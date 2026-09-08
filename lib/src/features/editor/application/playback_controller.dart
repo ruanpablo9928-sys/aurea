@@ -41,6 +41,7 @@ class PlaybackController {
   int compositionFps = 30;
 
   Duration _base = Duration.zero;
+  int seekRevision = 0;
 
   void _onTick(Duration elapsed) {
     final t = _base + elapsed;
@@ -49,6 +50,7 @@ class PlaybackController {
       if (loop.value && end > Duration.zero) {
         // Recomeca de zero no proximo tick: a base passa a ser -elapsed.
         _base = Duration.zero - elapsed;
+        seekRevision++;
         time.value = Duration.zero;
         return;
       }
@@ -99,7 +101,10 @@ class PlaybackController {
     if (playing.value) return;
     final end = durationOf();
     if (end == Duration.zero) return;
-    if (time.value >= end) time.value = Duration.zero;
+    if (time.value >= end) {
+      seekRevision++;
+      time.value = Duration.zero;
+    }
     _base = time.value;
     _ticker.start();
     playing.value = true;
@@ -135,6 +140,7 @@ class PlaybackController {
   }
 
   void seek(Duration t) {
+    seekRevision++;
     final end = durationOf();
     var v = _naGrade(t);
     if (v < Duration.zero) v = Duration.zero;

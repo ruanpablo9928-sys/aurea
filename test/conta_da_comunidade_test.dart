@@ -2,10 +2,20 @@ import 'dart:convert';
 
 import 'package:aurea/src/core/storage/prefs.dart';
 import 'package:aurea/src/features/community/application/conta_da_comunidade.dart';
+import 'package:aurea/src/features/community/application/comunidade_service.dart';
 import 'package:aurea/src/features/community/domain/post_da_comunidade.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _AccountService extends ComunidadeService {
+  @override
+  Future<RespostaDaConta> criarConta(String apelido) async =>
+      RespostaDaConta(id: 'test-account', apelido: apelido, codigo: 'a' * 48);
+  @override
+  Future<RespostaDaConta> trocarApelido(String codigo, String apelido) async =>
+      RespostaDaConta(id: 'test-account', apelido: apelido);
+}
 
 /// A MINI CONTA e o que a MIDIA carrega.
 ///
@@ -20,7 +30,8 @@ void main() {
     SharedPreferences.setMockInitialValues(inicial);
     final prefs = await SharedPreferences.getInstance();
     final c = ProviderContainer(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs),
+        comunidadeServiceProvider.overrideWithValue(_AccountService())],
     );
     addTearDown(c.dispose);
     return c;
@@ -30,7 +41,7 @@ void main() {
     test('nasce vazia e e criada em um passo', () async {
       final c = await comPrefs();
       expect(c.read(contaDaComunidadeProvider), isNull);
-      final erro = c.read(contaDaComunidadeProvider.notifier).criar('Ana Motion');
+      final erro = await c.read(contaDaComunidadeProvider.notifier).criar('Ana Motion');
       expect(erro, isNull);
       final conta = c.read(contaDaComunidadeProvider)!;
       expect(conta.apelido, 'Ana Motion');
@@ -41,16 +52,16 @@ void main() {
     test('o apelido passa pelo filtro na criacao', () async {
       final c = await comPrefs();
       final n = c.read(contaDaComunidadeProvider.notifier);
-      expect(n.criar('ab'), isNotNull, reason: 'curto demais');
-      expect(n.criar('vai se foder'), isNotNull, reason: 'ofensa');
-      expect(n.criar('Aurea'), isNotNull, reason: 'passaria por oficial');
+      expect(await n.criar('ab'), isNotNull, reason: 'curto demais');
+      expect(await n.criar('vai se foder'), isNotNull, reason: 'ofensa');
+      expect(await n.criar('Aurea'), isNotNull, reason: 'passaria por oficial');
       expect(c.read(contaDaComunidadeProvider), isNull);
-      expect(n.criar('Aureliano'), isNull);
+      expect(await n.criar('Aureliano'), isNull);
     });
 
     test('sobrevive a fechar o app', () async {
       final c = await comPrefs();
-      c.read(contaDaComunidadeProvider.notifier).criar('Dnyx');
+      await c.read(contaDaComunidadeProvider.notifier).criar('Dnyx');
       final gravado = c.read(contaDaComunidadeProvider)!;
 
       // Outra sessao, mesmas prefs.
@@ -65,19 +76,19 @@ void main() {
     test('trocar o apelido mantem o id', () async {
       final c = await comPrefs();
       final n = c.read(contaDaComunidadeProvider.notifier);
-      n.criar('Primeiro');
+      await n.criar('Primeiro');
       final id = c.read(contaDaComunidadeProvider)!.id;
-      expect(n.atualizar(apelido: 'Segundo'), isNull);
+      expect(await n.atualizar(apelido: 'Segundo'), isNull);
       expect(c.read(contaDaComunidadeProvider)!.apelido, 'Segundo');
       expect(c.read(contaDaComunidadeProvider)!.id, id);
       // E o filtro continua valendo na troca.
-      expect(n.atualizar(apelido: 'suporte'), isNotNull);
+      expect(await n.atualizar(apelido: 'suporte'), isNotNull);
       expect(c.read(contaDaComunidadeProvider)!.apelido, 'Segundo');
     });
 
     test('apagar a conta some com a identidade, nao com os posts', () async {
       final c = await comPrefs();
-      c.read(contaDaComunidadeProvider.notifier).criar('Ana');
+      await c.read(contaDaComunidadeProvider.notifier).criar('Ana');
       c.read(contaDaComunidadeProvider.notifier).sair();
       expect(c.read(contaDaComunidadeProvider), isNull);
       // O que ela publicou no mural continua sendo dela: o post carrega o

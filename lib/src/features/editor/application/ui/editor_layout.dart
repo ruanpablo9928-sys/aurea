@@ -34,10 +34,7 @@ class EditorLayoutMetrics {
   /// Espaco que sobra para preview + timeline + painel.
   static double workspace(double totalHeight) => math.max(
     0,
-    totalHeight -
-        AureaTokens.topBar -
-        AureaTokens.transport -
-        handleHeight,
+    totalHeight - AureaTokens.topBar - AureaTokens.transport - handleHeight,
   );
 
   static EditorLayoutMetrics solve({
@@ -48,6 +45,8 @@ class EditorLayoutMetrics {
     bool timelineExpanded = false,
     bool sheetVisible = true,
     bool sheetMayCoverTimeline = false,
+    bool focusedLayer = false,
+    double timelineFloor = timelineMin,
   }) {
     if (previewExpanded) {
       return EditorLayoutMetrics(
@@ -78,7 +77,7 @@ class EditorLayoutMetrics {
     // o painel encolhe. O preview NAO cede: abrir categoria, adicionar
     // ou trocar de aba nunca move o preview. Ao ADICIONAR, o menu pode
     // cobrir a timeline (e um seletor, nao um ajuste): minimo zero.
-    final piso = sheetMayCoverTimeline ? 0.0 : timelineMin;
+    final piso = sheetMayCoverTimeline ? 0.0 : timelineFloor;
     var timeline = ws - preview - sheet;
     if (timeline < piso) {
       sheet = math.max(0, sheet - (piso - timeline));
@@ -94,6 +93,12 @@ class EditorLayoutMetrics {
     if (piso == 0 && timeline > 0 && timeline < timelineMin) {
       sheet += timeline;
       timeline = 0;
+    }
+    // A ferramenta mostra uma única camada. O espaço das outras linhas
+    // pertence ao controle, como na referência, sem reduzir a prévia.
+    if (focusedLayer && sheetVisible && !timelineExpanded && timeline > 88) {
+      sheet += timeline - 88;
+      timeline = 88;
     }
     return EditorLayoutMetrics(
       topBar: AureaTokens.topBar,

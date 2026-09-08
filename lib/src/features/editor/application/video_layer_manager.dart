@@ -22,6 +22,67 @@ class VideoLayerManager {
   final Map<String, Future<void>> _initializing = {};
   final Map<String, DateTime> _lastSeek = {};
   int _lastProxyRevision = -1;
+  int _seekRevision = 0;
+  final Map<String, Object> _positioning = {};
+  final Set<String> _starting = {};
+  final Map<String, ({Duration time, bool play, double rate})>
+  _positionTargets = {};
+
+  /// A decoder must finish seeking before play. Keep only the newest
+  /// requested position while a native seek is pending.
+  void _position(
+    String id,
+    VideoPlayerController c,
+    Duration time, {
+    bool play = false,
+    double rate = 1,
+  }) {
+    _positionTargets[id] = (time: time, play: play, rate: rate);
+    if (play) {
+      _starting.add(id);
+    } else {
+      _starting.remove(id);
+    }
+    if (_positioning.containsKey(id)) return;
+    final ticket = Object();
+    _positioning[id] = ticket;
+    bool live() =>
+        identical(_positioning[id], ticket) && identical(_controllers[id], c);
+    unawaited(() async {
+      try {
+        if (c.value.isPlaying) await c.pause();
+        while (live()) {
+          final target = _positionTargets.remove(id);
+          if (target == null) break;
+          await c.seekTo(target.time);
+          if (!live()) return;
+          if (_positionTargets.containsKey(id)) continue;
+          _lastPos[id] = null;
+          _biasUs.remove(id);
+          if (target.play && (_lastPlaying || _scrubbing)) {
+            try {
+              await c.setPlaybackSpeed(target.rate);
+            } catch (_) {
+              if (live()) _failedNativeRate[id] = target.rate;
+              return;
+            }
+            if (!live()) return;
+            _appliedRate[id] = target.rate;
+            if (_positionTargets.containsKey(id)) continue;
+            if (_lastPlaying || _scrubbing) await c.play();
+          }
+        }
+      } catch (_) {
+        // A removed or failed decoder must not start playback later.
+        if (live()) _positionTargets.remove(id);
+      } finally {
+        if (identical(_positioning[id], ticket)) {
+          _positioning.remove(id);
+          _starting.remove(id);
+        }
+      }
+    }());
+  }
 
   /// Ultimo volume APLICADO por camada: setVolume e uma chamada de
   /// plataforma — repeti-la a cada tick (30x/s por camada) derruba o
@@ -80,6 +141,9 @@ class VideoLayerManager {
   /// como um token de cancelamento: ao terminar, [_ensure] ve que a camada
   /// nao e mais desejada e descarta o controller antes de publica-lo.
   void _evict(String id) {
+    _positioning.remove(id);
+    _starting.remove(id);
+    _positionTargets.remove(id);
     _controllerPath.remove(id);
     _controllerTicket.remove(id);
     _initializing.remove(id);
@@ -119,7 +183,7 @@ class VideoLayerManager {
           _appliedVolume[id] = volume;
           revision.value++;
           // Seek inicial no instante atual do clock (decupagem correta).
-          sync(_lastLayers, _lastT, _lastPlaying);
+          sync(_lastLayers, _lastT, _lastPlaying, seekRevision: _seekRevision);
         })
         .catchError((_) {
           if (_controllerPath[id] == path &&
@@ -152,7 +216,23 @@ class VideoLayerManager {
 
   /// Chamado a cada mudanca relevante do clock. Camadas de AUDIO usam o
   /// mesmo pipeline (ExoPlayer/AVPlayer tocam audio puro sem textura).
-  Duration? sync(List<Layer> layers, Duration t, bool isPlaying) {
+  Duration? sync(
+    List<Layer> layers,
+    Duration t,
+    bool isPlaying, {
+    int seekRevision = 0,
+  }) {
+    final jumped = seekRevision != _seekRevision;
+    _seekRevision = seekRevision;
+    if (jumped) {
+      _lastPos.clear();
+      _biasUs.clear();
+      _preRolled.clear();
+    }
+    if (isPlaying && _scrubbing) {
+      _scrubbing = false;
+      _scrubTimer?.cancel();
+    }
     _lastT = t;
     _lastPlaying = isPlaying;
 
@@ -317,13 +397,24 @@ class VideoLayerManager {
         };
         if (_preRolled[m.id] != prepareAt) {
           if (controller.value.isPlaying) controller.pause();
-          controller.seekTo(prepareAt);
+          _position(m.id, controller, prepareAt);
           _preRolled[m.id] = prepareAt;
         }
         continue;
       }
 
       if (active && isPlaying) {
+        if (jumped && !frameDriven) {
+          _position(m.id, controller, local, play: true, rate: rate);
+          continue;
+        }
+        if (_positioning.containsKey(m.id)) {
+          // A pre-roll or paused scrub may still be decoding on play.
+          if (!_starting.contains(m.id) && !frameDriven) {
+            _position(m.id, controller, local, play: true, rate: rate);
+          }
+          continue;
+        }
         if (isAudio && nativeRateFailed) {
           // Nao ha quadro para dirigir manualmente numa faixa somente de
           // audio. Mantemos o clock da composicao independente em vez de
@@ -338,7 +429,7 @@ class VideoLayerManager {
           if (last == null ||
               DateTime.now().difference(last) >
                   const Duration(milliseconds: 25)) {
-            controller.seekTo(local);
+            _position(m.id, controller, local);
             _lastSeek[layer.id] = DateTime.now();
           }
           _lastPos[m.id] = null;
@@ -350,7 +441,10 @@ class VideoLayerManager {
           final jaNoLugar =
               preparado != null &&
               (local - preparado).abs() < const Duration(milliseconds: 250);
-          if (!jaNoLugar) controller.seekTo(local);
+          if (!jaNoLugar) {
+            _position(m.id, controller, local, play: true, rate: rate);
+            continue;
+          }
           // O tocador tem velocidade propria: usar ela e o que mantem o
           // som continuo em vez de picotado por seeks.
           _setNativeRate(m.id, controller, rate);
@@ -402,9 +496,8 @@ class VideoLayerManager {
         final ultimo = _lastSeek[layer.id];
         if (ultimo == null ||
             agora.difference(ultimo) > const Duration(milliseconds: 90)) {
-          controller.seekTo(local);
+          _position(m.id, controller, local, play: true, rate: rate);
           _lastSeek[layer.id] = agora;
-          if (!controller.value.isPlaying) controller.play();
         }
       } else {
         _preRolled.remove(m.id);
@@ -414,10 +507,11 @@ class VideoLayerManager {
         // play. Era o que afogava o preview ao arrastar a timeline.
         if (active && !isAudio) {
           final last = _lastSeek[layer.id];
-          if (last == null ||
+          if (jumped ||
+              last == null ||
               DateTime.now().difference(last) >
                   const Duration(milliseconds: 66)) {
-            controller.seekTo(local);
+            _position(m.id, controller, local);
             _lastSeek[layer.id] = DateTime.now();
           }
         }
@@ -441,7 +535,7 @@ class VideoLayerManager {
     _scrubTimer?.cancel();
     _scrubTimer = Timer(const Duration(milliseconds: 160), () {
       _scrubbing = false;
-      pauseAll();
+      if (!_lastPlaying) pauseAll();
     });
   }
 
@@ -452,6 +546,9 @@ class VideoLayerManager {
   }
 
   void dispose() {
+    _positioning.clear();
+    _starting.clear();
+    _positionTargets.clear();
     _scrubTimer?.cancel();
     _controllerPath.clear();
     _controllerTicket.clear();

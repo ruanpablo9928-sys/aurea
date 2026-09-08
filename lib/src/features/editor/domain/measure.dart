@@ -9,8 +9,12 @@ import 'shape.dart';
 /// Caixa RENDERIZADA de uma camada, em px logicos. E a medida que
 /// alinhamento, distribuicao, forma-conteiner e empilhamento usam — por
 /// isso vive num lugar so, e nao copiada em cada um.
-Size measureLayerBox(Layer layer, Duration local,
-    {double fallbackWidth = 1080}) {
+Size measureLayerBox(
+  Layer layer,
+  Duration local, {
+  double fallbackWidth = 1080,
+  bool scaled = true,
+}) {
   final sx = layer.scaleX.valueAt(local).abs();
   final sy = layer.scaleY.valueAt(local).abs();
   final base = switch (layer) {
@@ -22,10 +26,13 @@ Size measureLayerBox(Layer layer, Duration local,
     AudioLayer _ => Size.zero,
     AdjustmentLayer _ => const Size(220, 220),
     CaptionLayer l => measureText(
-        l.cueAt(local)?.text ?? '', l.style.fontSize, l.style.bold),
+      l.cueAt(local)?.text ?? '',
+      l.style.fontSize,
+      l.style.bold,
+    ),
     _ => Size(fallbackWidth, fallbackWidth * 9 / 16),
   };
-  return Size(base.width * sx, base.height * sy);
+  return scaled ? Size(base.width * sx, base.height * sy) : base;
 }
 
 /// Caixa do texto medida de verdade (nao estimada).

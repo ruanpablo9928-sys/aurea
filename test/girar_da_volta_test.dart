@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'dart:math' as math;
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
@@ -33,7 +34,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mover e\ntransf.'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Girar'));
+    await selectTransformTool(tester, 'Girar');
     await tester.pumpAndSettle();
 
     final dial = find.byKey(const ValueKey('rotation-dial'));

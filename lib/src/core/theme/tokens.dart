@@ -81,6 +81,9 @@ class AureaTokens {
     danger: Color(0xFFFF6B6B),
   );
 
+  /// Editor and studio retain the Aurea brand palette.
+  static const motion = dark;
+
   static const light = AureaTokens(
     brightness: Brightness.light,
     bg: Color(0xFFF4F5F7),
@@ -101,10 +104,7 @@ class AureaTokens {
 
   /// Os tokens em vigor neste ponto da arvore (escuro por padrao).
   static AureaTokens of(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<AureaTheme>()
-          ?.tokens ??
-      dark;
+      context.dependOnInheritedWidgetOfExactType<AureaTheme>()?.tokens ?? dark;
 
   // ----------------------------------------------------- medidas
 

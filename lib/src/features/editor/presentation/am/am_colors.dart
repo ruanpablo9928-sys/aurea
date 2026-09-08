@@ -1,13 +1,12 @@
 import 'dart:ui';
 
-/// Flat, low-contrast editing surfaces and teal selection, matching the
-/// reference workflow. Branding on project/home screens is independent.
+/// Shared Aurea palette for the editor, its controls and the 3D studio.
 abstract final class AmColors {
-  static const Color bg = Color(0xFF191A1C);
-  static const Color topBar = Color(0xFF202123);
-  static const Color panel = Color(0xFF17181A);
-  static const Color panelHigh = Color(0xFF25262B);
-  static const Color chip = Color(0xFF292B33);
+  static const Color bg = Color(0xFF12151A);
+  static const Color topBar = Color(0xFF171C23);
+  static const Color panel = Color(0xFF171C23);
+  static const Color panelHigh = Color(0xFF1E242E);
+  static const Color chip = Color(0xFF262C36);
 
   /// Keyframe, curva e realce de contexto (teal).
   static const Color accent = Color(0xFF1ED6B1);

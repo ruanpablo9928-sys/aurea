@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
@@ -74,16 +75,15 @@ void main() {
     final s = c.read(editorSessionProvider);
     expect(s.panel, EditorPanel.curve, reason: 'o losango abre o easing');
     expect(s.curveProp, LayerProp.opacity);
-    expect(find.byKey(const ValueKey('curve-presets-grid')), findsOneWidget, reason: 'Simples: grade');
-    expect(find.byKey(const ValueKey('curve-edit-area')), findsNothing, reason: 'editor de curva e Pro');
+    expect(find.byKey(const ValueKey('curve-edit-area')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('curva-preset-Ease in')));
+    await tester.tap(find.text('Ease in').last);
     await tester.pumpAndSettle();
     final l = c.read(editorControllerProvider).layerById(id)!;
     expect(l.opacity.easeAt(Duration.zero).x1, closeTo(Easing.easeIn.x1, 1e-6));
 
     // Voltar sai da curva para o E2 (de onde veio).
-    await tester.tap(find.byKey(const ValueKey('painel-voltar')));
+    await tester.tap(find.byKey(const ValueKey('editor-back')));
     await tester.pumpAndSettle();
     expect(c.read(editorSessionProvider).panel, EditorPanel.none);
 
@@ -105,7 +105,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mover e\ntransf.'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Opacid.'));
+    await selectTransformTool(tester, 'Opacid.');
     await tester.pumpAndSettle();
     await tester.longPress(find.byKey(const ValueKey('opacidade-valor')));
     await tester.pumpAndSettle();

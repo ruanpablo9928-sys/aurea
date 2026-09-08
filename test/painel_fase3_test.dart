@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
@@ -107,14 +108,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mover e\ntransf.'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Opacid.'));
+    await selectTransformTool(tester, 'Opacid.');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('opacidade-valor')));
     await tester.pumpAndSettle();
     await digitar(tester, '25');
     expect(c.read(editorControllerProvider).layerById(id)!.opacity.valueAt(Duration.zero), closeTo(0.25, 1e-6));
 
-    await tester.tap(find.text('Escalar'));
+    await selectTransformTool(tester, 'Escalar');
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('scale-width-valor')));
     await tester.pumpAndSettle();
@@ -124,7 +125,7 @@ void main() {
     expect(l.scaleY.valueAt(Duration.zero), closeTo(1.5, 1e-6), reason: 'proporcao travada');
 
     // O losango da linha crava keyframe na propriedade.
-    await tester.tap(find.byKey(const ValueKey('kf-largura')));
+    await tester.tap(find.byTooltip('Adicionar keyframe neste instante'));
     await tester.pumpAndSettle();
     expect(c.read(editorControllerProvider).layerById(id)!.scaleX.isAnimated, isTrue);
   });
@@ -137,7 +138,7 @@ void main() {
     for (final tile in ['Mover e\ntransf.', 'Mesclar e\nopacidade', 'Cor e\npreench.', 'Efeitos']) {
       await tester.tap(find.text(tile));
       await tester.pumpAndSettle();
-      final voltar = find.byKey(const ValueKey('painel-voltar'));
+      final voltar = find.byKey(const ValueKey('editor-back'));
       expect(voltar, findsOneWidget, reason: tile);
       // SO O SIMBOLO, E COM TAMANHO DE ALVO. Antes era um chevron de 16
       // com a palavra em corpo 10, os dois espremidos numa faixa de 18
@@ -146,7 +147,7 @@ void main() {
       final caixa = tester.getSize(voltar);
       expect(caixa.width, greaterThanOrEqualTo(44), reason: tile);
       expect(caixa.height, greaterThanOrEqualTo(24), reason: tile);
-      await tester.tap(find.byKey(const ValueKey('painel-voltar')));
+      await tester.tap(find.byKey(const ValueKey('editor-back')));
       await tester.pumpAndSettle();
       expect(c.read(editorSessionProvider).panel, EditorPanel.none, reason: '$tile fechou');
       expect(find.text('Mover e\ntransf.'), findsOneWidget);
@@ -160,12 +161,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('editor-fab')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
+    await tester.tap(find.text('Texto'));
     await tester.pumpAndSettle();
     final texto = c.read(editorControllerProvider).layers.whereType<TextLayer>().single;
     c.read(selectedLayerProvider.notifier).state = texto.id;
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Editar\ntexto'));
+    if (find.text('Editar\ntexto').evaluate().isNotEmpty) await tester.tap(find.text('Editar\ntexto'));
     await tester.pumpAndSettle();
     expect(c.read(editorSessionProvider).panel, EditorPanel.editText);
     expect(find.text('Editar texto'), findsOneWidget);

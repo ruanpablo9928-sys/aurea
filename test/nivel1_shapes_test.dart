@@ -245,10 +245,10 @@ void main() {
       await tester.tap(find.text('abrir'));
       await tester.pumpAndSettle();
 
-      for (final aba in ['Forma', 'Midia', 'Audio', 'Objeto', 'Modelo']) {
+      for (final aba in ['Forma', 'Midia', 'Audio', 'Objeto', 'Mais']) {
         expect(find.text(aba), findsOneWidget, reason: aba);
       }
-      expect(find.text('Desenho\nlivre'), findsOneWidget);
+      expect(find.text('Desenho à\nmão livre'), findsOneWidget);
       expect(find.text('Desenho\nvetorial'), findsOneWidget);
       expect(find.text('Texto'), findsOneWidget);
       // Primeira pagina: quinze tiles, cinco por fileira.

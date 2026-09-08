@@ -1,3 +1,7 @@
+import '../widgets/composition_frame.dart';
+import '../widgets/motion_keyframe_track.dart';
+import '../context/parameter_row.dart' show showNumberInput;
+
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -143,18 +147,10 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
     );
     _playback.compositionFps = ref.read(editorControllerProvider).fps;
     _playback.loop.value = true;
-    _playback.time.addListener(_clockChanged);
-    _playback.playing.addListener(_clockChanged);
-  }
-
-  void _clockChanged() {
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _playback.time.removeListener(_clockChanged);
-    _playback.playing.removeListener(_clockChanged);
     _playback.pause();
     _playback.dispose();
     super.dispose();
@@ -547,8 +543,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
     setState(() {
       _view = v;
       _pivot = null;
-      if ((v == SceneView.custom1 || v == SceneView.custom2) &&
-          layer != null) {
+      if ((v == SceneView.custom1 || v == SceneView.custom2) && layer != null) {
         // A vista livre nasce onde a camera esta — assim nada pula
         // quando se troca para ela.
         final cam = _activeCamera(layer);
@@ -623,75 +618,237 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
         .where((l) => l.id == _selectedLight)
         .firstOrNull;
 
+    // Clock ticks update the viewport and motion controls, not the whole
+    // studio or its tool menus. Camera cuts still update the camera title.
+    Widget live(Widget Function() builder) => ListenableBuilder(
+      listenable: Listenable.merge([_playback.time, _playback.playing]),
+      builder: (_, _) => builder(),
+    );
+    final project = ref.read(editorControllerProvider);
+    Widget viewport() => LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        final frame = compositionRect(
+          size,
+          Size(project.outputWidth.toDouble(), project.outputHeight.toDouble()),
+        );
+        if (_miniPos.dx < 0) {
+          _miniPos = Offset(
+            math.max(0, size.width - _miniSize - 12),
+            math.max(0, size.height - _miniSize - 12),
+          );
+        }
+        return Stack(
+          key: const ValueKey('studio-viewport'),
+          children: [
+            // Camera projection and picking use precisely the same output
+            // aspect ratio as the main composition and exported frame.
+            Positioned.fromRect(
+              rect: frame,
+              child: CompositionFrame(
+                key: const ValueKey('studio-composition-frame'),
+                safeAreas: project.guides.showSafeAreas,
+                child: RepaintBoundary(child: _viewport(layer, frame.size)),
+              ),
+            ),
+            if (_avancado && _showMiniView) _miniViewWidget(layer, size),
+            Positioned(
+              left: 10,
+              top: 10,
+              child: AxisGizmo(
+                camera: _activeCamera(layer),
+                time: _time,
+                onView: _verVista,
+              ),
+            ),
+            if (layer.allCameras.length > 1)
+              Positioned(
+                left: 80,
+                right: 58,
+                top: 10,
+                child: _cameraStrip(layer),
+              ),
+          ],
+        );
+      },
+    );
+    Widget controls() => ColoredBox(
+      color: AmColors.panel,
+      child: Column(
+        children: [
+          SizedBox(height: 44, child: _quickActions(layer)),
+          live(() => _timeRow(layer, node)),
+          live(() => _contextBar(layer, node, luz)),
+          live(() => _transformValues(layer, node)),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _toolStrip(),
+                  if (_avancado) _viewSelector(layer),
+                  if (_avancado) _commandBar(layer),
+                  if (_dica >= 0) _hintCard(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
     return Scaffold(
       backgroundColor: AmColors.bg,
+      resizeToAvoidBottomInset: ModalRoute.of(context)?.isCurrent ?? true,
       body: SafeArea(
         child: Column(
           children: [
-            _topBar(layer),
+            live(() => _topBar(layer)),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final size = Size(
-                    constraints.maxWidth,
-                    constraints.maxHeight,
-                  );
-                  if (_miniPos.dx < 0) {
-                    _miniPos = Offset(
-                      size.width - _miniSize - 12,
-                      size.height - _miniSize - 12,
+                  final wide =
+                      constraints.maxWidth >= 600 &&
+                      constraints.maxWidth > constraints.maxHeight;
+                  if (wide) {
+                    return Row(
+                      children: [
+                        Expanded(child: live(viewport)),
+                        SizedBox(
+                          width: (constraints.maxWidth * .4).clamp(
+                            280.0,
+                            380.0,
+                          ),
+                          child: controls(),
+                        ),
+                      ],
                     );
                   }
-                  return Stack(
+                  final previewHeight = math.min(
+                    (constraints.maxWidth - 16) / project.aspectRatio + 16,
+                    math.min(
+                      constraints.maxHeight * .57,
+                      math.max(80.0, constraints.maxHeight - 308),
+                    ),
+                  );
+                  return Column(
                     children: [
-                      _viewport(layer, size),
-                      if (_avancado && _showMiniView)
-                        _miniViewWidget(layer, size),
-                      Positioned(
-                        left: 10,
-                        top: 10,
-                        child: AxisGizmo(
-                          camera: _activeCamera(layer),
-                          time: _time,
-                          onView: _verVista,
-                        ),
-                      ),
-                      if (layer.allCameras.length > 1)
-                        Positioned(
-                          left: 80,
-                          right: 58,
-                          top: 10,
-                          child: _cameraStrip(layer),
-                        ),
-                      Positioned(
-                        right: 10,
-                        top: 10,
-                        child: _quickActions(layer),
-                      ),
-                      if (_dica >= 0)
-                        Positioned(
-                          left: 12,
-                          right: 60,
-                          top: 84,
-                          child: _hintCard(),
-                        ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 8,
-                        child: _contextBar(layer, node, luz),
-                      ),
+                      SizedBox(height: previewHeight, child: live(viewport)),
+                      Expanded(child: controls()),
                     ],
                   );
                 },
               ),
             ),
-            _timeRow(layer, node),
-            _toolStrip(),
-            if (_avancado) _viewSelector(layer),
-            if (_avancado) _commandBar(layer),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _transformValues(Scene3DLayer layer, SceneNode? node) {
+    final camera = _activeCamera(layer);
+    final tool = _tool;
+    if (tool == FerramentaDoEstudio.selecionar || _alvos.length > 1) {
+      return const SizedBox(
+        height: 44,
+        child: Center(
+          child: Text(
+            'Escolha Mover, Girar ou Escalar para ajustar',
+            style: TextStyle(fontSize: 11, color: AmColors.muted),
+          ),
+        ),
+      );
+    }
+    final tracks = switch (tool) {
+      FerramentaDoEstudio.girar =>
+        node == null
+            ? [camera.rotX, camera.rotY, camera.rotZ]
+            : [node.rotX, node.rotY, node.rotZ],
+      FerramentaDoEstudio.escalar => [node?.scale ?? camera.focalLength],
+      _ =>
+        node == null
+            ? [camera.posX, camera.posY, camera.posZ]
+            : [node.x, node.y, node.z],
+    };
+    return SizedBox(
+      height: 44,
+      child: Row(
+        children: [
+          for (var axis = 0; axis < tracks.length; axis++)
+            Expanded(
+              child: TextButton(
+                key: ValueKey('scene-transform-$axis'),
+                onPressed: node?.locked == true
+                    ? null
+                    : () async {
+                        _playback.pause();
+                        final isScale =
+                            tool == FerramentaDoEstudio.escalar && node != null;
+                        final value = await showNumberInput(
+                          context,
+                          title: tracks.length == 1
+                              ? (isScale ? 'Escala (%)' : 'Lente (mm)')
+                              : '${ferramentaLabel(tool)} · ${['X', 'Y', 'Z'][axis]}',
+                          value:
+                              tracks[axis].valueAt(_time) * (isScale ? 100 : 1),
+                          min: tracks.length == 1
+                              ? .1
+                              : double.negativeInfinity,
+                        );
+                        if (value == null || !mounted || _layer == null) return;
+                        final v = value / (isScale ? 100 : 1);
+                        if (node != null) {
+                          _controller.updateSceneNode(
+                            widget.layerId,
+                            node.id,
+                            (n) => switch (tool) {
+                              FerramentaDoEstudio.escalar => n.copyWith(
+                                scale: _valor(n.scale, v),
+                              ),
+                              FerramentaDoEstudio.girar => n.copyWith(
+                                rotX: axis == 0 ? _valor(n.rotX, v) : null,
+                                rotY: axis == 1 ? _valor(n.rotY, v) : null,
+                                rotZ: axis == 2 ? _valor(n.rotZ, v) : null,
+                              ),
+                              _ => n.copyWith(
+                                x: axis == 0 ? _valor(n.x, v) : null,
+                                y: axis == 1 ? _valor(n.y, v) : null,
+                                z: axis == 2 ? _valor(n.z, v) : null,
+                              ),
+                            },
+                          );
+                        } else {
+                          final c = _activeCamera(_layer!);
+                          _setCamera(switch (tool) {
+                            FerramentaDoEstudio.escalar => c.copyWith(
+                              focalLength: _valor(c.focalLength, v),
+                            ),
+                            FerramentaDoEstudio.girar => c.copyWith(
+                              rotX: axis == 0 ? _valor(c.rotX, v) : null,
+                              rotY: axis == 1 ? _valor(c.rotY, v) : null,
+                              rotZ: axis == 2 ? _valor(c.rotZ, v) : null,
+                            ),
+                            _ => c.copyWith(
+                              posX: axis == 0 ? _valor(c.posX, v) : null,
+                              posY: axis == 1 ? _valor(c.posY, v) : null,
+                              posZ: axis == 2 ? _valor(c.posZ, v) : null,
+                            ),
+                          });
+                        }
+                      },
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '${tracks.length == 1 ? (node == null ? 'mm' : '%') : ['X', 'Y', 'Z'][axis]}  '
+                    '${(tracks[axis].valueAt(_time) * (tool == FerramentaDoEstudio.escalar && node != null ? 100 : 1)).toStringAsFixed(1)}',
+                    style: const TextStyle(
+                      color: AmColors.accent,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -844,7 +1001,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
               key: const ValueKey('mais-ajustes'),
               icone: CupertinoIcons.slider_horizontal_3,
               titulo: 'Ajustes avancados da cena',
-              subtitulo: 'A ficha completa: objetos, luzes, ambiente, '
+              subtitulo:
+                  'A ficha completa: objetos, luzes, ambiente, '
                   'camera, foco e ajudas.',
               chevron: true,
               onTap: () {
@@ -918,7 +1076,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
               key: const ValueKey('mais-avancado'),
               icone: CupertinoIcons.wrench,
               titulo: 'Modo avancado',
-              subtitulo: 'Vistas, mini-vista, eixo travado e os comandos de '
+              subtitulo:
+                  'Vistas, mini-vista, eixo travado e os comandos de '
                   'camera na tela.',
               ligado: _avancado,
               onTap: () {
@@ -1011,8 +1170,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
 
   /// AS ACOES RAPIDAS, flutuando no canto da vista.
   Widget _quickActions(Scene3DLayer layer) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _acaoRapida(
           key: const ValueKey('estudio-adicionar'),
@@ -1021,28 +1180,28 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
           destaque: true,
           onTap: _abrirAdicionar,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(width: 4),
         _acaoRapida(
           key: const ValueKey('estudio-focar'),
           icone: CupertinoIcons.viewfinder,
           tooltip: 'Focar (enquadrar o selecionado)',
           onTap: () => _frameSelected(layer),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(width: 4),
         _acaoRapida(
           key: const ValueKey('estudio-cena'),
           icone: CupertinoIcons.list_bullet,
           tooltip: 'Cena: objetos, luzes e cameras',
           onTap: _abrirHierarquia,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(width: 4),
         _acaoRapida(
           key: const ValueKey('estudio-desfazer'),
           icone: CupertinoIcons.arrow_uturn_left,
           tooltip: 'Desfazer',
           onTap: _controller.canUndo ? _controller.undo : null,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(width: 4),
         _acaoRapida(
           key: const ValueKey('estudio-refazer'),
           icone: CupertinoIcons.arrow_uturn_right,
@@ -1072,7 +1231,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
           height: 40,
           decoration: BoxDecoration(
             color: destaque
-                ? AmColors.accent
+                ? AmColors.action
                 : AmColors.panel.withValues(alpha: .82),
             shape: BoxShape.circle,
           ),
@@ -1534,8 +1693,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
       onTapUp: (d) => _handleTap(layer, d.localPosition, size),
       onDoubleTapDown: (d) => _handleDoubleTap(layer, d.localPosition, size),
       onDoubleTap: () {},
-      onLongPressStart: (d) =>
-          _handleLongPress(layer, d.localPosition, size),
+      onLongPressStart: (d) => _handleLongPress(layer, d.localPosition, size),
       onScaleStart: (d) {
         final frame = renderScene(layer.scene, cam, size, _time);
         final hit = pickNodeAt(frame, d.localFocalPoint);
@@ -1962,7 +2120,8 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                     min: 0,
                     max: duration / 1e6,
                     value:
-                        _time.inMicroseconds.toDouble().clamp(0, duration) / 1e6,
+                        _time.inMicroseconds.toDouble().clamp(0, duration) /
+                        1e6,
                     onChanged: (v) => seek((v * 1e6).round()),
                   ),
                 ),
@@ -1975,6 +2134,14 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                 ),
               ],
             ),
+          ),
+          MotionKeyframeTrack(
+            key: const ValueKey('scene-motion-keyframes'),
+            keysUs: keys,
+            duration: layer.duration,
+            time: _time,
+            label: node == null ? 'Camera' : node.name,
+            onSeek: (time) => seek(time.inMicroseconds),
           ),
           SizedBox(
             height: 36,
@@ -2093,15 +2260,16 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                             switch (f) {
                               FerramentaDoEstudio.selecionar =>
                                 CupertinoIcons.hand_point_left,
-                              FerramentaDoEstudio.mover =>
-                                CupertinoIcons.move,
+                              FerramentaDoEstudio.mover => CupertinoIcons.move,
                               FerramentaDoEstudio.girar =>
                                 CupertinoIcons.rotate_right,
                               FerramentaDoEstudio.escalar =>
                                 CupertinoIcons.arrow_up_left_arrow_down_right,
                             },
                             size: 15,
-                            color: _tool == f ? AmColors.accent : AmColors.muted,
+                            color: _tool == f
+                                ? AmColors.accent
+                                : AmColors.muted,
                           ),
                           const SizedBox(height: 2),
                           // Uma linha sempre: em tela estreita o nome

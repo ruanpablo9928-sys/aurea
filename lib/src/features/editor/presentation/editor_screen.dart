@@ -15,7 +15,6 @@ import '../application/preview_stats.dart';
 import '../application/qualidade3d_controller.dart';
 import '../application/ui/editor_layout.dart';
 import '../application/ui/editor_session.dart';
-import '../application/ui/pro_mode.dart';
 import '../application/video_layer_manager.dart';
 import '../domain/effect.dart';
 import '../domain/gear.dart';
@@ -74,7 +73,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   final GlobalKey<PointsPanelState> _pointsKey = GlobalKey<PointsPanelState>();
   AddTab? _addTab;
 
-  EditorSessionNotifier get _session => ref.read(editorSessionProvider.notifier);
+  EditorSessionNotifier get _session =>
+      ref.read(editorSessionProvider.notifier);
   EditorSession get _s => ref.read(editorSessionProvider);
 
   @override
@@ -100,6 +100,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       project.layers,
       _playback.time.value,
       _playback.playing.value,
+      seekRevision: _playback.seekRevision,
     );
     if (master != null) _playback.anchorToMedia(master);
   }
@@ -117,13 +118,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   /// Fecha a coisa mais interna que estiver aberta; sem nada aberto,
   /// sai do editor.
   void _back() {
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
     final s = _s;
     if (s.adding) {
-      // Do seletor com abas, Voltar volta para a barra do "+".
-      if (_addTab != null) {
-        setState(() => _addTab = null);
-        return;
-      }
       _session.closeAdd();
       return;
     }
@@ -297,14 +297,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   void _openCurve(LayerProp prop) => _session.openCurve(prop);
 
-  /// Tocar na barra JA selecionada: o E2 ja esta no painel; so garante
-  /// que ele esteja a vista (sobe do nivel espiar para a metade).
-  void _onTapLayer(Layer layer) {
-    _playback.pause();
-    if (_s.sheetLevel == SheetLevel.peek || (_s.sheetFraction ?? 1) < 0.3) {
-      _session.setSheetLevel(SheetLevel.half);
-    }
-  }
+  /// Tocar na barra JA selecionada: o painel ja esta aberto e sempre da
+  /// mesma altura, entao so resta parar a reproducao.
+  void _onTapLayer(Layer layer) => _playback.pause();
 
   void _openLayerAction(Layer layer, LayerMenuAction action) {
     if (ref.read(selectedLayerProvider) != layer.id ||
@@ -386,12 +381,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     ref.read(pathEditCursorProvider.notifier).state = null;
   }
 
-
   // ------------------------------------------------------- adicionar
 
   void _openAdd([AddTab? tab]) {
     _playback.pause();
-    _addTab = tab;
+    _addTab = tab ?? AddTab.forma;
     _session.openAdd();
   }
 
@@ -446,9 +440,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         await showBeatsSheet(context, ref, som.id);
       case AddTarget.autoEdit:
         _playback.pause();
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const AutoEditScreen()),
-        );
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const AutoEditScreen()));
     }
   }
 
@@ -563,9 +557,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     controller.runAsOneUndo(() {
       for (final prop in props) {
         final local = layer.localTime(t).inMicroseconds;
-        final temEste = _timesForProp(layer, prop).any(
-          (us) => (us - local).abs() < 8000,
-        );
+        final temEste = _timesForProp(
+          layer,
+          prop,
+        ).any((us) => (us - local).abs() < 8000);
         // Tirando: so as que tem. Pondo: so as que nao tem.
         if (tem == temEste) controller.toggleKeyframe(layer.id, t, prop);
       }
@@ -579,7 +574,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final selectedId = ref.watch(selectedLayerProvider);
     final multi = ref.watch(multiSelectProvider);
     final s = ref.watch(editorSessionProvider);
-    final pro = ref.watch(proModeProvider);
 
     ref.listen<String?>(selectedLayerProvider, (previous, next) {
       if (previous == next) return;
@@ -640,7 +634,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         onOpenCurve: _openCurve,
         onEditMaskPoints: _abrirMaskEditPoints,
       ),
-      EditorPanel.colorFill => ColorFillPanel(onBack: _back, playback: _playback),
+      EditorPanel.colorFill => ColorFillPanel(
+        onBack: _back,
+        playback: _playback,
+      ),
       EditorPanel.effects => EffectsPanel(playback: _playback, onBack: _back),
       EditorPanel.curve => CurvePanel(
         playback: _playback,
@@ -723,16 +720,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ? ref.watch(editorControllerProvider).name
           : '${ref.watch(editorControllerProvider).name} › ${layer.name}';
     } else if (s.adding) {
-      // Primeiro a barra do "+" (o que se pode adicionar); so depois de
-      // escolher e que abre o seletor com abas.
-      conteudo = _addTab == null
-          ? AddToolbar(pro: pro, empty: semCamadas, onTarget: _onAddTarget)
-          : AddLayerPanel(
-              key: ValueKey('adicionar-${_addTab!.name}'),
-              playhead: _playback.time.value,
-              initialTab: _addTab,
-              onClose: () => setState(() => _addTab = null),
-            );
+      conteudo = AddLayerPanel(
+        key: const ValueKey('adicionar-camada'),
+        playhead: _playback.time.value,
+        initialTab: _addTab,
+        onClose: _session.closeAdd,
+        onProjectAction: _onAddTarget,
+      );
     } else if (targets.length >= 2) {
       conteudo = MultiSelectionPanel(targets: targets, playback: _playback);
     } else if (layer != null) {
@@ -744,7 +738,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     } else if (semCamadas) {
       conteudo = EstadoVazio(onMidia: () => _onAddTarget(AddTarget.midia));
     } else {
-      conteudo = const DicaDoPalco();
+      conteudo = null;
     }
     // AS DICAS DE PRIMEIRO USO MORAM NA FOLHA, e nao por cima do palco.
     //
@@ -778,7 +772,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         targets.length < 2;
 
     return AureaTheme(
-      tokens: AureaTokens.dark,
+      tokens: AureaTokens.motion,
       child: PopScope(
         canPop: !temContexto,
         onPopInvokedWithResult: (didPop, _) {
@@ -786,6 +780,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         },
         child: Scaffold(
           key: paramSheetHostKey,
+          resizeToAvoidBottomInset: ModalRoute.of(context)?.isCurrent ?? true,
           backgroundColor: AmColors.bg,
           body: SafeArea(
             child: LayoutBuilder(
@@ -813,17 +808,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 // espaco — num aparelho pequeno isso estoura o layout.
                 final fracaoDaComposicao =
                     constraints.maxHeight <= 0 || proporcao <= 0
-                    ? s.previewFraction
+                    ? EditorSession.alturaDoPreview
                     : math.min(
-                        s.previewFraction,
+                        math.min(
+                          EditorSession.alturaDoPreview,
+                          math.max(96, ws - 88 - 206) / constraints.maxHeight,
+                        ),
                         (constraints.maxWidth / proporcao) /
                             constraints.maxHeight,
                       );
                 final m = EditorLayoutMetrics.solve(
                   totalHeight: constraints.maxHeight,
-                  previewFraction: s.previewAjustado
-                      ? s.previewFraction
-                      : fracaoDaComposicao,
+                  previewFraction: fracaoDaComposicao,
                   // A dica e o estado vazio ocupam UMA linha; painel de
                   // verdade ocupa o nivel que a alca deixou.
                   // A FOLHA FINA E A FAIXA DO CABECALHO MAIS UMA LINHA.
@@ -833,14 +829,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   // ganhou tamanho de alvo), sobravam 14 px para o texto
                   // e a dica saia cortada pela metade.
                   sheetFraction: folhaFina && ws > 0
-                      ? (ContextSheet.handleHeight + 30) / ws
+                      ? (ContextSheet.handleHeight + (semCamadas ? 86 : 30)) /
+                            ws
                       : (mostrandoDicas && ws > 0
                             ? (ContextSheet.handleHeight + 108) / ws
-                            : s.effectiveSheetFraction),
+                            : EditorSession.alturaDaFolha),
                   previewExpanded: s.previewExpanded,
                   timelineExpanded: s.timelineExpanded,
                   sheetVisible: conteudo != null,
+                  timelineFloor: layer != null && s.panel == EditorPanel.none
+                      ? 126
+                      : 88,
                   sheetMayCoverTimeline: s.adding && _addTab != null,
+                  focusedLayer:
+                      layer != null && s.panel != EditorPanel.none && !s.adding,
                 );
                 // AS PECAS, montadas uma vez; o arranjo depende da largura
                 // (Fase 7: acima de 700 pt, timeline e painel lado a lado —
@@ -852,70 +854,70 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     child: PreviewStage(playback: _playback, videos: _videos),
                   ),
                 );
-                final alca =                           PreviewResizeHandle(
-                            expanded: false,
-                            onExpand: _session.togglePreviewExpanded,
-                            onReset: _session.soltarPreview,
-                            onDrag: (dy) => _session.setPreviewFraction(
-                              s.previewFraction +
-                                  (constraints.maxHeight <= 0
-                                      ? 0
-                                      : dy / constraints.maxHeight),
-                            ),
-                          );
-                final transporte =                         EditorTransportBar(
-                          playback: _playback,
-                          keyframeEnabled: layer != null,
-                          keyframeHere: layer != null && _keyframeAqui(layer, s),
-                          onKeyframe: () {
-                            if (layer != null) _toggleKeyframe(layer, s);
-                          },
-                          onAdd: s.adding ? null : _openAdd,
-                        );
-                Widget timeline(double alturaTimeline) =>                           RepaintBoundary(
-                            child: AmTimeline(
-                              playback: _playback,
-                              height: alturaTimeline,
-                              singleLayerId: panel == null ? null : selectedId,
-                              playheadColor: pinkPlayhead
-                                  ? AmColors.pink
-                                  : Colors.white,
-                              onTapLayer: (l) {
-                                if (panel != null) {
-                                  _back();
-                                  return;
-                                }
-                                _onTapLayer(l);
-                              },
-                              onScrub: _videos.scrub,
-                              onExpand: _session.toggleTimelineExpanded,
-                              expanded: s.timelineExpanded,
-                              activeTimesUs: activeTimesUs,
-                              onForeignKeyframe: panel == null
-                                  ? null
-                                  : _onForeignKeyframe,
-                              onKeyframeTap: _onKeyframeTap,
-                            ),
-                          );
+                final alca = PreviewResizeHandle(
+                  expanded: false,
+                  onExpand: _session.togglePreviewExpanded,
+                );
+                final transporte = EditorTransportBar(
+                  playback: _playback,
+                  keyframeEnabled: layer != null,
+                  keyframeHere: layer != null && _keyframeAqui(layer, s),
+                  onKeyframe: () {
+                    if (layer != null) _toggleKeyframe(layer, s);
+                  },
+                  onAdd: s.adding ? null : _openAdd,
+                );
+                Widget timeline(double alturaTimeline) => RepaintBoundary(
+                  child: AmTimeline(
+                    playback: _playback,
+                    height: alturaTimeline,
+                    singleLayerId:
+                        targets.length < 2 &&
+                            s.panel != EditorPanel.none &&
+                            !s.adding
+                        ? selectedId
+                        : null,
+                    playheadColor: pinkPlayhead ? AmColors.pink : Colors.white,
+                    onTapLayer: (l) {
+                      if (panel != null) {
+                        _back();
+                        return;
+                      }
+                      _onTapLayer(l);
+                    },
+                    onScrub: _videos.scrub,
+                    onExpand: _session.toggleTimelineExpanded,
+                    expanded: s.timelineExpanded,
+                    activeTimesUs: activeTimesUs,
+                    onForeignKeyframe: panel == null
+                        ? null
+                        : _onForeignKeyframe,
+                    onKeyframeTap: _onKeyframeTap,
+                  ),
+                );
                 Widget folha(double alturaFolha) => ContextSheet(
-                            height: alturaFolha,
-                            title: titulo,
-                            subtitle: trilha,
-                            onBack: titulo == null ? null : _back,
-                            onDrag: (dy) => _session.setSheetFraction(
-                              s.effectiveSheetFraction - (ws <= 0 ? 0 : dy / ws),
-                            ),
-                            onDragEnd: _session.snapSheet,
-                            child: RepaintBoundary(child: conteudo),
-                          );
-                final largo = constraints.maxWidth > 700 && !s.previewExpanded;
+                  height: alturaFolha,
+                  title: null,
+                  subtitle: trilha,
+                  onBack: titulo == null ? null : _back,
+                  child: RepaintBoundary(child: conteudo),
+                );
+                final largo =
+                    constraints.maxWidth >= 600 &&
+                        constraints.maxWidth > constraints.maxHeight &&
+                        !s.previewExpanded ||
+                    constraints.maxWidth >= 900 && !s.previewExpanded;
+                final larguraFolha = (constraints.maxWidth * .4).clamp(
+                  280.0,
+                  380.0,
+                );
                 final alturaTimelineLarga =
                     ((constraints.maxHeight -
                                 AureaTokens.topBar -
                                 AureaTokens.transport -
                                 EditorLayoutMetrics.handleHeight) *
                             0.34)
-                        .clamp(148.0, 360.0)
+                        .clamp(88.0, 280.0)
                         .toDouble();
                 return Stack(
                   children: [
@@ -923,7 +925,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       Column(
                         key: const ValueKey('editor-largo'),
                         children: [
-                          EditorTopBar(onBack: _back, backLabel: _backLabel),
+                          EditorTopBar(
+                            onBack: _back,
+                            backLabel: _backLabel,
+                            title: titulo,
+                          ),
                           Expanded(
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -938,13 +944,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                     ],
                                   ),
                                 ),
-                                if (conteudo != null)
-                                  SizedBox(
-                                    width: 380,
-                                    child: folha(
-                                      constraints.maxHeight - AureaTokens.topBar,
-                                    ),
+                                SizedBox(
+                                  width: larguraFolha,
+                                  child: folha(
+                                    constraints.maxHeight - AureaTokens.topBar,
                                   ),
+                                ),
                               ],
                             ),
                           ),
@@ -954,7 +959,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       Column(
                         children: [
                           if (!s.previewExpanded)
-                            EditorTopBar(onBack: _back, backLabel: _backLabel),
+                            EditorTopBar(
+                              onBack: _back,
+                              backLabel: _backLabel,
+                              title: titulo,
+                            ),
                           preview(m.preview),
                           if (!s.previewExpanded) alca,
                           transporte,
@@ -963,6 +972,28 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             if (conteudo != null) folha(m.sheet),
                           ],
                         ],
+                      ),
+                    if (!s.previewExpanded &&
+                        !s.adding &&
+                        layer == null &&
+                        targets.isEmpty)
+                      Positioned(
+                        right: 16 + (largo ? larguraFolha : 0),
+                        bottom: 16 + (largo || conteudo == null ? 0 : m.sheet),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: FloatingActionButton(
+                            key: const ValueKey('editor-fab'),
+                            tooltip: 'Adicionar camada',
+                            elevation: 0,
+                            shape: const CircleBorder(),
+                            backgroundColor: AmColors.action,
+                            foregroundColor: AmColors.onAction,
+                            onPressed: _openAdd,
+                            child: const Icon(Icons.add, size: 28),
+                          ),
+                        ),
                       ),
                     if (s.previewExpanded)
                       Positioned(
@@ -1055,37 +1086,36 @@ class _DiagOverlay extends ConsumerWidget {
                       ),
                       child: ValueListenableBuilder<int>(
                         valueListenable: PreviewStats.jankFrames,
-                        builder: (context, jank, _) =>
-                            ValueListenableBuilder<double>(
-                              valueListenable: PreviewStats.worstFrameMs,
-                              builder: (context, pior, _) =>
-                                  ValueListenableBuilder<FrameReport?>(
-                                    valueListenable: FrameLog.report,
-                                    builder: (context, r, _) => Text(
-                                      'UI: $jank travadas · pior ${pior.toStringAsFixed(0)} ms\n'
-                                      'MARCHA: ${gear == null ? '—' : gearLabel(gear.gear)}\n'
-                                      'motivo: ${gear?.reason ?? '—'}\n'
-                                      'compoe $comps/s · projeto ${fps}fps\n'
-                                      'variancia entre ticks: $variance ms\n'
-                                      'camadas no frame: $inFrame / $total · '
-                                      'M1+M2: $lowPct%\n'
-                                      '── registrador (${r?.seconds ?? 0}s) ──\n'
-                                      'mediana ${r?.medianMs ?? 0} ms · '
-                                      'pico ${r?.peakMs ?? 0} ms\n'
-                                      'travadas ${r?.stutters ?? 0} · '
-                                      'intervalo ${r?.gapS ?? 0}s (±${r?.gapSdS ?? 0})\n'
-                                      'deriva video-audio ${r?.driftMs ?? 0} ms',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AmColors.accent,
-                                        height: 1.4,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
-                                    ),
+                        builder: (context, jank, _) => ValueListenableBuilder<double>(
+                          valueListenable: PreviewStats.worstFrameMs,
+                          builder: (context, pior, _) =>
+                              ValueListenableBuilder<FrameReport?>(
+                                valueListenable: FrameLog.report,
+                                builder: (context, r, _) => Text(
+                                  'UI: $jank travadas · pior ${pior.toStringAsFixed(0)} ms\n'
+                                  'MARCHA: ${gear == null ? '—' : gearLabel(gear.gear)}\n'
+                                  'motivo: ${gear?.reason ?? '—'}\n'
+                                  'compoe $comps/s · projeto ${fps}fps\n'
+                                  'variancia entre ticks: $variance ms\n'
+                                  'camadas no frame: $inFrame / $total · '
+                                  'M1+M2: $lowPct%\n'
+                                  '── registrador (${r?.seconds ?? 0}s) ──\n'
+                                  'mediana ${r?.medianMs ?? 0} ms · '
+                                  'pico ${r?.peakMs ?? 0} ms\n'
+                                  'travadas ${r?.stutters ?? 0} · '
+                                  'intervalo ${r?.gapS ?? 0}s (±${r?.gapSdS ?? 0})\n'
+                                  'deriva video-audio ${r?.driftMs ?? 0} ms',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmColors.accent,
+                                    height: 1.4,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
-                            ),
+                                ),
+                              ),
+                        ),
                       ),
                     );
                   },
@@ -1123,7 +1153,10 @@ class _Diag3D extends StatelessWidget {
               }
               final est = c.estimativa.value;
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xCC12151A),
                   borderRadius: BorderRadius.circular(8),

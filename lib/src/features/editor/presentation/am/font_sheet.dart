@@ -16,7 +16,11 @@ import 'am_widgets.dart';
 /// texto deixa de ser texto: nao anima por letra, nao muda depois, nao
 /// aceita o animador.
 Future<void> showFontSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
+  var importing = false;
   await showParamSheet(
     context,
     title: 'Fonte',
@@ -33,22 +37,39 @@ Future<void> showFontSheet(
         final atual = layer.fontFamily;
 
         Future<void> importar() async {
-          final r = await FilePicker.platform.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: const ['ttf', 'otf'],
-          );
-          final caminho = r?.files.single.path;
-          if (caminho == null) return;
-          final familia = await servico.import(caminho);
-          if (!sheetContext.mounted) return;
-          if (familia == null) {
+          if (importing) return;
+          FocusScope.of(sheetContext).unfocus();
+          setSheetState(() => importing = true);
+          try {
+            final r = await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: const ['ttf', 'otf'],
+              allowMultiple: true,
+            );
+            if (r == null) return;
+            final result = await servico.importMany(
+              r.files.map((f) => f.path).whereType<String>(),
+            );
+            if (!sheetContext.mounted) return;
+            if (result.imported.isNotEmpty) {
+              controller.editTextLayer(
+                layerId,
+                fontFamily: result.imported.first,
+              );
+            }
+            setSheetState(() {});
+            final failed = r.files.length - result.imported.length;
             AureaSnack.show(
-                sheetContext, 'Nao consegui ler essa fonte');
-            return;
+              sheetContext,
+              '${result.imported.length} fontes importadas${failed > 0 ? ' · $failed arquivos não puderam ser lidos' : ''}',
+            );
+          } catch (_) {
+            if (sheetContext.mounted) {
+              AureaSnack.show(sheetContext, 'Não foi possível abrir as fontes');
+            }
+          } finally {
+            if (sheetContext.mounted) setSheetState(() => importing = false);
           }
-          controller.editTextLayer(layerId, fontFamily: familia);
-          setSheetState(() {});
-          AureaSnack.show(sheetContext, 'Fonte "$familia" instalada');
         }
 
         return SafeArea(
@@ -58,23 +79,21 @@ Future<void> showFontSheet(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Fonte',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
-                const SizedBox(height: 4),
                 const Text(
                   'Arquivos .ttf e .otf. A fonte e copiada para dentro do '
                   'Aurea — o projeto continua abrindo mesmo se o arquivo '
                   'original sumir.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 _Linha(
                   nome: 'Fonte do Aurea',
+                  sample: layer.text,
                   familia: null,
                   aceso: atual == null,
                   onTap: () {
@@ -85,24 +104,32 @@ Future<void> showFontSheet(
                 for (final f in fontes)
                   _Linha(
                     nome: f,
+                    sample: layer.text,
                     familia: f,
                     aceso: atual == f,
                     onTap: () {
                       controller.editTextLayer(layerId, fontFamily: f);
                       setSheetState(() {});
                     },
-                    onRemove: servico.isBundled(f) ? null : () async {
-                      await servico.remove(f);
-                      if (atual == f) {
-                        controller.editTextLayer(layerId, clearFont: true);
-                      }
-                      setSheetState(() {});
-                    },
+                    onRemove: servico.isBundled(f)
+                        ? null
+                        : () async {
+                            await servico.remove(f);
+                            if (!sheetContext.mounted) return;
+                            if (atual == f) {
+                              controller.editTextLayer(
+                                layerId,
+                                clearFont: true,
+                              );
+                            }
+                            setSheetState(() {});
+                          },
                   ),
 
                 const SizedBox(height: 10),
                 GestureDetector(
-                  onTap: importar,
+                  key: const ValueKey('fontes-importar'),
+                  onTap: importing ? null : importar,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 11),
                     alignment: Alignment.center,
@@ -110,17 +137,23 @@ Future<void> showFontSheet(
                       color: AmColors.accentDim,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(CupertinoIcons.add, size: 15,
-                            color: AmColors.accent),
-                        SizedBox(width: 6),
-                        Text('Importar fonte',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AmColors.accent)),
+                        const Icon(
+                          CupertinoIcons.add,
+                          size: 15,
+                          color: AmColors.accent,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          importing ? 'Importando…' : 'Importar fontes',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AmColors.accent,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -137,6 +170,7 @@ Future<void> showFontSheet(
 class _Linha extends StatelessWidget {
   const _Linha({
     required this.nome,
+    required this.sample,
     required this.familia,
     required this.aceso,
     required this.onTap,
@@ -144,6 +178,7 @@ class _Linha extends StatelessWidget {
   });
 
   final String nome;
+  final String sample;
   final String? familia;
   final bool aceso;
   final VoidCallback onTap;
@@ -151,17 +186,26 @@ class _Linha extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            children: [
-              Expanded(
-                // O nome desenhado NA PROPRIA fonte: e como se escolhe
-                // fonte de verdade, sem ficar aplicando para ver.
-                child: Text(
+    onTap: onTap,
+    behavior: HitTestBehavior.opaque,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            // O nome desenhado NA PROPRIA fonte: e como se escolhe
+            // fonte de verdade, sem ficar aplicando para ver.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   nome,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, color: AmColors.muted),
+                ),
+                Text(
+                  sample.trim().isEmpty ? 'Aa Bb Cc 123' : sample,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -170,21 +214,29 @@ class _Linha extends StatelessWidget {
                     color: aceso ? AmColors.accent : AmColors.text,
                   ),
                 ),
-              ),
-              if (aceso)
-                const Icon(CupertinoIcons.checkmark_alt,
-                    size: 16, color: AmColors.accent),
-              if (onRemove != null)
-                GestureDetector(
-                  onTap: onRemove,
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 12),
-                    child: Icon(CupertinoIcons.trash,
-                        size: 15, color: AmColors.muted),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
+          if (aceso)
+            const Icon(
+              CupertinoIcons.checkmark_alt,
+              size: 16,
+              color: AmColors.accent,
+            ),
+          if (onRemove != null)
+            GestureDetector(
+              onTap: onRemove,
+              child: const Padding(
+                padding: EdgeInsets.only(left: 12),
+                child: Icon(
+                  CupertinoIcons.trash,
+                  size: 15,
+                  color: AmColors.muted,
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }

@@ -166,7 +166,7 @@ void main() {
       final glyph = find.byKey(ValueKey('keyframe-glyph-$id-0'));
       expect(glyph, findsOneWidget);
       expect(tester.getSize(glyph), const Size(10, 10));
-      await tester.tap(find.text('Girar').first);
+      await tester.tap(find.byTooltip('Girar').first);
       await tester.pumpAndSettle();
       expect(glyph, findsOneWidget, reason: 'other-property keys stay visible');
       expect(tester.getRect(find.byType(PreviewStage)), before);

@@ -83,16 +83,16 @@ Color layerTypeStripe(Layer l) =>
     Color.lerp(layerTypeColor(l), Colors.white, 0.28)!;
 
 IconData layerTypeIcon(Layer l) => switch (l) {
-      VideoLayer() => CupertinoIcons.videocam_fill,
-      ImageLayer() => CupertinoIcons.photo_fill,
-      AudioLayer() => CupertinoIcons.music_note,
-      TextLayer() => CupertinoIcons.textformat,
-      CaptionLayer() => CupertinoIcons.captions_bubble_fill,
-      ShapeLayer() => CupertinoIcons.circle_fill,
-      ParticlesLayer() => CupertinoIcons.sparkles,
-      Element3DLayer() => CupertinoIcons.cube_fill,
-      Scene3DLayer() => CupertinoIcons.cube_box_fill,
-      GroupLayer() => CupertinoIcons.folder_fill,
-      AdjustmentLayer() => CupertinoIcons.slider_horizontal_3,
-      NullLayer() => CupertinoIcons.smallcircle_circle,
-    };
+  VideoLayer() => CupertinoIcons.videocam_fill,
+  ImageLayer() => CupertinoIcons.photo_fill,
+  AudioLayer() => CupertinoIcons.music_note,
+  TextLayer() => CupertinoIcons.textformat,
+  CaptionLayer() => CupertinoIcons.captions_bubble_fill,
+  ShapeLayer() => CupertinoIcons.circle_fill,
+  ParticlesLayer() => CupertinoIcons.sparkles,
+  Element3DLayer() => CupertinoIcons.cube_fill,
+  Scene3DLayer() => CupertinoIcons.cube_box_fill,
+  GroupLayer() => CupertinoIcons.folder_fill,
+  AdjustmentLayer() => CupertinoIcons.slider_horizontal_3,
+  NullLayer() => CupertinoIcons.smallcircle_circle,
+};

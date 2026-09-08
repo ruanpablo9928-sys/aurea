@@ -1,126 +1,153 @@
-# Rastreio de câmera 3D e rastreio de objetos
+# Rastreio de câmera 3D
 
-Beta 53 (2026-09-07).
+Descobrir por onde a câmera andou olhando só para o vídeo, e devolver
+isso como uma câmera 3D de verdade — para que o que a pessoa puser na
+cena fique parado no lugar do mundo real enquanto o vídeo corre.
 
-Duas ferramentas novas na mesma porta: **⌖ Rastrear**, nas ações rápidas
-de qualquer camada de vídeo.
+Não é AR. AR lê os sensores do aparelho no momento da filmagem; aqui o
+vídeo pode ter vindo de qualquer lugar (galeria, WhatsApp, uma câmera de
+verdade), e a única informação disponível são os pixels.
 
-## Por que existem
+## O caminho, do vídeo ao texto na calçada
 
-O app já sabia seguir um ponto (`tracker2d.dart`, usado por estabilizar e
-reenquadrar) e já sabia detectar regiões em movimento
-(`blob_track.dart`). Nenhuma das duas servia para o que as pessoas pedem:
+```
+vídeo → achar pontos → seguir os pontos → ler que cena é essa →
+reconstruir a câmera → ver os pontos em cima do vídeo →
+escolher uma superfície → definir o chão → criar a câmera 3D →
+pôr texto / forma / nulo em cima
+```
 
-- o **Blob Tracker** só **desenhava caixas**. Via-se o rastreio e não
-  dava para pendurar nada nele. Além disso vivia escondido dentro de um
-  efeito, atrás de quatro passos.
-- **rastreio de câmera 3D não existia**. Sem ele, cena 3D em cima de
-  vídeo é sempre um adesivo: o vídeo se move e o objeto fica parado.
+Na tela isso são três toques: **Rastrear a câmera** → **Ver os pontos e
+montar a cena** → **Criar a câmera 3D**. O resto é opcional e serve para
+melhorar o resultado.
 
-## Seguir um objeto (2D)
+## As peças
 
-Um toque em **Procurar objetos** faz tudo: cria o efeito de rastreio na
-camada se ainda não existir, extrai os quadros e roda a detecção. O
-resultado vira uma lista de objetos, do que atravessa o plano inteiro
-para o que passou de relance (os de menos de 4 quadros nem aparecem —
-são ruído).
+| Arquivo | O que faz |
+| --- | --- |
+| `domain/pontos_seguidos.dart` | Acha cantos (Shi-Tomasi) e segue cada um quadro a quadro (NCC com ajuste sub-pixel). |
+| `domain/algebra_numerica.dart` | Mat3, autovalores por Jacobi, núcleo, sistema linear, rotação ↔ vetor, mediana. |
+| `domain/camera_solver3d.dart` | A reconstrução: essencial por 8 pontos + RANSAC, cheiralidade, triangulação DLT, resecção Gauss-Newton com Huber, refinamento alternado, varredura de focal, portões de degenerescência. |
+| `domain/plano_do_rastreio.dart` | Ajusta plano a pontos escolhidos, acha a maior superfície por RANSAC, apaga pontos e recalcula o erro. |
+| `domain/cena_do_rastreio.dart` | Converte a solução em `Camera3D`, nuvem, e objetos pousados numa superfície. |
+| `application/camera_track_service.dart` | Lê o vídeo, roda tudo fora da thread da interface, grava o resultado, permite resolver de novo. |
+| `presentation/am/rastreio3d_screen.dart` | A tela: pontos em cima do vídeo, escolha por toque e laço, alvo do plano, ficha de qualidade, avançado. |
 
-Escolhido o objeto, a folha pergunta **qual camada gruda nele**. Daí o
-caminho do blob vira keyframes de posição na camada escolhida, com
-**Crescer e encolher junto** opcional (a escala segue a largura da
-caixa).
+## O que o solver recusa, e por quê
 
-A conversão passa pela **caixa da camada de vídeo**, não pela composição:
-o vídeo pode estar deslocado, ampliado ou girado, e nesse caso o objeto
-tem de acompanhar o que se vê, não o arquivo.
+Um rastreador que sempre devolve alguma coisa devolve **mentira** nos
+casos difíceis — e a mentira só aparece no dia da entrega, com o objeto
+nadando pelo quadro. Estes três casos são recusados de propósito, cada um
+com uma frase que diz o que fazer:
 
-## Rastrear a câmera em 3D
+- **Tripé / giro no lugar.** Sem deslocamento não existe profundidade a
+  medir. Uma panorâmica pura tem solução *perfeita* e falsa: câmeras
+  todas no mesmo ponto, pontos a qualquer distância, erro de reprojeção
+  zero. Pegamos isso três vezes: pelo resíduo da homografia antes de
+  qualquer conta, pelo ângulo de paralaxe do par inicial, e pelo percurso
+  da câmera comparado ao tamanho da cena.
+- **Cena plana.** Uma parede lisa filmada de lado: uma única homografia
+  explica todo o movimento, e a matriz essencial fica indeterminada.
+- **Sem textura.** Céu limpo, parede lisa, desfoque forte: menos de doze
+  pontos que durem.
 
-Descobre por onde a câmera passou e monta uma **camada de cena 3D** por
-cima do clipe, com fundo transparente, a câmera rastreada e a nuvem de
-pontos. O que entrar nessa cena fica parado no lugar do mundo real.
+## As decisões que custaram caro
 
-### O caminho da conta
+**O primeiro quadro não é sagrado.** Enquanto o par inicial era sempre
+`(quadro 0, melhor parceiro)`, três filmagens comuns não fechavam: o
+chicote (a câmera fica quase parada no começo), a filmagem escura (o
+ruído do primeiro quadro define a geometria de tudo) e a que começa
+borrada. Hoje a semente escolhe a si mesma: candidatos a base espalhados
+pela primeira metade, e o par com mais pontos em comum e mais paralaxe
+ganha. As três passaram a fechar.
 
-| Passo | Onde | O que faz |
-|---|---|---|
-| 1 | `pontos_seguidos.dart` | Acha **cantos** (Shi‑Tomasi: menor autovalor da matriz de estrutura) e segue cada um por correlação normalizada, com refino subpixel e reposição quando o time encolhe. |
-| 2 | `camera_solver3d.dart` | **Par inicial** com paralaxe suficiente → **matriz essencial** (8 pontos + RANSAC) → 4 poses possíveis → **cheiralidade** escolhe a única que põe a cena na frente das duas câmeras. |
-| 3 | idem | **Ressecção** de cada quadro (Gauss‑Newton amortecido com peso de Huber) e **interseção** (retriangulação com todas as vistas). Repetido três vezes — um ajuste de feixes pobre, que converge. |
-| 4 | idem | **Distância focal por varredura**: resolve uma versão curta com 14 focais candidatas e fica com a que explica melhor as observações. Duas vistas não decidem a focal; sete decidem. |
-| 5 | `cena_do_rastreio.dart` | Converte para `Camera3D` (posição, alvo, **giro** e focal em mm) e monta a camada. |
+**O erro é por ponto, e não só da cena.** Uma solução com 0,9 px de média
+pode ter dez pontos com 6 px cada — e são esses que fazem o objeto
+tremer. Com o erro guardado por ponto, a tela pinta cada um pela
+qualidade e deixa apagar os ruins.
 
-A álgebra necessária está em `algebra_numerica.dart` (Jacobi para
-simétricas, núcleo de sistema homogêneo, eliminação com pivô, Rodrigues).
-Não há pacote de álgebra no projeto e não valia trazer um.
+**Qualidade é erro + permanência.** Um ponto visto em três quadros quase
+sempre fecha, porque há poucas observações para contrariá-lo. Sozinho, o
+erro premiaria justamente os pontos frágeis.
 
-### O que ele recusa, e por quê
+**Estrelas são o menor entre erro e quantidade.** Erro baixíssimo com
+vinte pontos é uma cena frágil, e uma ficha otimista faria a pessoa
+confiar nela.
 
-Antes de qualquer conta, o solver mede o **resíduo de uma homografia**
-entre pares de quadros espalhados. Se uma transformação plana já explica
-todo o movimento, ou a câmera girou no lugar (tripé) ou o que aparece
-está todo na mesma distância — e nos dois casos a profundidade não está
-na imagem.
+**O objeto pousa, não afunda.** Um sólido deitado exatamente no plano
+briga com ele na hora de decidir qual pixel fica na frente, e pisca. Meio
+por cento do tamanho da cena acima resolve.
 
-Isso importa porque a solução degenerada **parece certa**: sem
-translação a conta fecha com as câmeras todas no mesmo ponto e erro de
-reprojeção zero. Quem confiasse nela veria o objeto colado nadar assim
-que a câmera mexesse. Medido nos testes: cena 3D com translação dá
-resíduo de 6 a 15 px; rotação pura dá 0 a 0,5 px. O corte fica em
-0,8 px (0,33 % da largura analisada).
+**X cruz normal, e não normal cruz X.** A ordem trocada devolve um trio
+de mão esquerda: a matriz parece uma rotação mas é uma reflexão, e o
+objeto nascia de cabeça para baixo. Cento e oitenta graus em X, sem nada
+na tela explicando.
 
-Também recusa com explicação quando há **poucos pontos** (plano liso,
-céu limpo, desfoque forte).
+**Semente fixa no RANSAC do plano.** O mesmo vídeo tem de dar o mesmo
+plano em duas aberturas do projeto, senão o objeto colado nele muda de
+lugar sozinho entre uma sessão e outra.
 
-### O que não dá para saber
+## Modos
 
-A **escala**. Duas fotos de uma maquete e de um prédio são idênticas.
-Por convenção a nuvem sai num raio de 350 unidades, que é a ordem de
-grandeza do resto da cena 3D do app.
+| Modo | Quadros/s | Pontos | Teto de quadros | Refinos |
+| --- | --- | --- | --- | --- |
+| Rápido | 5 | 70 | 120 | 1 |
+| Equilibrado | 8 | 110 | 240 | 2 |
+| Preciso | 12 | 220 | 400 | 4 |
 
-A **orientação** vem de "a câmera estava em pé": o topo médio das
-imagens vira +Y. Ajustar por um plano de chão seria mais preciso quando
-há chão, e desastroso quando o que domina o quadro é uma parede — por
-isso `definirChao(solucao, ids)` existe à parte, para quando a pessoa
-escolhe os pontos.
+O teto de quadros não é capricho: mil quadros em tons de cinza a 240 px
+já são setenta megabytes, e num iPhone 13 isso é o app fechado.
 
-## Como isso é testado
+## Tipo de tomada
 
-Um solver de câmera não se testa olhando: quando erra, o sintoma é a cena
-escorregando no vídeo, e aí já é tarde. Os testes fazem o caminho
-inverso — montam uma cena 3D conhecida, projetam nos quadros e conferem
-se o solver devolve o que se sabe ser a resposta.
+`auto` (padrão), `lenteFixa`, `zoomVariavel`, `tripe`. Quem escolhe
+`tripe` recebe a recusa na hora, sem esperar pela conta — não há o que
+resolver.
 
-- `camera_solver3d_test.dart`: recupera o caminho da câmera com menos de
-  2 % de erro de forma; aguenta 1 px de ruído de rastreio; descobre a
-  focal dentro de 25 %; recusa rotação pura.
-- `cena_do_rastreio_test.dart`: **fecha o círculo** — monta a câmera do
-  app a partir da solução e reprojeta a nuvem usando a projeção do
-  motor. Mediana de erro abaixo de 0,5 px, com 14 graus de câmera
-  inclinada. É este teste que pega o erro clássico de câmera rastreada:
-  enquadramento certo, cena inteira tombada.
-- `pontos_seguidos_test.dart`: cantos espalhados, deslocamento conhecido
-  com precisão subpixel, reposição em travelling longo.
-- `rastreio_ui_test.dart`: a porta de entrada existe e grudar move mesmo
-  a camada.
+## Onde tudo roda
 
-## Custo
+A leitura do vídeo usa o ffmpeg embutido. O seguimento e a reconstrução
+rodam em **isolates** (`Isolate.run`): são segundos de conta pura, e na
+thread principal isso é o app congelado. A interface mostra a etapa pelo
+nome — *Lendo o vídeo*, *Achando e seguindo os pontos*, *Vendo que tipo
+de cena é*, *Reconstruindo o movimento da câmera* — porque uma barra que
+fica trinta segundos em "Analisando..." parece travada.
 
-O rastreio roda em 240 px de largura, a 8 quadros por segundo, até 240
-quadros. Seguir os pontos e resolver a câmera saem da thread da interface
-(`Isolate.run`) — na thread principal isso é o app congelado.
+O resultado é gravado em `camera3d/<idDaCamada>.json`. Reabrir o projeto
+não pode custar de novo, e — mais importante — a solução tem de ser a
+**mesma** de antes, senão o objeto colado no plano muda de lugar entre
+uma sessão e outra.
 
-A solução é **gravada em disco** por camada. Resolver de novo a cada
-abertura custaria segundos e, pior, moveria o objeto que a pessoa colou
-no plano.
+Os rastros 2D ficam na memória enquanto a sessão dura. É isso que faz
+"apagar os pontos ruins e resolver de novo" ser um gesto usável em vez de
+uma ameaça: refazer a conta não relê o vídeo.
 
-## Uma limitação que vale saber
+## O que ainda não existe
 
-A cena 3D é desenhada no tamanho da **composição**, e o ângulo de visão
-resolvido vale para a largura do **quadro analisado**. Os dois só
-coincidem quando o clipe rastreado preenche a composição — que é o caso
-normal.
+- **Shadow catcher.** Precisa de suporte no renderizador (um material que
+  só recebe sombra); o pintor de CPU não tem sombras, e na GPU isso é um
+  passe novo. Está fora até haver a peça.
+- **Modelo 3D direto da tela do rastreio.** O caminho é criar um nulo no
+  ponto e pendurar o modelo nele pelo estúdio 3D — escolher modelo é
+  outra tela inteira.
+- **Focal variável (zoom durante a tomada).** O enum existe e o valor é
+  guardado, mas a varredura resolve **uma** focal para o clipe inteiro.
+  Um zoom real ainda sai com erro maior.
 
-Com o vídeo encaixotado numa composição de outra proporção, o 3D fica
-certo na horizontal e desencontrado na vertical. A folha avisa quando as
-proporções diferem em mais de 3 %.
+## Os testes
+
+`test/camera_tracker_pro_test.dart` monta quinze filmagens sintéticas —
+frente, lateral, órbita, mão, tripé, cena plana, muita profundidade,
+poucas features, movimento rápido, borrão, pouca luz, iPhone, Android,
+comprimido, longo — projeta uma cena 3D conhecida nos quadros, joga só as
+projeções no solver e confere se ele devolve o que se sabe que é a
+resposta.
+
+A prova não é o erro de reprojeção (esse fecha até quando a geometria
+está errada): é a **variação de escala**. As distâncias entre as posições
+da câmera, na solução e na verdade, têm de estar todas na mesma proporção.
+Se estão, a solução é a verdade a menos de escala — que é tudo o que se
+pode pedir de uma reconstrução feita só com imagens.
+
+`test/rastreio3d_screen_test.dart` cobre a tela; `test/camera_solver3d_test.dart`
+e `test/cena_do_rastreio_test.dart` cobrem a álgebra e a ponte para a cena.

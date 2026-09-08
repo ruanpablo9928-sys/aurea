@@ -22,10 +22,18 @@ double previewRasterRatio({
   required double devicePixelRatio,
   double maxSidePx = 2160,
 }) {
+  if (!compWidth.isFinite ||
+      !compHeight.isFinite ||
+      compWidth <= 0 ||
+      compHeight <= 0) {
+    return 1;
+  }
   final natural = stageScale * devicePixelRatio;
   final maior = math.max(compWidth, compHeight);
   final teto = maior <= 0 ? natural : maxSidePx / maior;
-  final razao = math.min(natural, teto);
-  // Nunca abaixo de um quarto: uma foto de 4 px nao e efeito, e ruido.
-  return razao.isFinite && razao > 0.25 ? razao : 0.25;
+  // A fractional floor of .25 overrides both the screen size and the
+  // allocation cap on 8K/16K projects. Keep only a one-pixel minimum.
+  final safeNatural = natural.isFinite && natural > 0 ? natural : 1 / maior;
+  final safeCap = teto.isFinite && teto > 0 ? teto : 1 / maior;
+  return math.max(1 / maior, math.min(safeNatural, safeCap));
 }

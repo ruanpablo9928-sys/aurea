@@ -193,3 +193,96 @@ Scene3DLayer camadaDoRastreio(
     nodes: [if (comNuvem) nuvemDoRastreio(s)],
   ),
 );
+
+/// O QUE SE PODE POUSAR NUMA SUPERFICIE RASTREADA.
+///
+/// A lista e curta de proposito. Ela cobre os quatro usos que aparecem
+/// de verdade: marcar um lugar (nulo), pintar uma area (solido), pôr um
+/// objeto (forma) e escrever no chao (texto). Modelo importado nao entra
+/// aqui porque escolher um modelo e outra tela inteira — o caminho e
+/// criar o nulo e pendurar o modelo nele no estudio 3D.
+enum ObjetoNoPlano {
+  nulo,
+  solido,
+  forma,
+  texto;
+
+  String get emPalavras => switch (this) {
+    ObjetoNoPlano.nulo => 'Nulo 3D',
+    ObjetoNoPlano.solido => 'Sólido',
+    ObjetoNoPlano.forma => 'Forma 3D',
+    ObjetoNoPlano.texto => 'Texto',
+  };
+
+  String get explicacao => switch (this) {
+    ObjetoNoPlano.nulo =>
+      'Só um lugar no mundo. Pendure o que quiser nele depois.',
+    ObjetoNoPlano.solido => 'Uma placa deitada na superfície.',
+    ObjetoNoPlano.forma => 'Um objeto sólido em cima da superfície.',
+    ObjetoNoPlano.texto => 'Uma placa com o seu texto, deitada na superfície.',
+  };
+}
+
+/// PÕE UM OBJETO NA SUPERFICIE, ja com posicao, giro e tamanho certos.
+///
+/// E aqui que o rastreio vira uso. Sem isto, a pessoa teria de ler tres
+/// coordenadas e tres angulos da nuvem e digitar tudo a mao — e ninguem
+/// faz isso num celular. O plano ja sabe onde e para que lado; o objeto
+/// so precisa nascer alinhado com ele.
+///
+/// O TAMANHO SAI DA SUPERFICIE. Um objeto de tamanho fixo some numa
+/// mesa grande e cobre o quadro inteiro numa pequena, e nos dois casos a
+/// pessoa acha que o rastreio errou.
+SceneNode noNoPlano(
+  PlanoLike plano,
+  ObjetoNoPlano tipo, {
+  String? nome,
+  String? textureLayerId,
+  Color cor = const Color(0xFF7C62FF),
+}) {
+  final (rx, ry, rz) = plano.anglesEmGraus;
+  // Metade da extensao dos pontos, com um piso: um plano formado por
+  // tres pontos quase juntos nao pode virar um objeto invisivel.
+  final tamanho = math.max(40.0, plano.tamanho * 0.9);
+  // O objeto POUSA, e nao afunda: um solido deitado exatamente no plano
+  // briga com ele na hora de decidir qual pixel fica na frente, e o
+  // resultado pisca. Meio por cento do tamanho da cena resolve.
+  final alturinha = tamanho * 0.005;
+  final o = plano.origem;
+  final n = plano.normal;
+  return SceneNode(
+    name: nome ?? tipo.emPalavras,
+    kind: tipo == ObjetoNoPlano.forma
+        ? Element3DKind.cube
+        : Element3DKind.plane,
+    isNull: tipo == ObjetoNoPlano.nulo,
+    size: tipo == ObjetoNoPlano.nulo ? 30 : tamanho,
+    x: AnimatedDouble(o[0] + n[0] * alturinha),
+    y: AnimatedDouble(o[1] + n[1] * alturinha),
+    z: AnimatedDouble(o[2] + n[2] * alturinha),
+    rotX: AnimatedDouble(rx),
+    rotY: AnimatedDouble(ry),
+    rotZ: AnimatedDouble(rz),
+    material: Material3D(
+      baseColor: cor,
+      textureLayerId: textureLayerId,
+      // O texto e o solido nao recebem luz: eles sao GRAFISMO em cima do
+      // video, e uma placa que escurece quando a luz da cena vira
+      // parece um erro, nao um efeito.
+      kind: tipo == ObjetoNoPlano.forma
+          ? MaterialKind.pbr
+          : MaterialKind.unlit,
+      roughness: .5,
+    ),
+  );
+}
+
+/// O que [noNoPlano] precisa saber de um plano. E uma interface pequena
+/// de proposito: o dominio da cena nao deve depender do modulo do
+/// rastreio so para ler seis numeros.
+abstract class PlanoLike {
+  List<double> get origem;
+  List<double> get normal;
+  double get tamanho;
+  (double, double, double) get anglesEmGraus;
+}

@@ -144,12 +144,7 @@ void main() {
         );
         expect(transform.tool, TransformTool.position);
         expect(find.text('Transformar · Posição'), findsOneWidget);
-        expect(
-          tester
-              .widget<Text>(find.byKey(const ValueKey('editor-context')))
-              .data,
-          contains(layer.name),
-        );
+        expect(c.read(selectedLayerProvider), layer.id);
         transform.playback.seek(const Duration(seconds: 1));
         final controller = c.read(editorControllerProvider.notifier);
         controller.toggleKeyframe(layer.id, Duration.zero, LayerProp.position);

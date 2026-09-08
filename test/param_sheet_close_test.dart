@@ -81,7 +81,8 @@ void main() {
       builder: (_) => const Text('segunda ferramenta'),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Primeiro'));
+    // Recent chips were removed; replacing the sheet must still preserve the route.
+    showParamSheet(context, title: 'Primeiro', builder: (_) => const Text('primeira ferramenta'));
     await tester.pumpAndSettle();
     expect(find.text('primeira ferramenta'), findsOneWidget);
     expect(find.text('segunda ferramenta'), findsNothing);

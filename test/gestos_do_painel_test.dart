@@ -1,3 +1,4 @@
+import 'editor_audit_helpers.dart';
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,7 +42,7 @@ void main() {
     tester,
   ) async {
     final (c, id) = await abrirTransformar(tester);
-    await tester.tap(find.text('Girar'));
+    await selectTransformTool(tester, 'Girar');
     await tester.pumpAndSettle();
 
     final dial = find.byKey(const ValueKey('rotation-dial'));
@@ -89,7 +90,7 @@ void main() {
     tester,
   ) async {
     final (c, id) = await abrirTransformar(tester);
-    await tester.tap(find.text('Pivo'));
+    await selectTransformTool(tester, 'Pivo');
     await tester.pumpAndSettle();
     final pad = find.byKey(const ValueKey('pivot-drag-pad'));
     expect(pad, findsOneWidget);

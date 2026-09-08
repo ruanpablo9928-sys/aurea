@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/tokens.dart';
-import '../../../../core/utils/time_format.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../application/ui/editor_session.dart';
 import 'layer_actions.dart';
 
 /// ZONA C — O TRANSPORTE (48 pt).
@@ -37,11 +37,13 @@ class EditorTransportBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AureaTokens.of(context);
-    final duration = ref.watch(editorControllerProvider.select((p) => p.duration));
+    final duration = ref.watch(
+      editorControllerProvider.select((p) => p.duration),
+    );
     final fps = ref.watch(editorControllerProvider.select((p) => p.fps));
-    final markers = ref.watch(editorControllerProvider.select((p) => p.markers));
     final controller = ref.read(editorControllerProvider.notifier);
-
+    final selected = ref.watch(selectedLayerProvider);
+    ref.watch(editorControllerProvider);
     Widget botao({
       required Key key,
       required IconData icon,
@@ -63,7 +65,8 @@ class EditorTransportBar extends ConsumerWidget {
           child: Icon(
             icon,
             size: size,
-            color: cor ?? (onTap == null ? t.muted.withValues(alpha: .5) : t.text),
+            color:
+                cor ?? (onTap == null ? t.muted.withValues(alpha: .5) : t.text),
           ),
         ),
       ),
@@ -73,153 +76,66 @@ class EditorTransportBar extends ConsumerWidget {
       height: AureaTokens.transport,
       color: t.surface,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          const SizedBox(width: 4),
+          botao(
+            key: const ValueKey('editor-undo'),
+            icon: CupertinoIcons.arrow_uturn_left,
+            tooltip: 'Desfazer',
+            onTap: controller.canUndo ? controller.undo : null,
+          ),
+          botao(
+            key: const ValueKey('editor-redo'),
+            icon: CupertinoIcons.arrow_uturn_right,
+            tooltip: 'Refazer',
+            onTap: controller.canRedo ? controller.redo : null,
+          ),
           botao(
             key: const ValueKey('transport-start'),
             icon: CupertinoIcons.backward_end,
-            tooltip: markers.isEmpty ? 'Inicio' : 'Marca anterior',
-            onTap: () {
-              final now = playback.time.value;
-              playback.seek(
-                markers.isEmpty
-                    ? Duration.zero
-                    : (controller.markerBefore(now) ?? Duration.zero),
-              );
-            },
+            tooltip: 'Início · segure para marcas',
+            onTap: () => playback.seek(Duration.zero),
+            onLongPress: () => menuDasMarcas(context, ref, playback),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: playback.playing,
-            builder: (context, playing, _) => botao(
+          ListenableBuilder(
+            listenable: Listenable.merge([playback.playing, playback.loop]),
+            builder: (context, _) => botao(
               key: const ValueKey('transport-play'),
-              icon: playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
-              tooltip: playing ? 'Pausar' : 'Reproduzir',
-              size: 26,
-              cor: t.text,
+              icon: playback.playing.value
+                  ? CupertinoIcons.pause_fill
+                  : CupertinoIcons.play_fill,
+              tooltip: playback.loop.value
+                  ? 'Repetição ligada · segure para desligar'
+                  : (playback.playing.value ? 'Pausar' : 'Reproduzir'),
+              cor: playback.loop.value ? t.accent : t.text,
+              size: 24,
               onTap: playback.toggle,
+              onLongPress: () => playback.loop.value = !playback.loop.value,
             ),
           ),
           botao(
             key: const ValueKey('transport-end'),
             icon: CupertinoIcons.forward_end,
-            tooltip: markers.isEmpty ? 'Fim' : 'Proxima marca',
-            onTap: () {
-              final now = playback.time.value;
-              playback.seek(
-                markers.isEmpty
-                    ? duration
-                    : (controller.markerAfter(now) ?? duration),
-              );
-            },
+            tooltip: 'Fim · segure para ir ao tempo',
+            onTap: () => playback.seek(duration),
+            onLongPress: () => _digitarTempo(context, playback, duration, fps),
           ),
-          // TIMECODE atual / total. Toque = digitar o tempo.
-          Expanded(
-            child: ValueListenableBuilder<Duration>(
-              valueListenable: playback.time,
-              builder: (context, now, _) => GestureDetector(
-                key: const ValueKey('transport-timecode'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _digitarTempo(context, playback, duration, fps),
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    // Text.rich (nao RichText): herda a fonte do tema.
-                    child: Text.rich(
-                      TextSpan(
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: t.text,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                        children: [
-                          TextSpan(
-                            text: formatTimecode(now, fps),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          TextSpan(
-                            text: ' / ${formatTimecode(duration, fps)}',
-                            style: TextStyle(color: t.muted, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: playback.loop,
-            builder: (context, loop, _) => botao(
-              key: const ValueKey('transport-loop'),
-              icon: CupertinoIcons.repeat,
-              tooltip: loop ? 'Loop ligado' : 'Loop',
-              cor: loop ? t.accent : t.text,
-              onTap: () => playback.loop.value = !loop,
-            ),
-          ),
-          // ◆ KEYFRAME: o losango unico (principio 7).
           botao(
-            key: const ValueKey('transport-keyframe'),
-            icon: keyframeHere ? CupertinoIcons.rhombus_fill : CupertinoIcons.rhombus,
-            tooltip: keyframeHere
-                ? 'Keyframe: remover aqui'
-                : 'Keyframe: adicionar aqui',
-            cor: !keyframeEnabled
-                ? t.muted.withValues(alpha: .5)
-                : t.keyframe,
-            onTap: keyframeEnabled ? onKeyframe : null,
+            key: const ValueKey('camada-duplicar'),
+            icon: CupertinoIcons.plus_square_on_square,
+            tooltip: 'Duplicar camada',
+            onTap: selected == null
+                ? null
+                : () => controller.duplicateLayer(selected),
           ),
-          // MARCA: toque poe/tira (no ritmo, com o play andando); toque
-          // longo abre o que as marcas destravam.
-          ValueListenableBuilder<Duration>(
-            valueListenable: playback.time,
-            builder: (context, now, _) {
-              final tem =
-                  ref
-                      .read(editorControllerProvider)
-                      .markerNear(now, const Duration(milliseconds: 120)) !=
-                  null;
-              return botao(
-                key: const ValueKey('transport-marker'),
-                icon: tem ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
-                tooltip: 'Marca (toque longo: menu das marcas)',
-                cor: tem ? t.accent : t.text,
-                onTap: () => controller.toggleMarker(playback.time.value),
-                onLongPress: () => menuDasMarcas(context, ref, playback),
-              );
-            },
+          botao(
+            key: const ValueKey('transport-expand'),
+            icon: CupertinoIcons.viewfinder,
+            tooltip: 'Expandir prévia',
+            onTap: () => ref
+                .read(editorSessionProvider.notifier)
+                .togglePreviewExpanded(),
           ),
-          // O "+": um ponto de entrada so, sempre no mesmo lugar.
-          if (onAdd != null)
-            Tooltip(
-              message: 'Adicionar camada',
-              child: GestureDetector(
-                key: const ValueKey('editor-fab'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onAdd,
-                child: SizedBox(
-                  width: AureaTokens.minTap,
-                  height: AureaTokens.minTap,
-                  child: Center(
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: t.accent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        CupertinoIcons.plus,
-                        size: 22,
-                        color: t.onAccent,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(width: 4),
         ],
       ),
     );

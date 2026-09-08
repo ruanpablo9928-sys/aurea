@@ -162,6 +162,18 @@ class AmLeftRail extends StatelessWidget {
         children: [
           for (final button in <Widget>[
             Tooltip(
+              message: 'Voltar às ferramentas da camada',
+              child: AmRailButton(
+                key: const ValueKey('painel-voltar'),
+                onTap: onBack,
+                child: const Icon(
+                  CupertinoIcons.chevron_back,
+                  size: 23,
+                  color: AmColors.text,
+                ),
+              ),
+            ),
+            Tooltip(
               message: temKfAqui
                   ? 'Remover keyframe neste instante'
                   : 'Adicionar keyframe neste instante',
@@ -505,7 +517,7 @@ class AmRightTabs extends StatelessWidget {
     child: LayoutBuilder(
       builder: (context, limits) {
         final slot = abas.isEmpty ? 0.0 : limits.maxHeight / abas.length;
-        final iconSize = (slot - 16).clamp(8.0, 19.0);
+        final iconSize = (slot - 12).clamp(18.0, 25.0);
         return Column(
           children: [
             for (final aba in abas)
@@ -538,20 +550,21 @@ class AmRightTabs extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 1),
                               ],
-                              Text(
-                                aba.label,
-                                maxLines: 1,
-                                textAlign: TextAlign.center,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  height: 1.1,
-                                  fontWeight: FontWeight.w600,
-                                  color: ativa == aba.id
-                                      ? AmColors.accent
-                                      : AmColors.text,
+                              if (aba.icone == null)
+                                Text(
+                                  aba.label,
+                                  maxLines: 1,
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w600,
+                                    color: ativa == aba.id
+                                        ? AmColors.accent
+                                        : AmColors.text,
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                           if (aba.animated)
