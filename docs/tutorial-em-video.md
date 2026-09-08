@@ -1,6 +1,8 @@
 # Tutoriais em vídeo, gravados pelo próprio app
 
-São dois, e os dois aparecem na **Início** e no menu ⋮ do **Estúdio 3D**:
+São três. Todos aparecem na **Início**; os dois de cena 3D também no
+menu ⋮ do **Estúdio 3D**, e o do texto dentro do painel **Animação de
+texto**:
 
 | id | O que ensina | Duração |
 |---|---|---|
@@ -35,7 +37,7 @@ AUREA_GRAVAR_TUTORIAL=1 flutter test test/tutoriais/gravar_tutorial_cena3d_test.
 python test/tutoriais/montar_tutorial.py
 ```
 
-E o segundo:
+Para os outros, os mesmos dois comandos trocando o arquivo e o id:
 
 ```bash
 AUREA_GRAVAR_TUTORIAL=1 flutter test test/tutoriais/gravar_tutorial_cena_completa_test.dart
@@ -43,6 +45,14 @@ AUREA_GRAVAR_TUTORIAL=1 flutter test test/tutoriais/gravar_tutorial_cena_complet
 
 ```bash
 python test/tutoriais/montar_tutorial.py cena-completa
+```
+
+```bash
+AUREA_GRAVAR_TUTORIAL=1 flutter test test/tutoriais/gravar_tutorial_texto_bounce_test.dart
+```
+
+```bash
+python test/tutoriais/montar_tutorial.py texto-bounce
 ```
 
 O primeiro comando escreve `build/tutorial/<id>/`: um PNG por quadro,
@@ -65,7 +75,7 @@ embutido do `imageio_ffmpeg` e escreve:
 ## Como escrever outro tutorial
 
 Copie um dos gravadores. A maquinaria mora em `test/tutoriais/gravador.dart`
-e tem sete verbos:
+e tem oito verbos:
 
 - `g.cena('texto')` — abre um passo novo; o texto vira a legenda daqui
   em diante e uma linha na lista da tela.
@@ -75,6 +85,8 @@ e tem sete verbos:
   preguiçosas: o que está fora da tela nem chega a ser construído).
 - `g.valorDoEixo(1, '180')` — digita um número no campo X/Y/Z da
   ferramenta ativa.
+- `g.valorDaRegua(finder, de, ate)` — anda um número pela régua, com o
+  dedo deslizando junto (funciona mesmo com a régua fora da janela).
 - `g.segurar(segundos)` — segura o quadro (para dar tempo de ler).
 - `g.assentar()` — alguns quadros seguidos, para uma folha subindo ou
   uma rota entrando.
@@ -84,7 +96,7 @@ menos. E ponha um `expect` nos momentos que provam que o passo funcionou
 (o keyframe gravado, a câmera no ar, o `lookAtNodeId`) — é o que impede
 o tutorial de mostrar um caminho que já não existe.
 
-Três armadilhas que custaram tempo, e que já estão resolvidas dentro do
+Cinco armadilhas que custaram tempo, e que já estão resolvidas dentro do
 gravador:
 
 1. **Gravar o PNG no meio de um gesto mata o gesto.** `runAsync` sai do
