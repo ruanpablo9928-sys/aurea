@@ -31,18 +31,37 @@ passa por ele.
 gratuita dá 100 mil requisições por dia. Um mural de beta usa uns
 milhares por mês.
 
-## Parte 2 · Criar a gaveta onde os posts ficam
+## Parte 2 · Criar o KV
+
+O produto chama-se **Workers KV**. É um armazenamento de chave e valor:
+você guarda um texto debaixo de um nome e busca por esse nome. Nada de
+tabelas nem de consultas.
 
 No painel da Cloudflare:
 
 1. Menu da esquerda: **Storage & Databases** › **KV**.
-2. **Create instance** (ou *Create a namespace*).
+2. **Create instance** (ou *Create a namespace*, conforme a versão do
+   painel).
 3. Nome: `mural`.
 4. **Add**.
 
-KV é uma gaveta de chave e valor. Cada post fica numa gaveta própria, e é
-por isso que dois aparelhos publicando ao mesmo tempo não apagam um ao
-outro.
+### Por que KV e não os outros
+
+A Cloudflare oferece quatro armazenamentos, e a escolha aqui não é gosto:
+
+| Produto | Para quê | Por que não |
+|---|---|---|
+| **KV** | chave e valor, leitura rápida e distribuída | **é este** |
+| **R2** | arquivos (imagem, vídeo, backup) | vai ser preciso **depois**, para a mídia |
+| **D1** | banco SQL relacional | um mural não tem relação nenhuma para consultar |
+| **Durable Objects** | estado com consistência forte | resolve corrida de escrita, e aqui cada post já tem chave própria |
+
+Um mural é uma lista de textos que se lê muito e se escreve pouco. Isso é
+exatamente o que KV faz melhor, e é o mais barato de operar: na camada
+gratuita são 100 mil leituras por dia.
+
+Cada post fica numa chave própria, e é por isso que dois aparelhos
+publicando no mesmo segundo não apagam um ao outro.
 
 ## Parte 3 · Criar o servidor
 
@@ -68,7 +87,7 @@ O código procura a gaveta pelo nome `MURAL`. Falta dizer qual é:
 1. Na página do Worker: **Settings** › **Bindings** › **Add binding**.
 2. Tipo: **KV namespace**.
 3. Variable name: `MURAL` (em maiúsculas, exatamente assim).
-4. KV namespace: `mural`, o que você criou.
+4. KV namespace: `mural`, o que você criou na Parte 2.
 5. **Deploy**.
 
 ## Parte 5 · A senha de moderação
