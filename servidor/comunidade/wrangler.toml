@@ -1,0 +1,23 @@
+# A configuracao do servidor do mural.
+#
+# O `configurar.mjs` preenche o id do KV aqui embaixo sozinho — nao e
+# preciso editar este arquivo a mao.
+
+name = "mural-do-aurea"
+main = "worker.js"
+
+# A data trava o comportamento do runtime. Sem ela o Cloudflare recusa o
+# deploy; com uma data fixa, uma mudanca futura da plataforma nao muda o
+# que este servidor faz.
+compatibility_date = "2026-09-01"
+
+# O armazenamento. `binding` e o nome pelo qual o codigo enxerga o KV
+# (env.MURAL), e `id` e qual KV da sua conta ele e.
+[[kv_namespaces]]
+binding = "MURAL"
+id = "PREENCHER_COM_configurar.mjs"
+
+# A senha de moderacao NAO fica aqui. Ela entra por
+# `npx wrangler secret put SENHA_DE_MODERACAO`, que guarda o valor no
+# Cloudflare e nunca no repositorio. Segredo em arquivo versionado e
+# segredo vazado.

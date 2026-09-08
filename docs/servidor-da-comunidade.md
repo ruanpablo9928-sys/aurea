@@ -1,10 +1,9 @@
 # Como subir o servidor do mural
 
-Você não precisa saber programar servidor. O código está pronto em
-`servidor/comunidade/worker.js`; o que falta é criar uma conta e colar.
+O código está pronto. Você vai criar uma conta e rodar quatro comandos.
 
-São uns dez minutos de cliques. Nada de cartão de crédito, nada de
-instalar programa.
+Nada de cartão de crédito. Não precisa instalar nada além do que já está
+na sua máquina (o Node já está: versão 24).
 
 ## Por que isso é necessário
 
@@ -14,114 +13,112 @@ descompacta e acha a chave em minutos. Com a chave na mão, ela reescreve
 ou apaga o mural inteiro.
 
 O servidor existe para segurar essa chave. O aplicativo fala com o
-servidor; o servidor é quem escreve. É a única peça que falta.
+servidor; o servidor é quem escreve.
 
-Ele também é o único lugar onde o filtro vale de verdade. O filtro que
-está dentro do aplicativo é cortesia: quem chama o endereço direto não
-passa por ele.
+Ele também é o único lugar onde o filtro vale. O filtro que está dentro
+do aplicativo é cortesia: quem chama o endereço direto não passa por ele.
 
 ---
 
-## Parte 1 · Criar a conta
+## Passo 1 · A conta (no navegador)
 
-1. Vá em **cloudflare.com** e crie uma conta gratuita.
-2. Confirme o e-mail que eles mandam.
+Vá em **cloudflare.com**, crie uma conta gratuita e confirme o e-mail.
 
-É a mesma empresa que a maioria dos sites usa para não cair. A camada
-gratuita dá 100 mil requisições por dia. Um mural de beta usa uns
-milhares por mês.
+É só isso no site. Todo o resto é no terminal.
 
-## Parte 2 · Criar o KV
+## Passo 2 · Entrar pelo terminal
 
-O produto chama-se **Workers KV**. É um armazenamento de chave e valor:
-você guarda um texto debaixo de um nome e busca por esse nome. Nada de
-tabelas nem de consultas.
+Abra o terminal na pasta do servidor:
 
-No painel da Cloudflare:
+```bash
+cd "C:\Users\SnyX\Documents\Projetos - Claude\Aurea\servidor\comunidade"
+```
 
-1. Menu da esquerda: **Storage & Databases** › **KV**.
-2. **Create instance** (ou *Create a namespace*, conforme a versão do
-   painel).
-3. Nome: `mural`.
-4. **Add**.
+E entre na sua conta:
 
-### Por que KV e não os outros
+```bash
+npx wrangler login
+```
 
-A Cloudflare oferece quatro armazenamentos, e a escolha aqui não é gosto:
+Abre o navegador pedindo autorização. Clique em **Allow**. A senha é sua
+e fica com você: o terminal recebe só uma autorização, nunca a senha.
 
-| Produto | Para quê | Por que não |
-|---|---|---|
-| **KV** | chave e valor, leitura rápida e distribuída | **é este** |
-| **R2** | arquivos (imagem, vídeo, backup) | vai ser preciso **depois**, para a mídia |
-| **D1** | banco SQL relacional | um mural não tem relação nenhuma para consultar |
-| **Durable Objects** | estado com consistência forte | resolve corrida de escrita, e aqui cada post já tem chave própria |
+## Passo 3 · Criar o armazenamento
 
-Um mural é uma lista de textos que se lê muito e se escreve pouco. Isso é
-exatamente o que KV faz melhor, e é o mais barato de operar: na camada
-gratuita são 100 mil leituras por dia.
+```bash
+node configurar.mjs
+```
 
-Cada post fica numa chave própria, e é por isso que dois aparelhos
-publicando no mesmo segundo não apagam um ao outro.
+Esse comando cria o **Workers KV** com o nome `MURAL` e escreve o id dele
+no `wrangler.toml` sozinho. Era o único passo manual da montagem, e o
+único onde dá para errar sem perceber: um caractere trocado e o servidor
+sobe apontando para lugar nenhum, sem reclamar.
 
-## Parte 3 · Criar o servidor
+## Passo 4 · A senha de moderação
 
-1. Menu da esquerda: **Compute (Workers)** › **Workers & Pages**.
-2. **Create** › **Start with Hello World!** › **Deploy**.
-3. Depois de subir, **Edit code** (ou *Continue to project* › *Edit
-   code*).
-4. Apague tudo o que estiver no editor.
-5. Abra `servidor/comunidade/worker.js` deste projeto, copie o arquivo
-   inteiro e cole lá.
-6. **Deploy**.
+```bash
+npx wrangler secret put SENHA_DE_MODERACAO
+```
 
-Anote o endereço que aparece. É algo como:
+Ele pergunta o valor. Invente uma senha longa e guarde num lugar seguro.
+
+Ela fica no Cloudflare, nunca no projeto. É com ela que você apaga um
+post do mural, e sem ela o endereço de apagar responde "sem permissão"
+para todo mundo, inclusive para você.
+
+## Passo 5 · Subir
+
+```bash
+npx wrangler deploy
+```
+
+No fim ele imprime o endereço. É algo como:
 
 ```
 https://mural-do-aurea.SEU-NOME.workers.dev
 ```
 
-## Parte 4 · Ligar o KV no servidor
-
-O código procura o KV pelo nome `MURAL`. Falta dizer qual é:
-
-1. Na página do Worker: **Settings** › **Bindings** › **Add binding**.
-2. Tipo: **KV namespace**.
-3. Variable name: `MURAL` (em maiúsculas, exatamente assim).
-4. KV namespace: `mural`, o que você criou na Parte 2.
-5. **Deploy**.
-
-## Parte 5 · A senha de moderação
-
-É com ela que você apaga um post do mural.
-
-1. **Settings** › **Variables and Secrets** › **Add**.
-2. Type: **Secret**.
-3. Name: `SENHA_DE_MODERACAO`.
-4. Value: invente uma senha longa e guarde num lugar seguro.
-5. **Deploy**.
-
-Sem esse segredo, o endereço de apagar responde "sem permissão" para
-todo mundo, inclusive para você.
-
 ---
 
 ## Conferir se funcionou
 
-Abra no navegador:
+Abra o endereço no navegador com `/feed` no fim:
 
 ```
-https://SEU-ENDERECO.workers.dev/feed
+https://mural-do-aurea.SEU-NOME.workers.dev/feed
 ```
 
 Tem que aparecer `{"posts":[]}`. Mural vazio é o começo certo.
 
 ## Apagar um post depois
 
-Pelo terminal, trocando o endereço, a senha e o id do post:
+Trocando o endereço, a senha e o id do post:
 
 ```bash
-curl -X DELETE -H "Authorization: Bearer SUA_SENHA" https://SEU-ENDERECO.workers.dev/post/ID-DO-POST
+curl -X DELETE -H "Authorization: Bearer SUA_SENHA" https://mural-do-aurea.SEU-NOME.workers.dev/post/ID-DO-POST
 ```
+
+---
+
+## O que foi criado, com os nomes certos
+
+| Nome | O que é | Para quê |
+|---|---|---|
+| **Worker** `mural-do-aurea` | o servidor | recebe e devolve os posts |
+| **Workers KV** `MURAL` | armazenamento de chave e valor | guarda cada post numa chave |
+| **Secret** `SENHA_DE_MODERACAO` | variável secreta do Worker | autoriza apagar |
+
+### Por que KV, e não R2, D1 ou Durable Objects
+
+| Produto | Para quê | Aqui |
+|---|---|---|
+| **Workers KV** | chave e valor, leitura rápida | **é este** |
+| **R2** | arquivos (imagem, vídeo) | vai ser preciso **depois**, para a mídia |
+| **D1** | banco SQL relacional | um mural não tem relação para consultar |
+| **Durable Objects** | consistência forte | cada post já tem chave própria, não há corrida |
+
+Um mural se lê muito e se escreve pouco, guardando texto debaixo de um
+nome. É o que KV faz melhor: 100 mil leituras por dia na camada gratuita.
 
 ---
 
@@ -144,15 +141,24 @@ Os quatro portões do `POST`, na ordem:
 
 ## Testar sem subir nada
 
-O filtro e o formato dão para exercitar na sua máquina:
+O filtro e o formato dão para exercitar na sua máquina, antes de tudo:
 
 ```bash
-node servidor/comunidade/teste.mjs
+node teste.mjs
 ```
 
 Quinze verificações, entre elas ofensa disfarçada (`v1@d0`), telefone,
 apelido ofensivo, o limite por hora, e que "carro" e "nossa" continuam
 passando.
+
+## Se der errado
+
+| O que aparece | O que fazer |
+|---|---|
+| `not logged in` | `npx wrangler login` |
+| `KV namespace ... is not valid` | faltou o Passo 3: `node configurar.mjs` |
+| `Sem permissao` ao apagar | faltou o Passo 4, ou a senha está diferente |
+| `{"posts":[]}` | está certo. O mural começa vazio. |
 
 ---
 
