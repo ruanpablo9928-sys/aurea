@@ -6,6 +6,7 @@ São dois, e os dois aparecem na **Início** e no menu ⋮ do **Estúdio 3D**:
 |---|---|---|
 | `cena3d` | A primeira cena: criar o projeto, adicionar a Cena 3D, pôr um cubo, mexer no material, animar com Auto-key, criar a segunda câmera, cortar e mandar a câmera olhar para o objeto. | ~1 min |
 | `cena-completa` | A cena de verdade: **importar modelos** (o astronauta e a árvore que já vêm no app), posicionar por valor, luz de ponto, animar por keyframe, segunda câmera, **dois cortes no tempo** e a câmera seguindo o personagem. | ~1min24 |
+| `texto-bounce` | **Texto que quica, do seu jeito**: escrever, aplicar "Quicar por letra" e mexer no que faz o quique ser seu — amplitude, frequência, decaimento, distância e o atraso entre as letras; e trocar letra ↔ palavra e a ordem. Aparece também dentro do painel Animação de texto. | ~51 s |
 
 A tela mostra o vídeo em cima e os passos embaixo; o passo que está
 tocando fica aceso, e tocar num passo pula para ele.
@@ -96,6 +97,15 @@ gravador:
    fora do objeto, o mesmo arrasto orbita a câmera em vez de girar o que
    está selecionado. Para animar, o caminho que sempre funciona é o campo
    de valor (`g.valorDoEixo`) — e é o que se ensina no vídeo.
+4. **Um alvo fora da janela recebe o toque mas não o arrasto.** Num
+   painel mais alto que a tela, `g.arrastar` rola até ele antes; quando
+   nem isso resolve (a régua vive numa lista que só rola por dentro),
+   `g.valorDaRegua` anda o número pela própria régua, com o dedo
+   deslizando junto — o que se vê é o mesmo.
+5. **O texto do palco sai como quadradinhos** se a camada não tiver uma
+   fonte que o serviço de fontes conheça: no tutorial do texto, o
+   gravador registra a fonte do app (`FontService.registrarSemArquivo`) e
+   a aplica à camada antes de gravar.
 
 Um detalhe da montagem: a fonte do app não tem seta nem "⋮". O montador
 desenha esses poucos caracteres com a fonte de símbolos do sistema; sem

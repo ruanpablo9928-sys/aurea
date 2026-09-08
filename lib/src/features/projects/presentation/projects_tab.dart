@@ -681,6 +681,16 @@ class ProjectsTab extends ConsumerWidget {
             ),
           ),
           _Linha(
+            key: const ValueKey('inicio-tutorial-texto-bounce'),
+            icon: CupertinoIcons.textformat,
+            texto: 'Tutorial em vídeo: texto que quica, do seu jeito',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const TutorialScreen(id: 'texto-bounce'),
+              ),
+            ),
+          ),
+          _Linha(
             icon: CupertinoIcons.exclamationmark_bubble,
             texto: 'Versao beta: achou um problema? Conte pra gente',
             onTap: () => showReportSheet(context),

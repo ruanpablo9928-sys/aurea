@@ -1,0 +1,98 @@
+{
+ "titulo": "Texto que quica",
+ "duracao": 51.444,
+ "largura": 780,
+ "altura": 1908,
+ "cenas": [
+  {
+   "n": 1,
+   "texto": "Novo projeto 9:16 — o texto que quica é coisa de Reels.",
+   "inicio": 0.0,
+   "fim": 4.28
+  },
+  {
+   "n": 2,
+   "texto": "No menu de adicionar, o Texto fica na coluna da direita.",
+   "inicio": 4.28,
+   "fim": 8.09
+  },
+  {
+   "n": 3,
+   "texto": "Escreva o seu — aqui, AUREA.",
+   "inicio": 8.09,
+   "fim": 12.62
+  },
+  {
+   "n": 4,
+   "texto": "Animar texto abre as animações: entrada, ênfase e saída.",
+   "inicio": 12.62,
+   "fim": 16.08
+  },
+  {
+   "n": 5,
+   "texto": "Quicar por letra: cada letra entra de baixo, com mola.",
+   "inicio": 16.08,
+   "fim": 19.98
+  },
+  {
+   "n": 6,
+   "texto": "Daqui para baixo é seu: a mola tem amplitude, frequência e decaimento.",
+   "inicio": 19.98,
+   "fim": 22.58
+  },
+  {
+   "n": 7,
+   "texto": "Amplitude é o tamanho do quique — arraste para a esquerda e ele fica maior.",
+   "inicio": 22.58,
+   "fim": 25.4
+  },
+  {
+   "n": 8,
+   "texto": "Frequência é quantas vezes ele quica antes de parar.",
+   "inicio": 25.4,
+   "fim": 28.22
+  },
+  {
+   "n": 9,
+   "texto": "Decaimento é a rapidez com que o quique morre. Menos decaimento, mais balanço.",
+   "inicio": 28.22,
+   "fim": 31.06
+  },
+  {
+   "n": 10,
+   "texto": "Distância é de onde a letra vem: quanto maior, mais longe o salto começa.",
+   "inicio": 31.06,
+   "fim": 33.79
+  },
+  {
+   "n": 11,
+   "texto": "Atraso é o intervalo entre uma letra e a outra — é ele que faz a onda.",
+   "inicio": 33.79,
+   "fim": 36.72
+  },
+  {
+   "n": 12,
+   "texto": "A mesma animação por PALAVRA, e não por letra: outro ritmo, um toque.",
+   "inicio": 36.72,
+   "fim": 39.88
+  },
+  {
+   "n": 13,
+   "texto": "E de volta para letra, com a ordem invertida: entra da última para a primeira.",
+   "inicio": 39.88,
+   "fim": 43.71
+  },
+  {
+   "n": 14,
+   "texto": "Feche o painel e dê o play: o texto quica do seu jeito.",
+   "inicio": 43.71,
+   "fim": 48.944
+  },
+  {
+   "n": 15,
+   "texto": "Guardado no projeto: a animação viaja junto com a camada de texto.",
+   "inicio": 48.944,
+   "fim": 51.444
+  }
+ ]
+}

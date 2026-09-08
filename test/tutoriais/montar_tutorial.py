@@ -31,6 +31,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 TITULOS = {
     'cena3d': 'Cena 3D',
     'cena-completa': 'Cena 3D completa',
+    'texto-bounce': 'Texto que quica',
 }
 ID = sys.argv[1] if len(sys.argv) > 1 else 'cena3d'
 TITULO = TITULOS.get(ID, ID)

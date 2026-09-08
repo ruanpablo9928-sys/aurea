@@ -33,7 +33,7 @@ void main() {
     expect(t.video, 'assets/tutoriais/x.mp4');
   });
 
-  for (final id in ['cena3d', 'cena-completa']) {
+  for (final id in ['cena3d', 'cena-completa', 'texto-bounce']) {
     test('o tutorial $id esta no pacote e faz sentido', () async {
       final t = await Tutorial.carregar(id);
       expect(t.cenas.length, greaterThanOrEqualTo(10));
@@ -45,7 +45,6 @@ void main() {
         anterior = c.inicio;
       }
       expect(t.cenas.first.texto, contains('projeto'));
-      expect(t.cenas.any((c) => c.texto.contains('âmera')), isTrue);
       // O video e o poster existem como assets.
       final video = await rootBundle.load(t.video);
       expect(video.lengthInBytes, greaterThan(100 * 1024));
@@ -53,6 +52,16 @@ void main() {
       expect(poster.lengthInBytes, greaterThan(5 * 1024));
     });
   }
+
+  test('o tutorial do texto ensina o que promete', () async {
+    final t = await Tutorial.carregar('texto-bounce');
+    final tudo = t.cenas.map((c) => c.texto).join(' ');
+    expect(tudo, contains('Quicar por letra'), reason: 'o preset de bounce');
+    expect(tudo, contains('Amplitude'), reason: 'o tamanho do quique');
+    expect(tudo, contains('Frequência'), reason: 'quantas vezes quica');
+    expect(tudo, contains('Decaimento'), reason: 'como o quique morre');
+    expect(tudo, contains('Atraso'), reason: 'a onda entre as letras');
+  });
 
   test('o tutorial dos modelos ensina o que promete', () async {
     final t = await Tutorial.carregar('cena-completa');

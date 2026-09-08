@@ -12,6 +12,7 @@ import '../../domain/text_anim.dart';
 import '../../domain/text_animator.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import '../../../tutoriais/presentation/tutorial_screen.dart';
 
 /// ANIMACAO DE TEXTO — painel no modelo do Alight Motion.
 ///
@@ -112,6 +113,33 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AmColors.text)),
+              const Spacer(),
+              // O TUTORIAL, onde a duvida nasce: a mola tem tres numeros
+              // e nenhum deles se entende so pelo nome.
+              CupertinoButton(
+                key: const ValueKey('texto-anim-tutorial'),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                onPressed: () {
+                  widget.playback.pause();
+                  // Rota do Cupertino: este painel nao importa o
+                  // Material, e o empurrao lateral e o do iOS mesmo.
+                  Navigator.of(context).push(
+                    CupertinoPageRoute<void>(
+                      builder: (_) => const TutorialScreen(id: 'texto-bounce'),
+                    ),
+                  );
+                },
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(CupertinoIcons.play_rectangle,
+                        size: 15, color: AmColors.accent),
+                    SizedBox(width: 5),
+                    Text('Tutorial',
+                        style: TextStyle(fontSize: 12, color: AmColors.accent)),
+                  ],
+                ),
+              ),
             ],
           ),
           Expanded(child: child),

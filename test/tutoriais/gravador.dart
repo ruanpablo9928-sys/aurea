@@ -57,6 +57,12 @@ Future<void> carregarFontes() async {
     '.SF UI Text',
     '.SF UI Display',
     '.AppleSystemUIFont',
+    // A FONTE PADRAO DO PROPRIO TESTE. Sem ela, o texto do palco (que
+    // nao tem familia escolhida, e cai no padrao) saia como uma fileira
+    // de quadradinhos brancos — no tutorial do texto, justamente o que
+    // o video existe para mostrar.
+    'FlutterTest',
+    'Ahem',
   ]) {
     await (FontLoader(family)..addFont(
           rootBundle.load('assets/templates/dnyx/AureaMotionSans.ttf'),
@@ -195,6 +201,12 @@ class Gravador {
   /// Gestos inteiros sempre valem — e como o efeito e cumulativo (girar
   /// soma graus, a regua soma passos), o resultado e o mesmo.
   Future<void> arrastar(Finder f, Offset delta, {int passos = 8}) async {
+    // ROLA ATE ELE PRIMEIRO. Um widget pode existir na arvore e estar
+    // fora da janela: o arrasto cai no vazio e o valor nao anda — foi o
+    // que aconteceu com as reguas da animacao de texto, la embaixo num
+    // painel alto.
+    await tester.ensureVisible(f);
+    await tester.pump();
     final inicio = tester.getCenter(f);
     final pedaco = delta / passos.toDouble();
     for (var i = 1; i <= passos; i++) {
@@ -206,6 +218,40 @@ class Gravador {
     dedo = null;
     await tester.pump(const Duration(milliseconds: 60));
     await quadro(dur: .35);
+    await descarregar();
+  }
+
+  /// ANDA UM NUMERO PELA REGUA, com o dedo deslizando junto.
+  ///
+  /// Chama o `onChanged` da propria regua em vez de arrastar o dedo de
+  /// verdade: num painel mais alto que a tela o alvo pode estar fora da
+  /// janela, e ai o arrasto cai no vazio e o numero nao anda. O que se
+  /// ve e o mesmo — os riscos deslizam e o valor muda.
+  Future<void> valorDaRegua(
+    Finder regua,
+    double de,
+    double ate, {
+    int passos = 8,
+  }) async {
+    await tester.ensureVisible(regua);
+    await tester.pump();
+    final r = tester.getRect(regua);
+    for (var i = 1; i <= passos; i++) {
+      final v = de + (ate - de) * i / passos;
+      tester.widget<AmTickRuler>(regua).onChanged(v);
+      // O dedo anda para o lado contrario do valor: puxar para a
+      // esquerda aumenta, como na regua de verdade.
+      final t = i / passos;
+      dedo = Offset(
+        r.center.dx - (ate > de ? 1 : -1) * (t - .5) * r.width * .7,
+        r.center.dy,
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      await quadro(dur: .09);
+    }
+    dedo = null;
+    await tester.pump();
+    await quadro(dur: .3);
     await descarregar();
   }
 
