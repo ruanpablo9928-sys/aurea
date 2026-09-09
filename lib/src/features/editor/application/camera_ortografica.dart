@@ -32,7 +32,7 @@ class LenteOrtografica extends fs.CameraProjection {
   final double far;
 
   @override
-  vm.Matrix4 getProjectionMatrix(double aspectRatio) {
+  vm.Matrix4 getProjectionMatrix(double aspectRatio, {vm.Vector2? jitter}) {
     final h = math.max(1e-6, altura);
     final w = h * (aspectRatio <= 0 ? 1 : aspectRatio);
     // Ortografica com profundidade em 0..1 (a mesma faixa que a
@@ -43,6 +43,16 @@ class LenteOrtografica extends fs.CameraProjection {
     m.setEntry(2, 2, 1 / (near - far));
     m.setEntry(2, 3, near / (near - far));
     m.setEntry(3, 3, 1);
+    // O TREMOR do anti-serrilhado temporal entra na TRANSLACAO, nao na
+    // profundidade. Na perspectiva o motor soma o tremor na coluna do z
+    // porque ali o w vale z, e a divisao converte aquilo num
+    // deslocamento constante em tela. Aqui o w vale sempre 1, entao o
+    // mesmo truque nao deslocaria nada: o lugar certo e a coluna da
+    // translacao, que ja esta em coordenada normalizada.
+    if (jitter != null) {
+      m.setEntry(0, 3, m.entry(0, 3) + jitter.x);
+      m.setEntry(1, 3, m.entry(1, 3) + jitter.y);
+    }
     return m;
   }
 }
