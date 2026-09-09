@@ -2615,20 +2615,51 @@ LayerMeta _asMeta(Map<String, dynamic> m) => LayerMeta(
 ///
 /// A ultima peneira antes do arquivo troca esses numeros por zero. Um
 /// valor zerado se conserta na tela; um projeto que nao grava, nao.
-Map<String, dynamic> projectToJson(VideoProject p) => {
-  for (final e in _projectToJson(p).entries)
-    e.key: _semNumeroImpossivel(e.value),
-};
+Map<String, dynamic> projectToJson(VideoProject p) {
+  final bruto = _projectToJson(p);
+  final limpo = _semNumeroImpossivel(bruto);
+  return limpo is Map<String, dynamic> ? limpo : bruto;
+}
 
 /// Troca NaN e infinito por zero, fundo abaixo (mapas, listas, numeros).
+///
+/// SO COPIA O QUE PRECISA MUDAR. A primeira versao reconstruia todo mapa
+/// e toda lista que encontrasse, sempre. Num projeto comum isso nao se
+/// nota; num projeto com um modelo 3D importado, cujas posicoes, normais
+/// e indices sao listas de milhoes de numeros guardadas no arquivo, a
+/// peneira sozinha custava dezenas de milissegundos a cada salvamento —
+/// e o salvamento roda no fio que responde ao toque.
+///
+/// Agora o galho que nao tem numero impossivel volta como ELE MESMO, sem
+/// copia. Numero impossivel e raro; copiar como se fosse comum era o
+/// erro.
 Object? _semNumeroImpossivel(Object? valor) {
   if (valor is double) return valor.isFinite ? valor : 0.0;
+
   if (valor is Map) {
-    return <String, dynamic>{
-      for (final e in valor.entries) '${e.key}': _semNumeroImpossivel(e.value),
-    };
+    // As chaves precisam ser String no arquivo. Um mapa que ja e
+    // Map<String, dynamic> e aproveitado inteiro quando nada muda.
+    var mudou = valor is! Map<String, dynamic>;
+    final saida = <String, dynamic>{};
+    for (final e in valor.entries) {
+      final v = _semNumeroImpossivel(e.value);
+      if (!identical(v, e.value)) mudou = true;
+      saida['${e.key}'] = v;
+    }
+    return mudou ? saida : valor;
   }
-  if (valor is List) return [for (final v in valor) _semNumeroImpossivel(v)];
+
+  if (valor is List) {
+    var mudou = false;
+    final saida = List<Object?>.filled(valor.length, null, growable: false);
+    for (var i = 0; i < valor.length; i++) {
+      final v = _semNumeroImpossivel(valor[i]);
+      if (!identical(v, valor[i])) mudou = true;
+      saida[i] = v;
+    }
+    return mudou ? saida : valor;
+  }
+
   return valor;
 }
 
