@@ -161,6 +161,30 @@ sealed class Layer {
     ..._times(skewY.keyframes),
   };
   Set<int> get pivotTimesUs => _times(pivot.keyframes);
+
+  /// Os instantes das trilhas de TRANSFORMACAO — as que a linha do tempo
+  /// sabe arrastar. Efeito, mascara e modulo ficam de fora: cada um
+  /// guarda o tempo do seu jeito, e mover so metade das marcas de um
+  /// instante rachava o losango em dois.
+  Set<int> get transformTimesUs => {
+    ...positionTimesUs,
+    ...scaleTimesUs,
+    ...rotationTimesUs,
+    ...opacityTimesUs,
+    ...skewTimesUs,
+    ...pivotTimesUs,
+  };
+
+  /// Este instante pode ser arrastado? So quando TUDO que ha nele e
+  /// transformacao. Um losango que carrega marca de efeito nao se mexe —
+  /// e nao deve parecer que se mexe.
+  bool podeArrastarKeyframeEm(Duration t) {
+    final us = t.inMicroseconds;
+    if (!transformTimesUs.contains(us)) return false;
+    return !effectTimesUs.contains(us) &&
+        !maskTimesUs.contains(us) &&
+        !moduleTimesUs.contains(us);
+  }
   Set<int> get effectTimesUs => {
     for (final e in effects) ...e.keyframeTimes.map((t) => t.inMicroseconds),
   };

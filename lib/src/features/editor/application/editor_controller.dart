@@ -4261,6 +4261,99 @@ class EditorController extends Notifier<VideoProject> {
     return [for (final u in list) Duration(microseconds: u)];
   }
 
+  /// DUPLICA a camada inteira, logo acima da original.
+  ///
+  /// A copia leva a FICHA junto (cor, travas, olho): duplicar uma camada
+  /// e depois descobrir que ela voltou visivel, ou sem a cor que a
+  /// identificava, e o tipo de surpresa que faz desconfiar do desfazer.
+  String? duplicarCamada(String id) {
+    final src = _layer(id);
+    if (src == null) return null;
+    final copia = src.duplicated();
+    final i = state.layers.indexWhere((l) => l.id == id);
+    final layers = [...state.layers];
+    layers.insert(i < 0 ? 0 : i, copia);
+    _mutate(
+      state.copyWith(
+        layers: layers,
+        meta: {...state.meta, copia.id: state.metaOf(id)},
+      ),
+    );
+    ref.read(selectedLayerProvider.notifier).state = copia.id;
+    return copia.id;
+  }
+
+  /// MOVE no tempo todas as marcas de transformacao de um instante.
+  ///
+  /// O losango da linha do tempo representa um INSTANTE, e num instante
+  /// pode haver marca de posicao, escala, rotacao e opacidade ao mesmo
+  /// tempo. Arrastar tem de levar todas juntas — mover so uma rachava o
+  /// losango em dois e desmontava a animacao sem o usuario pedir.
+  ///
+  /// Efeito, mascara e modulo NAO entram (ver
+  /// [Layer.podeArrastarKeyframeEm]): cada um guarda o tempo do seu
+  /// jeito, e mover metade seria pior que nao mover.
+  void moverKeyframeDeTransformacao(
+    String id,
+    Duration deLocal,
+    Duration paraLocal,
+  ) {
+    final layer = _layer(id);
+    if (layer == null || deLocal == paraLocal) return;
+    if (!layer.podeArrastarKeyframeEm(deLocal)) return;
+    // Nao passa por cima de uma marca que ja existe: duas marcas no
+    // mesmo instante e um estado que nao da para desfazer olhando.
+    if (layer.transformTimesUs.contains(paraLocal.inMicroseconds)) return;
+
+    AnimatedDouble mover(AnimatedDouble t) => t.hasKeyframeAt(deLocal)
+        ? t.withoutKeyframe(deLocal).withKeyframe(paraLocal, t.valueAt(deLocal))
+        : t;
+    AnimatedOffset moverO(AnimatedOffset t) => t.hasKeyframeAt(deLocal)
+        ? t.withoutKeyframe(deLocal).withKeyframe(paraLocal, t.valueAt(deLocal))
+        : t;
+
+    _replace(
+      layer.copyLayer(
+        position: moverO(layer.position),
+        positionZ: mover(layer.positionZ),
+        scaleX: mover(layer.scaleX),
+        scaleY: mover(layer.scaleY),
+        rotation: mover(layer.rotation),
+        rotationX: mover(layer.rotationX),
+        rotationY: mover(layer.rotationY),
+        opacity: mover(layer.opacity),
+        skewX: mover(layer.skewX),
+        skewY: mover(layer.skewY),
+        pivot: moverO(layer.pivot),
+      ),
+    );
+  }
+
+  /// APAGA todas as marcas de transformacao de um instante.
+  void apagarKeyframeDeTransformacao(String id, Duration local) {
+    final layer = _layer(id);
+    if (layer == null || !layer.podeArrastarKeyframeEm(local)) return;
+    AnimatedDouble tirar(AnimatedDouble t) =>
+        t.hasKeyframeAt(local) ? t.withoutKeyframe(local) : t;
+    AnimatedOffset tirarO(AnimatedOffset t) =>
+        t.hasKeyframeAt(local) ? t.withoutKeyframe(local) : t;
+    _replace(
+      layer.copyLayer(
+        position: tirarO(layer.position),
+        positionZ: tirar(layer.positionZ),
+        scaleX: tirar(layer.scaleX),
+        scaleY: tirar(layer.scaleY),
+        rotation: tirar(layer.rotation),
+        rotationX: tirar(layer.rotationX),
+        rotationY: tirar(layer.rotationY),
+        opacity: tirar(layer.opacity),
+        skewX: tirar(layer.skewX),
+        skewY: tirar(layer.skewY),
+        pivot: tirarO(layer.pivot),
+      ),
+    );
+  }
+
   void toggleKeyframe(String id, Duration globalTime, LayerProp prop) {
     final layer = _layer(id);
     if (layer == null) return;

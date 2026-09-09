@@ -27,9 +27,13 @@ import '../../domain/layer.dart';
 ///     cabecote destacado;
 ///   - coluna fixa a esquerda (olho e cor) que nao rola com a trilha.
 class LinhaDoTempo extends ConsumerWidget {
-  const LinhaDoTempo({super.key, required this.playback});
+  const LinhaDoTempo({super.key, required this.playback, this.aoExportar});
 
   final PlaybackController playback;
+
+  /// Abrir a exportacao e NAVEGACAO, e navegacao e da tela — nao de um
+  /// controle dentro dela. Por isso vem de fora.
+  final VoidCallback? aoExportar;
 
   /// Altura total: transporte + regua + trilha.
   static const altura = 148.0;
@@ -49,16 +53,30 @@ class LinhaDoTempo extends ConsumerWidget {
         color: AmColors.panel,
         child: Column(
           children: [
-            _Transporte(playback: playback, duracao: project.duration),
+            _Transporte(
+              playback: playback,
+              duracao: project.duration,
+              camadaSelecionada: selecionada,
+              aoExportar: aoExportar,
+            ),
             Expanded(
               child: _Faixa(
                 playback: playback,
                 duracao: project.duration,
                 camada: atual,
-                escondida:
-                    atual != null && project.metaOf(atual.id).hidden,
+                escondida: atual != null && project.metaOf(atual.id).hidden,
                 temAnterior: _vizinha(camadas, atual, -1) != null,
                 temProxima: _vizinha(camadas, atual, 1) != null,
+                aoMoverKeyframe: atual == null
+                    ? null
+                    : (de, para) => ref
+                          .read(editorControllerProvider.notifier)
+                          .moverKeyframeDeTransformacao(atual.id, de, para),
+                aoApagarKeyframe: atual == null
+                    ? null
+                    : (local) => ref
+                          .read(editorControllerProvider.notifier)
+                          .apagarKeyframeDeTransformacao(atual.id, local),
                 aoTrocar: (passo) {
                   final v = _vizinha(camadas, atual, passo);
                   if (v != null) {
@@ -93,59 +111,89 @@ class LinhaDoTempo extends ConsumerWidget {
 /// A BARRA DE TRANSPORTE. O play e o maior alvo da barra, no meio, e os
 /// saltos ficam do lado dele: e o gesto que a mao repete mais.
 class _Transporte extends ConsumerWidget {
-  const _Transporte({required this.playback, required this.duracao});
+  const _Transporte({
+    required this.playback,
+    required this.duracao,
+    required this.camadaSelecionada,
+    required this.aoExportar,
+  });
 
   final PlaybackController playback;
   final Duration duracao;
+  final String? camadaSelecionada;
+  final VoidCallback? aoExportar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.watch(editorControllerProvider.notifier);
     return SizedBox(
       height: 48,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _Botao(
-            icone: Icons.undo_rounded,
-            ativo: controller.canUndo,
-            aoTocar: controller.undo,
-            rotulo: 'Desfazer',
-          ),
-          _Botao(
-            icone: Icons.redo_rounded,
-            ativo: controller.canRedo,
-            aoTocar: controller.redo,
-            rotulo: 'Refazer',
-          ),
-          _Botao(
-            icone: Icons.first_page_rounded,
-            aoTocar: () {
-              playback.pause();
-              playback.seek(Duration.zero);
-            },
-            rotulo: 'Inicio',
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: playback.playing,
-            builder: (context, tocando, _) => _Botao(
-              icone: tocando
-                  ? Icons.pause_rounded
-                  : Icons.play_arrow_rounded,
-              tamanho: 34,
-              aoTocar: playback.toggle,
-              rotulo: tocando ? 'Pausar' : 'Reproduzir',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          // SETE ALVOS numa largura de celular: `spaceEvenly` os empurraria
+          // para fora. `spaceBetween` com folga nas pontas mantem cada um
+          // com area de toque cheia e ainda deixa o play no meio.
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _Botao(
+              icone: Icons.undo_rounded,
+              ativo: controller.canUndo,
+              aoTocar: controller.undo,
+              rotulo: 'Desfazer',
             ),
-          ),
-          _Botao(
-            icone: Icons.last_page_rounded,
-            aoTocar: () {
-              playback.pause();
-              playback.seek(duracao);
-            },
-            rotulo: 'Fim',
-          ),
-        ],
+            _Botao(
+              icone: Icons.redo_rounded,
+              ativo: controller.canRedo,
+              aoTocar: controller.redo,
+              rotulo: 'Refazer',
+            ),
+            _Botao(
+              icone: Icons.first_page_rounded,
+              aoTocar: () {
+                playback.pause();
+                playback.seek(Duration.zero);
+              },
+              rotulo: 'Inicio',
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: playback.playing,
+              builder: (context, tocando, _) => _Botao(
+                icone: tocando ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                tamanho: 34,
+                aoTocar: playback.toggle,
+                rotulo: tocando ? 'Pausar' : 'Reproduzir',
+              ),
+            ),
+            _Botao(
+              icone: Icons.last_page_rounded,
+              aoTocar: () {
+                playback.pause();
+                playback.seek(duracao);
+              },
+              rotulo: 'Fim',
+            ),
+            _Botao(
+              icone: Icons.copy_all_rounded,
+              ativo: camadaSelecionada != null,
+              aoTocar: () {
+                final id = camadaSelecionada;
+                if (id != null) {
+                  ref
+                      .read(editorControllerProvider.notifier)
+                      .duplicarCamada(id);
+                }
+              },
+              rotulo: 'Duplicar camada',
+            ),
+            _Botao(
+              icone: Icons.ios_share_rounded,
+              ativo: aoExportar != null,
+              aoTocar: () => aoExportar?.call(),
+              rotulo: 'Exportar',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -190,7 +238,7 @@ class _Botao extends StatelessWidget {
 
 /// A REGUA E A TRILHA, que dividem a mesma largura e o mesmo mapa de
 /// tempo — por isso vivem no mesmo widget.
-class _Faixa extends StatelessWidget {
+class _Faixa extends StatefulWidget {
   const _Faixa({
     required this.playback,
     required this.duracao,
@@ -200,6 +248,8 @@ class _Faixa extends StatelessWidget {
     required this.temProxima,
     required this.aoTrocar,
     required this.aoAlternarOlho,
+    required this.aoMoverKeyframe,
+    required this.aoApagarKeyframe,
   });
 
   final PlaybackController playback;
@@ -210,11 +260,115 @@ class _Faixa extends StatelessWidget {
   final bool temProxima;
   final void Function(int passo) aoTrocar;
   final VoidCallback? aoAlternarOlho;
+  final void Function(Duration de, Duration para)? aoMoverKeyframe;
+  final void Function(Duration local)? aoApagarKeyframe;
+
+  @override
+  State<_Faixa> createState() => _FaixaState();
+}
+
+class _FaixaState extends State<_Faixa> {
+  /// O keyframe que o dedo pegou, em tempo LOCAL da camada. Nulo quando
+  /// o arrasto e do cabecote e nao de uma marca.
+  Duration? _pego;
+
+  /// O KEYFRAME SOB O DEDO NO MOMENTO DO POUSO.
+  ///
+  /// Escolher a marca depende de saber onde o dedo POUSOU, e nenhum
+  /// retorno de gesto entrega isso a tempo:
+  ///
+  ///   - `onTapDown` nao dispara quando o dedo sai andando logo, porque
+  ///     o toque e rejeitado antes do prazo dele;
+  ///   - `onHorizontalDragStart` so chega depois de uns dezoito pixels,
+  ///     e ja com a posicao NOVA.
+  ///
+  /// Um `Listener` recebe o `onPointerDown` cru, no instante do pouso, e
+  /// sem entrar na arena de gestos — entao ele nao rouba o toque das
+  /// setas de trocar de camada, que ficam por cima.
+  Duration? _candidato;
 
   void _irPara(double dx, double largura) {
     if (largura <= 0) return;
-    playback.pause();
-    playback.seek(duracao * (dx / largura).clamp(0.0, 1.0));
+    widget.playback.pause();
+    widget.playback.seek(widget.duracao * (dx / largura).clamp(0.0, 1.0));
+  }
+
+  Duration _tempoEm(double dx, double largura) =>
+      widget.duracao * (dx / largura).clamp(0.0, 1.0);
+
+  /// O keyframe sob o dedo, em tempo LOCAL, ou nulo.
+  ///
+  /// A tolerancia e em PIXELS, e nao em tempo: o dedo tem o mesmo tamanho
+  /// seja qual for a duracao da composicao. Dezoito pixels e o raio que
+  /// deixa pegar o losango sem precisar de pontaria.
+  Duration? _keyframeSobODedo(Offset ponto, double largura) {
+    final l = widget.camada;
+    if (l == null || largura <= 0) return null;
+    if (ponto.dy < _PintorDaFaixa.topoDaTrilha - 8) return null;
+    final us = widget.duracao.inMicroseconds;
+    if (us <= 0) return null;
+    Duration? melhor;
+    var menorDistancia = double.infinity;
+    for (final t in l.keyframeTimes) {
+      final quando = l.startTime + t;
+      if (quando < l.startTime || quando > l.endTime) continue;
+      final px = largura * (quando.inMicroseconds / us).clamp(0.0, 1.0);
+      final d = (px - ponto.dx).abs();
+      if (d <= 18 && d < menorDistancia) {
+        menorDistancia = d;
+        melhor = t;
+      }
+    }
+    return melhor;
+  }
+
+  /// O dedo pousou: so ESCOLHE, nao age. Se o toque acabar sendo das
+  /// setas, nada aconteceu.
+  void _pousar(Offset ponto, double largura) {
+    _candidato = _keyframeSobODedo(ponto, largura);
+  }
+
+  /// TOCAR NUM KEYFRAME LEVA O CABECOTE ATE ELE. E o gesto que a mao faz
+  /// sem pensar, e sem ele nao ha como cair exatamente em cima da marca
+  /// para editar o valor dali.
+  void _tocar(Offset ponto, double largura) {
+    final l = widget.camada;
+    final k = _candidato;
+    if (k == null || l == null) {
+      _irPara(ponto.dx, largura);
+      return;
+    }
+    widget.playback.pause();
+    widget.playback.seek(l.startTime + k);
+  }
+
+  /// O arrasto comecou: quem manda e a marca escolhida no pouso.
+  void _comecarArrasto(Offset ponto, double largura) {
+    final l = widget.camada;
+    final k = _candidato;
+    if (k == null || l == null || !l.podeArrastarKeyframeEm(k)) {
+      _pego = null;
+      _irPara(ponto.dx, largura);
+      return;
+    }
+    _pego = k;
+  }
+
+  void _mover(Offset ponto, double largura) {
+    final l = widget.camada;
+    final pego = _pego;
+    if (pego == null || l == null) {
+      _irPara(ponto.dx, largura);
+      return;
+    }
+    var destino = _tempoEm(ponto.dx, largura) - l.startTime;
+    // A marca nao sai da propria camada.
+    if (destino < Duration.zero) destino = Duration.zero;
+    if (destino > l.duration) destino = l.duration;
+    if (destino == pego) return;
+    widget.aoMoverKeyframe?.call(pego, destino);
+    _pego = destino;
+    widget.playback.seek(l.startTime + destino);
   }
 
   @override
@@ -223,47 +377,59 @@ class _Faixa extends StatelessWidget {
       SizedBox(
         width: LinhaDoTempo.larguraDaCabeca,
         child: _Cabeca(
-          camada: camada,
-          escondida: escondida,
-          aoAlternarOlho: aoAlternarOlho,
+          camada: widget.camada,
+          escondida: widget.escondida,
+          aoAlternarOlho: widget.aoAlternarOlho,
         ),
       ),
       Expanded(
         child: LayoutBuilder(
           builder: (context, limites) {
             final largura = limites.maxWidth;
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (d) => _irPara(d.localPosition.dx, largura),
-              onHorizontalDragStart: (d) =>
-                  _irPara(d.localPosition.dx, largura),
-              onHorizontalDragUpdate: (d) =>
-                  _irPara(d.localPosition.dx, largura),
-              child: ValueListenableBuilder<Duration>(
-                valueListenable: playback.time,
-                builder: (context, t, _) => Stack(
-                  children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _PintorDaFaixa(
-                          tempo: t,
-                          duracao: duracao,
-                          camada: camada,
-                          escondida: escondida,
+            return Listener(
+              onPointerDown: (e) => _pousar(e.localPosition, largura),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (d) => _tocar(d.localPosition, largura),
+                onHorizontalDragStart: (d) =>
+                    _comecarArrasto(d.localPosition, largura),
+                onHorizontalDragUpdate: (d) => _mover(d.localPosition, largura),
+                onHorizontalDragEnd: (_) => _pego = null,
+                onHorizontalDragCancel: () => _pego = null,
+                onLongPressStart: (_) {
+                  final k = _candidato;
+                  final l = widget.camada;
+                  if (k == null || l == null) return;
+                  if (!l.podeArrastarKeyframeEm(k)) return;
+                  widget.aoApagarKeyframe?.call(k);
+                  _candidato = null;
+                },
+                child: ValueListenableBuilder<Duration>(
+                  valueListenable: widget.playback.time,
+                  builder: (context, t, _) => Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _PintorDaFaixa(
+                            tempo: t,
+                            duracao: widget.duracao,
+                            camada: widget.camada,
+                            escondida: widget.escondida,
+                          ),
                         ),
                       ),
-                    ),
-                    if (temAnterior)
-                      _Seta(
-                        esquerda: true,
-                        aoTocar: () => aoTrocar(-1),
-                      ),
-                    if (temProxima)
-                      _Seta(
-                        esquerda: false,
-                        aoTocar: () => aoTrocar(1),
-                      ),
-                  ],
+                      if (widget.temAnterior)
+                        _Seta(
+                          esquerda: true,
+                          aoTocar: () => widget.aoTrocar(-1),
+                        ),
+                      if (widget.temProxima)
+                        _Seta(
+                          esquerda: false,
+                          aoTocar: () => widget.aoTrocar(1),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -299,9 +465,7 @@ class _Seta extends StatelessWidget {
           alignment: Alignment.center,
           color: AmColors.panel.withValues(alpha: .92),
           child: Icon(
-            esquerda
-                ? Icons.chevron_left_rounded
-                : Icons.chevron_right_rounded,
+            esquerda ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
             size: 20,
             color: AmColors.text,
           ),
@@ -564,9 +728,10 @@ class _PintorDaFaixa extends CustomPainter {
   static String _relogio(Duration d) {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final c = (d.inMilliseconds.remainder(1000) ~/ 10)
-        .toString()
-        .padLeft(2, '0');
+    final c = (d.inMilliseconds.remainder(1000) ~/ 10).toString().padLeft(
+      2,
+      '0',
+    );
     return '$m:$s:$c';
   }
 

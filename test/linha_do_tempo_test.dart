@@ -195,4 +195,185 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.bySemanticsLabel('Reproduzir'), findsOneWidget);
   });
+
+  // ------------------------------------------------- keyframes
+
+  /// Monta a faixa com uma camada de 5 s e keyframes em instantes
+  /// conhecidos, e devolve o retangulo util da trilha para mirar o dedo.
+  Future<({ProviderContainer c, String id, Rect faixa, PlaybackController p})>
+  comKeyframes(WidgetTester tester, List<int> ms) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final c = container.read(editorControllerProvider.notifier);
+    c.addTextLayer(Duration.zero, text: 'Um');
+    final id = container.read(editorControllerProvider).layers.single.id;
+    container.read(selectedLayerProvider.notifier).state = id;
+    container.read(autoKeyframeProvider.notifier).state = true;
+    for (final m in ms) {
+      c.editOpacity(id, Duration(milliseconds: m), m / 10000);
+    }
+    final playback = PlaybackController(
+      vsync: _Vsync(),
+      durationOf: () => container.read(editorControllerProvider).duration,
+    );
+    addTearDown(playback.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [const Spacer(), LinhaDoTempo(playback: playback)],
+            ),
+          ),
+        ),
+      ),
+    );
+    return (
+      c: container,
+      id: id,
+      faixa: tester.getRect(find.byType(LinhaDoTempo)),
+      p: playback,
+    );
+  }
+
+  /// Onde, na tela, esta o keyframe do instante local [ms].
+  Offset pontoDoKeyframe(ProviderContainer c, Rect faixa, int ms) {
+    final duracao = c.read(editorControllerProvider).duration;
+    final camada = c.read(editorControllerProvider).layers.single;
+    final quando = camada.startTime + Duration(milliseconds: ms);
+    final util = faixa.width - LinhaDoTempo.larguraDaCabeca;
+    final x =
+        faixa.left +
+        LinhaDoTempo.larguraDaCabeca +
+        util * (quando.inMicroseconds / duracao.inMicroseconds);
+    // A trilha comeca 46 px abaixo do topo da faixa, e tem 38 de altura.
+    return Offset(x, faixa.top + 48 + 46 + 19);
+  }
+
+  testWidgets('tocar num keyframe leva o cabecote exatamente ate ele', (
+    tester,
+  ) async {
+    final m = await comKeyframes(tester, [500, 2000]);
+    expect(m.p.time.value, Duration.zero);
+
+    await tester.tapAt(pontoDoKeyframe(m.c, m.faixa, 2000));
+    await tester.pump();
+    expect(
+      m.p.time.value.inMilliseconds,
+      closeTo(2000, 60),
+      reason:
+          'tocar na marca tem de cair EM CIMA dela: e assim que se edita '
+          'o valor daquele instante',
+    );
+  });
+
+  testWidgets('arrastar um keyframe muda o instante dele', (tester) async {
+    final m = await comKeyframes(tester, [500, 2000]);
+    final antes = m.c.read(editorControllerProvider).layers.single.keyframeTimes;
+    expect(antes.map((t) => t.inMilliseconds), containsAll([500, 2000]));
+
+    final de = pontoDoKeyframe(m.c, m.faixa, 2000);
+    final gesto = await tester.startGesture(de);
+    // O PRIMEIRO MOVIMENTO E GASTO no reconhecimento do gesto: dele sai
+    // o `dragStart` e mais nada. Sem um segundo passo, nenhum `update`
+    // chega e a marca nao anda — no aparelho o dedo produz dezenas de
+    // eventos, aqui e preciso pedir.
+    await gesto.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesto.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesto.up();
+    await tester.pump();
+
+    final depois =
+        m.c.read(editorControllerProvider).layers.single.keyframeTimes;
+    expect(
+      depois.map((t) => t.inMilliseconds).contains(2000),
+      isFalse,
+      reason: 'a marca continuou no instante velho: o arrasto nao pegou',
+    );
+    expect(
+      depois.length,
+      antes.length,
+      reason: 'arrastar move a marca, nao cria nem apaga',
+    );
+  });
+
+  testWidgets('o keyframe nao escapa da propria camada', (tester) async {
+    final m = await comKeyframes(tester, [500]);
+    final de = pontoDoKeyframe(m.c, m.faixa, 500);
+    final gesto = await tester.startGesture(de);
+    // Puxa muito para a esquerda, para bem antes do inicio.
+    await gesto.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesto.moveBy(const Offset(-4000, 0));
+    await tester.pump();
+    await gesto.up();
+    await tester.pump();
+
+    final camada = m.c.read(editorControllerProvider).layers.single;
+    for (final t in camada.keyframeTimes) {
+      expect(
+        t >= Duration.zero && t <= camada.duration,
+        isTrue,
+        reason: 'a marca saiu da camada: ficou em $t',
+      );
+    }
+  });
+
+  testWidgets('toque longo apaga o keyframe', (tester) async {
+    final m = await comKeyframes(tester, [500, 2000]);
+    // Quantas marcas existem e assunto do motor: ligar o auto keyframe e
+    // editar cria tambem a marca que guarda o valor de antes. O teste le
+    // o numero real em vez de fingir saber.
+    final antes =
+        m.c.read(editorControllerProvider).layers.single.keyframeTimes;
+    expect(antes.map((t) => t.inMilliseconds), contains(2000));
+
+    await tester.longPressAt(pontoDoKeyframe(m.c, m.faixa, 2000));
+    await tester.pump();
+
+    final restantes =
+        m.c.read(editorControllerProvider).layers.single.keyframeTimes;
+    expect(
+      restantes.length,
+      antes.length - 1,
+      reason: 'o toque longo tinha de apagar exatamente uma marca',
+    );
+    expect(
+      restantes.map((t) => t.inMilliseconds),
+      isNot(contains(2000)),
+      reason: 'apagou a marca errada',
+    );
+  });
+
+  testWidgets('tocar longe de qualquer marca so move o cabecote', (
+    tester,
+  ) async {
+    final m = await comKeyframes(tester, [500]);
+    final antes = m.c.read(editorControllerProvider).layers.single.keyframeTimes;
+
+    // Um ponto na trilha, mas bem longe da unica marca.
+    final ponto = pontoDoKeyframe(m.c, m.faixa, 4200);
+    final gesto = await tester.startGesture(ponto);
+    await gesto.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesto.moveBy(const Offset(-25, 0));
+    await tester.pump();
+    await gesto.up();
+    await tester.pump();
+
+    expect(
+      m.c
+          .read(editorControllerProvider)
+          .layers
+          .single
+          .keyframeTimes
+          .map((t) => t.inMilliseconds),
+      antes.map((t) => t.inMilliseconds),
+      reason: 'arrastar no vazio e navegar no tempo, nao mexer em marca',
+    );
+  });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/editor_controller.dart';
 import '../application/playback_controller.dart';
 import '../application/video_layer_manager.dart';
+import '../../export/presentation/export_video_screen.dart';
 import 'widgets/linha_do_tempo.dart';
 import 'widgets/palco_de_previa.dart';
 
@@ -77,8 +78,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             Expanded(
               child: Center(
                 child: AspectRatio(
-                  aspectRatio:
-                      project.outputWidth / project.outputHeight,
+                  aspectRatio: project.outputWidth / project.outputHeight,
                   child: ColoredBox(
                     color: const Color(0xFF000000),
                     child: FittedBox(
@@ -97,7 +97,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 ),
               ),
             ),
-            LinhaDoTempo(playback: _playback),
+            LinhaDoTempo(
+              playback: _playback,
+              aoExportar: () {
+                _playback.pause();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ExportVideoScreen(),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
