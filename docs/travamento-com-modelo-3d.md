@@ -114,3 +114,64 @@ composição, a gravação do projeto, e — por cima de tudo — `drawFrame`.
 Com isso, um `nada marcado` deixou de ser ambíguo: ou o custo está num
 tique de animação, ou está em construção/posicionamento de algo que
 ninguém cronometrou. São duas hipóteses, não infinitas.
+
+---
+
+# O que o build 68 respondeu
+
+O registro voltou do iPhone 13 com a resposta, e ela não era nada do que
+eu vinha perseguindo:
+
+```
+POR MARCA, desde que o app abriu:
+  21984 ms  758x  pior 3662 ms   quadro: construir, posicionar e pintar
+  21006 ms  122x  pior 3616 ms   cena 3D: sincronizar
+  20234 ms  122x  pior 3445 ms   cena 3D: sincronizar > ambiente
+    763 ms  122x  pior  175 ms   cena 3D: sincronizar > nos
+    399 ms  143x  pior   71 ms   cena 3D: desenhar na GPU
+     64 ms  122x  pior   64 ms   avaliando o modelo importado
+```
+
+**O ambiente é 92% do quadro travado.** O modelo importado, que foi a
+minha hipótese por três entregas, custou **64 ms no total** — meio
+milissegundo por chamada.
+
+Dois números fecham a leitura:
+
+- as seis travadas registradas somam ~20,4 s em `ambiente`, que é o total
+  da marca: são **seis eventos discretos de ~3,4 s**, e não um custo
+  difuso;
+- fora essas seis, os outros 752 quadros somaram 1,5 s — **2 ms por
+  quadro**. O aplicativo está fluido; ele tem seis picos.
+
+## O que foi corrigido com isso
+
+O cálculo da radiância não é o culpado: medido em
+`test/bancada_ambiente_test.dart`, custa **13–26 ms** num desktop, e a
+parte síncrona de abrir o isolate custa **2 ms**. O custo está numa
+chamada nativa, e duas coisas erradas no caminho foram corrigidas:
+
+1. **Cada troca de ambiente subia um `EnvironmentMap` novo.** O mapa
+   depende só do tipo — são sete no catálogo — e o flutter_scene **não
+   libera memória de GPU** (bdero/flutter_scene#285). Seis trocas
+   deixavam seis atlas de radiância retidos, além do que o modelo de 73
+   mil faces já ocupa. Agora cada tipo sobe uma vez só — e o mesmo vale
+   para panoramas de arquivo, guardados pelo caminho, porque o desfoque
+   do fundo vive no `Skybox` e não no mapa: mexer no controle de desfoque
+   subia um atlas novo a cada passo. É a mesma política de "sobe uma vez"
+   que as texturas já seguem, pelo mesmo motivo.
+
+2. **Cada mudança de cor do céu criava um `SkyEnvironment` novo.** O
+   pacote fatia o bake do céu em um passe de GPU por quadro — mas só a
+   partir do **segundo** bake daquele objeto; o primeiro roda inteiro
+   numa chamada só, de propósito, para a cena nascer iluminada. Objeto
+   novo a cada mudança fazia todo bake ser o primeiro. Agora o objeto é
+   reaproveitado e recebe `invalidate()`.
+
+## O que ainda não está provado
+
+Se a pessoa estiver no céu procedural, nenhum dos dois caminhos acima
+roda, e o bloco do céu é síncrono e curto. Por isso as três saídas de
+`_sincronizarAmbiente` foram marcadas separadamente — panorama do disco,
+mapa HDR na GPU, abrir o isolate e céu procedural. O próximo registro
+aponta a linha, sem mais leitura de código.

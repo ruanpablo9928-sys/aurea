@@ -9,10 +9,10 @@
 /// Agora e uma constante so, e `test/versao_bate_com_pubspec_test.dart`
 /// falha se ela sair de sincronia com o `pubspec.yaml`. Esquecer de
 /// atualizar deixou de ser possivel em silencio.
-const versaoDoApp = '1.6.7';
+const versaoDoApp = '1.6.8';
 
 /// O numero da compilacao — o que muda a cada IPA/APK entregue.
-const buildDoApp = 68;
+const buildDoApp = 69;
 
 /// Como aparece para quem le: `1.6.7 (68)`.
 const versaoCompleta = '$versaoDoApp ($buildDoApp)';

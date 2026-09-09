@@ -12,6 +12,7 @@ import '../domain/element3d.dart';
 import '../domain/environment_radiance.dart';
 import '../domain/geometria_gpu.dart';
 import '../domain/orcamento_render.dart';
+import '../domain/panorama3d.dart';
 import '../domain/scene3d.dart';
 import '../domain/preview_quality.dart';
 import 'motor3d_modo.dart';
@@ -185,6 +186,18 @@ class Scene3DGpu {
   final List<Object?> _luzObjetos = [];
   String? _assinaturaLuzes;
   String? _chaveAmbiente;
+
+  /// O mapa de radiancia de cada tipo de ambiente, subido uma vez so.
+  /// Estatico porque o mapa depende so do tipo e a GPU nao o libera:
+  /// duas cenas abertas na mesma sessao dividem o mesmo atlas.
+  static final Map<EnvironmentKind, fs.EnvironmentMap> _mapasDeAmbiente = {};
+
+  /// O mesmo, para panoramas de arquivo, guardados pelo caminho.
+  static final Map<String, fs.EnvironmentMap> _panoramasDeAmbiente = {};
+
+  /// O ceu procedural desta cena. Guardado para o bake ser fatiado a
+  /// partir da segunda vez — ver [_sincronizarAmbiente].
+  fs.SkyEnvironment? _ceuDoAmbiente;
   int _epocaAmbiente = 0;
   bool _descartado = false;
 
@@ -967,13 +980,37 @@ class Scene3DGpu {
     final epoca = ++_epocaAmbiente;
 
     if (caminho != null) {
+      // O MESMO PANORAMA TAMBEM SOBE UMA VEZ SO. O mapa depende so do
+      // arquivo: o desfoque do fundo e o mostrar/esconder vivem no
+      // Skybox, nao nele. Sem isto, mexer no desfoque subia um atlas
+      // novo a cada passo do controle, e nenhum deles era liberado.
+      final guardado = _panoramasDeAmbiente[caminho];
+      if (guardado != null) {
+        cena.skyEnvironment = null;
+        cena.environment = guardado;
+        cena.skybox = pano.showBackground
+            ? fs.Skybox(
+                fs.EnvironmentSkySource(
+                  blurriness: (pano.backgroundBlur / 30).clamp(0.0, 1.0),
+                ),
+              )
+            : null;
+        return;
+      }
       () async {
         try {
-          final bytes = await File(caminho).readAsBytes();
-          final mapa = await fs.EnvironmentMap.fromEquirectImageBytes(
-            bytes: bytes,
-            maxWidth: 2048,
+          final bytes = await RegistroDeTravadas.marcandoAsync(
+            'cena 3D: ambiente > ler panorama do disco',
+            () => File(caminho).readAsBytes(),
           );
+          final mapa = await RegistroDeTravadas.marcandoAsync(
+            'cena 3D: ambiente > panorama na GPU',
+            () => fs.EnvironmentMap.fromEquirectImageBytes(
+              bytes: bytes,
+              maxWidth: 2048,
+            ),
+          );
+          _panoramasDeAmbiente[caminho] = mapa;
           if (_descartado || epoca != _epocaAmbiente) return;
           cena.skyEnvironment = null;
           cena.environment = mapa;
@@ -996,15 +1033,47 @@ class Scene3DGpu {
     // HDR highlights and roughness mip levels give metals readable reflections.
     if (scene.environment != EnvironmentKind.ceu) {
       final kind = scene.environment;
+      // O MAPA DE CADA AMBIENTE SOBE UMA VEZ SO.
+      //
+      // Ele depende exclusivamente do tipo — sao sete no catalogo, e o
+      // mesmo tipo sempre da o mesmo mapa. Antes, cada troca gerava um
+      // `EnvironmentMap` novo, e o flutter_scene NAO LIBERA memoria de
+      // GPU (bdero/flutter_scene#285): trocar de ambiente seis vezes
+      // deixava seis atlas de radiancia retidos, alem do que o modelo ja
+      // ocupa. E a mesma politica de "sobe uma vez" que as texturas ja
+      // seguem, pelo mesmo motivo.
+      final pronto = _mapasDeAmbiente[kind];
+      if (pronto != null) {
+        cena.skyEnvironment = null;
+        cena.environment = pronto;
+        cena.skybox = pano.showBackground
+            ? fs.Skybox(
+                fs.EnvironmentSkySource(
+                  blurriness: (pano.backgroundBlur / 30).clamp(0.0, 1.0),
+                ),
+              )
+            : null;
+        return;
+      }
       () async {
         try {
-          final pixels = await Isolate.run(() => environmentRadiance(kind));
-          if (_descartado || epoca != _epocaAmbiente) return;
-          final map = await fs.EnvironmentMap.fromEquirectHdr(
-            linearPixels: pixels,
-            width: 512,
-            height: 256,
+          // A marca cobre so a parte SINCRONA: abrir o isolate. E ela
+          // que segura o fio da interface; o calculo em si roda do outro
+          // lado e nao custa nada aqui.
+          final pixels = await RegistroDeTravadas.marcando(
+            'cena 3D: ambiente > abrir isolate',
+            () => Isolate.run(() => environmentRadiance(kind)),
           );
+          if (_descartado || epoca != _epocaAmbiente) return;
+          final map = await RegistroDeTravadas.marcandoAsync(
+            'cena 3D: ambiente > mapa HDR na GPU',
+            () => fs.EnvironmentMap.fromEquirectHdr(
+              linearPixels: pixels,
+              width: 512,
+              height: 256,
+            ),
+          );
+          _mapasDeAmbiente[kind] = map;
           if (_descartado || epoca != _epocaAmbiente) return;
           cena.skyEnvironment = null;
           cena.environment = map;
@@ -1025,6 +1094,18 @@ class Scene3DGpu {
 
     // CEU PROCEDURAL a partir das cores do dominio: zenite = ceu, chao =
     // chao, horizonte no meio, e o sol na direcao da luz principal.
+    //
+    // Este bloco e 100% SINCRONO, e por isso e o unico candidato que
+    // sobra para os 3.4 s que o registro do aparelho mediu dentro de
+    // `ambiente` quando nem o panorama nem o mapa HDR estao em jogo. A
+    // marca existe para o proximo registro nao deixar duvida.
+    RegistroDeTravadas.marcando(
+      'cena 3D: ambiente > ceu procedural',
+      () => _ceuProcedural(scene, t, pano),
+    );
+  }
+
+  void _ceuProcedural(Scene3D scene, Duration t, Panorama3D pano) {
     final ceu = _linear3(scene.skyColor);
     final chao = _linear3(scene.groundColor);
     final horizonte = (ceu + chao) * .5;
@@ -1045,7 +1126,24 @@ class Scene3DGpu {
       sunColor: corDoSol,
     );
     cena.environment = null;
-    cena.skyEnvironment = fs.SkyEnvironment(fonte);
+    // O MESMO SkyEnvironment, COM A FONTE TROCADA.
+    //
+    // O flutter_scene fatia o bake do ceu em um passe de GPU por quadro
+    // — mas so a partir do SEGUNDO bake daquele objeto. O primeiro roda
+    // inteiro numa chamada so, de proposito, para a cena nascer
+    // iluminada. Criar um `SkyEnvironment` novo a cada mudanca de cor
+    // fazia TODO bake ser o primeiro, e o pico voltava toda vez.
+    //
+    // Reaproveitando o objeto e pedindo `invalidate()`, so o primeiro
+    // custa; os demais entram fatiados, como o pacote pretende.
+    final ceuEnv = _ceuDoAmbiente;
+    if (ceuEnv != null) {
+      ceuEnv.source = fonte;
+      ceuEnv.invalidate();
+      cena.skyEnvironment = ceuEnv;
+    } else {
+      cena.skyEnvironment = _ceuDoAmbiente = fs.SkyEnvironment(fonte);
+    }
     cena.skybox = pano.showBackground ? fs.Skybox(fonte) : null;
   }
 
