@@ -6,6 +6,7 @@ import '../application/playback_controller.dart';
 import '../application/video_layer_manager.dart';
 import '../../export/presentation/export_video_screen.dart';
 import 'widgets/linha_do_tempo.dart';
+import 'widgets/painel_da_camada.dart';
 import 'widgets/palco_de_previa.dart';
 
 /// A TELA DE EDICAO, no osso.
@@ -108,6 +109,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 );
               },
             ),
+            // O PAINEL ENTRA ABAIXO DA LINHA DO TEMPO, na area inferior.
+            //
+            // Abrir o painel reduz o espaco que sobra para o preview, mas
+            // NAO muda a proporcao, a resolucao nem as coordenadas do
+            // projeto: o `AspectRatio` acima apenas encolhe dentro do que
+            // resta. O que se ve e o mesmo enquadramento, menor.
+            const PainelDaCamada(),
           ],
         ),
       ),
