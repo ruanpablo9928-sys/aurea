@@ -5,6 +5,21 @@ import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import 'visao_geral_das_camadas.dart';
+
+/// A COR DIZ O TIPO DA CAMADA.
+///
+/// Sem miniatura: a maior parte das camadas do Aurea (texto, forma, cena
+/// 3D) nao tem quadro para miniaturar, e gerar miniatura de video custa
+/// caro no aparelho. A cor responde a mesma pergunta — "o que e isto?" —
+/// por quase nada, e vale nos DOIS modos: uma camada nao pode trocar de
+/// cor so por mudar de vista.
+Color corDaCamada(Layer camada) => switch (camada) {
+  TextLayer() => AmColors.selection,
+  Scene3DLayer() => AmColors.accent,
+  ShapeLayer() => AmColors.tealBright,
+  _ => AmColors.teal,
+};
 
 /// A LINHA DO TEMPO: UMA CAMADA POR VEZ.
 ///
@@ -35,8 +50,15 @@ class LinhaDoTempo extends ConsumerWidget {
   /// controle dentro dela. Por isso vem de fora.
   final VoidCallback? aoExportar;
 
-  /// Altura total: transporte + regua + trilha.
+  /// Altura do modo detalhado: transporte + regua + trilha.
   static const altura = 148.0;
+
+  /// A altura que a linha do tempo ocupa, conforme o modo e quantas
+  /// camadas ha para mostrar.
+  static double alturaDoModo(ModoDaLinhaDoTempo modo, int camadas) =>
+      modo == ModoDaLinhaDoTempo.detalhado
+      ? altura
+      : 48 + VisaoGeralDasCamadas.alturaPara(camadas);
 
   /// A largura da coluna fixa da esquerda (olho + cor da camada).
   static const larguraDaCabeca = 64.0;
@@ -45,10 +67,11 @@ class LinhaDoTempo extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
+    final modo = ref.watch(modoDaLinhaDoTempoProvider);
     final camadas = project.layers;
     final atual = camadas.where((l) => l.id == selecionada).firstOrNull;
     return SizedBox(
-      height: altura,
+      height: alturaDoModo(modo, camadas.length),
       child: ColoredBox(
         color: AmColors.panel,
         child: Column(
@@ -58,38 +81,40 @@ class LinhaDoTempo extends ConsumerWidget {
               duracao: project.duration,
               camadaSelecionada: selecionada,
               aoExportar: aoExportar,
+              modo: modo,
             ),
-            Expanded(
-              child: _Faixa(
-                playback: playback,
-                duracao: project.duration,
-                camada: atual,
-                escondida: atual != null && project.metaOf(atual.id).hidden,
-                temAnterior: _vizinha(camadas, atual, -1) != null,
-                temProxima: _vizinha(camadas, atual, 1) != null,
-                aoMoverKeyframe: atual == null
-                    ? null
-                    : (de, para) => ref
-                          .read(editorControllerProvider.notifier)
-                          .moverKeyframeDeTransformacao(atual.id, de, para),
-                aoApagarKeyframe: atual == null
-                    ? null
-                    : (local) => ref
-                          .read(editorControllerProvider.notifier)
-                          .apagarKeyframeDeTransformacao(atual.id, local),
-                aoTrocar: (passo) {
-                  final v = _vizinha(camadas, atual, passo);
-                  if (v != null) {
-                    ref.read(selectedLayerProvider.notifier).state = v.id;
-                  }
-                },
-                aoAlternarOlho: atual == null
-                    ? null
-                    : () => ref
-                          .read(editorControllerProvider.notifier)
-                          .toggleHidden(atual.id),
+            if (modo == ModoDaLinhaDoTempo.geral)
+              Expanded(child: VisaoGeralDasCamadas(playback: playback))
+            else if (camadas.isEmpty)
+              const Expanded(child: SemCamadasNaLinhaDoTempo())
+            else if (atual == null)
+              const Expanded(child: _SemSelecao())
+            else
+              Expanded(
+                child: _Faixa(
+                  playback: playback,
+                  duracao: project.duration,
+                  camada: atual,
+                  escondida: project.metaOf(atual.id).hidden,
+                  temAnterior: _vizinha(camadas, atual, -1) != null,
+                  temProxima: _vizinha(camadas, atual, 1) != null,
+                  aoMoverKeyframe: (de, para) => ref
+                      .read(editorControllerProvider.notifier)
+                      .moverKeyframeDeTransformacao(atual.id, de, para),
+                  aoApagarKeyframe: (local) => ref
+                      .read(editorControllerProvider.notifier)
+                      .apagarKeyframeDeTransformacao(atual.id, local),
+                  aoTrocar: (passo) {
+                    final v = _vizinha(camadas, atual, passo);
+                    if (v != null) {
+                      ref.read(selectedLayerProvider.notifier).state = v.id;
+                    }
+                  },
+                  aoAlternarOlho: () => ref
+                      .read(editorControllerProvider.notifier)
+                      .toggleHidden(atual.id),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -116,12 +141,14 @@ class _Transporte extends ConsumerWidget {
     required this.duracao,
     required this.camadaSelecionada,
     required this.aoExportar,
+    required this.modo,
   });
 
   final PlaybackController playback;
   final Duration duracao;
   final String? camadaSelecionada;
   final VoidCallback? aoExportar;
+  final ModoDaLinhaDoTempo modo;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -129,13 +156,27 @@ class _Transporte extends ConsumerWidget {
     return SizedBox(
       height: 48,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         child: Row(
-          // SETE ALVOS numa largura de celular: `spaceEvenly` os empurraria
-          // para fora. `spaceBetween` com folga nas pontas mantem cada um
-          // com area de toque cheia e ainda deixa o play no meio.
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // O CAMINHO DE VOLTA ESTA SEMPRE AQUI. Trocar de vista e a
+            // primeira pergunta — vem antes de qualquer acao sobre o
+            // tempo —, e o mesmo botao leva e traz.
+            _Botao(
+              icone: modo == ModoDaLinhaDoTempo.geral
+                  ? Icons.view_stream_rounded
+                  : Icons.layers_rounded,
+              destacado: modo == ModoDaLinhaDoTempo.geral,
+              aoTocar: () =>
+                  ref
+                      .read(modoDaLinhaDoTempoProvider.notifier)
+                      .state = modo == ModoDaLinhaDoTempo.geral
+                  ? ModoDaLinhaDoTempo.detalhado
+                  : ModoDaLinhaDoTempo.geral,
+              rotulo: modo == ModoDaLinhaDoTempo.geral
+                  ? 'Ver uma camada'
+                  : 'Ver todas as camadas',
+            ),
             _Botao(
               icone: Icons.undo_rounded,
               ativo: controller.canUndo,
@@ -206,6 +247,7 @@ class _Botao extends StatelessWidget {
     required this.rotulo,
     this.ativo = true,
     this.tamanho = 24,
+    this.destacado = false,
   });
 
   final IconData icone;
@@ -214,22 +256,34 @@ class _Botao extends StatelessWidget {
   final bool ativo;
   final double tamanho;
 
+  /// Aceso: o controle diz que a vista dele e a que esta no ar.
+  final bool destacado;
+
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: rotulo,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: ativo ? aoTocar : null,
-      child: SizedBox(
-        // O ALVO TEM 48 px MESMO COM O ICONE MENOR. Botao de transporte
-        // e apertado com o polegar, muitas vezes seguidas.
-        width: 48,
-        height: 48,
-        child: Icon(
-          icone,
-          size: tamanho,
-          color: ativo ? AmColors.text : AmColors.muted.withValues(alpha: .4),
+  Widget build(BuildContext context) => Expanded(
+    // O ALVO DIVIDE A LARGURA, e nao a soma.
+    //
+    // Com largura fixa de 48 px, oito botoes pedem 384 px e estouram uma
+    // tela de 390 — e o estouro nao e cosmetico: o ultimo controle sai
+    // da area tocavel. Dividindo, cada um fica com a maior fatia que a
+    // tela permite, seja qual for o aparelho e o numero de botoes.
+    child: Semantics(
+      button: true,
+      label: rotulo,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: ativo ? aoTocar : null,
+        child: SizedBox(
+          height: 48,
+          child: Icon(
+            icone,
+            size: tamanho,
+            color: !ativo
+                ? AmColors.muted.withValues(alpha: .4)
+                : destacado
+                ? AmColors.accent
+                : AmColors.text,
+          ),
         ),
       ),
     ),
@@ -549,15 +603,7 @@ class _PintorDaFaixa extends CustomPainter {
   static const alturaDaTrilha = 38.0;
   static const _baseDaRegua = 30.0;
 
-  /// A COR DIZ O TIPO. Sem miniatura — a maior parte das camadas do
-  /// Aurea (texto, forma, cena 3D) nao tem quadro para miniaturar, e
-  /// gerar miniatura de video custa caro no aparelho.
-  static Color corDe(Layer camada) => switch (camada) {
-    TextLayer() => AmColors.selection,
-    Scene3DLayer() => AmColors.accent,
-    ShapeLayer() => AmColors.tealBright,
-    _ => AmColors.teal,
-  };
+  static Color corDe(Layer camada) => corDaCamada(camada);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -741,4 +787,26 @@ class _PintorDaFaixa extends CustomPainter {
       o.duracao != duracao ||
       o.escondida != escondida ||
       !identical(o.camada, camada);
+}
+
+/// ESTADO VAZIO do modo detalhado: ha camadas, mas nenhuma escolhida.
+///
+/// A trilha vazia sozinha parece defeito. Dizer o que falta — e que a
+/// visao geral resolve — custa duas linhas.
+class _SemSelecao extends StatelessWidget {
+  const _SemSelecao();
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Text(
+        'Nenhuma camada selecionada. Abra a visao geral para escolher '
+        'uma.',
+        key: const ValueKey('detalhado-sem-selecao'),
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: AmColors.muted, height: 1.4),
+      ),
+    ),
+  );
 }
