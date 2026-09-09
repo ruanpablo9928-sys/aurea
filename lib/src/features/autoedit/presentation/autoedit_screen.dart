@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../editor/application/editor_controller.dart';
 import '../../editor/domain/video_project.dart';
-import '../../editor/presentation/am/am_colors.dart';
-import '../../editor/presentation/am/am_widgets.dart';
+import '../../../core/ui/am_colors.dart';
+import '../../../core/ui/am_tick_ruler.dart';
 import '../../editor/presentation/editor_screen.dart';
 import '../application/autoedit_runner.dart';
 import '../domain/autoedit_plan.dart';

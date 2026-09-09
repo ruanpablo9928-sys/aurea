@@ -25,13 +25,13 @@ import '../../editor/domain/estresse3d.dart';
 import '../../editor/domain/keyframe.dart';
 import '../../editor/domain/layer.dart';
 import '../../editor/domain/orcamento_render.dart';
-import '../../editor/presentation/widgets/preview_stage.dart';
+import '../../editor/presentation/widgets/palco_de_previa.dart';
 
 /// O TESTE DE ESTRESSE DO MOTOR 3D — roda no aparelho de verdade, e
 /// entrega um relatorio para colar numa mensagem.
 ///
 /// Nove cenas (ver estresse3d.dart), cada uma tocando por doze segundos
-/// no MESMO palco do editor (o `PreviewStage`, com o mesmo motor, os
+/// no MESMO palco do editor (a `CompositionView`, com o mesmo motor, os
 /// mesmos efeitos e o mesmo player de video), enquanto se mede: tempo de
 /// quadro (mediana, p95, pior, travadas), memoria do processo (inicio,
 /// pico, fim), o nivel de qualidade e a pressao que o controlador
@@ -558,7 +558,11 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
               aspectRatio: 16 / 9,
               child: UncontrolledProviderScope(
                 container: container,
-                child: PreviewStage(playback: playback, videos: videos),
+                child: CompositionView(
+                  time: playback.time,
+                  videos: videos,
+                  selectedId: null,
+                ),
               ),
             )
           else

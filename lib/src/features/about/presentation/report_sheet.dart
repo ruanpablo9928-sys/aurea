@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/ui/snack.dart';
 import '../../../core/utils/versao_do_app.dart';
-import '../../editor/presentation/am/am_colors.dart';
+import '../../../core/ui/am_colors.dart';
 
 /// Dados do criador — usados no Sobre e no envio do relato.
 class AureaAutor {

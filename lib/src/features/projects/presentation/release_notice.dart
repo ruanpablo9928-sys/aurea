@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../editor/presentation/am/am_colors.dart';
+import '../../../core/ui/am_colors.dart';
 
 // Change this revision when publishing a new set of release notes.
 const releaseNoticeRevision = '2026-09-08-editor-3d-audio';

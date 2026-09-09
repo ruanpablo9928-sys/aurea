@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../editor/presentation/am/am_colors.dart';
+import '../../../core/ui/am_colors.dart';
 import 'release_notice.dart';
 
 /// Uma novidade da versao.
