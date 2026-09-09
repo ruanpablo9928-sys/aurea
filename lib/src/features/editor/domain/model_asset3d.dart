@@ -93,7 +93,7 @@ class ModelAsset3D {
   ModelFrame3D evaluate(Duration time, ModelMotion3D motion) {
     final staticPose =
         motion.keys.isEmpty && (motion.clip < 0 || motion.clip >= clips.length);
-    if (identical(_lastMotion, motion) &&
+    if (_lastMotion == motion &&
         (_lastTime == time.inMicroseconds || staticPose)) {
       return _lastFrame!;
     }
@@ -407,6 +407,28 @@ class ModelPose3D {
   });
   final List<double> translation, rotation;
   final double scale;
+
+  /// Por valor, para a cadeia de comparacao de [ModelMotion3D] fechar.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelPose3D &&
+          other.scale == scale &&
+          _mesmos(other.translation, translation) &&
+          _mesmos(other.rotation, rotation);
+
+  @override
+  int get hashCode => Object.hash(scale, translation.length, rotation.length);
+
+  static bool _mesmos(List<double> a, List<double> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   Map<String, dynamic> toJson() => {
     't': translation,
     'r': rotation,
@@ -432,6 +454,27 @@ class ModelPoseKey3D {
   const ModelPoseKey3D(this.seconds, this.pose);
   final double seconds;
   final Map<int, ModelPose3D> pose;
+
+  /// Por valor, pelo mesmo motivo de [ModelMotion3D].
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelPoseKey3D &&
+          other.seconds == seconds &&
+          _mesmaPose(other.pose, pose);
+
+  @override
+  int get hashCode => Object.hash(seconds, pose.length);
+
+  static bool _mesmaPose(Map<int, ModelPose3D> a, Map<int, ModelPose3D> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      if (b[e.key] != e.value) return false;
+    }
+    return true;
+  }
+
   Map<String, dynamic> toJson() => {
     't': seconds,
     'pose': {for (final e in pose.entries) '${e.key}': e.value.toJson()},
@@ -450,6 +493,41 @@ class ModelMotion3D {
   final double speed, offset;
   final bool loop;
   final List<ModelPoseKey3D> keys;
+
+  /// IGUALDADE POR VALOR, e nao por objeto.
+  ///
+  /// [ModelAsset3D.evaluate] guarda o ultimo quadro avaliado e so o
+  /// reaproveita quando a animacao e "a mesma". Enquanto isso foi
+  /// `identical`, qualquer no reconstruido trazia um objeto novo de
+  /// animacao com AS MESMAS configuracoes, o cache errava, e o modelo
+  /// inteiro era reavaliado — a pose recalculada sobre todos os
+  /// vertices, em Dart, no fio que recebe o toque. Num modelo importado
+  /// isso e quase dois segundos de tela parada.
+  ///
+  /// Comparar o conteudo custa uma lista curta de chaves; reavaliar
+  /// custa o modelo inteiro.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelMotion3D &&
+          other.clip == clip &&
+          other.speed == speed &&
+          other.offset == offset &&
+          other.loop == loop &&
+          _mesmasChaves(other.keys, keys);
+
+  @override
+  int get hashCode => Object.hash(clip, speed, offset, loop, keys.length);
+
+  static bool _mesmasChaves(List<ModelPoseKey3D> a, List<ModelPoseKey3D> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   ModelMotion3D copyWith({
     int? clip,
     double? speed,

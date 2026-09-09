@@ -3,6 +3,7 @@ import 'dart:ui' show Offset;
 import '../domain/element3d.dart';
 import '../domain/model_asset3d.dart';
 import '../domain/scene3d.dart';
+import 'registro_de_travadas.dart';
 import 'perfil3d.dart';
 
 /// A MALHA DE UM NO, PRONTA PARA VIRAR BUFFER DE GPU.
@@ -74,9 +75,12 @@ class CacheDeMalhas {
       final animado =
           motion.keys.isNotEmpty ||
           (motion.clip >= 0 && motion.clip < asset.clips.length);
-      final frame = Perfil3D.fase(
-        'modelo.avaliar',
-        () => asset.evaluate(t, motion),
+      // A AVALIACAO DO MODELO e o passo mais caro do quadro quando o
+      // cache dela nao pega: ela refaz a pose sobre TODOS os vertices,
+      // em Dart, no fio da interface.
+      final frame = RegistroDeTravadas.marcando(
+        'avaliando o modelo importado',
+        () => Perfil3D.fase('modelo.avaliar', () => asset.evaluate(t, motion)),
       );
       // O MESMO QUADRO DO MODELO: nada a refazer. Modelo parado devolve
       // sempre o mesmo objeto (o `evaluate` guarda o ultimo).

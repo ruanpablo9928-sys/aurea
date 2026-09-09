@@ -21,6 +21,7 @@ import 'am_colors.dart';
 import 'layer_look.dart';
 import 'clip_preview_painters.dart';
 import 'transition_sheet.dart';
+import '../../application/registro_de_travadas.dart';
 import '../../application/perfil3d.dart';
 
 // Mais baixas do que eram (46/38): num celular, tres camadas ja
@@ -364,8 +365,10 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      Perfil3D.fase('build.timeline', () => _build(context));
+  Widget build(BuildContext context) => RegistroDeTravadas.marcando(
+    'construindo a linha do tempo',
+    () => Perfil3D.fase('build.timeline', () => _build(context)),
+  );
 
   Widget _build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);

@@ -18,6 +18,7 @@ import 'motor3d_modo.dart';
 import 'preview_stats.dart';
 import 'qualidade3d_controller.dart';
 import 'texture_cache.dart';
+import 'registro_de_travadas.dart';
 import 'perfil3d.dart';
 import 'camera_ortografica.dart';
 import 'fonte_de_malha.dart';
@@ -275,7 +276,13 @@ class Scene3DGpu {
     // teto que valia quando ela foi pedida. O teto novo continua valendo
     // para as proximas.
     _capDasTexturas = _receita.texturaMax;
-    Perfil3D.fase('sincronia.nos', () => _sincronizarNos(scene, t, onMudou));
+    RegistroDeTravadas.marcando(
+      'sincronizando os objetos da cena 3D',
+      () => Perfil3D.fase(
+        'sincronia.nos',
+        () => _sincronizarNos(scene, t, onMudou),
+      ),
+    );
     Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t));
     Perfil3D.fase(
       'sincronia.ambiente',
