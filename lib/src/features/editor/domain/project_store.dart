@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:uuid/uuid.dart';
+
 import 'audio_effect.dart';
 
 import 'dart:typed_data';
@@ -1645,12 +1647,12 @@ Map<String, dynamic> _scene(Scene3D s) => {
         if (n.modelSource != null) 'modelSource': _modelSource(n.modelSource!),
         if (n.animationClip != null) 'animationClip': n.animationClip,
         if (n.modelAsset != null) ...{
-          'modelAsset': n.modelAsset!.data,
+          'modelAsset': _peso(n.modelAsset!, () => n.modelAsset!.data),
           'modelMotion': n.modelMotion.toJson(),
           'useModelMaterials': n.useModelMaterials,
         },
         if (n.modelSource != null && n.mesh != null)
-          'meshData': _meshBlob(n.mesh!),
+          'meshData': _peso(n.mesh!, () => _meshBlob(n.mesh!)),
         if (n.outline != null) ...{
           'outline': [
             for (final p in n.outline!) [p.dx, p.dy],
@@ -1690,9 +1692,25 @@ List<Offset>? _asOutline(dynamic v) => v == null
           Offset(((p as List)[0] as num).toDouble(), (p[1] as num).toDouble()),
       ];
 
+/// O modelo importado, colando de volta o id do peso: sem isso o
+/// salvamento seguinte acharia que o modelo e novo e reescreveria o
+/// arquivo inteiro de novo.
+ModelAsset3D? _asModelAsset(Object? bruto) {
+  final ref = _semRef(bruto);
+  final conteudo = ref.conteudo;
+  if (conteudo is! Map) return null;
+  final asset = ModelAsset3D(conteudo.cast<String, dynamic>());
+  if (ref.id != null) _idDoPeso[asset] = ref.id;
+  return asset;
+}
+
 SceneNode _asSceneNode(Map<String, dynamic> n) {
   final outline = _asOutline(n['outline']);
-  final importedMesh = _asMeshBlob(n['meshData']);
+  final refDaMalha = _semRef(n['meshData']);
+  final importedMesh = _asMeshBlob(refDaMalha.conteudo);
+  if (importedMesh != null && refDaMalha.id != null) {
+    _idDoPeso[importedMesh] = refDaMalha.id;
+  }
   final mesh = outline == null
       ? importedMesh
       : extrudeOutline(
@@ -1725,9 +1743,7 @@ SceneNode _asSceneNode(Map<String, dynamic> n) {
     credit: _asCredit(n['credit']),
     modelSource: _asModelSource(n['modelSource']),
     animationClip: n['animationClip'] as String?,
-    modelAsset: n['modelAsset'] == null
-        ? null
-        : ModelAsset3D((n['modelAsset'] as Map).cast<String, dynamic>()),
+    modelAsset: _asModelAsset(n['modelAsset']),
     modelMotion: ModelMotion3D.fromJson(n['modelMotion']),
     useModelMaterials: n['useModelMaterials'] as bool? ?? true,
     outline: outline,
@@ -2615,6 +2631,123 @@ LayerMeta _asMeta(Map<String, dynamic> m) => LayerMeta(
 ///
 /// A ultima peneira antes do arquivo troca esses numeros por zero. Um
 /// valor zerado se conserta na tela; um projeto que nao grava, nao.
+/// ============================================================ OS PESOS
+///
+/// Um modelo 3D importado e ENORME comparado ao resto do projeto: as
+/// posicoes, normais, UVs e indices viram listas de milhoes de numeros.
+/// Guardados dentro do arquivo do projeto, faziam cada salvamento
+/// automatico reescrever dezenas de megabytes no fio que responde ao
+/// toque — medido em `test/bancada_projeto_com_3d_test.dart`: 18,8 MB e
+/// quase 350 ms para um glTF de 60 mil triangulos, em PC, em depuracao.
+///
+/// Agora o modelo mora num arquivo PROPRIO, ao lado do projeto, e o
+/// projeto guarda so uma referencia. Um modelo nao muda depois de
+/// importado: escreve-se uma vez e nunca mais.
+///
+/// COMPATIBILIDADE NOS DOIS SENTIDOS. Sem sink, tudo continua indo para
+/// dentro do mapa, exatamente como antes — e por isso template,
+/// exportacao e os testes de ida e volta seguem funcionando. Na leitura,
+/// um arquivo antigo (modelo embutido) e um novo (referencia) abrem os
+/// dois.
+///
+/// O id vive num [Expando], nao dentro do dado: o modelo do usuario nao
+/// e lugar para bookkeeping nosso. Ao reler, o id volta a ser colado no
+/// objeto, para o salvamento seguinte reconhecer que o arquivo ja existe
+/// e nao reescrever nada.
+final Expando<String> _idDoPeso = Expando<String>();
+
+/// Para onde vao os pesos durante uma gravacao (nulo = vao inline).
+Map<String, Object>? _sinkDePesos;
+
+/// Os ids cujo arquivo JA existe em disco: nem se monta o conteudo.
+Set<String> _pesosJaGravados = const {};
+
+/// De onde vem os pesos durante uma leitura (nulo = so o que vier inline).
+Map<String, Object>? _fonteDePesos;
+
+/// O conteudo, ou uma referencia a ele, conforme a gravacao em curso.
+///
+/// [dono] carrega a identidade do peso (o modelo, a malha). [construir]
+/// so e chamado quando o conteudo precisa mesmo ser montado — e isso que
+/// evita refazer o base64 de uma malha inteira a cada salvamento.
+Object _peso(Object dono, Object Function() construir) {
+  final sink = _sinkDePesos;
+  if (sink == null) return construir();
+  final id = _idDoPeso[dono] ??= const Uuid().v4();
+  if (!_pesosJaGravados.contains(id) && !sink.containsKey(id)) {
+    sink[id] = _semNumeroImpossivel(construir()) ?? const <String, dynamic>{};
+  }
+  return <String, dynamic>{'ref': id};
+}
+
+/// O conteudo de um campo que pode ser uma referencia, e o id dela.
+///
+/// Conteudo nulo com id nao nulo significa referencia orfa: o arquivo do
+/// peso sumiu. O projeto abre sem aquele modelo, em vez de nao abrir.
+({Object? conteudo, String? id}) _semRef(Object? bruto) {
+  if (bruto is Map && bruto.length == 1 && bruto['ref'] is String) {
+    final id = bruto['ref'] as String;
+    return (conteudo: _fonteDePesos?[id], id: id);
+  }
+  return (conteudo: bruto, id: null);
+}
+
+/// O PROJETO E OS PESOS, separados.
+///
+/// Os modelos saem do mapa e entram em [pesados], um por id.
+/// [jaGravados] diz quais ids ja estao em disco, para nem montar o
+/// conteudo deles.
+Map<String, dynamic> projectToJsonSeparado(
+  VideoProject p, {
+  required Map<String, Object> pesados,
+  Set<String> jaGravados = const {},
+}) {
+  _sinkDePesos = pesados;
+  _pesosJaGravados = jaGravados;
+  try {
+    return projectToJson(p);
+  } finally {
+    _sinkDePesos = null;
+    _pesosJaGravados = const {};
+  }
+}
+
+/// O PROJETO, com os pesos que vieram dos arquivos ao lado.
+VideoProject projectFromJsonComPesos(
+  Map<String, dynamic> m,
+  Map<String, Object> pesados,
+) {
+  _fonteDePesos = pesados;
+  try {
+    return projectFromJson(m);
+  } finally {
+    _fonteDePesos = null;
+  }
+}
+
+/// Todo id de peso referenciado por [m] — para saber o que carregar.
+Set<String> refsDeProjeto(Object? m) {
+  final out = <String>{};
+  void varrer(Object? v) {
+    if (v is Map) {
+      if (v.length == 1 && v['ref'] is String) {
+        out.add(v['ref'] as String);
+        return;
+      }
+      for (final e in v.values) {
+        varrer(e);
+      }
+    } else if (v is List) {
+      for (final e in v) {
+        varrer(e);
+      }
+    }
+  }
+
+  varrer(m);
+  return out;
+}
+
 Map<String, dynamic> projectToJson(VideoProject p) {
   final bruto = _projectToJson(p);
   final limpo = _semNumeroImpossivel(bruto);

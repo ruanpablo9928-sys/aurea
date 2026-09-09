@@ -256,6 +256,45 @@ void main() {
 
     linhas
       ..add('')
+      ..add('DEPOIS: o modelo fora do projeto (o que o app grava agora)')
+      ..add('')
+      ..add('modelo              triangulos    montar    texto   tamanho')
+      ..add('-----------------------------------------------------------');
+
+    for (final (nome, tris) in <(String, int)>[
+      ('importado leve', 2000),
+      ('importado medio', 20000),
+      ('importado pesado', 60000),
+    ]) {
+      final p = _projetoComModelo(_modeloImportado(triangulos: tris));
+      // Segundo salvamento: o modelo ja esta em disco, entao nem se monta
+      // o conteudo dele. E o caso comum — um projeto e salvo centenas de
+      // vezes e o modelo, uma.
+      final pesados = <String, Object>{};
+      projectToJsonSeparado(p, pesados: pesados);
+      final ids = pesados.keys.toSet();
+      late Map<String, dynamic> json;
+      final montar = _ms(
+        () => json = projectToJsonSeparado(
+          p,
+          pesados: <String, Object>{},
+          jaGravados: ids,
+        ),
+        vezes: 2,
+      );
+      late String texto;
+      final emTexto = _ms(() => texto = jsonEncode(json), vezes: 2);
+      linhas.add(
+        '${nome.padRight(20)}'
+        '${tris.toString().padLeft(9)}  '
+        '${montar.toStringAsFixed(1).padLeft(8)} ms'
+        '${emTexto.toStringAsFixed(1).padLeft(8)} ms'
+        '${(texto.length / 1024).toStringAsFixed(0).padLeft(8)} KB',
+      );
+    }
+
+    linhas
+      ..add('')
       ..add('O salvamento automatico dispara 900 ms depois da ultima')
       ..add('mudanca, no fio da interface. "montar + texto" e o tempo em')
       ..add('que o aplicativo fica surdo ao toque a cada salvamento.');

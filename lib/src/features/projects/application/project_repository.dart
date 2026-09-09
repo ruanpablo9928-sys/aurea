@@ -57,7 +57,7 @@ class ProjectRepository {
       if (f is! File || !f.path.endsWith('.json')) continue;
       try {
         final json = await compute(_readProjectJson, f.path);
-        out.add(projectFromJson(json));
+        out.add(await _comOsPesos(json));
       } catch (e) {
         // Arquivo corrompido nao derruba a lista inteira.
         debugPrint('Projeto ilegivel ${f.path}: $e');
@@ -79,16 +79,79 @@ class ProjectRepository {
     await Future.wait(_writes.values.toList());
   }
 
-  Future<void> save(
-    VideoProject project,
-  ) => _enqueue(_safeId(project.id), () async {
+  /// A pasta dos PESOS: um arquivo por modelo importado, ao lado dos
+  /// projetos. Um modelo nao muda depois de importado, entao ele e
+  /// escrito uma vez e nunca mais — e o salvamento automatico volta a
+  /// mexer so nos poucos quilobytes do resto do projeto.
+  Future<Directory> _dirDosPesos() async {
     final dir = await _dir();
-    final path = '${dir.path}/${_safeId(project.id)}.json';
-    // Domain-to-map keeps model buffers by reference; expensive JSON encoding
-    // and disk I/O run outside the UI isolate. Per-project ordering prevents a
-    // slow older autosave overwriting a newer edit or resurrecting a deletion.
-    await compute(_writeProjectJson, (path, projectToJson(project)));
-  });
+    final d = Directory('${dir.path}/modelos');
+    if (!d.existsSync()) d.createSync(recursive: true);
+    return d;
+  }
+
+  /// Os ids de peso que ja estao em disco. Lido uma vez e mantido, para
+  /// nem montar o conteudo de um modelo que ja foi gravado.
+  Set<String>? _pesosEmDisco;
+
+  Future<Set<String>> _idsEmDisco() async {
+    if (_pesosEmDisco != null) return _pesosEmDisco!;
+    final d = await _dirDosPesos();
+    return _pesosEmDisco = {
+      for (final f in d.listSync())
+        if (f is File && f.path.endsWith('.json'))
+          f.uri.pathSegments.last.replaceAll('.json', ''),
+    };
+  }
+
+  /// O projeto lido, com os modelos que moram nos arquivos ao lado.
+  Future<VideoProject> _comOsPesos(Map<String, dynamic> json) async {
+    final ids = refsDeProjeto(json);
+    if (ids.isEmpty) return projectFromJson(json);
+    final d = await _dirDosPesos();
+    final pesados = <String, Object>{};
+    for (final id in ids) {
+      final f = File('${d.path}/${_safeId(id)}.json');
+      if (!f.existsSync()) continue;
+      try {
+        pesados[id] = await compute(_readPeso, f.path);
+      } catch (e) {
+        // Um modelo ilegivel tira o modelo, nao o projeto.
+        debugPrint('Modelo do projeto nao carregou ($id): $e');
+      }
+    }
+    return projectFromJsonComPesos(json, pesados);
+  }
+
+  Future<void> save(VideoProject project) =>
+      _enqueue(_safeId(project.id), () async {
+        final dir = await _dir();
+        final path = '${dir.path}/${_safeId(project.id)}.json';
+        final pastaDosPesos = await _dirDosPesos();
+        final jaTem = await _idsEmDisco();
+        // O MODELO SAI DO PROJETO. Antes, a geometria de um glTF importado
+        // ia dentro do arquivo: 18,8 MB e quase 350 ms por salvamento
+        // automatico num modelo de 60 mil triangulos, no fio que responde ao
+        // toque. Agora o projeto guarda uma referencia e o modelo vai num
+        // arquivo proprio, escrito uma unica vez.
+        final pesados = <String, Object>{};
+        final mapa = projectToJsonSeparado(
+          project,
+          pesados: pesados,
+          jaGravados: jaTem,
+        );
+        // OS PESOS PRIMEIRO, sempre. Se a gravacao morrer no meio, o que
+        // sobra e um modelo orfao ocupando espaco — nunca um projeto
+        // apontando para um modelo que nao existe.
+        for (final e in pesados.entries) {
+          await compute(_writePeso, (
+            '${pastaDosPesos.path}/${_safeId(e.key)}.json',
+            e.value,
+          ));
+          jaTem.add(e.key);
+        }
+        await compute(_writeProjectJson, (path, mapa));
+      });
 
   Future<void> delete(String id) => _enqueue(_safeId(id), () async {
     final dir = await _dir();
@@ -99,6 +162,14 @@ class ProjectRepository {
 
 Map<String, dynamic> _readProjectJson(String path) =>
     jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
+
+Object _readPeso(String path) => jsonDecode(File(path).readAsStringSync());
+
+void _writePeso((String, Object) message) {
+  final tmp = File('${message.$1}.tmp');
+  tmp.writeAsStringSync(jsonEncode(message.$2), flush: true);
+  tmp.renameSync(message.$1);
+}
 
 void _writeProjectJson((String, Map<String, dynamic>) message) {
   final tmp = File('${message.$1}.tmp');
