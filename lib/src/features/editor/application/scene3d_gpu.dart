@@ -49,6 +49,57 @@ import 'fonte_de_malha.dart';
 /// Quando o Flutter GPU nao esta disponivel (aparelho sem suporte, ou
 /// os testes, que rodam em Skia) [Scene3DGpu.pronto] nunca vira true e
 /// quem desenha e o pintor de sempre.
+/// O QUE FAZ UMA SINCRONIA SER NECESSARIA.
+///
+/// O widget da cena 3D e reconstruido por muito mais motivo do que a
+/// cena mudar: um painel que abre, uma textura que acabou de subir e
+/// pediu repintura, o controlador de qualidade avisando o mesmo nivel de
+/// novo, qualquer ancestral que se reconstroi. Cada uma dessas
+/// reconstrucoes reandava a cena inteira — nos, luzes, ambiente, neblina
+/// e pos-processamento — para chegar exatamente ao mesmo resultado.
+///
+/// Esta chave e o resumo do que, mudando, obriga a refazer o trabalho.
+/// Duas chaves iguais significam um quadro identico ao anterior.
+@immutable
+class ChaveDeSincronia {
+  const ChaveDeSincronia({
+    required this.cena,
+    required this.t,
+    required this.rascunho,
+    required this.nivel,
+    required this.texturaMax,
+  });
+
+  /// A cena entra por IDENTIDADE, nao por conteudo.
+  ///
+  /// [Scene3D] e imutavel: editar produz um objeto novo. Entao o mesmo
+  /// objeto e, por construcao, a mesma cena — e comparar conteudo
+  /// custaria mais do que a sincronia que se quer evitar. O preco desta
+  /// escolha e conservador na direcao certa: duas cenas de conteudo
+  /// igual mas objetos diferentes sincronizam de novo, o que desperdica
+  /// trabalho mas nunca mostra um quadro velho.
+  final Scene3D? cena;
+
+  /// O instante da linha do tempo.
+  final Duration t;
+
+  /// Rascunho muda o pos-processamento mesmo com a cena igual.
+  final bool rascunho;
+
+  /// O nivel de qualidade adaptativa.
+  final Qualidade3D nivel;
+
+  /// O teto de tamanho de textura da receita.
+  final int texturaMax;
+
+  bool mesmoQue(ChaveDeSincronia o) =>
+      identical(cena, o.cena) &&
+      t == o.t &&
+      rascunho == o.rascunho &&
+      nivel == o.nivel &&
+      texturaMax == o.texturaMax;
+}
+
 class Scene3DGpu {
   Scene3DGpu();
 
@@ -141,6 +192,9 @@ class Scene3DGpu {
   fs.AntiAliasingMode? _aaAplicado;
   Scene3D? _ultimaCena;
   Duration _ultimoT = Duration.zero;
+
+  /// A chave da ultima sincronia feita de verdade.
+  ChaveDeSincronia? _ultimaChave;
   Scene3D? _cenaRegistrada;
   ui.Size _areaRegistrada = ui.Size.zero;
   bool _dofPedido = false;
@@ -172,17 +226,55 @@ class Scene3DGpu {
   }) {
     if (_descartado) return;
     final nova = receita ?? ControladorDeQualidade3D.instancia.receita;
-    if (nova.nivel != _receita.nivel) {
+    final mesmoNivel = nova.nivel == _receita.nivel;
+    // NADA MUDOU: nao ha o que refazer. Ver [ChaveDeSincronia].
+    //
+    // Textura que sobe depois nao depende desta porta: ela se aplica
+    // direto no material e so pede repintura.
+    final chave = ChaveDeSincronia(
+      cena: scene,
+      t: t,
+      rascunho: rascunho,
+      nivel: nova.nivel,
+      texturaMax: nova.texturaMax,
+    );
+    final anterior = _ultimaChave;
+    if (anterior != null &&
+        chave.mesmoQue(anterior) &&
+        _capDasTexturas == _receita.texturaMax) {
+      Perfil3D.contar('sincronia.evitada');
+      return;
+    }
+    if (!mesmoNivel) {
       _receita = nova;
       // Sombras e MSAA mudam com o nivel: as luzes sao refeitas.
       _assinaturaLuzes = null;
     }
+    _ultimaChave = chave;
     _ultimaCena = scene;
     _ultimoT = t;
     _aplicarAntialias();
-    if (_capDasTexturas != _receita.texturaMax) {
-      _retrocarregarTexturas(onMudou);
-    }
+    // O TETO DE TEXTURA SO VALE PARA O QUE AINDA NAO SUBIU.
+    //
+    // Antes, mudar o teto rederrubava todas as texturas e subia todas de
+    // novo no tamanho novo. A intencao era boa e o efeito era o oposto:
+    // o flutter_scene NAO LIBERA memoria de GPU (bdero/flutter_scene#285
+    // — texturas, cenas e shaders ficam retidos ate o processo morrer),
+    // entao as antigas continuavam ocupando lugar e as novas se somavam
+    // a elas.
+    //
+    // Isso fechava um ciclo que so piorava: pressao de memoria faz o
+    // controlador baixar o teto, baixar o teto subia TUDO de novo, subir
+    // tudo de novo aumentava a memoria, e a memoria maior baixava o teto
+    // outra vez — ate o sistema matar o aplicativo. E a morte por
+    // memoria deixa a mesma migalha de uma queda do motor, o que jogava
+    // as tres sessoes seguintes no pintor de CPU. O relato "trava mesmo
+    // em celular potente" nasce ai.
+    //
+    // Enquanto o motor nao souber liberar, cada textura sobe UMA VEZ, no
+    // teto que valia quando ela foi pedida. O teto novo continua valendo
+    // para as proximas.
+    _capDasTexturas = _receita.texturaMax;
     Perfil3D.fase('sincronia.nos', () => _sincronizarNos(scene, t, onMudou));
     Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t));
     Perfil3D.fase(
@@ -396,7 +488,10 @@ class Scene3DGpu {
           () => _construir(node, malha, onMudou, existente: g),
         );
       }
-      Perfil3D.fase('sincronia.aplicarTransform', () => g!.transformar(xf, node));
+      Perfil3D.fase(
+        'sincronia.aplicarTransform',
+        () => g!.transformar(xf, node),
+      );
     }
     for (final id in _nos.keys.toList()) {
       if (!vivos.contains(id)) {
@@ -452,6 +547,13 @@ class Scene3DGpu {
     final no = existente ?? _NoGpu(fonte.assinatura, fs.Node(name: node.name));
     no.ultimaMalha = fonte.malha;
     final instanciado = node.instances.isNotEmpty;
+    // DESCARTE POR INSTANCIA: vale a pena quando as copias se espalham
+    // pelo espaco e entram na camera em momentos diferentes — uma grade
+    // grande, que e o que a ferramenta de array produz. Num punhado de
+    // copias juntas o teste por copia custa mais do que economiza, e o
+    // descarte do conjunto inteiro ja resolve. Por isso o corte por
+    // quantidade em vez de ligar sempre.
+    final descartarPorInstancia = node.instances.length >= 24;
     var triangulos = 0;
     for (final e in grupos.entries) {
       final g = e.value;
@@ -491,7 +593,11 @@ class Scene3DGpu {
       no.indices[e.key] = g.indexList;
       no.tamanhos[e.key] = g.positions.length;
       if (instanciado) {
-        final im = fs.InstancedMesh(geometry: geometria, material: material);
+        final im = fs.InstancedMesh(
+          geometry: geometria,
+          material: material,
+          cullInstances: descartarPorInstancia,
+        );
         no.instancias.add(im);
         final filho = fs.Node()..addComponent(fs.InstancedMeshComponent(im));
         no.no.add(filho);
@@ -650,16 +756,6 @@ class Scene3DGpu {
       codec?.dispose();
       descriptor?.dispose();
       buffer?.dispose();
-    }
-  }
-
-  /// O teto de textura mudou: tudo sobe de novo no tamanho novo.
-  void _retrocarregarTexturas(VoidCallback? onMudou) {
-    _capDasTexturas = _receita.texturaMax;
-    final caminhos = _texturas.keys.toList();
-    _texturas.clear();
-    for (final p in caminhos) {
-      _subirTextura(p, onMudou);
     }
   }
 
@@ -1040,4 +1136,3 @@ class _NoGpu {
 
   void remover(fs.Scene cena) => cena.remove(no);
 }
-
