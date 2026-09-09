@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.6.1+62
+version: 1.6.2+63
 
 environment:
   sdk: ^3.13.2
@@ -53,7 +53,6 @@ dependencies:
   url_launcher: ^6.3.2
   whisper_flutter_new: ^1.0.1
   flutter_scene: ^0.20.0
-  thermion_flutter: 0.5.0
   gal: ^2.3.3
   photo_manager: 3.12.0
 
@@ -62,16 +61,10 @@ dependencies:
 # inteiro (SIGSEGV) quando o modelo falhava ao carregar. O patch devolve
 # um erro tratavel no Dart. Vale para Android e iOS.
 dependency_overrides:
-  # Local, documented build compatibility patches; renderer API is unchanged.
-  thermion_flutter:
-    path: packages/thermion_flutter
-  thermion_dart:
-    path: packages/thermion_dart
   whisper_flutter_new:
     path: packages/whisper_flutter_new
 
 dev_dependencies:
-  thermion_dart: 0.5.0
   flutter_test:
     sdk: flutter
 

@@ -8,8 +8,6 @@ import '../../domain/orcamento_render.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/scene3d.dart';
 import 'scene3d_painter.dart';
-import '../../application/renderer3d/filament_renderer.dart';
-import 'filament_viewport.dart';
 
 /// A CENA 3D DESENHADA PELA GPU — e, ate a GPU estar pronta, pelo pintor
 /// de sempre, para nunca haver quadro vazio.
@@ -55,13 +53,6 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
 
   /// Esta view ja contou como cena em GPU na tela? (Ver [MarcaGpuViva].)
   var _marcado = false;
-  bool get _wantsFilament =>
-      filamentPreviewEnabled &&
-      (Motor3DPreferencia.instancia?.permiteGpu ?? true) &&
-      !widget.exporting &&
-      !widget.camera.dof.enabled &&
-      !widget.renderCamera.orthographic &&
-      FilamentRenderer.supports(widget.scene);
   bool _preparingLegacy = false;
 
   @override
@@ -70,7 +61,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
     // Uma cena 3D na tela liga as sondas do controlador de qualidade
     // (tempo de quadro, memoria, termico).
     ControladorDeQualidade3D.instancia.entrou();
-    if (!_wantsFilament) _prepareLegacy();
+    _prepareLegacy();
   }
 
   void _prepareLegacy() {
@@ -80,7 +71,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
       _preparingLegacy = true;
       Scene3DGpu.preparar().then((_) {
         _preparingLegacy = false;
-        if (!mounted || _wantsFilament) return;
+        if (!mounted) return;
         setState(() => _pronto = Scene3DGpu.pronto);
         if (_pronto) _marcar();
       });
@@ -90,16 +81,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
   @override
   void didUpdateWidget(covariant Scene3DGpuView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_wantsFilament) {
-      _gpu?.descartar();
-      _gpu = null;
-      if (_marcado) {
-        MarcaGpuViva.saiu();
-        _marcado = false;
-      }
-    } else {
-      _prepareLegacy();
-    }
+    _prepareLegacy();
   }
 
   void _marcar() {
@@ -119,46 +101,6 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_wantsFilament) {
-      final nativePreview = FilamentViewport(
-        scene: widget.rascunho
-            ? widget.scene.copyWith(draftMode: true)
-            : widget.scene,
-        camera: widget.renderCamera,
-        time: widget.time,
-        fallback: CustomPaint(
-          painter: Scene3DPainter(
-            scene: widget.scene,
-            camera: widget.camera,
-            view: widget.view,
-            time: widget.time,
-            overrideCamera: widget.renderCamera,
-          ),
-          size: Size.infinite,
-        ),
-      );
-      if (!widget.showHelpers) return nativePreview;
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          nativePreview,
-          IgnorePointer(
-            child: CustomPaint(
-              painter: Scene3DPainter(
-                scene: widget.scene,
-                camera: widget.camera,
-                view: widget.view,
-                time: widget.time,
-                overrideCamera: widget.renderCamera,
-                showHelpers: true,
-                helpersOnly: true,
-                selectedNodeId: widget.selectedNodeId,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
     // SO ENQUANTO A GPU NAO ESTA PRONTA. A camera ortografica ficava
     // aqui tambem — e era o caminho das vistas fixas do Estudio, que
     // desenhavam a cena inteira no processador. Agora o motor tem lente

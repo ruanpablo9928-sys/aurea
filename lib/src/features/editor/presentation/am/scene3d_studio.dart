@@ -21,8 +21,6 @@ import '../../domain/scene_motion.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/camera_cuts.dart';
 import '../../application/scene3d_gpu.dart';
-import '../../application/renderer3d/filament_renderer.dart'
-    show filamentPreviewEnabled;
 import '../widgets/scene3d_painter.dart';
 import '../widgets/scene3d_gpu_view.dart';
 import 'am_colors.dart';
@@ -1845,7 +1843,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
             // O MOTOR EM GPU desenha a cena; sem ele, o pintor em CPU
             // (que tambem e quem desenha as ajudas: grade, frustum,
             // caixa do selecionado).
-            if (filamentPreviewEnabled || !Scene3DGpu.indisponivel)
+            if (!Scene3DGpu.indisponivel)
               SizedBox(
                 width: size.width,
                 height: size.height,

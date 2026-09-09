@@ -63,8 +63,6 @@ import 'preview_raster.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import '../../application/scene3d_gpu.dart';
-import '../../application/renderer3d/filament_renderer.dart'
-    show filamentPreviewEnabled;
 import 'scene3d_painter.dart';
 import 'scene3d_gpu_view.dart';
 
@@ -4981,7 +4979,7 @@ class _LayerContent extends StatelessWidget {
                 // de loja no pintor de CPU e o app a 1 fps num iPhone 13.
                 // As ajudas (grade, frustum, caixa) sao desenhadas por
                 // cima do quadro da GPU, como o Filament ja fazia.
-                if (filamentPreviewEnabled || !Scene3DGpu.indisponivel) {
+                if (!Scene3DGpu.indisponivel) {
                   return Scene3DGpuView(
                     exporting: exporting,
                     scene: l.scene,

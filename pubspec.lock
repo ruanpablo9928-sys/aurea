@@ -65,14 +65,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.3"
-  code_assets:
-    dependency: transitive
-    description:
-      name: code_assets
-      sha256: bf394f466ba9205f1812a0433b392d6af280f155f56651eda7c18cc32ed493b8
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.1"
   collection:
     dependency: transitive
     description:
@@ -145,14 +137,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  ffigen_js:
-    dependency: transitive
-    description:
-      name: ffigen_js
-      sha256: "54739988e0f047456f31a007e566892c1535630ff1cd1f87a2bfd86fd8fcd22d"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.14-pre"
   ffmpeg_kit_flutter_new_full:
     dependency: "direct main"
     description:
@@ -317,14 +301,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.3"
-  glob:
-    dependency: transitive
-    description:
-      name: glob
-      sha256: "218aeb56050c714f62a3182775320dfa04602b55074873e24e31bbd39bda96fb"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.2.0"
   hooks:
     dependency: transitive
     description:
@@ -533,22 +509,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
-  native_toolchain_c:
-    dependency: transitive
-    description:
-      name: native_toolchain_c
-      sha256: a1c26117c48cebe5677b0cf0e33a980a79a7c5577effc86f52e5a0d309cdcb60
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.19.3"
-  objective_c:
-    dependency: transitive
-    description:
-      name: objective_c
-      sha256: "87103d96b19be76dc34b5ef859fecae78561d49779d5480b73c23b4dec8b9ec4"
-      url: "https://pub.dev"
-    source: hosted
-    version: "8.1.0"
   package_config:
     dependency: transitive
     description:
@@ -661,14 +621,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.1"
-  quiver:
-    dependency: transitive
-    description:
-      name: quiver
-      sha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.2"
   record_use:
     dependency: transitive
     description:
@@ -810,20 +762,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
-  thermion_dart:
-    dependency: "direct dev"
-    description:
-      path: "packages/thermion_dart"
-      relative: true
-    source: path
-    version: "0.5.0"
-  thermion_flutter:
-    dependency: "direct main"
-    description:
-      path: "packages/thermion_flutter"
-      relative: true
-    source: path
-    version: "0.5.0"
   typed_data:
     dependency: transitive
     description:
@@ -1007,14 +945,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.4"
-  yaml_edit:
-    dependency: transitive
-    description:
-      name: yaml_edit
-      sha256: "07c9e63ba42519745182b88ca12264a7ba2484d8239958778dfe4d44fe760488"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.2.4"
 sdks:
   dart: ">=3.13.2 <4.0.0"
   flutter: ">=3.44.0"
