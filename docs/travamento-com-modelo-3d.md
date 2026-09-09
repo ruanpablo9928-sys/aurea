@@ -175,3 +175,52 @@ roda, e o bloco do céu é síncrono e curto. Por isso as três saídas de
 `_sincronizarAmbiente` foram marcadas separadamente — panorama do disco,
 mapa HDR na GPU, abrir o isolate e céu procedural. O próximo registro
 aponta a linha, sem mais leitura de código.
+
+---
+
+# A causa, provada: abrir isolate custava mais que o trabalho
+
+O registro do build 69, no iPhone 13:
+
+```
+17761 ms  1922x  pior 2171 ms   quadro: construir, posicionar e pintar
+14223 ms   309x  pior 2154 ms   cena 3D: sincronizar
+12471 ms   309x  pior 1960 ms   cena 3D: sincronizar > ambiente
+12470 ms     9x  pior 1960 ms   cena 3D: ambiente > abrir isolate
+```
+
+**Os dois últimos totais são o mesmo número.** Abrir o isolate era 100%
+do custo do ambiente: 1.400–1.960 ms **síncronos**, no fio que recebe o
+toque. E não é só o primeiro spawn que custa — a média das nove chamadas
+foi 1.385 ms.
+
+O mesmo `Isolate.run` custa **2 ms** num desktop
+(`test/bancada_ambiente_test.dart`), então o preço é do spawn em AOT no
+iOS, e não do cálculo. E o cálculo que ele evitava custa **13–26 ms**.
+
+> Abrir o isolate saía vinte vezes mais caro do que simplesmente fazer a
+> conta.
+
+Isso também explica o relato ao pé da letra: *"a timeline roda lisa até
+chegar na camada da cena 3D; se eu vou até o fim e volto pra cima da
+camada, ele dá uma travada e volta"*. Entrar na camada remonta a cena,
+a sincronia dispara o ambiente, e o spawn congela a tela por dois
+segundos. A timeline nunca foi o problema.
+
+A radiância passou a ser calculada no próprio fio, uma vez por tipo, com
+os pedidos concorrentes compartilhando o mesmo trabalho. O custo vira um
+engasgo de dezenas de milissegundos na primeira vez que cada ambiente
+aparece. `test/sem_isolate_na_cena3d_test.dart` impede a volta, porque a
+intuição aqui está errada e a tentação de "jogar para um isolate" é
+grande.
+
+## O que sobrou, e é dez vezes menor
+
+```
+1731 ms  309x  pior 423 ms   cena 3D: sincronizar > nos
+ 287 ms  305x  pior 245 ms   avaliando o modelo importado
+```
+
+O pico de 423 ms em `nos` (dos quais 245 ms avaliando o modelo) continua
+sendo uma travada perceptível, e é o próximo alvo — mas é uma ordem de
+grandeza abaixo do que acabou de sair.

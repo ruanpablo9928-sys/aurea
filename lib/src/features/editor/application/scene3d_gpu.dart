@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -194,6 +193,13 @@ class Scene3DGpu {
 
   /// O mesmo, para panoramas de arquivo, guardados pelo caminho.
   static final Map<String, fs.EnvironmentMap> _panoramasDeAmbiente = {};
+
+  /// Os mapas que ainda estao subindo. Duas sincronias pedindo o mesmo
+  /// tipo antes de a primeira terminar dividem o mesmo trabalho — sem
+  /// isto, alternar entre ambientes gerava a mesma radiancia varias
+  /// vezes antes de qualquer uma chegar ao cache.
+  static final Map<EnvironmentKind, Future<fs.EnvironmentMap>> _mapasACaminho =
+      {};
 
   /// O ceu procedural desta cena. Guardado para o bake ser fatiado a
   /// partir da segunda vez — ver [_sincronizarAmbiente].
@@ -1055,25 +1061,43 @@ class Scene3DGpu {
             : null;
         return;
       }
+      // O ISOLATE CUSTAVA 1.700 ms PARA POUPAR 40. NAO USE ISOLATE AQUI.
+      //
+      // Medido no iPhone 13, registro do build 69: a marca
+      // `ambiente > abrir isolate` somou 12.470 ms em NOVE chamadas, com
+      // pior de 1.960 ms — e isso e a parte SINCRONA de `Isolate.run`, no
+      // mesmo fio que recebe o toque. Nao e a primeira que custa: a media
+      // das nove foi 1.385 ms.
+      //
+      // O mesmo `Isolate.run` custa 2 ms num desktop
+      // (`test/bancada_ambiente_test.dart`), entao o preco e do spawn em
+      // AOT no iOS, e nao do calculo. E o calculo que ele evitava custa
+      // 13-26 ms num desktop: abrir o isolate saia vinte vezes mais caro
+      // do que simplesmente fazer a conta.
+      //
+      // Entao a conta e feita aqui mesmo, UMA VEZ POR TIPO. O custo passa
+      // a ser um engasgo de algumas dezenas de milissegundos na primeira
+      // vez que cada ambiente aparece, contra quase dois segundos de tela
+      // parada toda vez que a camada 3D entrava em cena.
+      final aCaminho = _mapasACaminho[kind] ??= () async {
+        final pixels = RegistroDeTravadas.marcando(
+          'cena 3D: ambiente > gerar radiancia',
+          () => environmentRadiance(kind),
+        );
+        final map = await RegistroDeTravadas.marcandoAsync(
+          'cena 3D: ambiente > mapa HDR na GPU',
+          () => fs.EnvironmentMap.fromEquirectHdr(
+            linearPixels: pixels,
+            width: 512,
+            height: 256,
+          ),
+        );
+        _mapasDeAmbiente[kind] = map;
+        return map;
+      }();
       () async {
         try {
-          // A marca cobre so a parte SINCRONA: abrir o isolate. E ela
-          // que segura o fio da interface; o calculo em si roda do outro
-          // lado e nao custa nada aqui.
-          final pixels = await RegistroDeTravadas.marcando(
-            'cena 3D: ambiente > abrir isolate',
-            () => Isolate.run(() => environmentRadiance(kind)),
-          );
-          if (_descartado || epoca != _epocaAmbiente) return;
-          final map = await RegistroDeTravadas.marcandoAsync(
-            'cena 3D: ambiente > mapa HDR na GPU',
-            () => fs.EnvironmentMap.fromEquirectHdr(
-              linearPixels: pixels,
-              width: 512,
-              height: 256,
-            ),
-          );
-          _mapasDeAmbiente[kind] = map;
+          final map = await aCaminho;
           if (_descartado || epoca != _epocaAmbiente) return;
           cena.skyEnvironment = null;
           cena.environment = map;
@@ -1086,6 +1110,8 @@ class Scene3DGpu {
               : null;
           onMudou?.call();
         } catch (e) {
+          // Deixa o tipo tentar de novo numa proxima vez.
+          _mapasACaminho.remove(kind);
           debugPrint('Ambiente HDR: $e');
         }
       }();
@@ -1095,10 +1121,10 @@ class Scene3DGpu {
     // CEU PROCEDURAL a partir das cores do dominio: zenite = ceu, chao =
     // chao, horizonte no meio, e o sol na direcao da luz principal.
     //
-    // Este bloco e 100% SINCRONO, e por isso e o unico candidato que
-    // sobra para os 3.4 s que o registro do aparelho mediu dentro de
-    // `ambiente` quando nem o panorama nem o mapa HDR estao em jogo. A
-    // marca existe para o proximo registro nao deixar duvida.
+    // Este bloco e 100% SINCRONO e ficou marcado a parte durante a caca
+    // ao travamento. O culpado acabou sendo o spawn de isolate no
+    // caminho HDR (ver acima), e nao ele — mas a marca fica, porque
+    // custa um `if` e responde na hora se um dia a suspeita voltar.
     RegistroDeTravadas.marcando(
       'cena 3D: ambiente > ceu procedural',
       () => _ceuProcedural(scene, t, pano),
