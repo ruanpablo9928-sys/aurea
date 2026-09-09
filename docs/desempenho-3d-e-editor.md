@@ -115,23 +115,40 @@ editor separou as partes, com o relógio andando:
 | **só a linha do tempo** (12 camadas) | — | 6,3 ms | — |
 | **linha do tempo sem rolar** | — | **0,5 ms** | — |
 
-A última linha é a prova: a mesma linha do tempo, com o mesmo relógio
-andando, custa 6,3 ms quando rola atrás do cabeçote e **0,5 ms quando
-não rola**. São ~5,8 ms por quadro — mais de um terço do orçamento de 60
-fps — gastos pela rolagem automática, e não por pintura: as quatro
-pinturas da timeline (régua, batidas, barra, frente) somam menos de
-0,1 ms por quadro, medidas uma a uma.
+### Correção de leitura (esta seção estava errada)
 
-O custo está no **layout**: cada `jumpTo` muda o deslocamento do
-viewport, e o conteúdo tem a largura do projeto inteiro. Além disso, a
-primeira montagem da linha do tempo custa 120–140 ms — o engasgo de
-abrir o editor.
+A primeira versão desta seção lia a última linha da tabela como prova de
+que a **rolagem automática custava ~5,8 ms por quadro**. Não custa. A
+bancada, rodada de novo com o detalhamento por fase ligado, mostra outra
+coisa:
 
-**Isto está medido e diagnosticado, e ainda não corrigido**: a correção
-mexe no modelo de rolagem da timeline (ou trocar o conteúdo largo por
-uma lista preguiçosa, ou mover o cabeçote em vez do conteúdo), e as duas
-mudam comportamento visível. É a próxima parada, e agora com número para
-comparar antes e depois.
+```
+build.timeline   4.95 ms/quadro | 1 vezes, 99.0 ms cada
+pintar.regua     0.05 ms/quadro | 20 vezes, 0.1 ms cada
+```
+
+O "1 vezes" é o que desfaz o engano. A linha do tempo foi construída
+**uma vez** durante a janela medida, custando 99 ms, e a bancada dividiu
+isso pelos 20 quadros da janela. Os 4,95 ms não são um custo por quadro:
+são uma montagem única, amortizada pela aritmética da média. Por quadro,
+a linha do tempo custa o que as pinturas custam, e elas somam menos de
+0,1 ms.
+
+Duas checagens confirmam. O custo **não cresce com o número de camadas**
+(99 ms com 4, 91 ms com 24), o que descarta as faixas e os clipes; e as
+linhas são preguiçosas de verdade (`ListView.builder` com `itemExtent`),
+então só as visíveis são construídas.
+
+### O que sobra, então
+
+O gasto real é **a primeira montagem**, e ela aparece uma vez, ao abrir
+o editor. É o engasgo da abertura, não o lag da reprodução.
+
+Falta um número honesto para ele: a bancada roda em modo de depuração,
+onde Dart é várias vezes mais lento que no aplicativo compilado. Os 95 ms
+daqui não são 95 ms no aparelho. Medir isso exige aparelho, e enquanto
+não houver essa medida **não se otimiza a montagem**, para não repetir o
+erro que esta seção acabou de corrigir: trocar código por suposição.
 
 ## O painel de desempenho
 
