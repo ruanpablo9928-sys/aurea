@@ -313,6 +313,27 @@ class _PintorDaTrilhaRasa extends CustomPainter {
       Paint()..color = escondida ? cor.withValues(alpha: .25) : cor,
     );
 
+    // OS RISCOS VEM ANTES DO NOME, e com espacamento minimo.
+    //
+    // Visto no aparelho: uma cena 3D com dezenas de keyframes virava uma
+    // barra listrada, ilegivel, com o nome da camada coberto. Risco
+    // colado em risco nao informa nada — a partir de certa densidade, o
+    // que ele diz e "ha muita animacao aqui", e para isso bastam alguns.
+    final risco = Paint()..color = Colors.white.withValues(alpha: .8);
+    var ultimoX = double.negativeInfinity;
+    for (final t in camada.keyframeTimes) {
+      final quando = camada.startTime + t;
+      if (quando < camada.startTime || quando > camada.endTime) continue;
+      final px = x(quando);
+      // Menos de quatro pixels do anterior: nao cabe, e nao acrescenta.
+      if (px - ultimoX < 4) continue;
+      ultimoX = px;
+      canvas.drawRect(
+        Rect.fromLTWH(px - .8, barra.top + 3, 1.6, barra.height - 6),
+        risco,
+      );
+    }
+
     final nome = TextPainter(
       text: TextSpan(
         text: camada.name,
@@ -332,18 +353,6 @@ class _PintorDaTrilhaRasa extends CustomPainter {
     canvas.clipRRect(rr);
     nome.paint(canvas, Offset(barra.left + 6, barra.center.dy - 7));
     canvas.restore();
-
-    // Os keyframes como riscos: dizem ONDE ha animacao sem pedir
-    // pontaria, que e tudo que esta vista precisa responder.
-    final risco = Paint()..color = Colors.white.withValues(alpha: .85);
-    for (final t in camada.keyframeTimes) {
-      final quando = camada.startTime + t;
-      if (quando < camada.startTime || quando > camada.endTime) continue;
-      canvas.drawRect(
-        Rect.fromLTWH(x(quando) - .8, barra.top + 3, 1.6, barra.height - 6),
-        risco,
-      );
-    }
 
     if (selecionada) {
       canvas.drawRRect(
