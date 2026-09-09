@@ -98,14 +98,47 @@ class EditorController extends Notifier<VideoProject> {
     }
     // Dentro de um grupo, ninguem empilha: o snapshot foi tirado uma vez
     // no comeco, e desfazer volta o passo inteiro.
+    //
+    // Fora de um grupo, a janela de 450 ms junta o que E um ajuste so:
+    // arrastar um numero manda dezenas de mudancas por segundo, e cada
+    // uma virar um passo de desfazer tornaria o desfazer inutil.
+    //
+    // MAS SO QUANDO A ESTRUTURA NAO MUDA. Adicionar duas camadas
+    // seguidas, duplicar e apagar, reordenar — sao acoes distintas e
+    // deliberadas, e a janela as engolia: um toque em desfazer sumia com
+    // as duas. Quando a lista de camadas muda (outra quantidade, outra
+    // ordem, outros ids), o passo entra na pilha sempre.
+    final estrutural = _estruturaMudou(state, next);
+    // E o primeiro ajuste DEPOIS de uma acao estrutural tambem entra na
+    // pilha: sem isso, "adicionei a forma e mudei a opacidade" virava um
+    // passo so, e um desfazer sumia com a forma inteira.
     if (!_agrupando &&
-        now.difference(_lastPush) > const Duration(milliseconds: 450)) {
+        (estrutural ||
+            _ultimaFoiEstrutural ||
+            now.difference(_lastPush) > const Duration(milliseconds: 450))) {
       _undoStack.add(state);
       if (_undoStack.length > 100) _undoStack.removeAt(0);
     }
+    _ultimaFoiEstrutural = estrutural;
     _lastPush = now;
     _redoStack.clear();
     state = next;
+  }
+
+  /// A ultima mutacao mexeu na lista de camadas?
+  bool _ultimaFoiEstrutural = false;
+
+  /// A lista de camadas mudou de tamanho, de ordem ou de gente?
+  ///
+  /// Editar uma propriedade cria camadas novas (elas sao imutaveis), mas
+  /// mantem os mesmos ids na mesma ordem — e por isso a comparacao e por
+  /// id, e nao por identidade de objeto.
+  static bool _estruturaMudou(VideoProject antes, VideoProject depois) {
+    if (antes.layers.length != depois.layers.length) return true;
+    for (var i = 0; i < antes.layers.length; i++) {
+      if (antes.layers[i].id != depois.layers[i].id) return true;
+    }
+    return false;
   }
 
   bool _agrupando = false;
@@ -2149,12 +2182,28 @@ class EditorController extends Notifier<VideoProject> {
               else
                 l,
         ],
+        meta: _semAsFichasDe(state, {id}),
       ),
     );
     if (ref.read(selectedLayerProvider) == id) {
       ref.read(selectedLayerProvider.notifier).state = null;
     }
   }
+
+  /// As fichas de camada (solo, olho, cadeado, rotulo) SEM as das
+  /// camadas que estao indo embora.
+  ///
+  /// Ficha de camada apagada nao serve para nada e atrapalha: engorda o
+  /// arquivo a cada exclusao e, no caso do solo, chega a esconder o
+  /// projeto inteiro. O desfazer nao perde nada com isto — ele guarda o
+  /// estado anterior por inteiro, fichas inclusive.
+  static Map<String, LayerMeta> _semAsFichasDe(
+    VideoProject p,
+    Set<String> ids,
+  ) => {
+    for (final e in p.meta.entries)
+      if (!ids.contains(e.key)) e.key: e.value,
+  };
 
   /// Exclui VARIAS camadas numa unica mutacao (um "Desfazer" restaura
   /// tudo — efeitos, keyframes e vinculos intactos).
@@ -2171,6 +2220,7 @@ class EditorController extends Notifier<VideoProject> {
               else
                 l,
         ],
+        meta: _semAsFichasDe(state, set),
       ),
     );
     if (set.contains(ref.read(selectedLayerProvider))) {
@@ -2381,16 +2431,20 @@ class EditorController extends Notifier<VideoProject> {
         : [for (final m in state.markers) m.time];
     if (tempos.isEmpty) return 0;
     var cortes = 0;
-    // De TRAS para a frente: cortar cedo desloca as bordas do que vem
-    // depois, e a lista de tempos ficaria falando de outro clipe.
-    for (final t in tempos.reversed) {
-      for (final l in [...state.layers]) {
-        if (!l.activeAt(t)) continue;
-        final antes = state.layers.length;
-        splitLayer(l.id, t);
-        if (state.layers.length > antes) cortes++;
+    // Um comando, um passo de desfazer — mesmo que ele corte oito
+    // camadas em vinte marcas.
+    runAsOneUndo(() {
+      // De TRAS para a frente: cortar cedo desloca as bordas do que vem
+      // depois, e a lista de tempos ficaria falando de outro clipe.
+      for (final t in tempos.reversed) {
+        for (final l in [...state.layers]) {
+          if (!l.activeAt(t)) continue;
+          final antes = state.layers.length;
+          splitLayer(l.id, t);
+          if (state.layers.length > antes) cortes++;
+        }
       }
-    }
+    });
     return cortes;
   }
 
@@ -3899,18 +3953,24 @@ class EditorController extends Notifier<VideoProject> {
     final ordenados = times.toList()..sort();
     var atual = id;
     final ids = <String>[id];
-    for (final t in ordenados) {
-      final layer = _layer(atual);
-      if (layer == null) break;
-      if (!layer.activeAt(t)) continue;
-      ref.read(selectedLayerProvider.notifier).state = atual;
-      splitLayer(atual, t);
-      final novo = ref.read(selectedLayerProvider);
-      if (novo != null && novo != atual) {
-        atual = novo;
-        ids.add(novo);
+    // O agrupamento e EXPLICITO: cada corte mexe na lista de camadas, e
+    // uma acao estrutural nunca e engolida pela janela de tempo. Sem
+    // isto, decupar um clipe em trinta pedacos custaria trinta toques em
+    // desfazer para voltar atras de UM comando.
+    runAsOneUndo(() {
+      for (final t in ordenados) {
+        final layer = _layer(atual);
+        if (layer == null) break;
+        if (!layer.activeAt(t)) continue;
+        ref.read(selectedLayerProvider.notifier).state = atual;
+        splitLayer(atual, t);
+        final novo = ref.read(selectedLayerProvider);
+        if (novo != null && novo != atual) {
+          atual = novo;
+          ids.add(novo);
+        }
       }
-    }
+    });
     return ids;
   }
 

@@ -251,11 +251,13 @@ List<Cue> parseSrt(String content) {
     final times = _timeRe.allMatches(lines[timeIdx]).toList();
     final text = lines.sublist(timeIdx + 1).join('\n').trim();
     if (text.isEmpty) continue;
-    cues.add(Cue(
-      start: _parseSrtTime(times[0].group(0)!),
-      end: _parseSrtTime(times[1].group(0)!),
-      text: text,
-    ));
+    final inicio = _parseSrtTime(times[0].group(0)!);
+    final fim = _parseSrtTime(times[1].group(0)!);
+    // FIM ANTES DO COMECO: um SRT assim existe (exportador torto, edicao
+    // a mao) e uma legenda com duracao negativa nunca aparece — pior,
+    // ela bagunca a ordenacao de quem desenha. Fica de fora.
+    if (fim <= inicio) continue;
+    cues.add(Cue(start: inicio, end: fim, text: text));
   }
   cues.sort((a, b) => a.start.compareTo(b.start));
   return cues;

@@ -4635,47 +4635,51 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
           // desenhava tudo para pintar com alfa zero em cima.
           if (effect.paramAt('opacity', local) <= 0.4) break;
           final rastreio = BlobTrackService.instance.dataFor(effect.id);
-          final sobreposicao = Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: BlobTrackerPainter(
-                  track: rastreio,
-                  time: local,
-                  color: effect.color,
-                  style: effect.paramAt('style', local).round().clamp(0, 4),
-                  showCenter:
-                      effect.paramAt('show_center_marker', local) >= 0.5,
-                  showLines:
-                      effect.paramAt('show_connecting_lines', local) >= 0.5,
-                  lineType: effect
-                      .paramAt('line_type', local)
-                      .round()
-                      .clamp(0, 2),
-                  lineStyle: effect
-                      .paramAt('line_style', local)
-                      .round()
-                      .clamp(0, 2),
-                  palette: effect.paramAt('palette', local).round().clamp(0, 2),
-                  thickness: effect.paramAt('thickness', local),
-                  opacity: effect.paramAt('opacity', local),
-                  fill: effect.paramAt('fill', local),
-                  cornerLength: effect.paramAt('corner_length', local),
-                  showCaption: effect.paramAt('show_caption', local) >= 0.5,
-                  captionContent: effect
-                      .paramAt('caption_content', local)
-                      .round()
-                      .clamp(0, 2),
-                  captionPosition: effect
-                      .paramAt('caption_position', local)
-                      .round()
-                      .clamp(0, 3),
-                  fontSize: effect.paramAt('font_size', local),
-                  seed: effect.paramAt('seed', local).round(),
-                  simulatedCount: effect
-                      .paramAt('max_blobs', local)
-                      .round()
-                      .clamp(1, 16),
-                ),
+          // O DESENHO vem sem posicionamento: quem posiciona e a linha
+          // la embaixo, DEPOIS da mescla. Um `Positioned` so vale como
+          // filho DIRETO de um `Stack` — embrulhado num BlendMask ele
+          // vira um widget de dado-do-pai perdido: em depuracao levanta
+          // "Incorrect use of ParentDataWidget", e em producao a
+          // sobreposicao fica sem tamanho e SOME. Era o que acontecia
+          // com os modos de mescla Somar e Tela do rastreio.
+          final desenhoDoRastreio = IgnorePointer(
+            child: CustomPaint(
+              painter: BlobTrackerPainter(
+                track: rastreio,
+                time: local,
+                color: effect.color,
+                style: effect.paramAt('style', local).round().clamp(0, 4),
+                showCenter: effect.paramAt('show_center_marker', local) >= 0.5,
+                showLines:
+                    effect.paramAt('show_connecting_lines', local) >= 0.5,
+                lineType: effect
+                    .paramAt('line_type', local)
+                    .round()
+                    .clamp(0, 2),
+                lineStyle: effect
+                    .paramAt('line_style', local)
+                    .round()
+                    .clamp(0, 2),
+                palette: effect.paramAt('palette', local).round().clamp(0, 2),
+                thickness: effect.paramAt('thickness', local),
+                opacity: effect.paramAt('opacity', local),
+                fill: effect.paramAt('fill', local),
+                cornerLength: effect.paramAt('corner_length', local),
+                showCaption: effect.paramAt('show_caption', local) >= 0.5,
+                captionContent: effect
+                    .paramAt('caption_content', local)
+                    .round()
+                    .clamp(0, 2),
+                captionPosition: effect
+                    .paramAt('caption_position', local)
+                    .round()
+                    .clamp(0, 3),
+                fontSize: effect.paramAt('font_size', local),
+                seed: effect.paramAt('seed', local).round(),
+                simulatedCount: effect
+                    .paramAt('max_blobs', local)
+                    .round()
+                    .clamp(1, 16),
               ),
             ),
           );
@@ -4687,15 +4691,30 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
               .paramAt('blend_mode', local)
               .round()
               .clamp(0, 2);
-          final camadaBlob = switch (modoBlob) {
-            1 => BlendMask(blendMode: BlendMode.plus, child: sobreposicao),
-            2 => BlendMask(blendMode: BlendMode.screen, child: sobreposicao),
-            _ => sobreposicao,
+          final misturado = switch (modoBlob) {
+            1 => BlendMask(blendMode: BlendMode.plus, child: desenhoDoRastreio),
+            2 => BlendMask(
+              blendMode: BlendMode.screen,
+              child: desenhoDoRastreio,
+            ),
+            _ => desenhoDoRastreio,
           };
+          final camadaBlob = Positioned.fill(child: misturado);
 
-          out = soSobreposicao
-              ? Stack(clipBehavior: Clip.none, children: [camadaBlob])
-              : Stack(clipBehavior: Clip.none, children: [out, camadaBlob]);
+          // O conteudo da camada FICA na pilha mesmo no modo "so
+          // sobreposicao" — com opacidade zero, que o Flutter nao chega
+          // a pintar. Ele esta ali para DAR TAMANHO: uma pilha cujos
+          // filhos sao todos posicionados nao tem de onde tirar largura
+          // e altura, e sob restricao livre (que e o caso de uma camada
+          // com transformacao) isso quebra o quadro inteiro, nao so o
+          // efeito.
+          out = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (soSobreposicao) Opacity(opacity: 0, child: out) else out,
+              camadaBlob,
+            ],
+          );
       }
     }
     return out;

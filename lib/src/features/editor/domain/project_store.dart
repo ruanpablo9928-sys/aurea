@@ -1877,6 +1877,42 @@ Camera3D _asCamera(Map<String, dynamic> m) {
   );
 }
 
+/// Os EFEITOS da camada, pulando o que nao da para ler.
+///
+/// Um efeito ilegivel — de uma versao mais nova, com um parametro que
+/// mudou de forma, com um pedaco do arquivo corrompido — levava a
+/// CAMADA INTEIRA junto: a pessoa perdia o texto, a forma, os
+/// keyframes e o trabalho todo por causa de um item da lista de
+/// efeitos. Perder o efeito e um arranhao; perder a camada nao.
+List<EffectInstance> _efeitosDoJson(Object? bruto) {
+  if (bruto is! List) return const [];
+  final out = <EffectInstance>[];
+  for (final e in bruto) {
+    if (e is! Map) continue;
+    try {
+      out.add(_asEffect(e.cast<String, dynamic>()));
+    } catch (_) {
+      // Efeito ilegivel: fica de fora, a camada abre.
+    }
+  }
+  return out;
+}
+
+/// As MASCARAS da camada, pela mesma regra dos efeitos.
+List<LayerMask> _mascarasDoJson(Object? bruto) {
+  if (bruto is! List) return const [];
+  final out = <LayerMask>[];
+  for (final k in bruto) {
+    if (k is! Map) continue;
+    try {
+      out.add(_asMask(k.cast<String, dynamic>()));
+    } catch (_) {
+      // Mascara ilegivel: a camada aparece sem ela, e nao some.
+    }
+  }
+  return out;
+}
+
 Layer layerFromJson(Map<String, dynamic> m) {
   final id = m['id'] as String;
   final name = m['name'] as String;
@@ -1898,14 +1934,8 @@ Layer layerFromJson(Map<String, dynamic> m) {
       : AureaBlend.values[(m['blendX'] as num).toInt()];
   final is3D = m['is3D'] as bool;
   final z = _asAd(m['z']);
-  final effects = [
-    for (final e in (m['effects'] as List))
-      _asEffect(e as Map<String, dynamic>),
-  ];
-  final masks = [
-    for (final k in (m['masks'] as List? ?? const []))
-      _asMask(k as Map<String, dynamic>),
-  ];
+  final effects = _efeitosDoJson(m['effects']);
+  final masks = _mascarasDoJson(m['masks']);
   final matte = m['matte'] == null
       ? MatteMode.none
       : MatteMode.values[(m['matte'] as num).toInt()];
@@ -2575,7 +2605,34 @@ LayerMeta _asMeta(Map<String, dynamic> m) => LayerMeta(
   extrude: (m['ext'] as num?)?.toDouble() ?? 0,
 );
 
+/// O PROJETO EM JSON, sem numero que o JSON nao aceita.
+///
+/// `NaN` e `Infinity` sao numeros validos em Dart e INVALIDOS em JSON:
+/// bastava uma escala em cima de outra, ou uma expressao com divisao por
+/// zero, para a gravacao falhar com "Converting object to an encodable
+/// object failed" — e ai o projeto nao era salvo. O trabalho da sessao
+/// inteira se perdia por causa de um numero.
+///
+/// A ultima peneira antes do arquivo troca esses numeros por zero. Um
+/// valor zerado se conserta na tela; um projeto que nao grava, nao.
 Map<String, dynamic> projectToJson(VideoProject p) => {
+  for (final e in _projectToJson(p).entries)
+    e.key: _semNumeroImpossivel(e.value),
+};
+
+/// Troca NaN e infinito por zero, fundo abaixo (mapas, listas, numeros).
+Object? _semNumeroImpossivel(Object? valor) {
+  if (valor is double) return valor.isFinite ? valor : 0.0;
+  if (valor is Map) {
+    return <String, dynamic>{
+      for (final e in valor.entries) '${e.key}': _semNumeroImpossivel(e.value),
+    };
+  }
+  if (valor is List) return [for (final v in valor) _semNumeroImpossivel(v)];
+  return valor;
+}
+
+Map<String, dynamic> _projectToJson(VideoProject p) => {
   'v': 1,
   'id': p.id,
   'name': p.name,
@@ -2681,18 +2738,57 @@ Map<String, dynamic> projectToJson(VideoProject p) => {
   ],
 };
 
+/// UM PROJETO A PARTIR DO ARQUIVO — inclusive de um arquivo torto.
+///
+/// Antes, qualquer campo faltando derrubava a leitura inteira com um
+/// erro de tipo: um projeto sem `createdAt` (vindo de uma versao antiga,
+/// de um arquivo cortado pela bateria, de um template escrito a mao) NAO
+/// ABRIA, e o aplicativo caia na cara de quem tentou. Perder um pedaco
+/// de um arquivo estragado e aceitavel; perder o arquivo, nao.
+///
+/// Agora cada campo tem um valor de retorno razoavel, e uma CAMADA
+/// quebrada e pulada sem levar o resto junto — quem abre ve o que
+/// sobreviveu, e nao uma tela de erro.
+/// Um numero que precisa ser maior que zero (fps, altura, proporcao):
+/// o do arquivo quando serve, o padrao quando nao.
+double _positivo(Object? bruto, double padrao) {
+  // O arquivo pode trazer "trinta" no lugar de 30 (projeto escrito a
+  // mao, exportador de outro app): o que nao for numero vira o padrao.
+  final v = bruto is num ? bruto.toDouble() : double.tryParse('$bruto');
+  return (v == null || !v.isFinite || v <= 0) ? padrao : v;
+}
+
+/// As camadas do arquivo, pulando o que nao da para ler.
+///
+/// Uma camada de um tipo que esta versao nao conhece (projeto salvo por
+/// uma versao mais nova) ou com um campo estragado sai da lista; as
+/// outras entram. O contrario — deixar a excecao subir — perderia o
+/// projeto inteiro por causa de uma camada.
+List<Layer> _camadasDoJson(Object? bruto) {
+  if (bruto is! List) return const [];
+  final out = <Layer>[];
+  for (final l in bruto) {
+    if (l is! Map) continue;
+    try {
+      out.add(layerFromJson(l.cast<String, dynamic>()));
+    } catch (_) {
+      // Camada ilegivel: fica de fora, e o resto do projeto abre.
+    }
+  }
+  return out;
+}
+
 VideoProject projectFromJson(Map<String, dynamic> m) => VideoProject(
-  id: m['id'] as String,
-  name: m['name'] as String,
-  createdAt: DateTime.parse(m['createdAt'] as String),
-  aspectRatio: (m['aspect'] as num).toDouble(),
-  fps: (m['fps'] as num).toInt(),
-  resolutionHeight: (m['resH'] as num).toInt(),
+  // Sem id no arquivo, um id novo — dois projetos sem id nao podem
+  // virar o mesmo projeto na lista de recentes.
+  id: (m['id'] as String?) ?? 'p${DateTime.now().microsecondsSinceEpoch}',
+  name: (m['name'] as String?) ?? 'Projeto',
+  createdAt: DateTime.tryParse('${m['createdAt']}') ?? DateTime.now(),
+  aspectRatio: _positivo(m['aspect'], 16 / 9),
+  fps: _positivo(m['fps'], 30).round(),
+  resolutionHeight: _positivo(m['resH'], 1080).round(),
   backgroundColor: m['bg'] == null ? const Color(0xFF000000) : _asCol(m['bg']),
-  layers: [
-    for (final l in (m['layers'] as List))
-      layerFromJson(l as Map<String, dynamic>),
-  ],
+  layers: _camadasDoJson(m['layers']),
   links: [
     for (final l in (m['links'] as List? ?? const []))
       PropertyLink(

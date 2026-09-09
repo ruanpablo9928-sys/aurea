@@ -217,9 +217,29 @@ class VideoProject {
     return null;
   }
 
+  /// TODO id de camada do projeto, inclusive os de dentro de grupos.
+  late final Set<String> _todosOsIds = () {
+    final out = <String>{};
+    void varrer(Iterable<Layer> camadas) {
+      for (final l in camadas) {
+        out.add(l.id);
+        if (l is GroupLayer) varrer(l.children);
+      }
+    }
+
+    varrer(layers);
+    return out;
+  }();
+
   /// SOLO (PR-X26): havendo qualquer camada em solo, so as em solo
   /// renderizam.
-  late final bool hasSolo = meta.values.any((m) => m.solo);
+  ///
+  /// So conta o solo de camada que EXISTE. Uma marca de solo ORFA — a
+  /// sobra de uma camada apagada — escondia todas as outras: a
+  /// composicao ficava preta no preview E no arquivo exportado, sem
+  /// botao para desligar, porque o botao morava justamente na camada
+  /// que nao existe mais. Uma marca sem dono nao manda em ninguem.
+  late final bool hasSolo = _todosOsIds.any((id) => metaOf(id).solo);
 
   bool rendersInPreview(String layerId) =>
       !metaOf(layerId).hidden && (!hasSolo || metaOf(layerId).solo);
