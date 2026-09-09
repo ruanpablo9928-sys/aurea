@@ -16,7 +16,6 @@
 import 'dart:ui' show Color;
 
 import 'package:aurea/src/features/editor/application/fonte_de_malha.dart';
-import 'package:aurea/src/features/editor/domain/element3d.dart';
 import 'package:aurea/src/features/editor/domain/model_asset3d.dart';
 import 'package:aurea/src/features/editor/domain/scene3d.dart';
 import 'package:flutter_test/flutter_test.dart';
