@@ -5003,6 +5003,10 @@ class _LayerContent extends StatelessWidget {
                     view: l.view,
                     time: localTime,
                     showHelpers: ajudas,
+                    // NA EXPORTACAO o quadro pode demorar o que precisar:
+                    // ninguem esta esperando resposta ao dedo, e o
+                    // arquivo entregue nunca leva substituto.
+                    respeitarOrcamento: !exporting,
                   ),
                 );
               },

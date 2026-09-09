@@ -992,10 +992,21 @@ class RenderCamera {
 
   @override
   int get hashCode => Object.hash(
-    position.x, position.y, position.z,
-    target.x, target.y, target.z,
-    up.x, up.y, up.z,
-    focalLength, filmWidth, orthographic, orthoScale, near, far,
+    position.x,
+    position.y,
+    position.z,
+    target.x,
+    target.y,
+    target.z,
+    up.x,
+    up.y,
+    up.z,
+    focalLength,
+    filmWidth,
+    orthographic,
+    orthoScale,
+    near,
+    far,
   );
 }
 
@@ -1100,6 +1111,37 @@ Element3DMesh _subdividedPrimitive(Element3DKind kind, int levels) {
     return mesh;
   });
 }
+
+/// QUANTOS TRIANGULOS ESTA CENA PEDE, sem desenhar nada.
+///
+/// Serve para decidir ANTES de comecar se o pintor em CPU tem alguma
+/// chance. Conta a malha que o nivel de detalhe escolheria, que e a que
+/// seria desenhada de verdade.
+int trianglesEstimados(Scene3D cena) {
+  var total = 0;
+  for (final no in cena.nodes) {
+    if (!no.visible || no.isNull) continue;
+    final malha = _automaticLod(no, cena.draftMode);
+    final copias = no.instances.isEmpty ? 1 : no.instances.length;
+    total += (malha?.faces.length ?? facesDaPrimitiva(no.kind)) * copias;
+  }
+  return total;
+}
+
+/// Quantas faces uma primitiva do catalogo tem, por alto. Serve so para
+/// a estimativa acima nao ignorar cubos e esferas.
+int facesDaPrimitiva(Element3DKind kind) => switch (kind) {
+  Element3DKind.sphere => 512,
+  Element3DKind.torus => 576,
+  Element3DKind.capsule => 384,
+  Element3DKind.tube => 256,
+  Element3DKind.cylinder => 192,
+  Element3DKind.cone => 128,
+  Element3DKind.dome => 256,
+  Element3DKind.crown => 256,
+  Element3DKind.crownFine => 512,
+  _ => 32,
+};
 
 Element3DMesh? _automaticLod(SceneNode node, bool draftMode) {
   final high = node.mesh;

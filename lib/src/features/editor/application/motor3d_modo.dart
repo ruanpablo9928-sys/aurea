@@ -117,9 +117,8 @@ class Motor3DPreferencia {
   String get motivoDeNaoTentar => switch (modo) {
     Motor3DModo.cpu => 'voce escolheu Sempre CPU nos Ajustes',
     Motor3DModo.gpu => '',
-    Motor3DModo.automatico => caiu
-        ? 'o app fechou sozinho na ultima vez que desenhou em GPU'
-        : '',
+    Motor3DModo.automatico =>
+      caiu ? 'o app fechou sozinho na ultima vez que desenhou em GPU' : '',
   };
 
   /// Marca que um quadro em GPU vai comecar. Se o app nao voltar daqui,
@@ -174,19 +173,48 @@ class MarcaGpuViva with WidgetsBindingObserver {
     _sincronizar();
   }
 
+  /// DEPOIS DE QUANTO TEMPO DESENHANDO a GPU se prova.
+  ///
+  /// Uma falha de motor 3D acontece cedo: nos recursos estaticos, no
+  /// primeiro quadro, nos primeiros segundos. Passado esse tempo, o que
+  /// derruba o aplicativo nao e mais o motor — e a memoria, o iOS, ou a
+  /// pessoa fechando o app pelo gerenciador.
+  ///
+  /// Sem este prazo, TODA morte com uma cena 3D na tela virava "o motor
+  /// caiu", e a sessao seguinte desenhava no processador. Com um modelo
+  /// importado o pintor de CPU leva mais de um segundo por quadro, entao
+  /// o aplicativo ficava inutil por tres aberturas por causa de um
+  /// fechamento comum. Era esse o "trava tudo, ate o toque".
+  static const seProvaEm = Duration(seconds: 15);
+
+  static Timer? _relogioDaProva;
+
   static void _sincronizar() {
     final quer = _naTela > 0 && _emPrimeiroPlano;
     if (quer == _marcada) return;
     _marcada = quer;
+    _relogioDaProva?.cancel();
+    _relogioDaProva = null;
     final p = Motor3DPreferencia.instancia;
     if (p == null) return;
     // Sem await de proposito: isto acontece dentro de initState/dispose
     // e de callbacks de ciclo de vida.
-    unawaited(quer ? p.marcarTentativa() : p.marcarSucesso());
+    if (!quer) {
+      unawaited(p.marcarSucesso());
+      return;
+    }
+    unawaited(p.marcarTentativa());
+    // A migalha vale so pela janela em que o motor ainda pode falhar.
+    _relogioDaProva = Timer(seProvaEm, () {
+      _relogioDaProva = null;
+      if (_marcada) unawaited(p.marcarSucesso());
+    });
   }
 
   @visibleForTesting
   static void zerar() {
+    _relogioDaProva?.cancel();
+    _relogioDaProva = null;
     _naTela = 0;
     _emPrimeiroPlano = true;
     _marcada = false;

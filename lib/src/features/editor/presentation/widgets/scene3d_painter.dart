@@ -215,6 +215,7 @@ class Scene3DPainter extends CustomPainter {
     this.overrideCamera,
     this.selectedNodeId,
     this.onMetrics,
+    this.respeitarOrcamento = true,
   }) : super(
          repaint: Listenable.merge([
            TextureCache.instance.revision,
@@ -243,6 +244,86 @@ class Scene3DPainter extends CustomPainter {
 
   final void Function(SceneFrame frame)? onMetrics;
 
+  /// O TETO DE TRIANGULOS VALE AQUI?
+  ///
+  /// Na tela, vale: um quadro que demora um segundo nao e uma previa
+  /// ruim, e um aplicativo travado — o toque nao chega, a linha do tempo
+  /// nao anda, nada responde.
+  ///
+  /// Na EXPORTACAO, nao vale: ali o quadro pode demorar o que precisar,
+  /// porque ninguem esta esperando resposta ao dedo. O arquivo entregue
+  /// nunca leva substituto.
+  final bool respeitarOrcamento;
+
+  /// ATE ONDE O PROCESSADOR AGUENTA, em triangulos por quadro.
+  ///
+  /// Medido por `test/ferramenta_custo_cena3d_test.dart`, em DESKTOP:
+  /// 6.174 triangulos custam 65 ms por quadro e 10.449 custam 101 ms. No
+  /// iPhone e duas a tres vezes mais. Um modelo importado de 60 mil
+  /// triangulos daria perto de DOIS SEGUNDOS por quadro — que e
+  /// exatamente o "clicar em algo so clica depois de uns 2 seg" do beta.
+  ///
+  /// Tres mil triangulos custam uns 30 ms aqui e uns 90 ms no aparelho.
+  /// E o limite do que ainda deixa o aplicativo responder ao dedo.
+  static const orcamentoDeCpu = 3000;
+
+  /// O SUBSTITUTO da cena pesada demais para o processador.
+  ///
+  /// Nao e um erro: e um aviso honesto de que a previa esta desligada
+  /// para o aplicativo continuar respondendo. O video exportado sai
+  /// completo, porque na exportacao o teto nao vale.
+  void _pintarPesadoDemais(Canvas canvas, Size size, int triangulos) {
+    final centro = size.center(Offset.zero);
+    final lado = size.shortestSide * 0.28;
+    final caixa = Rect.fromCenter(center: centro, width: lado, height: lado);
+    final traco = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = const Color(0x66FFFFFF);
+    // Uma caixa em perspectiva, so para o lugar da cena nao ficar vazio.
+    final frente = caixa.translate(-lado * 0.08, lado * 0.08);
+    final fundo = caixa.translate(lado * 0.08, -lado * 0.08);
+    canvas
+      ..drawRect(fundo, traco)
+      ..drawRect(frente, traco);
+    for (final par in [
+      (frente.topLeft, fundo.topLeft),
+      (frente.topRight, fundo.topRight),
+      (frente.bottomLeft, fundo.bottomLeft),
+      (frente.bottomRight, fundo.bottomRight),
+    ]) {
+      canvas.drawLine(par.$1, par.$2, traco);
+    }
+
+    final texto = TextPainter(
+      text: TextSpan(
+        children: [
+          const TextSpan(
+            text: 'Previa 3D desligada\n',
+            style: TextStyle(
+              color: Color(0xFFFFFFFF),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          TextSpan(
+            text:
+                'A cena tem $triangulos triangulos e o motor 3D esta no '
+                'processador.\n'
+                'O video exportado sai completo.',
+            style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 11),
+          ),
+        ],
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: size.width * 0.8);
+    texto.paint(
+      canvas,
+      Offset(centro.dx - texto.width / 2, caixa.bottom + lado * 0.22),
+    );
+  }
+
   /// Camera ja resolvida por quem monta a cena (tomadas e transicoes).
   /// Nula = usa [camera] direto.
   final RenderCamera? resolvedCamera;
@@ -260,6 +341,23 @@ class Scene3DPainter extends CustomPainter {
     final cam = _renderCamera();
     canvas.save();
     canvas.clipRect(Offset.zero & size);
+
+    // PESADO DEMAIS PARA O PROCESSADOR: mostra um substituto.
+    //
+    // Isto so acontece quando o motor em GPU nao esta em uso — por
+    // escolha nos Ajustes, ou porque a sessao anterior nao voltou. Nesse
+    // estado, uma cena com modelo importado nao "fica lenta": ela para o
+    // aplicativo inteiro, porque cada quadro leva mais de um segundo e
+    // nada mais roda enquanto isso. Um lugar vazio com um aviso e
+    // ruim; um aparelho que nao responde e pior.
+    if (respeitarOrcamento && !helpersOnly) {
+      final pedidos = trianglesEstimados(scene);
+      if (pedidos > orcamentoDeCpu) {
+        _pintarPesadoDemais(canvas, size, pedidos);
+        canvas.restore();
+        return;
+      }
+    }
 
     if (helpersOnly) {
       if (showHelpers && scene.showFloorGrid) {
