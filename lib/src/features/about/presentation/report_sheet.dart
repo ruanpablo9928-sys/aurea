@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/ui/snack.dart';
+import '../../../core/utils/versao_do_app.dart';
 import '../../editor/presentation/am/am_colors.dart';
 
 /// Dados do criador — usados no Sobre e no envio do relato.
@@ -16,7 +17,7 @@ class AureaAutor {
   static const email = 'ruanpablombl@gmail.com';
   static const instagram = 'ofruanzitwo';
   static const tiktok = 'ruanzitwo';
-  static const versao = '1.2.0 (35) · FX V2 beta';
+  static const versao = versaoCompleta;
 }
 
 enum _Tipo { bug, ferramenta, efeito, outro }

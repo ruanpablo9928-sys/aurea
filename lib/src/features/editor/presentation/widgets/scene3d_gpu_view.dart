@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../../application/motor3d_modo.dart';
 import '../../application/preview_stats.dart';
 import '../../application/qualidade3d_controller.dart';
+import '../../application/registro_de_travadas.dart';
 import '../../application/scene3d_gpu.dart';
 import '../../domain/orcamento_render.dart';
 import '../../domain/camera3d.dart';
@@ -26,6 +27,7 @@ class Scene3DGpuView extends StatefulWidget {
     this.view = SceneView.camera,
     this.rascunho = false,
     this.showHelpers = false,
+    this.showModelRig = false,
     this.selectedNodeId,
     this.exporting = false,
   });
@@ -40,6 +42,10 @@ class Scene3DGpuView extends StatefulWidget {
   /// liso.
   final bool rascunho;
   final bool showHelpers;
+
+  /// O esqueleto do modelo por cima do quadro. A tela de Animacao de
+  /// modelo vive disto: e por ele que a pose e editada.
+  final bool showModelRig;
   final String? selectedNodeId;
   final bool exporting;
 
@@ -153,7 +159,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
           ),
           size: Size.infinite,
         );
-        if (!widget.showHelpers) return quadro;
+        if (!widget.showHelpers && !widget.showModelRig) return quadro;
         // AS AJUDAS POR CIMA DA GPU, como no caminho do Filament: o
         // pintor em modo `helpersOnly` nunca avalia triangulo nenhum —
         // desenha grade, frustum e caixa do selecionado, e so.
@@ -169,7 +175,8 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
                   view: widget.view,
                   time: widget.time,
                   overrideCamera: widget.renderCamera,
-                  showHelpers: true,
+                  showHelpers: widget.showHelpers,
+                  showModelRig: widget.showModelRig,
                   helpersOnly: true,
                   selectedNodeId: widget.selectedNodeId,
                 ),
@@ -202,12 +209,19 @@ class _PintorGpu extends CustomPainter {
     canvas.save();
     canvas.clipRect(area);
     if (fundo != null) canvas.drawRect(area, Paint()..color = fundo!);
-    gpu.desenhar(
-      canvas,
-      area,
-      gpu.camera(camera, size),
-      rascunho: rascunho,
-      exporting: exporting,
+    // O DESENHO DA GPU E CHAMADO DAQUI, na fase de PINTURA — que o
+    // Flutter contabiliza como `constroi`, e nao como `desenha`. Um
+    // registro com `desenha 0` nao inocenta o motor 3D; so diz que a
+    // rasterizacao do quadro composto foi barata.
+    RegistroDeTravadas.marcando(
+      'cena 3D: desenhar na GPU',
+      () => gpu.desenhar(
+        canvas,
+        area,
+        gpu.camera(camera, size),
+        rascunho: rascunho,
+        exporting: exporting,
+      ),
     );
     canvas.restore();
   }

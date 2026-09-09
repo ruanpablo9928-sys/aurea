@@ -14,6 +14,7 @@ import 'caption_highlight_painter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../application/registro_de_travadas.dart';
 import '../../application/texture_cache.dart';
 import '../../application/blob_track_service.dart';
 import '../../application/editor_controller.dart';
@@ -504,7 +505,12 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RegistroDeTravadas.marcando(
+    'palco: construir',
+    () => _construir(context),
+  );
+
+  Widget _construir(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final onion = ref.watch(onionSkinProvider);
@@ -1213,7 +1219,12 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   bool get exporting => widget.exporting;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RegistroDeTravadas.marcando(
+    'composicao: construir',
+    () => _construir(context),
+  );
+
+  Widget _construir(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
 
     // O RASCUNHO PRECISA DE QUEM O ESCUTE. Sem este ouvinte, a

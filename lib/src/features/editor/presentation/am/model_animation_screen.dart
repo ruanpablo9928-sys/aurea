@@ -8,6 +8,8 @@ import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/model_asset3d.dart';
+import '../../application/scene3d_gpu.dart';
+import '../widgets/scene3d_gpu_view.dart';
 import '../widgets/scene3d_painter.dart';
 import 'am_widgets.dart';
 
@@ -111,18 +113,43 @@ class _ModelAnimationScreenState extends ConsumerState<ModelAnimationScreen>
                 SizedBox(
                   height: MediaQuery.sizeOf(context).height * .29,
                   width: double.infinity,
-                  child: CustomPaint(
-                    painter: Scene3DPainter(
-                      scene: l.scene,
-                      camera: l.camera,
-                      resolvedCamera: l.cameraAt(time),
-                      view: SceneView.camera,
-                      time: time,
-                      selectedNodeId: node.id,
-                      showHelpers: false,
-                      showModelRig: showRig,
-                    ),
-                  ),
+                  // ESTA TELA EXISTE PARA MOSTRAR O MODELO, entao ela
+                  // usa a GPU quando ha GPU.
+                  //
+                  // Ela era a unica previa 3D que so tinha o pintor de
+                  // CPU. Enquanto a estimativa de triangulos era cega
+                  // para o modelo importado isso passava batido: o teto
+                  // nunca disparava e o modelo era desenhado inteiro no
+                  // processador — mais de um segundo por quadro num
+                  // iPhone, com a tela sem responder. Corrigida a
+                  // estimativa, o teto passaria a disparar e a tela
+                  // mostraria um substituto no lugar do modelo, que e
+                  // justamente o que ela tem para mostrar.
+                  //
+                  // Com a GPU, nenhuma das duas coisas acontece. O
+                  // esqueleto vai por cima, como as demais ajudas.
+                  child: !Scene3DGpu.indisponivel
+                      ? Scene3DGpuView(
+                          scene: l.scene,
+                          camera: l.camera,
+                          renderCamera: l.cameraAt(time),
+                          view: SceneView.camera,
+                          time: time,
+                          selectedNodeId: node.id,
+                          showModelRig: showRig,
+                        )
+                      : CustomPaint(
+                          painter: Scene3DPainter(
+                            scene: l.scene,
+                            camera: l.camera,
+                            resolvedCamera: l.cameraAt(time),
+                            view: SceneView.camera,
+                            time: time,
+                            selectedNodeId: node.id,
+                            showHelpers: false,
+                            showModelRig: showRig,
+                          ),
+                        ),
                 ),
                 Row(
                   children: [

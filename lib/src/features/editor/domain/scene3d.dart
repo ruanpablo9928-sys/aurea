@@ -1117,15 +1117,43 @@ Element3DMesh _subdividedPrimitive(Element3DKind kind, int levels) {
 /// Serve para decidir ANTES de comecar se o pintor em CPU tem alguma
 /// chance. Conta a malha que o nivel de detalhe escolheria, que e a que
 /// seria desenhada de verdade.
-int trianglesEstimados(Scene3D cena) {
+int trianglesEstimados(Scene3D cena, {int? teto}) {
   var total = 0;
   for (final no in cena.nodes) {
     if (!no.visible || no.isNull) continue;
-    final malha = _automaticLod(no, cena.draftMode);
     final copias = no.instances.isEmpty ? 1 : no.instances.length;
-    total += (malha?.faces.length ?? facesDaPrimitiva(no.kind)) * copias;
+    total += facesQueONoDesenha(no, cena.draftMode, teto: teto) * copias;
   }
   return total;
+}
+
+/// Quantas faces este no manda desenhar, na mesma ordem de preferencia
+/// que o pintor usa: modelo importado manda; sem ele, a malha propria;
+/// sem ela, o solido do tipo.
+///
+/// O MODELO IMPORTADO ENTRA AQUI, e nao entrava. Um no de modelo tem
+/// `mesh` nulo — a geometria mora em `modelAsset` e so vira malha na
+/// hora de desenhar. A estimativa antiga caia no valor de primitiva e
+/// devolvia 32 para um modelo de sessenta mil faces. Duas consequencias,
+/// e as duas doeram:
+///
+///   - o teto do pintor de CPU nunca disparava justamente no unico caso
+///     para o qual ele foi feito, entao a protecao entregue no build 66
+///     nao protegia nada;
+///   - o registro do aparelho vinha com `PINTOU-EM-CPU=32tri` enquanto a
+///     cena tinha o modelo inteiro, e eu li isso como "o pintor de CPU
+///     esta fora disto".
+int facesQueONoDesenha(SceneNode no, bool rascunho, {int? teto}) {
+  final modelo = no.modelAsset;
+  if (modelo != null) {
+    // O pintor corta o modelo no teto antes de desenhar; a estimativa
+    // conta o que ele vai desenhar de verdade, nao o arquivo inteiro.
+    final limite =
+        teto ?? (rascunho ? tetoDeFacesCpuRascunho : tetoDeFacesCpu);
+    final faces = modelo.triangleCount;
+    return faces < limite ? faces : limite;
+  }
+  return _automaticLod(no, rascunho)?.faces.length ?? facesDaPrimitiva(no.kind);
 }
 
 /// Quantas faces uma primitiva do catalogo tem, por alto. Serve so para
@@ -1312,6 +1340,14 @@ SceneFrame renderScene(
   Size viewport,
   Duration t, {
   EnvironmentSampler? environmentSampler,
+  /// Quantas faces, no maximo, um modelo importado pode contribuir.
+  /// Nulo = o teto de sempre (cheio ou de rascunho, pela cena).
+  ///
+  /// Quem desenha a PREVIA passa o orcamento do pintor de CPU aqui: e
+  /// melhor um modelo decimado que aparece do que um modelo perfeito
+  /// que trava a tela — ou, pior, um substituto que nao mostra nada. A
+  /// EXPORTACAO nao passa nada e leva o modelo inteiro.
+  int? tetoDeFaces,
 }) {
   final basis = cameraBasis(cam);
   final opaque = <RenderTri>[];
@@ -1339,7 +1375,7 @@ SceneFrame renderScene(
     // tudo.
     final bruto = node.modelAsset?.evaluate(t, node.modelMotion);
     final modelFrame = bruto?.rascunho(
-      scene.draftMode ? tetoDeFacesCpuRascunho : tetoDeFacesCpu,
+      tetoDeFaces ?? (scene.draftMode ? tetoDeFacesCpuRascunho : tetoDeFacesCpu),
     );
     // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
     final selectedMesh =

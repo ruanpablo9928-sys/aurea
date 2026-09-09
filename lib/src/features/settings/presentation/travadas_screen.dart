@@ -5,15 +5,23 @@ import '../../editor/application/registro_de_travadas.dart';
 
 /// O REGISTRO DE TRAVADAS, para ler no aparelho e me mandar.
 ///
-/// A pergunta que tres tentativas de correcao nao conseguiram responder
-/// de longe foi simples: no SEU aparelho, com o SEU projeto, o que
-/// exatamente esta demorando? Esta tela responde com o que o proprio
+/// A pergunta que varias tentativas de correcao nao conseguiram
+/// responder de longe foi simples: no SEU aparelho, com o SEU projeto, o
+/// que exatamente esta demorando? Esta tela responde com o que o proprio
 /// aplicativo anotou enquanto travava.
 ///
-/// Cada linha e um quadro que passou de 120 ms. Ela diz quanto foi
-/// construcao (Dart, o mesmo fio que recebe o toque) e quanto foi
-/// desenho (GPU), o que o aplicativo estava fazendo, e — o mais
-/// importante — qual renderizador 3D estava em uso.
+/// Sao tres blocos, e a ordem e a ordem de utilidade:
+///
+///   1. POR MARCA — quanto tempo cada trabalho caro somou desde que o
+///      aplicativo abriu. E a resposta direta.
+///   2. TRAVADAS — cada quadro que passou de 120 ms e o que foi medido
+///      dentro dele. `nada marcado` aqui quer dizer que o tempo saiu de
+///      um caminho que ninguem esta cronometrando.
+///   3. CONSTROI x DESENHA — se o custo foi em Dart (o mesmo fio que
+///      recebe o toque) ou na GPU.
+///
+/// A linha de cima traz a VERSAO. Sem ela, dois registros iguais de
+/// builds diferentes contam historias opostas — foi o que aconteceu.
 class TravadasScreen extends StatefulWidget {
   const TravadasScreen({super.key});
 
@@ -22,10 +30,14 @@ class TravadasScreen extends StatefulWidget {
 }
 
 class _TravadasScreenState extends State<TravadasScreen> {
+  static const _mono = TextStyle(fontFamily: 'monospace', fontSize: 11);
+
   @override
   Widget build(BuildContext context) {
     final travadas = RegistroDeTravadas.travadas;
+    final quadros = RegistroDeTravadas.quadros;
     final causas = RegistroDeTravadas.porCausa();
+    final titulo = Theme.of(context).textTheme.titleSmall;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Travadas'),
@@ -58,16 +70,28 @@ class _TravadasScreenState extends State<TravadasScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          Text(
-            'Quem esta desenhando a cena 3D agora',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text('Versao e motor 3D em uso', style: titulo),
           const SizedBox(height: 6),
           SelectableText(
             descreverMotor3D(),
             key: const ValueKey('travadas-motor'),
             style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
           ),
+          if (causas.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            Text('Por marca, do que mais pesou', style: titulo),
+            const SizedBox(height: 6),
+            for (final c in causas.take(8))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${c.somaMs.toString().padLeft(6)} ms  '
+                  '${c.vezes.toString().padLeft(4)}x  '
+                  'pior ${c.piorMs.toString().padLeft(4)} ms   ${c.oQue}',
+                  style: _mono,
+                ),
+              ),
+          ],
           const SizedBox(height: 22),
           if (travadas.isEmpty)
             Text(
@@ -77,33 +101,22 @@ class _TravadasScreenState extends State<TravadasScreen> {
               key: const ValueKey('travadas-vazio'),
             )
           else ...[
-            Text(
-              'Por causa, do que mais pesou',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 6),
-            for (final c in causas.take(6))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '${c.somaMs.toString().padLeft(6)} ms em '
-                  '${c.vezes.toString().padLeft(3)}x   ${c.oQue}',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
-              ),
-            const SizedBox(height: 22),
-            Text(
-              '${travadas.length} travadas, da mais recente',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
+            Text('${travadas.length} travadas, da mais recente', style: titulo),
             const SizedBox(height: 6),
             for (final t in travadas)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: SelectableText(
-                  t.linha,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                ),
+                child: SelectableText(t.linha, style: _mono),
+              ),
+          ],
+          if (quadros.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            Text('Constroi x desenha', style: titulo),
+            const SizedBox(height: 6),
+            for (final q in quadros)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: SelectableText(q.linha, style: _mono),
               ),
           ],
         ],

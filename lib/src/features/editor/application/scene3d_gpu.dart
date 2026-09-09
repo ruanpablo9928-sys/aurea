@@ -276,20 +276,39 @@ class Scene3DGpu {
     // teto que valia quando ela foi pedida. O teto novo continua valendo
     // para as proximas.
     _capDasTexturas = _receita.texturaMax;
-    RegistroDeTravadas.marcando(
-      'sincronizando os objetos da cena 3D',
-      () => Perfil3D.fase(
-        'sincronia.nos',
-        () => _sincronizarNos(scene, t, onMudou),
-      ),
-    );
-    Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t));
-    Perfil3D.fase(
-      'sincronia.ambiente',
-      () => _sincronizarAmbiente(scene, t, onMudou),
-    );
-    _sincronizarNevoa(scene);
-    _sincronizarPos(scene, rascunho);
+    // AS MARCAS COBREM A SINCRONIA INTEIRA, e nao so os nos.
+    //
+    // Antes so `nos` era marcado. Se o tempo estivesse no ambiente (que
+    // gera o mapa de radiancia) ou nas luzes (que refazem as sombras em
+    // cascata), a travada aparecia como `nada marcado` — e `nada
+    // marcado` so vale como pista se o que sobrou for pequeno.
+    RegistroDeTravadas.marcando('cena 3D: sincronizar', () {
+      RegistroDeTravadas.marcando(
+        'cena 3D: sincronizar > nos',
+        () => Perfil3D.fase(
+          'sincronia.nos',
+          () => _sincronizarNos(scene, t, onMudou),
+        ),
+      );
+      RegistroDeTravadas.marcando(
+        'cena 3D: sincronizar > luzes',
+        () => Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t)),
+      );
+      RegistroDeTravadas.marcando(
+        'cena 3D: sincronizar > ambiente',
+        () => Perfil3D.fase(
+          'sincronia.ambiente',
+          () => _sincronizarAmbiente(scene, t, onMudou),
+        ),
+      );
+      RegistroDeTravadas.marcando(
+        'cena 3D: sincronizar > nevoa e pos',
+        () {
+          _sincronizarNevoa(scene);
+          _sincronizarPos(scene, rascunho);
+        },
+      );
+    });
     Perfil3D.quadro();
   }
 

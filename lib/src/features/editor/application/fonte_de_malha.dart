@@ -112,8 +112,21 @@ class CacheDeMalhas {
         uvs: frame.uvs,
         materiais: materiais,
         dinamica: animado,
+        // A ASSINATURA DECIDE SE O NO E RECONSTRUIDO NA GPU — e
+        // reconstruir um modelo importado e destruir e resubir buffers
+        // de dezenas de milhares de vertices, no fio da interface.
+        //
+        // Ela usava `identityHashCode(motion)`. Como o no e imutavel,
+        // toda reconstrucao traz um `ModelMotion3D` NOVO com o mesmo
+        // conteudo — objeto novo, hash de identidade novo, assinatura
+        // nova, no inteiro refeito. E o mesmo defeito que ja estava no
+        // cache do `evaluate` e que foi corrigido dando igualdade por
+        // VALOR aquela classe; aqui ele tinha sobrado.
+        //
+        // Agora a assinatura pergunta pelo VALOR. Mudar de animacao
+        // continua reconstruindo; reconstruir o widget, nao.
         assinatura:
-            'm${identityHashCode(asset)}:${identityHashCode(motion)}:'
+            'm${identityHashCode(asset)}:${motion.hashCode}:'
             '${node.instances.isNotEmpty}:'
             '${node.useModelMaterials ? 'a' : assinaturaDoMaterial(node.material)}',
       );

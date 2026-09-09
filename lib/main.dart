@@ -17,7 +17,10 @@ import 'src/features/editor/application/registro_de_travadas.dart';
 import 'src/features/settings/application/grafico_preferencia.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // A LIGACAO PROPRIA MEDE O QUADRO DESDE O PRIMEIRO CODIGO DART DELE.
+  // Sem ela, o registro de travadas confundiria tela parada com tela
+  // travada. Ver [RegistroDeTravadas].
+  LigacaoQueMedeOQuadro();
   TextureCache.instance.observeMemoryPressure(WidgetsBinding.instance);
   final prefs = await SharedPreferences.getInstance();
   // Resolve a migalha do motor 3D antes de qualquer cena desenhar:

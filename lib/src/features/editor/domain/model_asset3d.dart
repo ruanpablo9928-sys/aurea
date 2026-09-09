@@ -24,7 +24,10 @@ class ModelAsset3D {
   Set<int> get joints => {
     for (final s in skins) ...(s['joints'] as List).cast<int>(),
   };
-  int get triangleCount => primitives.fold<int>(
+  /// Quantas faces o modelo tem. Guardado porque agora o teto do pintor
+  /// de CPU pergunta isto A CADA QUADRO, e o dado nunca muda: o modelo e
+  /// imutavel depois de importado.
+  late final int triangleCount = primitives.fold<int>(
     0,
     (sum, p) => sum + (p['indices'] as List).length ~/ 3,
   );

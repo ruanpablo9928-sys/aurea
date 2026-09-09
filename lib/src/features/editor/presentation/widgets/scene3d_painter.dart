@@ -94,6 +94,7 @@ class _ChaveDoQuadro {
     required this.selecionado,
     required this.texturas,
     required this.panorama,
+    required this.teto,
   });
 
   final Scene3D scene;
@@ -109,6 +110,11 @@ class _ChaveDoQuadro {
   final String? selecionado;
   final int texturas;
   final int panorama;
+
+  /// O teto de faces deste desenho. Previa e exportacao desenham a mesma
+  /// cena com tetos diferentes: sem isto, o quadro decimado da previa
+  /// seria servido para a exportacao.
+  final int teto;
 
   // IDENTIDADE, e nao igualdade, para a cena e a camera: o editor cria
   // objetos novos a cada mudanca real, e comparar campo a campo uma cena
@@ -128,7 +134,8 @@ class _ChaveDoQuadro {
       other.rig == rig &&
       other.selecionado == selecionado &&
       other.texturas == texturas &&
-      other.panorama == panorama;
+      other.panorama == panorama &&
+      other.teto == teto;
 
   @override
   int get hashCode => Object.hash(
@@ -145,6 +152,7 @@ class _ChaveDoQuadro {
     selecionado,
     texturas,
     panorama,
+    teto,
   );
 }
 
@@ -269,6 +277,12 @@ class Scene3DPainter extends CustomPainter {
   /// E o limite do que ainda deixa o aplicativo responder ao dedo.
   static const orcamentoDeCpu = 3000;
 
+  /// Quantas faces um modelo importado pode contribuir neste desenho.
+  /// Na previa e o orcamento; na exportacao, o teto de sempre.
+  int? get _tetoDeFaces => respeitarOrcamento && !helpersOnly
+      ? orcamentoDeCpu
+      : null;
+
   /// O SUBSTITUTO da cena pesada demais para o processador.
   ///
   /// Nao e um erro: e um aviso honesto de que a previa esta desligada
@@ -339,7 +353,17 @@ class Scene3DPainter extends CustomPainter {
           : orthoViewCamera(view));
 
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(Canvas canvas, Size size) => RegistroDeTravadas.marcando(
+    helpersOnly
+        ? 'cena 3D: ajudas no processador'
+        : 'cena 3D: pintar no processador',
+    () => _pintar(canvas, size),
+  );
+
+  /// A PINTURA ACONTECE NA FASE DE PINTURA, que o Flutter conta como
+  /// `constroi` e nao como `desenha`. Por isso ela e marcada: um quadro
+  /// de 1.800 ms com `desenha 0` pode ser inteirinho daqui.
+  void _pintar(Canvas canvas, Size size) {
     final cam = _renderCamera();
     canvas.save();
     canvas.clipRect(Offset.zero & size);
@@ -352,15 +376,25 @@ class Scene3DPainter extends CustomPainter {
     // aplicativo inteiro, porque cada quadro leva mais de um segundo e
     // nada mais roda enquanto isso. Um lugar vazio com um aviso e
     // ruim; um aparelho que nao responde e pior.
-    if (respeitarOrcamento && !helpersOnly) {
-      final pedidos = trianglesEstimados(scene);
-      if (pedidos > orcamentoDeCpu) {
-        _pintarPesadoDemais(canvas, size, pedidos);
-        canvas.restore();
-        return;
-      }
+    // DECIMAR ATE CABER, EM VEZ DE RECUSAR A DESENHAR.
+    //
+    // O teto do pintor e o orcamento eram dois numeros que nao se
+    // falavam: o pintor cortava o modelo em 40 mil faces e o orcamento
+    // recusava qualquer coisa acima de 3 mil. Com a estimativa
+    // corrigida, TODO modelo importado passava a cair no substituto —
+    // inclusive na tela que existe para mostrar o modelo.
+    //
+    // Agora o teto E o orcamento. Um modelo de 73 mil faces vira um de
+    // 3 mil e aparece; e o substituto fica para o que a decimacao nao
+    // resolve — muitos objetos, muitas copias — que e o caso para o
+    // qual ele foi escrito. A exportacao nao tem teto e leva tudo.
+    final pedidos = trianglesEstimados(scene, teto: _tetoDeFaces);
+    RegistroDeTravadas.marcarCena(pedidos);
+    if (respeitarOrcamento && !helpersOnly && pedidos > orcamentoDeCpu) {
+      _pintarPesadoDemais(canvas, size, pedidos);
+      canvas.restore();
+      return;
     }
-    RegistroDeTravadas.marcarCena(trianglesEstimados(scene));
 
     if (helpersOnly) {
       if (showHelpers && scene.showFloorGrid) {
@@ -398,6 +432,7 @@ class Scene3DPainter extends CustomPainter {
       selecionado: selectedNodeId,
       texturas: TextureCache.instance.revision.value,
       panorama: PanoramaCache.instance.revision.value,
+      teto: _tetoDeFaces ?? 0,
     );
     // SEM O GUARDADO nos testes que espiam o canvas: eles contam
     // drawVertices e saveLayer para provar o custo do desenho, e um
@@ -446,6 +481,7 @@ class Scene3DPainter extends CustomPainter {
       size,
       time,
       environmentSampler: PanoramaCache.instance.samplerFor(scene.panorama),
+      tetoDeFaces: _tetoDeFaces,
     );
     onMetrics?.call(frame);
 
