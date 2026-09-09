@@ -26,17 +26,17 @@ enum AureaBlend {
 }
 
 String aureaBlendLabel(AureaBlend b) => switch (b) {
-      AureaBlend.linearBurn => 'Linear Burn',
-      AureaBlend.linearLight => 'Linear Light',
-      AureaBlend.vividLight => 'Vivid Light',
-      AureaBlend.pinLight => 'Pin Light',
-      AureaBlend.hardMix => 'Hard Mix',
-      AureaBlend.divide => 'Dividir',
-      AureaBlend.subtract => 'Subtrair',
-      AureaBlend.darkerColor => 'Cor mais escura',
-      AureaBlend.lighterColor => 'Cor mais clara',
-      AureaBlend.dissolve => 'Dissolver',
-    };
+  AureaBlend.linearBurn => 'Linear Burn',
+  AureaBlend.linearLight => 'Linear Light',
+  AureaBlend.vividLight => 'Vivid Light',
+  AureaBlend.pinLight => 'Pin Light',
+  AureaBlend.hardMix => 'Hard Mix',
+  AureaBlend.divide => 'Dividir',
+  AureaBlend.subtract => 'Subtrair',
+  AureaBlend.darkerColor => 'Cor mais escura',
+  AureaBlend.lighterColor => 'Cor mais clara',
+  AureaBlend.dissolve => 'Dissolver',
+};
 
 /// Modos que olham o PIXEL inteiro em vez de canal a canal.
 bool aureaBlendIsPerPixel(AureaBlend b) =>
@@ -46,11 +46,9 @@ bool aureaBlendIsPerPixel(AureaBlend b) =>
 
 double _clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
 
-double _burn(double b, double s) =>
-    s <= 0 ? 0 : 1 - math.min(1.0, (1 - b) / s);
+double _burn(double b, double s) => s <= 0 ? 0 : 1 - math.min(1.0, (1 - b) / s);
 
-double _dodge(double b, double s) =>
-    s >= 1 ? 1 : math.min(1.0, b / (1 - s));
+double _dodge(double b, double s) => s >= 1 ? 1 : math.min(1.0, b / (1 - s));
 
 /// Luminancia perceptual (Rec. 709) — a mesma do shader.
 double aureaLuma(double r, double g, double b) =>
@@ -69,9 +67,8 @@ double blendChannel(AureaBlend mode, double backdrop, double source) {
     AureaBlend.linearLight => _clamp01(b + 2 * s - 1),
     AureaBlend.vividLight =>
       s <= 0.5 ? _burn(b, 2 * s) : _dodge(b, 2 * (s - 0.5)),
-    AureaBlend.pinLight => s <= 0.5
-        ? math.min(b, 2 * s)
-        : math.max(b, 2 * (s - 0.5)),
+    AureaBlend.pinLight =>
+      s <= 0.5 ? math.min(b, 2 * s) : math.max(b, 2 * (s - 0.5)),
     AureaBlend.hardMix => b + s >= 1 ? 1 : 0,
     AureaBlend.divide => s <= 0 ? 1 : math.min(1.0, b / s),
     AureaBlend.subtract => _clamp01(b - s),
@@ -79,8 +76,7 @@ double blendChannel(AureaBlend mode, double backdrop, double source) {
     // inteiro faria no caso em que ele vence.
     AureaBlend.darkerColor ||
     AureaBlend.lighterColor ||
-    AureaBlend.dissolve =>
-      s,
+    AureaBlend.dissolve => s,
   };
 }
 
@@ -103,8 +99,7 @@ Rgb blendPixel(
   if (mode == AureaBlend.darkerColor || mode == AureaBlend.lighterColor) {
     final lb = aureaLuma(backdrop.$1, backdrop.$2, backdrop.$3);
     final ls = aureaLuma(source.$1, source.$2, source.$3);
-    final venceOTopo =
-        mode == AureaBlend.darkerColor ? ls < lb : ls > lb;
+    final venceOTopo = mode == AureaBlend.darkerColor ? ls < lb : ls > lb;
     return venceOTopo ? source : backdrop;
   }
   return (

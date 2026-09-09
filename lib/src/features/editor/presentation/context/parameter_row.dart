@@ -95,45 +95,45 @@ class ParameterRow extends StatelessWidget {
       unitsPerPixel: unitsPerPixel,
       onChanged: onChanged,
       child: ParameterFrame(
-      label: label,
-      keyframe: keyframe,
-      onReset: onReset,
-      height: height,
-      child: Row(
-        children: [
-          Expanded(
-            child: AmTickRuler(
-              key: rulerKey,
-              value: value,
-              min: min,
-              max: max,
-              unitsPerPixel: unitsPerPixel,
-              accentCenter: accentCenter,
-              height: height - 8,
-              arrastavel: false,
-              onChanged: onChanged,
-            ),
-          ),
-          const SizedBox(width: 6),
-          ParameterValue(
-            key: valueKey,
-            text: '${amNumber(value, decimals)}$unit',
-            prefix: (expression ?? '').trim().isEmpty ? null : 'fx',
-            onLongPress: onExpression,
-            onTap: () async {
-              final v = await showNumberInput(
-                context,
+        label: label,
+        keyframe: keyframe,
+        onReset: onReset,
+        height: height,
+        child: Row(
+          children: [
+            Expanded(
+              child: AmTickRuler(
+                key: rulerKey,
                 value: value,
-                unit: unit,
                 min: min,
                 max: max,
-                decimals: decimals,
-              );
-              if (v != null) onChanged(v);
-            },
-          ),
-        ],
-      ),
+                unitsPerPixel: unitsPerPixel,
+                accentCenter: accentCenter,
+                height: height - 8,
+                arrastavel: false,
+                onChanged: onChanged,
+              ),
+            ),
+            const SizedBox(width: 6),
+            ParameterValue(
+              key: valueKey,
+              text: '${amNumber(value, decimals)}$unit',
+              prefix: (expression ?? '').trim().isEmpty ? null : 'fx',
+              onLongPress: onExpression,
+              onTap: () async {
+                final v = await showNumberInput(
+                  context,
+                  value: value,
+                  unit: unit,
+                  min: min,
+                  max: max,
+                  decimals: decimals,
+                );
+                if (v != null) onChanged(v);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

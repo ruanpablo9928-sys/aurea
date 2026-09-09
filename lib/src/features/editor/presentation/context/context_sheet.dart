@@ -53,40 +53,40 @@ class ContextSheet extends StatelessWidget {
             // a arrastar; agora nada se arrasta, e um convite que nao
             // leva a lugar nenhum e pior do que nao convidar.
             child: title == null
-                  ? const SizedBox.shrink()
-                  : Row(
-                      children: [
-                        if (onBack != null)
-                          IconButton(
-                            key: const ValueKey('painel-voltar'),
-                            tooltip: 'Voltar às ferramentas da camada',
-                            onPressed: onBack,
-                            icon: Icon(
-                              Icons.chevron_left,
-                              size: 26,
+                ? const SizedBox.shrink()
+                : Row(
+                    children: [
+                      if (onBack != null)
+                        IconButton(
+                          key: const ValueKey('painel-voltar'),
+                          tooltip: 'Voltar às ferramentas da camada',
+                          onPressed: onBack,
+                          icon: Icon(
+                            Icons.chevron_left,
+                            size: 26,
+                            color: t.text,
+                          ),
+                        ),
+                      Expanded(
+                        child: Tooltip(
+                          message: subtitle ?? title!,
+                          child: Text(
+                            title!,
+                            key: const ValueKey('editor-context'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               color: t.text,
                             ),
                           ),
-                        Expanded(
-                          child: Tooltip(
-                            message: subtitle ?? title!,
-                            child: Text(
-                              title!,
-                              key: const ValueKey('editor-context'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: t.text,
-                              ),
-                            ),
-                          ),
                         ),
-                        ?trailing,
-                        const SizedBox(width: 12),
-                      ],
-                    ),
+                      ),
+                      ?trailing,
+                      const SizedBox(width: 12),
+                    ],
+                  ),
           ),
           Expanded(child: child),
         ],

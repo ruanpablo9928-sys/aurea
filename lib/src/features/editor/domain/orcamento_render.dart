@@ -262,10 +262,10 @@ class EstimativaGpu {
 
   int get total => alvosDeRender + sombras + texturas + ambiente + geometria;
 
-  double fracaoDe(int orcamento) =>
-      orcamento <= 0 ? 1 : total / orcamento;
+  double fracaoDe(int orcamento) => orcamento <= 0 ? 1 : total / orcamento;
 
-  NivelDePressao pressaoEm(int orcamento) => pressaoDaFracao(fracaoDe(orcamento));
+  NivelDePressao pressaoEm(int orcamento) =>
+      pressaoDaFracao(fracaoDe(orcamento));
 
   static const vazia = EstimativaGpu(
     alvosDeRender: 0,
@@ -535,10 +535,7 @@ EstimativaGpu estimarGpu({
     receita.escalaRender,
     math.min(1.0, receita.ladoMaximoPreview / maior),
   );
-  return (
-    largura: (largura * escala).ceil(),
-    altura: (altura * escala).ceil(),
-  );
+  return (largura: (largura * escala).ceil(), altura: (altura * escala).ceil());
 }
 
 /// A escala real (0..1) com que o preview desenha em [receita].
@@ -594,7 +591,8 @@ double escalaDoPreview(
 /// (0.9, 0.8, ...) ate caber — e o quadro final e ampliado de volta. Um
 /// 4K com MSAA e bloom pede mais de um giga de alvos; num aparelho de
 /// 4 GB isso e o app fechando no meio da exportacao.
-({Qualidade3D nivel, double escala, EstimativaGpu estimativa}) receitaDeExportacao({
+({Qualidade3D nivel, double escala, EstimativaGpu estimativa})
+receitaDeExportacao({
   required PerfilDaCena perfil,
   required int orcamentoBytes,
   required double larguraPx,

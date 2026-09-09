@@ -163,16 +163,21 @@ class World3DPainter extends CustomPainter {
 
   /// Monta a lista de triangulos (ainda sem ordenar). Publico para os
   /// testes: a ordem por profundidade e o que garante a interpenetracao.
-  static List<World3DTri> build(List<World3DItem> items, Size size,
-      {double focal = 1200, List<ui.Image?>? images}) {
+  static List<World3DTri> build(
+    List<World3DItem> items,
+    Size size, {
+    double focal = 1200,
+    List<ui.Image?>? images,
+  }) {
     final cx = size.width / 2, cy = size.height / 2;
     final out = <World3DTri>[];
     for (var k = 0; k < items.length; k++) {
       final it = items[k];
       final l = it.layer;
       // Modelo importado, se ja chegou; senao o solido nativo.
-      final custom =
-          l.meshPath == null ? null : MeshCache.instance.meshFor(l.meshPath!);
+      final custom = l.meshPath == null
+          ? null
+          : MeshCache.instance.meshFor(l.meshPath!);
       final mesh = custom ?? element3DMesh(l.kind);
       final info = _infoDe(custom == null ? l.kind : l.meshPath!, mesh);
       final img = images == null || k >= images.length ? null : images[k];
@@ -226,8 +231,7 @@ class World3DPainter extends CustomPainter {
       // Subdivisao: triangulos grandes viram quatro, ate duas vezes, para
       // a ordenacao por profundidade acertar quando solidos se cruzam.
       // Modelos importados grandes ja vem em triangulos pequenos.
-      final limiar =
-          items.length > 1 && mesh.faces.length <= 2000 ? 70.0 : 1e9;
+      final limiar = items.length > 1 && mesh.faces.length <= 2000 ? 70.0 : 1e9;
       void emite(List<List<double>> v, int mask, int prof) {
         double dist(List<double> a, List<double> b) {
           final dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
@@ -235,11 +239,13 @@ class World3DPainter extends CustomPainter {
         }
 
         final maior = math.max(
-            dist(v[0], v[1]), math.max(dist(v[1], v[2]), dist(v[2], v[0])));
+          dist(v[0], v[1]),
+          math.max(dist(v[1], v[2]), dist(v[2], v[0])),
+        );
         if (prof < 2 && maior > limiar) {
           List<double> meio(List<double> a, List<double> b) => [
-                for (var i = 0; i < a.length; i++) (a[i] + b[i]) / 2,
-              ];
+            for (var i = 0; i < a.length; i++) (a[i] + b[i]) / 2,
+          ];
           final m01 = meio(v[0], v[1]);
           final m12 = meio(v[1], v[2]);
           final m20 = meio(v[2], v[0]);
@@ -256,21 +262,26 @@ class World3DPainter extends CustomPainter {
         for (final p in v) {
           pts.add(projeta(p[0], p[1], p[2]));
           depth += p[2];
-          cores.add(Color.from(
+          cores.add(
+            Color.from(
               alpha: p[3].clamp(0.0, 1.0),
               red: p[4].clamp(0.0, 1.0),
               green: p[5].clamp(0.0, 1.0),
-              blue: p[6].clamp(0.0, 1.0)));
+              blue: p[6].clamp(0.0, 1.0),
+            ),
+          );
           uv?.add(Offset(p[7], p[8]));
         }
-        out.add(World3DTri(
-          depth: depth / 3,
-          pts: pts,
-          colors: cores,
-          item: k,
-          edges: mask,
-          uv: uv,
-        ));
+        out.add(
+          World3DTri(
+            depth: depth / 3,
+            pts: pts,
+            colors: cores,
+            item: k,
+            edges: mask,
+            uv: uv,
+          ),
+        );
       }
 
       for (var f = 0; f < mesh.faces.length; f++) {
@@ -312,8 +323,13 @@ class World3DPainter extends CustomPainter {
   }
 
   /// Cor final de um vertice: material + luz + reflexo, ja composta.
-  static Color _shade(World3DItem it, double nx, double ny, double nz,
-      {bool textured = false}) {
+  static Color _shade(
+    World3DItem it,
+    double nx,
+    double ny,
+    double nz, {
+    bool textured = false,
+  }) {
     // A normal virada para a camera e a que conta (faces de tras tambem
     // sao pintadas, sem descarte).
     if (nz > 0) {
@@ -329,8 +345,9 @@ class World3DPainter extends CustomPainter {
     const hx = -0.37, hy = -0.55, hz = -1.75;
     final hl = math.sqrt(hx * hx + hy * hy + hz * hz);
     final ndoth = ((nx * hx + ny * hy + nz * hz) / hl).clamp(0.0, 1.0);
-    final spec =
-        math.pow(ndoth, 6 + 110 * it.shininess.clamp(0.0, 1.0)).toDouble();
+    final spec = math
+        .pow(ndoth, 6 + 110 * it.shininess.clamp(0.0, 1.0))
+        .toDouble();
     final fresnel = 0.04 + 0.96 * math.pow(1 - nv, 5).toDouble();
     final base = textured ? Colors.white : it.layer.color;
 
@@ -352,10 +369,11 @@ class World3DPainter extends CustomPainter {
     Color deAmbiente() {
       final (er, eg, eb) = ambiente();
       return Color.from(
-          alpha: 1,
-          red: er.clamp(0.0, 1.0),
-          green: eg.clamp(0.0, 1.0),
-          blue: eb.clamp(0.0, 1.0));
+        alpha: 1,
+        red: er.clamp(0.0, 1.0),
+        green: eg.clamp(0.0, 1.0),
+        blue: eb.clamp(0.0, 1.0),
+      );
     }
 
     Color fill;
@@ -364,8 +382,10 @@ class World3DPainter extends CustomPainter {
     var amt = 0.0;
     switch (textured ? 0 : it.material) {
       case 1: // brilhante em degrade (iridescente)
-        final t = (0.5 - ny * 0.45 + nx * 0.2 + (1 - nv) * 0.25)
-            .clamp(0.0, 1.0);
+        final t = (0.5 - ny * 0.45 + nx * 0.2 + (1 - nv) * 0.25).clamp(
+          0.0,
+          1.0,
+        );
         final col = gradientAt(it.gradient, t);
         fill = Color.lerp(Colors.black, col, 0.55 + 0.45 * diffuse)!;
         over = Colors.white;
@@ -376,8 +396,10 @@ class World3DPainter extends CustomPainter {
         over = it.layer.reflect > 0
             ? Color.lerp(deAmbiente(), Colors.white, spec)!
             : Colors.white;
-        amt = (spec * 0.95 + fresnel * 0.25 + it.layer.reflect * 0.2)
-            .clamp(0.0, 1.0);
+        amt = (spec * 0.95 + fresnel * 0.25 + it.layer.reflect * 0.2).clamp(
+          0.0,
+          1.0,
+        );
       case 3: // metal
         fill = Color.lerp(Colors.black, base, 0.25 + 0.5 * diffuse)!;
         over = Color.lerp(deAmbiente(), Colors.white, spec * 0.8)!;
@@ -391,7 +413,9 @@ class World3DPainter extends CustomPainter {
           amt = (it.layer.reflect * (0.25 + 0.75 * fresnel)).clamp(0.0, 1.0);
         }
     }
-    final c = over == null || amt <= 0.002 ? fill : Color.lerp(fill, over, amt)!;
+    final c = over == null || amt <= 0.002
+        ? fill
+        : Color.lerp(fill, over, amt)!;
     return c.withValues(alpha: (alpha * it.opacity).clamp(0.0, 1.0));
   }
 
@@ -446,7 +470,11 @@ class World3DPainter extends CustomPainter {
       fill.isAntiAlias = !translucido;
       if (img != null && t.uv != null) {
         final shader = shaders[t.item] ??= ui.ImageShader(
-            img, TileMode.clamp, TileMode.clamp, Matrix4.identity().storage);
+          img,
+          TileMode.clamp,
+          TileMode.clamp,
+          Matrix4.identity().storage,
+        );
         final w = img.width.toDouble(), h = img.height.toDouble();
         final positions = Float32List(6);
         final coords = Float32List(6);
@@ -459,8 +487,12 @@ class World3DPainter extends CustomPainter {
           colors[m] = t.colors[m].toARGB32();
         }
         canvas.drawVertices(
-          ui.Vertices.raw(ui.VertexMode.triangles, positions,
-              textureCoordinates: coords, colors: colors),
+          ui.Vertices.raw(
+            ui.VertexMode.triangles,
+            positions,
+            textureCoordinates: coords,
+            colors: colors,
+          ),
           BlendMode.modulate,
           Paint()..shader = shader,
         );
@@ -470,30 +502,40 @@ class World3DPainter extends CustomPainter {
         if (plano) {
           fill.color = c0;
           canvas.drawPath(
-              Path()
-                ..moveTo(pts[0].dx, pts[0].dy)
-                ..lineTo(pts[1].dx, pts[1].dy)
-                ..lineTo(pts[2].dx, pts[2].dy)
-                ..close(),
-              fill);
+            Path()
+              ..moveTo(pts[0].dx, pts[0].dy)
+              ..lineTo(pts[1].dx, pts[1].dy)
+              ..lineTo(pts[2].dx, pts[2].dy)
+              ..close(),
+            fill,
+          );
         } else {
           final positions = Float32List.fromList([
-            pts[0].dx, pts[0].dy, pts[1].dx, pts[1].dy, pts[2].dx, pts[2].dy,
+            pts[0].dx,
+            pts[0].dy,
+            pts[1].dx,
+            pts[1].dy,
+            pts[2].dx,
+            pts[2].dy,
           ]);
-          final colors = Int32List.fromList(
-              [c0.toARGB32(), c1.toARGB32(), c2.toARGB32()]);
+          final colors = Int32List.fromList([
+            c0.toARGB32(),
+            c1.toARGB32(),
+            c2.toARGB32(),
+          ]);
           canvas.drawVertices(
-            ui.Vertices.raw(ui.VertexMode.triangles, positions,
-                colors: colors),
+            ui.Vertices.raw(ui.VertexMode.triangles, positions, colors: colors),
             BlendMode.srcOver,
             fill..color = Colors.white,
           );
         }
       }
       if (it.layer.edges && t.edges != 0) {
-        final ec = edgeColors[t.item] ??=
-            Color.lerp(it.layer.color, Colors.black, 0.55)!
-                .withValues(alpha: it.opacity.clamp(0.0, 1.0));
+        final ec = edgeColors[t.item] ??= Color.lerp(
+          it.layer.color,
+          Colors.black,
+          0.55,
+        )!.withValues(alpha: it.opacity.clamp(0.0, 1.0));
         stroke.color = ec;
         if (t.edges & 1 != 0) canvas.drawLine(t.pts[0], t.pts[1], stroke);
         if (t.edges & 2 != 0) canvas.drawLine(t.pts[1], t.pts[2], stroke);
@@ -516,11 +558,12 @@ class World3DPainter extends CustomPainter {
       }
       if (first) continue;
       canvas.drawRect(
-          r.inflate(6),
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 4
-            ..color = Colors.white);
+        r.inflate(6),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4
+          ..color = Colors.white,
+      );
     }
   }
 

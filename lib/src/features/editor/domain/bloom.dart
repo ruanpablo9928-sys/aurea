@@ -13,10 +13,10 @@ import 'dart:math' as math;
 
 /// Quantos niveis a qualidade pede.
 int bloomLevels(int quality) => switch (quality) {
-      0 => 2, // Draft
-      2 => 5, // High
-      _ => 3, // Normal
-    };
+  0 => 2, // Draft
+  2 => 5, // High
+  _ => 3, // Normal
+};
 
 /// Pesos NORMALIZADOS de cada nivel: IGUAIS, e a soma e sempre 1.
 ///
@@ -119,18 +119,27 @@ double tonemap(double x, int mode) {
 /// A conta e `(x * ganho - limiar) / (ganho - limiar)`: o limiar cai em
 /// zero e o valor mais alto possivel depois do ganho continua no teto.
 (double, double) glowThresholdMatrix(
-    double threshold, double softness, double gain) {
+  double threshold,
+  double softness,
+  double gain,
+) {
   final g = math.max(0.01, gain);
-  final efetivo = (threshold * (1 - softness.clamp(0.0, 1.0) * 0.5))
-      .clamp(0.0, g * 0.98);
+  final efetivo = (threshold * (1 - softness.clamp(0.0, 1.0) * 0.5)).clamp(
+    0.0,
+    g * 0.98,
+  );
   final escala = g / math.max(0.02, g - efetivo);
   return (escala, -efetivo * 255 * (escala / g));
 }
 
 /// O quanto de um pixel de luminancia [l] (0..1) sobra depois do ganho e
 /// do limiar, pela mesma conta que a matriz faz. So para teste.
-double glowAfterThreshold(double l, double threshold, double softness,
-        [double gain = 1]) {
+double glowAfterThreshold(
+  double l,
+  double threshold,
+  double softness, [
+  double gain = 1,
+]) {
   final (escala, desl) = glowThresholdMatrix(threshold, softness, gain);
   return ((l * 255 * escala + desl) / 255).clamp(0.0, 1.0);
 }

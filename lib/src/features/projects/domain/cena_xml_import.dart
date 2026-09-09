@@ -336,10 +336,7 @@ XmlNode _zDe(XmlNode loc) {
     if (k.tag != 'kf') continue;
     final v = k.attr(['v']);
     copia.children.add(
-      XmlNode('kf', {
-        ...k.attrs,
-        if (v != null) 'v': _comp(v, 2),
-      }, copia),
+      XmlNode('kf', {...k.attrs, if (v != null) 'v': _comp(v, 2)}, copia),
     );
   }
   return copia;
@@ -415,9 +412,10 @@ Easing _curva(String? e) {
     ),
     'elastic' => const Easing(type: EasingType.elastic),
     'bounce' => const Easing(type: EasingType.bounce),
-    'hold' || 'step' || 'steps' || 'constant' => const Easing(
-      type: EasingType.steps,
-    ),
+    'hold' ||
+    'step' ||
+    'steps' ||
+    'constant' => const Easing(type: EasingType.steps),
     'ease' || 'easeinout' => Easing.easeInOut,
     'easein' => Easing.easeIn,
     'easeout' => Easing.easeOut,
@@ -465,8 +463,8 @@ Layer _forma(
         6;
     itens.add(
       ShapeStroke(
-        color: _cor(ps.child('color')?.attr(['value'])) ??
-            const Color(0xFFFFFFFF),
+        color:
+            _cor(ps.child('color')?.attr(['value'])) ?? const Color(0xFFFFFFFF),
         width: AnimatedDouble(larguraStroke <= 0 ? 6 : larguraStroke),
       ),
     );
@@ -559,7 +557,9 @@ ShapeItem? _geometria(XmlNode e, Duration dur, _Contexto ctx) {
     _ => null,
   };
   if (kind == null) {
-    ctx.ignora('forma "$nome" nao existe aqui — virou retangulo do mesmo tamanho');
+    ctx.ignora(
+      'forma "$nome" nao existe aqui — virou retangulo do mesmo tamanho',
+    );
   }
   final raio = _num(_propriedade(e, 'cornerRadius')?.attr(['value']));
   final pontas = _num(_propriedade(e, 'pointCount')?.attr(['value']));
@@ -603,11 +603,14 @@ Layer _textoCamada(
   _Contexto ctx,
 ) {
   final conteudo = e.child('content')?.innerText.trim() ?? '';
-  final texto = conteudo.isEmpty ? (_texto(e.attr(['label'])) ?? 'Texto') : conteudo;
+  final texto = conteudo.isEmpty
+      ? (_texto(e.attr(['label'])) ?? 'Texto')
+      : conteudo;
   final fc = e.child('fillcolor');
   // O nome e o rotulo do arquivo; sem rotulo, o proprio texto (e o que
   // deixa a timeline legivel — "Texto" em dez camadas nao diz nada).
-  final rotulo = _texto(e.attr(['label'])) ??
+  final rotulo =
+      _texto(e.attr(['label'])) ??
       (texto.length > 24 ? texto.substring(0, 24) : texto);
   return TextLayer(
     name: rotulo,

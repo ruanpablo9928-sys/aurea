@@ -45,13 +45,13 @@ class TemplatePack {
   }
 
   Map<String, dynamic> toJson() => {
-        'aurea': 'template',
-        'v': version,
-        'name': name,
-        if (author.isNotEmpty) 'author': author,
-        if (notes.isNotEmpty) 'notes': notes,
-        'project': projectToJson(project),
-      };
+    'aurea': 'template',
+    'v': version,
+    'name': name,
+    if (author.isNotEmpty) 'author': author,
+    if (notes.isNotEmpty) 'notes': notes,
+    'project': projectToJson(project),
+  };
 
   String encode() => const JsonEncoder.withIndent('  ').convert(toJson());
 
@@ -97,33 +97,40 @@ List<TemplateIssue> validateTemplate(VideoProject p) {
     out.add(const TemplateIssue('O projeto esta vazio.', blocking: true));
   }
   if (p.exposed.isEmpty) {
-    out.add(const TemplateIssue(
+    out.add(
+      const TemplateIssue(
         'Nenhuma propriedade exposta: quem receber nao vai poder mudar '
         'nada.',
-        blocking: true));
+        blocking: true,
+      ),
+    );
   }
 
   // Campo apontando para camada que nao existe e o defeito classico de
   // template: some depois de alguem apagar a camada, e o formulario
   // continua mostrando o campo que nao faz nada.
-  final ids = {
-    for (final l in _todasAsCamadas(p.layers)) l.id,
-  };
+  final ids = {for (final l in _todasAsCamadas(p.layers)) l.id};
   for (final e in p.exposed) {
     if (!ids.contains(e.layerId)) {
-      out.add(TemplateIssue(
+      out.add(
+        TemplateIssue(
           'O campo "${e.label}" aponta para uma camada que nao existe '
           'mais.',
-          blocking: true));
+          blocking: true,
+        ),
+      );
     }
   }
 
   final rotulos = <String>{};
   for (final e in p.exposed) {
     if (!rotulos.add('${e.group}/${e.label}')) {
-      out.add(TemplateIssue(
+      out.add(
+        TemplateIssue(
           'Dois campos chamados "${e.label}" no grupo "${e.group}" — '
-          'quem preencher nao vai saber qual e qual.'));
+          'quem preencher nao vai saber qual e qual.',
+        ),
+      );
     }
   }
 
@@ -137,9 +144,12 @@ List<TemplateIssue> validateTemplate(VideoProject p) {
         l.sourcePath,
   };
   if (midiaExterna.isNotEmpty) {
-    out.add(TemplateIssue(
+    out.add(
+      TemplateIssue(
         '${midiaExterna.length} arquivo(s) de midia ficam de fora do '
-        'pacote: o template leva o projeto, nao os videos.'));
+        'pacote: o template leva o projeto, nao os videos.',
+      ),
+    );
   }
 
   return out;

@@ -24,13 +24,17 @@ enum AmSecao {
   volume,
   fade,
   editarForma,
+
   /// O Modulo Grade do nulo — clonar em grade, circulo, esfera ou caminho.
   clonar,
+
   /// Texto: conteudo, fonte, animadores e texto em caminho.
   editarTexto,
+
   /// Legenda: o texto de cada fala e o estilo.
   editarLegendas,
   particulas,
+
   /// Cena 3D e Elemento 3D: objetos, materiais, luzes, cameras e cortes.
   cena3d,
   presets,

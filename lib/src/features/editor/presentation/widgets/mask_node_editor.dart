@@ -34,8 +34,7 @@ class PathEditTarget {
   int get hashCode => Object.hash(layerId, maskId, forma);
 }
 
-final pathEditTargetProvider =
-    StateProvider<PathEditTarget?>((ref) => null);
+final pathEditTargetProvider = StateProvider<PathEditTarget?>((ref) => null);
 
 /// Qual no esta selecionado (o unico que mostra alcas).
 final pathEditSelectedProvider = StateProvider<int?>((ref) => null);
@@ -129,8 +128,7 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
     );
   }
 
-  void _editar(
-      PathEditTarget alvo, BezierPath Function(BezierPath) fn) {
+  void _editar(PathEditTarget alvo, BezierPath Function(BezierPath) fn) {
     final c = ref.read(editorControllerProvider.notifier);
     if (alvo.forma) {
       c.editShapeBezier(alvo.layerId, alvo.maskId, widget.time.value, fn);
@@ -192,8 +190,7 @@ class _MaskNodeEditorState extends ConsumerState<MaskNodeEditor> {
             }
             _arrastandoNo = vertexAt(caminho, p, _raio);
             if (_arrastandoNo != null) {
-              ref.read(pathEditSelectedProvider.notifier).state =
-                  _arrastandoNo;
+              ref.read(pathEditSelectedProvider.notifier).state = _arrastandoNo;
             }
           },
           onPanUpdate: (d) {
@@ -268,17 +265,19 @@ class _NodePainter extends CustomPainter {
       contorno.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p3.dx, p3.dy);
     }
     canvas.drawPath(
-        contorno,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3.5 * k
-          ..color = const Color(0xCC000000));
+      contorno,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5 * k
+        ..color = const Color(0xCC000000),
+    );
     canvas.drawPath(
-        contorno,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 * k
-          ..color = AmColors.accent);
+      contorno,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5 * k
+        ..color = AmColors.accent,
+    );
 
     // Alcas so do no selecionado — mostrar todas vira um monte de
     // bolinha sobreposta e nao da para pegar nenhuma.
@@ -290,13 +289,13 @@ class _NodePainter extends CustomPainter {
         if (rel == Offset.zero) continue;
         final ponta = toComp(v.p + rel);
         canvas.drawLine(
-            centro,
-            ponta,
-            Paint()
-              ..strokeWidth = 1.2 * k
-              ..color = AmColors.tealBright);
-        canvas.drawCircle(
-            ponta, 6 * k, Paint()..color = AmColors.tealBright);
+          centro,
+          ponta,
+          Paint()
+            ..strokeWidth = 1.2 * k
+            ..color = AmColors.tealBright,
+        );
+        canvas.drawCircle(ponta, 6 * k, Paint()..color = AmColors.tealBright);
       }
     }
 
@@ -310,12 +309,17 @@ class _NodePainter extends CustomPainter {
       if (v.corner) {
         final quad = Rect.fromCenter(center: p, width: r * 2, height: r * 2);
         canvas.drawRect(quad, Paint()..color = const Color(0xCC000000));
-        canvas.drawRect(quad.deflate(1.2 * k),
-            Paint()..color = aceso ? AmColors.accent : Colors.white);
+        canvas.drawRect(
+          quad.deflate(1.2 * k),
+          Paint()..color = aceso ? AmColors.accent : Colors.white,
+        );
       } else {
         canvas.drawCircle(p, r, Paint()..color = const Color(0xCC000000));
-        canvas.drawCircle(p, r - 1.2 * k,
-            Paint()..color = aceso ? AmColors.accent : Colors.white);
+        canvas.drawCircle(
+          p,
+          r - 1.2 * k,
+          Paint()..color = aceso ? AmColors.accent : Colors.white,
+        );
       }
     }
   }

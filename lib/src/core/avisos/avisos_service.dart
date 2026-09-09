@@ -82,8 +82,12 @@ class Aviso {
 enum NivelDoAviso { info, atencao, problema }
 
 class AvisosService {
-  AvisosService({HttpClient? http, this.endereco = ComunidadeService.enderecoPadrao})
-    : _http = http ?? (HttpClient()..connectionTimeout = const Duration(seconds: 8));
+  AvisosService({
+    HttpClient? http,
+    this.endereco = ComunidadeService.enderecoPadrao,
+  }) : _http =
+           http ??
+           (HttpClient()..connectionTimeout = const Duration(seconds: 8));
 
   static final instance = AvisosService();
 

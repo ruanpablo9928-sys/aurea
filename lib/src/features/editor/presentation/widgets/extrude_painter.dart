@@ -49,23 +49,40 @@ class ExtrudeSnapshotPainter extends SnapshotPainter {
   }
 
   @override
-  void paint(PaintingContext context, Offset offset, Size size,
-      PaintingContextCallback painter) {
+  void paint(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    PaintingContextCallback painter,
+  ) {
     // Sem foto (nao deveria acontecer no modo forcado): so a frente,
     // pelo caminho normal de transform.
     context.pushTransform(true, offset, _matriz(size, 0), (ctx, off) {
-      ctx.pushOpacity(off, (opacity * 255).round().clamp(0, 255),
-          (c2, o2) => painter(c2, o2));
+      ctx.pushOpacity(
+        off,
+        (opacity * 255).round().clamp(0, 255),
+        (c2, o2) => painter(c2, o2),
+      );
     });
   }
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     final alpha = opacity.clamp(0.0, 1.0);
     final shader = ui.ImageShader(
-        image, TileMode.clamp, TileMode.clamp, Matrix4.identity().storage);
+      image,
+      TileMode.clamp,
+      TileMode.clamp,
+      Matrix4.identity().storage,
+    );
     final paint = Paint()
       ..shader = shader
       ..filterQuality = FilterQuality.medium;
@@ -120,8 +137,13 @@ class ExtrudeSnapshotPainter extends SnapshotPainter {
         }
       }
       canvas.drawVertices(
-        ui.Vertices.raw(ui.VertexMode.triangles, pos,
-            textureCoordinates: uv, colors: cores, indices: idx),
+        ui.Vertices.raw(
+          ui.VertexMode.triangles,
+          pos,
+          textureCoordinates: uv,
+          colors: cores,
+          indices: idx,
+        ),
         BlendMode.modulate,
         paint,
       );

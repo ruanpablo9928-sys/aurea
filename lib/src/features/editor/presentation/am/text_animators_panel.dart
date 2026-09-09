@@ -30,8 +30,7 @@ class TextAnimatorsPanel extends ConsumerStatefulWidget {
   final VoidCallback onBack;
 
   @override
-  ConsumerState<TextAnimatorsPanel> createState() =>
-      _TextAnimatorsPanelState();
+  ConsumerState<TextAnimatorsPanel> createState() => _TextAnimatorsPanelState();
 }
 
 class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
@@ -43,108 +42,123 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
     final project = ref.watch(editorControllerProvider);
     final controller = ref.read(editorControllerProvider.notifier);
     final selectedId = ref.watch(selectedLayerProvider);
-    final layer =
-        selectedId == null ? null : project.layerById(selectedId);
+    final layer = selectedId == null ? null : project.layerById(selectedId);
 
     if (layer is! TextLayer) {
-      return _shell(const Center(
-        child: Text('Selecione uma camada de texto',
-            style: TextStyle(color: AmColors.muted, fontSize: 13)),
-      ));
-    }
-
-    final current =
-        layer.anims.where((a) => a.slot == _slot).firstOrNull;
-
-    return _shell(Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _slotTabs(layer),
-        // UMA superficie rolavel so. A grade era um GridView com
-        // shrinkWrap dentro de uma ListView: alem do conflito de gesto,
-        // shrinkWrap CONSTROI TUDO de uma vez — trinta e seis
-        // miniaturas animadas nascendo juntas era o travamento.
-        //
-        // Em sliver, a grade nasce preguicosa: a miniatura de fora da
-        // tela nao existe, entao nao anima e nao ocupa memoria.
-        Expanded(
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                sliver: _catalogSliver(layer, controller, current),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (current != null) ...[
-                        const SizedBox(height: 14),
-                        _controls(layer, controller, current),
-                      ],
-                      const SizedBox(height: 16),
-                      _advancedSection(layer, controller),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+      return _shell(
+        const Center(
+          child: Text(
+            'Selecione uma camada de texto',
+            style: TextStyle(color: AmColors.muted, fontSize: 13),
           ),
         ),
-      ],
-    ));
+      );
+    }
+
+    final current = layer.anims.where((a) => a.slot == _slot).firstOrNull;
+
+    return _shell(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _slotTabs(layer),
+          // UMA superficie rolavel so. A grade era um GridView com
+          // shrinkWrap dentro de uma ListView: alem do conflito de gesto,
+          // shrinkWrap CONSTROI TUDO de uma vez — trinta e seis
+          // miniaturas animadas nascendo juntas era o travamento.
+          //
+          // Em sliver, a grade nasce preguicosa: a miniatura de fora da
+          // tela nao existe, entao nao anima e nao ocupa memoria.
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  sliver: _catalogSliver(layer, controller, current),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (current != null) ...[
+                          const SizedBox(height: 14),
+                          _controls(layer, controller, current),
+                        ],
+                        const SizedBox(height: 16),
+                        _advancedSection(layer, controller),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _shell(Widget child) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(
-            children: [
-              CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                onPressed: widget.onBack,
-                child: const Icon(CupertinoIcons.chevron_left,
-                    size: 20, color: AmColors.text),
-              ),
-              const Text('Animacao de texto',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AmColors.text)),
-              const Spacer(),
-              // O TUTORIAL, onde a duvida nasce: a mola tem tres numeros
-              // e nenhum deles se entende so pelo nome.
-              CupertinoButton(
-                key: const ValueKey('texto-anim-tutorial'),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                onPressed: () {
-                  widget.playback.pause();
-                  // Rota do Cupertino: este painel nao importa o
-                  // Material, e o empurrao lateral e o do iOS mesmo.
-                  Navigator.of(context).push(
-                    CupertinoPageRoute<void>(
-                      builder: (_) => const TutorialScreen(id: 'texto-bounce'),
-                    ),
-                  );
-                },
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(CupertinoIcons.play_rectangle,
-                        size: 15, color: AmColors.accent),
-                    SizedBox(width: 5),
-                    Text('Tutorial',
-                        style: TextStyle(fontSize: 12, color: AmColors.accent)),
-                  ],
-                ),
-              ),
-            ],
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            onPressed: widget.onBack,
+            child: const Icon(
+              CupertinoIcons.chevron_left,
+              size: 20,
+              color: AmColors.text,
+            ),
           ),
-          Expanded(child: child),
+          const Text(
+            'Animacao de texto',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AmColors.text,
+            ),
+          ),
+          const Spacer(),
+          // O TUTORIAL, onde a duvida nasce: a mola tem tres numeros
+          // e nenhum deles se entende so pelo nome.
+          CupertinoButton(
+            key: const ValueKey('texto-anim-tutorial'),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            onPressed: () {
+              widget.playback.pause();
+              // Rota do Cupertino: este painel nao importa o
+              // Material, e o empurrao lateral e o do iOS mesmo.
+              Navigator.of(context).push(
+                CupertinoPageRoute<void>(
+                  builder: (_) => const TutorialScreen(id: 'texto-bounce'),
+                ),
+              );
+            },
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  CupertinoIcons.play_rectangle,
+                  size: 15,
+                  color: AmColors.accent,
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'Tutorial',
+                  style: TextStyle(fontSize: 12, color: AmColors.accent),
+                ),
+              ],
+            ),
+          ),
         ],
-      );
+      ),
+      Expanded(child: child),
+    ],
+  );
 
   Widget _slotTabs(TextLayer layer) {
     return Padding(
@@ -160,8 +174,7 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                   padding: const EdgeInsets.symmetric(vertical: 9),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color:
-                        s == _slot ? AmColors.accentDim : AmColors.chip,
+                    color: s == _slot ? AmColors.accentDim : AmColors.chip,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -174,8 +187,7 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                           fontWeight: s == _slot
                               ? FontWeight.w700
                               : FontWeight.w400,
-                          color:
-                              s == _slot ? AmColors.accent : AmColors.muted,
+                          color: s == _slot ? AmColors.accent : AmColors.muted,
                         ),
                       ),
                       // Ponto verde na posicao que ja tem animacao.
@@ -201,7 +213,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
   }
 
   Widget _catalogSliver(
-      TextLayer layer, EditorController controller, TextAnim? current) {
+    TextLayer layer,
+    EditorController controller,
+    TextAnim? current,
+  ) {
     final specs = textAnimsForSlot(_slot);
     final total = specs.length + 1;
 
@@ -217,34 +232,33 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
         // grade nunca reflui.
         childAspectRatio: 0.86,
       ),
-      delegate: SliverChildBuilderDelegate(
-        (context, i) {
-          if (i == 0) {
-            return _tile(
-              label: 'Nenhuma',
-              selected: current == null,
-              preview: const Center(
-                child: Icon(CupertinoIcons.nosign,
-                    size: 22, color: AmColors.muted),
-              ),
-              onTap: () => controller.setTextAnim(layer.id, _slot, null),
-            );
-          }
-          final spec = specs[i - 1];
+      delegate: SliverChildBuilderDelegate((context, i) {
+        if (i == 0) {
           return _tile(
-            label: spec.label,
-            selected: current?.specId == spec.id,
-            preview: _AnimPreview(
-              anim: current?.specId == spec.id
-                  ? current!
-                  : TextAnim(specId: spec.id, slot: _slot),
+            label: 'Nenhuma',
+            selected: current == null,
+            preview: const Center(
+              child: Icon(
+                CupertinoIcons.nosign,
+                size: 22,
+                color: AmColors.muted,
+              ),
             ),
-            onTap: () =>
-                controller.setTextAnim(layer.id, _slot, spec.id),
+            onTap: () => controller.setTextAnim(layer.id, _slot, null),
           );
-        },
-        childCount: total,
-      ),
+        }
+        final spec = specs[i - 1];
+        return _tile(
+          label: spec.label,
+          selected: current?.specId == spec.id,
+          preview: _AnimPreview(
+            anim: current?.specId == spec.id
+                ? current!
+                : TextAnim(specId: spec.id, slot: _slot),
+          ),
+          onTap: () => controller.setTextAnim(layer.id, _slot, spec.id),
+        );
+      }, childCount: total),
     );
   }
 
@@ -290,7 +304,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
   }
 
   Widget _controls(
-      TextLayer layer, EditorController controller, TextAnim anim) {
+    TextLayer layer,
+    EditorController controller,
+    TextAnim anim,
+  ) {
     final spec = anim.spec;
     final n = controller.textAnimUnitCount(layer.id, anim.unit);
 
@@ -299,11 +316,14 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
       children: [
         Row(
           children: [
-            Text(anim.label,
-                style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AmColors.text)),
+            Text(
+              anim.label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
             const Spacer(),
             Text(
               'total ${_ms(anim.totalFor(n))}',
@@ -329,30 +349,35 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
         const SizedBox(height: 8),
         _chips(
           label: 'Unidade',
-          options: [
-            for (final u in TextAnimUnit.values) textAnimUnitLabel(u)
-          ],
+          options: [for (final u in TextAnimUnit.values) textAnimUnitLabel(u)],
           index: anim.unit.index,
-          onChanged: (i) => controller.updateTextAnim(layer.id, anim.id,
-              (a) => a.copyWith(unit: TextAnimUnit.values[i])),
+          onChanged: (i) => controller.updateTextAnim(
+            layer.id,
+            anim.id,
+            (a) => a.copyWith(unit: TextAnimUnit.values[i]),
+          ),
         ),
         _chips(
           label: 'Ordem',
           options: [
-            for (final o in TextAnimOrder.values) textAnimOrderLabel(o)
+            for (final o in TextAnimOrder.values) textAnimOrderLabel(o),
           ],
           index: anim.order.index,
-          onChanged: (i) => controller.updateTextAnim(layer.id, anim.id,
-              (a) => a.copyWith(order: TextAnimOrder.values[i])),
+          onChanged: (i) => controller.updateTextAnim(
+            layer.id,
+            anim.id,
+            (a) => a.copyWith(order: TextAnimOrder.values[i]),
+          ),
         ),
         _chips(
           label: 'Curva',
-          options: [
-            for (final e in TextAnimEase.values) textAnimEaseLabel(e)
-          ],
+          options: [for (final e in TextAnimEase.values) textAnimEaseLabel(e)],
           index: anim.ease.index,
-          onChanged: (i) => controller.updateTextAnim(layer.id, anim.id,
-              (a) => a.copyWith(ease: TextAnimEase.values[i])),
+          onChanged: (i) => controller.updateTextAnim(
+            layer.id,
+            anim.id,
+            (a) => a.copyWith(ease: TextAnimEase.values[i]),
+          ),
         ),
         _slider(
           label: 'Duracao',
@@ -361,10 +386,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
           max: 3000,
           suffix: 'ms',
           onChanged: (v) => controller.updateTextAnim(
-              layer.id,
-              anim.id,
-              (a) => a.copyWith(
-                  duration: Duration(milliseconds: v.round()))),
+            layer.id,
+            anim.id,
+            (a) => a.copyWith(duration: Duration(milliseconds: v.round())),
+          ),
         ),
         if (anim.unit != TextAnimUnit.all)
           _slider(
@@ -374,10 +399,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             max: 500,
             suffix: 'ms',
             onChanged: (v) => controller.updateTextAnim(
-                layer.id,
-                anim.id,
-                (a) => a.copyWith(
-                    stagger: Duration(milliseconds: v.round()))),
+              layer.id,
+              anim.id,
+              (a) => a.copyWith(stagger: Duration(milliseconds: v.round())),
+            ),
           ),
         _slider(
           label: 'Inicio',
@@ -385,8 +410,11 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
           min: 0,
           max: 4000,
           suffix: 'ms',
-          onChanged: (v) => controller.updateTextAnim(layer.id, anim.id,
-              (a) => a.copyWith(start: Duration(milliseconds: v.round()))),
+          onChanged: (v) => controller.updateTextAnim(
+            layer.id,
+            anim.id,
+            (a) => a.copyWith(start: Duration(milliseconds: v.round())),
+          ),
         ),
         if (anim.order == TextAnimOrder.random)
           _slider(
@@ -395,7 +423,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             min: 1,
             max: 999,
             onChanged: (v) => controller.updateTextAnim(
-                layer.id, anim.id, (a) => a.copyWith(seed: v.round())),
+              layer.id,
+              anim.id,
+              (a) => a.copyWith(seed: v.round()),
+            ),
           ),
         // Parametros proprios da animacao escolhida.
         for (final p in spec?.params ?? const <TextAnimParam>[])
@@ -405,18 +436,21 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             min: p.min,
             max: p.max,
             suffix: p.suffix,
-            onChanged: (v) => controller.setTextAnimParam(
-                layer.id, anim.id, p.key, v),
+            onChanged: (v) =>
+                controller.setTextAnimParam(layer.id, anim.id, p.key, v),
           ),
         // A MOLA da extensao MultiTools: amplitude, frequencia e
         // decaimento, os mesmos tres numeros.
         if (anim.ease == TextAnimEase.mola) ...[
           const SizedBox(height: 4),
-          const Text('Mola',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AmColors.text)),
+          const Text(
+            'Mola',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AmColors.text,
+            ),
+          ),
           _slider(
             label: 'Amplitude',
             value: anim.amplitude,
@@ -424,7 +458,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             max: 3,
             decimals: 2,
             onChanged: (v) => controller.updateTextAnim(
-                layer.id, anim.id, (a) => a.copyWith(amplitude: v)),
+              layer.id,
+              anim.id,
+              (a) => a.copyWith(amplitude: v),
+            ),
           ),
           _slider(
             label: 'Frequencia',
@@ -433,7 +470,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             max: 8,
             decimals: 2,
             onChanged: (v) => controller.updateTextAnim(
-                layer.id, anim.id, (a) => a.copyWith(frequency: v)),
+              layer.id,
+              anim.id,
+              (a) => a.copyWith(frequency: v),
+            ),
           ),
           _slider(
             label: 'Decaimento',
@@ -442,7 +482,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             max: 20,
             decimals: 2,
             onChanged: (v) => controller.updateTextAnim(
-                layer.id, anim.id, (a) => a.copyWith(decay: v)),
+              layer.id,
+              anim.id,
+              (a) => a.copyWith(decay: v),
+            ),
           ),
         ],
       ],
@@ -467,20 +510,26 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             child: Row(
               children: [
                 Icon(
-                    _advanced
-                        ? CupertinoIcons.chevron_down
-                        : CupertinoIcons.chevron_right,
-                    size: 13,
-                    color: AmColors.muted),
+                  _advanced
+                      ? CupertinoIcons.chevron_down
+                      : CupertinoIcons.chevron_right,
+                  size: 13,
+                  color: AmColors.muted,
+                ),
                 const SizedBox(width: 8),
-                const Text('Avancado (animadores do AE)',
-                    style:
-                        TextStyle(fontSize: 12, color: AmColors.text)),
+                const Text(
+                  'Avancado (animadores do AE)',
+                  style: TextStyle(fontSize: 12, color: AmColors.text),
+                ),
                 const Spacer(),
                 if (layer.animators.isNotEmpty)
-                  Text('${layer.animators.length}',
-                      style: const TextStyle(
-                          fontSize: 11, color: AmColors.accent)),
+                  Text(
+                    '${layer.animators.length}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AmColors.accent,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -491,15 +540,13 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
             'Cada animador combina seletores e propriedades na mao — o '
             'modelo do After Effects. As animacoes acima sao compiladas '
             'para estes mesmos animadores.',
-            style: TextStyle(
-                fontSize: 11, height: 1.35, color: AmColors.muted),
+            style: TextStyle(fontSize: 11, height: 1.35, color: AmColors.muted),
           ),
           const SizedBox(height: 8),
           for (final a in layer.animators)
             Container(
               margin: const EdgeInsets.only(bottom: 6),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: AmColors.panelHigh,
                 borderRadius: BorderRadius.circular(10),
@@ -507,12 +554,9 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
               child: Row(
                 children: [
                   GestureDetector(
-                    onTap: () =>
-                        controller.toggleTextAnimator(layer.id, a.id),
+                    onTap: () => controller.toggleTextAnimator(layer.id, a.id),
                     child: Icon(
-                      a.enabled
-                          ? CupertinoIcons.eye
-                          : CupertinoIcons.eye_slash,
+                      a.enabled ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
                       size: 16,
                       color: a.enabled ? AmColors.text : AmColors.muted,
                     ),
@@ -522,28 +566,36 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(a.name,
-                            style: const TextStyle(
-                                fontSize: 12, color: AmColors.text)),
+                        Text(
+                          a.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AmColors.text,
+                          ),
+                        ),
                         Text(
                           a.properties.isEmpty
                               ? 'sem propriedades'
                               : a.properties
-                                  .map((p) => textAnimPropLabel(p.type))
-                                  .join(' · '),
+                                    .map((p) => textAnimPropLabel(p.type))
+                                    .join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 10, color: AmColors.muted),
+                            fontSize: 10,
+                            color: AmColors.muted,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   GestureDetector(
-                    onTap: () =>
-                        controller.removeTextAnimator(layer.id, a.id),
-                    child: const Icon(CupertinoIcons.trash,
-                        size: 15, color: AmColors.muted),
+                    onTap: () => controller.removeTextAnimator(layer.id, a.id),
+                    child: const Icon(
+                      CupertinoIcons.trash,
+                      size: 15,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ],
               ),
@@ -551,8 +603,7 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
           GestureDetector(
             onTap: () => controller.addTextAnimator(layer.id),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
               decoration: BoxDecoration(
                 color: AmColors.chip,
                 borderRadius: BorderRadius.circular(9),
@@ -560,12 +611,12 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(CupertinoIcons.plus,
-                      size: 13, color: AmColors.accent),
+                  Icon(CupertinoIcons.plus, size: 13, color: AmColors.accent),
                   SizedBox(width: 6),
-                  Text('Animador cru',
-                      style: TextStyle(
-                          fontSize: 12, color: AmColors.accent)),
+                  Text(
+                    'Animador cru',
+                    style: TextStyle(fontSize: 12, color: AmColors.accent),
+                  ),
                 ],
               ),
             ),
@@ -588,9 +639,10 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style:
-                  const TextStyle(fontSize: 11, color: AmColors.muted)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: AmColors.muted),
+          ),
           const SizedBox(height: 5),
           Wrap(
             spacing: 6,
@@ -601,17 +653,20 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
                   onTap: () => onChanged(i),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: i == index ? AmColors.accentDim : AmColors.chip,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(options[i],
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: i == index
-                                ? AmColors.accent
-                                : AmColors.muted)),
+                    child: Text(
+                      options[i],
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: i == index ? AmColors.accent : AmColors.muted,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -636,21 +691,22 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
         children: [
           SizedBox(
             width: 78,
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontSize: 11, color: AmColors.muted)),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: AmColors.muted),
+            ),
           ),
           Expanded(
             child: AmTickRuler(
-  value: value.clamp(min, max),
-  min: min,
-  max: max,
-  unitsPerPixel: ((max) - (min)) / 420,
-  height: 40,
-  onChanged: onChanged,
-),
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              unitsPerPixel: ((max) - (min)) / 420,
+              height: 40,
+              onChanged: onChanged,
+            ),
           ),
           SizedBox(
             width: 58,
@@ -689,10 +745,8 @@ class _AnimPreviewState extends State<_AnimPreview>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
+    _c = AnimationController(vsync: this, duration: const Duration(seconds: 2))
+      ..repeat();
   }
 
   @override
@@ -710,14 +764,18 @@ class _AnimPreviewState extends State<_AnimPreview>
     final cycle = (anim.spec?.loop ?? false)
         ? const Duration(milliseconds: 1600)
         : total + const Duration(milliseconds: 700);
-    final compiled = compileTextAnim(anim,
-        layerDuration: cycle, unitCount: _units);
+    final compiled = compileTextAnim(
+      anim,
+      layerDuration: cycle,
+      unitCount: _units,
+    );
 
     return AnimatedBuilder(
       animation: _c,
       builder: (context, _) {
         final t = Duration(
-            microseconds: (_c.value * cycle.inMicroseconds).round());
+          microseconds: (_c.value * cycle.inMicroseconds).round(),
+        );
         return CustomPaint(
           size: Size.infinite,
           painter: _PreviewPainter(animator: compiled, time: t),
@@ -797,10 +855,8 @@ class _PreviewPainter extends CustomPainter {
         final h = (hsl.hue + hue) % 360;
         color = hsl
             .withHue(h < 0 ? h + 360 : h)
-            .withSaturation(
-                (hsl.saturation * sat / 100).clamp(0.0, 1.0))
-            .withLightness(
-                (hsl.lightness * bri / 100).clamp(0.0, 1.0))
+            .withSaturation((hsl.saturation * sat / 100).clamp(0.0, 1.0))
+            .withLightness((hsl.lightness * bri / 100).clamp(0.0, 1.0))
             .toColor();
       }
 
@@ -827,21 +883,28 @@ class _PreviewPainter extends CustomPainter {
       if (blurring) {
         canvas.saveLayer(
           Rect.fromCenter(
-              center: Offset(x, y), width: size.width, height: size.height),
+            center: Offset(x, y),
+            width: size.width,
+            height: size.height,
+          ),
           Paint()
             ..imageFilter = ImageFilter.blur(
-                sigmaX: blur * 0.22, sigmaY: blur * 0.22),
+              sigmaX: blur * 0.22,
+              sigmaY: blur * 0.22,
+            ),
         );
       }
       canvas.translate(x, y);
       if (rot != 0) canvas.rotate(rot * math.pi / 180);
       if (skew != 0) {
-        canvas.transform(Float64List.fromList(<double>[
-          1, 0, 0, 0, //
-          math.tan(-skew * math.pi / 180), 1, 0, 0, //
-          0, 0, 1, 0, //
-          0, 0, 0, 1,
-        ]));
+        canvas.transform(
+          Float64List.fromList(<double>[
+            1, 0, 0, 0, //
+            math.tan(-skew * math.pi / 180), 1, 0, 0, //
+            0, 0, 1, 0, //
+            0, 0, 0, 1,
+          ]),
+        );
       }
       canvas.scale(sx, sy);
       tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
@@ -872,15 +935,18 @@ class _StaggerPainter extends CustomPainter {
     final rowH = size.height / n;
     final paint = Paint()..color = AmColors.accent;
     for (var i = 0; i < n; i++) {
-      final idx = orderMapIndex(
-          selectorOrderFor(anim.order), i, n, anim.seed);
+      final idx = orderMapIndex(selectorOrderFor(anim.order), i, n, anim.seed);
       final x0 = (idx * s) / total * size.width;
       // Duracao zero (maquina de escrever) ainda precisa ser visivel.
       final w = math.max(2.0, d / total * size.width);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(x0, i * rowH + rowH * 0.18,
-              math.min(w, size.width - x0), rowH * 0.64),
+          Rect.fromLTWH(
+            x0,
+            i * rowH + rowH * 0.18,
+            math.min(w, size.width - x0),
+            rowH * 0.64,
+          ),
           const Radius.circular(2),
         ),
         paint,

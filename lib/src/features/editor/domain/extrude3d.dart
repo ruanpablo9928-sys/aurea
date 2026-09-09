@@ -69,8 +69,8 @@ List<List<int>> earClip(List<Offset> pts) {
       final a = pts[ia], b = pts[ib], c = pts[ic];
 
       // Canto reflexo nao e orelha.
-      final cruz = (b.dx - a.dx) * (c.dy - a.dy) -
-          (b.dy - a.dy) * (c.dx - a.dx);
+      final cruz =
+          (b.dx - a.dx) * (c.dy - a.dy) - (b.dy - a.dy) * (c.dx - a.dx);
       if (cruz <= 0) continue;
 
       // Nem orelha que engole outro vertice.
@@ -166,12 +166,11 @@ Element3DMesh extrudeOutline(List<Offset> contorno, {double depth = 40}) {
   }
   final cx = (minX + maxX) / 2;
   final cy = (minY + maxY) / 2;
-  final meia = math.max(
-      1e-6, math.max((maxX - minX) / 2, (maxY - minY) / 2));
+  final meia = math.max(1e-6, math.max((maxX - minX) / 2, (maxY - minY) / 2));
   final z = (depth / 2) / meia;
 
   final planos = [
-    for (final p in pts) Offset((p.dx - cx) / meia, (p.dy - cy) / meia)
+    for (final p in pts) Offset((p.dx - cx) / meia, (p.dy - cy) / meia),
   ];
   final n = planos.length;
 

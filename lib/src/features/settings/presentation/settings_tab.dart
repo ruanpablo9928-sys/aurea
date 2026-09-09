@@ -8,6 +8,7 @@ import '../../editor/application/motor3d_modo.dart';
 import '../../editor/application/qualidade3d_controller.dart';
 import '../../editor/domain/orcamento_render.dart';
 import 'estresse3d_screen.dart';
+import 'travadas_screen.dart';
 import '../../editor/application/proxy_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../../../core/ui/snack.dart';
@@ -154,6 +155,8 @@ class SettingsTab extends ConsumerWidget {
               _Qualidade3DRow(),
               _GroupDivider(),
               _EstresseRow(),
+              _GroupDivider(),
+              _TravadasRow(),
             ],
           ),
           // So no Android: no iPhone o Impeller e sempre Metal.
@@ -527,6 +530,23 @@ class _Qualidade3DRowState extends State<_Qualidade3DRow> {
   }
 }
 
+/// O REGISTRO DE TRAVADAS.
+///
+/// Fica aqui, e nao escondido atras de uma flag de desenvolvimento,
+/// porque quem tem o aparelho que trava e quem usa o aplicativo — nao
+/// quem o escreve.
+class _TravadasRow extends StatelessWidget {
+  const _TravadasRow();
+
+  @override
+  Widget build(BuildContext context) => _TapRow(
+    title: 'Travadas',
+    subtitle: 'O que demorou, medido pelo proprio aparelho',
+    onTap: () => Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const TravadasScreen())),
+  );
+}
+
 class _EstresseRow extends StatelessWidget {
   const _EstresseRow();
 
@@ -534,8 +554,8 @@ class _EstresseRow extends StatelessWidget {
   Widget build(BuildContext context) => _TapRow(
     title: 'Teste de estresse do motor 3D',
     subtitle: 'Nove cenas pesadas, com relatorio para enviar',
-    onTap: () => Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const Estresse3DScreen()),
-    ),
+    onTap: () => Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const Estresse3DScreen())),
   );
 }

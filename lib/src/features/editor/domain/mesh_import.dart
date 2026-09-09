@@ -63,7 +63,8 @@ MeshImportResult importMeshText(String text, {required String extension}) {
       return _fbxAscii(text);
     default:
       throw MeshImportException(
-          'Formato .$ext nao suportado. Use OBJ ou FBX (ASCII).');
+        'Formato .$ext nao suportado. Use OBJ ou FBX (ASCII).',
+      );
   }
 }
 
@@ -98,7 +99,8 @@ MeshImportResult _obj(String text) {
   }
   if (verts.isEmpty || faces.isEmpty) {
     throw const MeshImportException(
-        'O OBJ nao tem vertices e faces que o app entenda.');
+      'O OBJ nao tem vertices e faces que o app entenda.',
+    );
   }
   return _finaliza(verts, faces, 'OBJ');
 }
@@ -106,7 +108,8 @@ MeshImportResult _obj(String text) {
 MeshImportResult _fbxAscii(String text) {
   if (text.contains('Kaydara FBX Binary')) {
     throw const MeshImportException(
-        'FBX binario nao e suportado: exporte como FBX ASCII ou OBJ.');
+      'FBX binario nao e suportado: exporte como FBX ASCII ou OBJ.',
+    );
   }
   final verts = <List<double>>[];
   final faces = <List<int>>[];
@@ -119,10 +122,11 @@ MeshImportResult _fbxAscii(String text) {
     final fimIdx = _fimDaLista(text, ip + 'PolygonVertexIndex:'.length);
     final segV = _corpoDaLista(text.substring(iv + 'Vertices:'.length, ip));
     final segP = _corpoDaLista(
-        text.substring(ip + 'PolygonVertexIndex:'.length, fimIdx));
+      text.substring(ip + 'PolygonVertexIndex:'.length, fimIdx),
+    );
     final base = verts.length;
     final nums = [
-      for (final m in _numero.allMatches(segV)) double.parse(m.group(0)!)
+      for (final m in _numero.allMatches(segV)) double.parse(m.group(0)!),
     ];
     for (var i = 0; i + 2 < nums.length; i += 3) {
       verts.add([nums[i], nums[i + 1], nums[i + 2]]);
@@ -145,7 +149,8 @@ MeshImportResult _fbxAscii(String text) {
   }
   if (verts.isEmpty || faces.isEmpty) {
     throw const MeshImportException(
-        'O FBX nao tem geometria em texto que o app entenda (e binario?).');
+      'O FBX nao tem geometria em texto que o app entenda (e binario?).',
+    );
   }
   return _finaliza(verts, faces, 'FBX');
 }
@@ -173,13 +178,19 @@ int _fimDaLista(String text, int inicio) {
     return fecha < 0 ? text.length : fecha + 1;
   }
   // FBX 6: os numeros seguem em linhas sem chaves ate o proximo campo.
-  final campo = RegExp(r'\n\s*[A-Za-z]+\s*:').firstMatch(text.substring(inicio));
+  final campo = RegExp(r'\n\s*[A-Za-z]+\s*:')
+      .firstMatch(text.substring(inicio));
   return campo == null ? text.length : inicio + campo.start;
 }
 
 MeshImportResult _finaliza(
-    List<List<double>> verts, List<List<int>> facesBrutas, String format) {
-  var faces = facesBrutas.where((f) => f.every((i) => i < verts.length)).toList();
+  List<List<double>> verts,
+  List<List<int>> facesBrutas,
+  String format,
+) {
+  var faces = facesBrutas
+      .where((f) => f.every((i) => i < verts.length))
+      .toList();
   final total = faces.length;
   var truncated = false;
   if (faces.length > kMeshFacesMax) {
@@ -187,7 +198,9 @@ MeshImportResult _finaliza(
     truncated = true;
   }
   if (faces.isEmpty) {
-    throw const MeshImportException('As faces do modelo apontam para vertices que nao existem.');
+    throw const MeshImportException(
+      'As faces do modelo apontam para vertices que nao existem.',
+    );
   }
   // Normaliza: centro no meio da caixa, maior eixo = 1, Y para baixo.
   var minX = double.infinity, minY = double.infinity, minZ = double.infinity;
@@ -201,8 +214,11 @@ MeshImportResult _finaliza(
     if (v[2] > maxZ) maxZ = v[2];
   }
   final cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
-  var maior = [maxX - minX, maxY - minY, maxZ - minZ]
-      .reduce((a, b) => a > b ? a : b);
+  var maior = [
+    maxX - minX,
+    maxY - minY,
+    maxZ - minZ,
+  ].reduce((a, b) => a > b ? a : b);
   if (maior < 1e-9) maior = 1;
   final k = 1 / maior;
   final normalizados = <List<double>>[

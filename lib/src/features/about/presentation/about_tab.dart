@@ -82,10 +82,7 @@ class AboutTab extends StatelessWidget {
             child: Column(
               children: [
                 ListTile(
-                  leading: Icon(
-                    CupertinoIcons.book,
-                    color: AppColors.lime,
-                  ),
+                  leading: Icon(CupertinoIcons.book, color: AppColors.lime),
                   title: const Text('Como usar o AUREA'),
                   subtitle: const Text(
                     'Guia rápido e ajuda dos efeitos · offline',

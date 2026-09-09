@@ -12,7 +12,9 @@ class AureaApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // TEMA (Fase 6): escuro, claro ou o do sistema. O editor continua
     // escuro por dentro (palco de video); Projetos e Ajustes acompanham.
-    final modo = ref.watch(settingsControllerProvider.select((s) => s.themeMode));
+    final modo = ref.watch(
+      settingsControllerProvider.select((s) => s.themeMode),
+    );
     final sistema =
         WidgetsBinding.instance.platformDispatcher.platformBrightness ==
         Brightness.light;

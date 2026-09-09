@@ -23,28 +23,28 @@ import 'text_animator.dart';
 enum TextAnimSlot { entrada, enfase, saida }
 
 String textAnimSlotLabel(TextAnimSlot s) => switch (s) {
-      TextAnimSlot.entrada => 'Entrada',
-      TextAnimSlot.enfase => 'Enfase',
-      TextAnimSlot.saida => 'Saida',
-    };
+  TextAnimSlot.entrada => 'Entrada',
+  TextAnimSlot.enfase => 'Enfase',
+  TextAnimSlot.saida => 'Saida',
+};
 
 /// O que conta como "uma unidade" da animacao.
 enum TextAnimUnit { character, charactersNoSpaces, word, line, all }
 
 String textAnimUnitLabel(TextAnimUnit u) => switch (u) {
-      TextAnimUnit.character => 'Letras',
-      TextAnimUnit.charactersNoSpaces => 'Letras (sem espaco)',
-      TextAnimUnit.word => 'Palavras',
-      TextAnimUnit.line => 'Linhas',
-      TextAnimUnit.all => 'Tudo junto',
-    };
+  TextAnimUnit.character => 'Letras',
+  TextAnimUnit.charactersNoSpaces => 'Letras (sem espaco)',
+  TextAnimUnit.word => 'Palavras',
+  TextAnimUnit.line => 'Linhas',
+  TextAnimUnit.all => 'Tudo junto',
+};
 
 SelectorBasedOn basedOnFor(TextAnimUnit u) => switch (u) {
-      TextAnimUnit.character || TextAnimUnit.all => SelectorBasedOn.characters,
-      TextAnimUnit.charactersNoSpaces => SelectorBasedOn.charactersNoSpaces,
-      TextAnimUnit.word => SelectorBasedOn.words,
-      TextAnimUnit.line => SelectorBasedOn.lines,
-    };
+  TextAnimUnit.character || TextAnimUnit.all => SelectorBasedOn.characters,
+  TextAnimUnit.charactersNoSpaces => SelectorBasedOn.charactersNoSpaces,
+  TextAnimUnit.word => SelectorBasedOn.words,
+  TextAnimUnit.line => SelectorBasedOn.lines,
+};
 
 // -------------------------------------------------------- o catalogo
 
@@ -106,25 +106,50 @@ class TextAnimSpec {
   final bool overshoot;
 
   Map<String, double> get defaults => {
-        for (final p in params) p.key: p.initial,
-      };
+    for (final p in params) p.key: p.initial,
+  };
 }
 
 const _dist = TextAnimParam(
-    key: 'distancia', label: 'Distancia', initial: 90, min: 0, max: 600,
-    suffix: 'px');
+  key: 'distancia',
+  label: 'Distancia',
+  initial: 90,
+  min: 0,
+  max: 600,
+  suffix: 'px',
+);
 const _blur = TextAnimParam(
-    key: 'desfoque', label: 'Desfoque', initial: 22, min: 0, max: 80,
-    suffix: 'px');
+  key: 'desfoque',
+  label: 'Desfoque',
+  initial: 22,
+  min: 0,
+  max: 80,
+  suffix: 'px',
+);
 const _giro = TextAnimParam(
-    key: 'giro', label: 'Giro', initial: 90, min: -720, max: 720,
-    suffix: '°');
+  key: 'giro',
+  label: 'Giro',
+  initial: 90,
+  min: -720,
+  max: 720,
+  suffix: '°',
+);
 const _escala = TextAnimParam(
-    key: 'escala', label: 'Escala', initial: 0, min: 0, max: 400,
-    suffix: '%');
+  key: 'escala',
+  label: 'Escala',
+  initial: 0,
+  min: 0,
+  max: 400,
+  suffix: '%',
+);
 const _forca = TextAnimParam(
-    key: 'forca', label: 'Forca', initial: 100, min: 0, max: 300,
-    suffix: '%');
+  key: 'forca',
+  label: 'Forca',
+  initial: 100,
+  min: 0,
+  max: 300,
+  suffix: '%',
+);
 
 /// O CATALOGO. Cobre o que o Alight Motion traz de fabrica e os presets
 /// de texto que voce ja usa no After Effects.
@@ -204,8 +229,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     slots: const [TextAnimSlot.entrada, TextAnimSlot.saida],
     params: const [
       TextAnimParam(
-          key: 'escala', label: 'Escala', initial: 220, min: 100, max: 500,
-          suffix: '%')
+        key: 'escala',
+        label: 'Escala',
+        initial: 220,
+        min: 100,
+        max: 500,
+        suffix: '%',
+      ),
     ],
     build: (p) => {
       TextAnimProp.scale: p['escala'] ?? 220,
@@ -325,8 +355,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     slots: const [TextAnimSlot.entrada, TextAnimSlot.saida],
     params: const [
       TextAnimParam(
-          key: 'giro', label: 'Giro', initial: 180, min: -720, max: 720,
-          suffix: '°')
+        key: 'giro',
+        label: 'Giro',
+        initial: 180,
+        min: -720,
+        max: 720,
+        suffix: '°',
+      ),
     ],
     build: (p) => {
       TextAnimProp.rotation: p['giro'] ?? 180,
@@ -349,10 +384,7 @@ final List<TextAnimSpec> textAnimCatalog = [
     id: 'flip',
     label: 'Virar',
     slots: const [TextAnimSlot.entrada, TextAnimSlot.saida],
-    build: (p) => {
-      TextAnimProp.scaleX: 0,
-      TextAnimProp.opacity: 0,
-    },
+    build: (p) => {TextAnimProp.scaleX: 0, TextAnimProp.opacity: 0},
   ),
   TextAnimSpec(
     id: 'skewIn',
@@ -360,8 +392,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     slots: const [TextAnimSlot.entrada, TextAnimSlot.saida],
     params: const [
       TextAnimParam(
-          key: 'giro', label: 'Inclinacao', initial: 45, min: -80, max: 80,
-          suffix: '°'),
+        key: 'giro',
+        label: 'Inclinacao',
+        initial: 45,
+        min: -80,
+        max: 80,
+        suffix: '°',
+      ),
       _dist,
     ],
     build: (p) => {
@@ -378,8 +415,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     duration: const Duration(milliseconds: 900),
     params: const [
       TextAnimParam(
-          key: 'distancia', label: 'Espaco', initial: 40, min: -60, max: 200,
-          suffix: 'px')
+        key: 'distancia',
+        label: 'Espaco',
+        initial: 40,
+        min: -60,
+        max: 200,
+        suffix: 'px',
+      ),
     ],
     build: (p) => {
       TextAnimProp.tracking: p['distancia'] ?? 40,
@@ -415,8 +457,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     slots: const [TextAnimSlot.entrada, TextAnimSlot.saida],
     params: const [
       TextAnimParam(
-          key: 'matiz', label: 'Matiz', initial: 180, min: -180, max: 180,
-          suffix: '°')
+        key: 'matiz',
+        label: 'Matiz',
+        initial: 180,
+        min: -180,
+        max: 180,
+        suffix: '°',
+      ),
     ],
     build: (p) => {
       TextAnimProp.hue: p['matiz'] ?? 180,
@@ -435,8 +482,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     stagger: const Duration(milliseconds: 90),
     params: const [
       TextAnimParam(
-          key: 'distancia', label: 'Altura', initial: 22, min: 0, max: 200,
-          suffix: 'px')
+        key: 'distancia',
+        label: 'Altura',
+        initial: 22,
+        min: 0,
+        max: 200,
+        suffix: 'px',
+      ),
     ],
     build: (p) => {TextAnimProp.positionY: -(p['distancia'] ?? 22)},
   ),
@@ -450,8 +502,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     stagger: Duration.zero,
     params: const [
       TextAnimParam(
-          key: 'distancia', label: 'Altura', initial: 14, min: 0, max: 120,
-          suffix: 'px')
+        key: 'distancia',
+        label: 'Altura',
+        initial: 14,
+        min: 0,
+        max: 120,
+        suffix: 'px',
+      ),
     ],
     build: (p) => {TextAnimProp.positionY: -(p['distancia'] ?? 14)},
   ),
@@ -465,8 +522,13 @@ final List<TextAnimSpec> textAnimCatalog = [
     stagger: Duration.zero,
     params: const [
       TextAnimParam(
-          key: 'escala', label: 'Escala', initial: 118, min: 50, max: 250,
-          suffix: '%')
+        key: 'escala',
+        label: 'Escala',
+        initial: 118,
+        min: 50,
+        max: 250,
+        suffix: '%',
+      ),
     ],
     build: (p) => {TextAnimProp.scale: p['escala'] ?? 118},
   ),
@@ -478,10 +540,7 @@ final List<TextAnimSpec> textAnimCatalog = [
     unit: TextAnimUnit.all,
     duration: const Duration(milliseconds: 2200),
     stagger: Duration.zero,
-    build: (p) => {
-      TextAnimProp.scale: 108,
-      TextAnimProp.brightness: 130,
-    },
+    build: (p) => {TextAnimProp.scale: 108, TextAnimProp.brightness: 130},
   ),
   TextAnimSpec(
     id: 'shake',
@@ -566,8 +625,10 @@ TextAnimSpec? textAnimSpecById(String id) {
   return null;
 }
 
-List<TextAnimSpec> textAnimsForSlot(TextAnimSlot slot) =>
-    [for (final s in textAnimCatalog) if (s.slots.contains(slot)) s];
+List<TextAnimSpec> textAnimsForSlot(TextAnimSlot slot) => [
+  for (final s in textAnimCatalog)
+    if (s.slots.contains(slot)) s,
+];
 
 // ---------------------------------------------------- a instancia
 
@@ -590,19 +651,21 @@ class TextAnim {
     this.frequency = 1.8,
     this.decay = 5,
     Map<String, double>? params,
-  })  : id = id ?? const Uuid().v4(),
-        unit = unit ?? textAnimSpecById(specId)?.unit ?? TextAnimUnit.character,
-        duration = duration ??
-            textAnimSpecById(specId)?.duration ??
-            const Duration(milliseconds: 600),
-        stagger = stagger ??
-            textAnimSpecById(specId)?.stagger ??
-            const Duration(milliseconds: 55),
-        ease = ease ??
-            textAnimSpecById(specId)?.ease ??
-            TextAnimEase.desacelerar,
-        params = Map.unmodifiable(
-            params ?? textAnimSpecById(specId)?.defaults ?? const {});
+  }) : id = id ?? const Uuid().v4(),
+       unit = unit ?? textAnimSpecById(specId)?.unit ?? TextAnimUnit.character,
+       duration =
+           duration ??
+           textAnimSpecById(specId)?.duration ??
+           const Duration(milliseconds: 600),
+       stagger =
+           stagger ??
+           textAnimSpecById(specId)?.stagger ??
+           const Duration(milliseconds: 55),
+       ease =
+           ease ?? textAnimSpecById(specId)?.ease ?? TextAnimEase.desacelerar,
+       params = Map.unmodifiable(
+         params ?? textAnimSpecById(specId)?.defaults ?? const {},
+       );
 
   final String id;
   final String specId;
@@ -629,8 +692,7 @@ class TextAnim {
   String get label => spec?.label ?? specId;
 
   /// Quanto tempo a animacao inteira leva com [n] unidades.
-  Duration totalFor(int n) =>
-      duration + stagger * math.max(0, n - 1);
+  Duration totalFor(int n) => duration + stagger * math.max(0, n - 1);
 
   TextAnim copyWith({
     String? specId,
@@ -647,24 +709,23 @@ class TextAnim {
     double? frequency,
     double? decay,
     Map<String, double>? params,
-  }) =>
-      TextAnim(
-        id: id,
-        specId: specId ?? this.specId,
-        slot: slot ?? this.slot,
-        unit: unit ?? this.unit,
-        start: start ?? this.start,
-        duration: duration ?? this.duration,
-        stagger: stagger ?? this.stagger,
-        order: order ?? this.order,
-        ease: ease ?? this.ease,
-        seed: seed ?? this.seed,
-        enabled: enabled ?? this.enabled,
-        amplitude: amplitude ?? this.amplitude,
-        frequency: frequency ?? this.frequency,
-        decay: decay ?? this.decay,
-        params: params ?? this.params,
-      );
+  }) => TextAnim(
+    id: id,
+    specId: specId ?? this.specId,
+    slot: slot ?? this.slot,
+    unit: unit ?? this.unit,
+    start: start ?? this.start,
+    duration: duration ?? this.duration,
+    stagger: stagger ?? this.stagger,
+    order: order ?? this.order,
+    ease: ease ?? this.ease,
+    seed: seed ?? this.seed,
+    enabled: enabled ?? this.enabled,
+    amplitude: amplitude ?? this.amplitude,
+    frequency: frequency ?? this.frequency,
+    decay: decay ?? this.decay,
+    params: params ?? this.params,
+  );
 }
 
 // ---------------------------------------------------- compilacao
@@ -734,7 +795,6 @@ List<TextAnimator> compileTextAnims(
     ..sort((a, b) => rank[a.slot]!.compareTo(rank[b.slot]!));
   return [
     for (final a in sorted)
-      compileTextAnim(a,
-          layerDuration: layerDuration, unitCount: unitCount),
+      compileTextAnim(a, layerDuration: layerDuration, unitCount: unitCount),
   ];
 }

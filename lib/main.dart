@@ -13,6 +13,7 @@ import 'src/features/editor/presentation/widgets/custom_blend.dart';
 import 'src/features/editor/presentation/widgets/linear_light.dart';
 import 'src/features/editor/presentation/widgets/pixel_effect_engine.dart';
 import 'src/features/editor/application/qualidade3d_controller.dart';
+import 'src/features/editor/application/registro_de_travadas.dart';
 import 'src/features/settings/application/grafico_preferencia.dart';
 
 Future<void> main() async {
@@ -23,6 +24,13 @@ Future<void> main() async {
   // uma sessao que nao voltou de um quadro em GPU desliga a GPU
   // nesta.
   await Motor3DPreferencia.carregar(prefs);
+  // O APLICATIVO PASSA A MEDIR A SI MESMO. Tres tentativas de corrigir
+  // "o app congela" falharam porque as medicoes eram feitas num PC, em
+  // depuracao, numa bancada. Agora todo quadro acima de 120 ms fica
+  // registrado no aparelho, com o que estava acontecendo e com o
+  // renderizador em uso — que e a pergunta que faltava responder.
+  RegistroDeTravadas.comecar();
+  RegistroDeTravadas.contextoAtual = descreverMotor3D;
   // A API de desenho no Android (Vulkan ou OpenGL ES) e lida pela
   // MainActivity antes de o motor subir; aqui so se confirma, no
   // primeiro quadro, que a sessao esta viva — e o que desarma a migalha.

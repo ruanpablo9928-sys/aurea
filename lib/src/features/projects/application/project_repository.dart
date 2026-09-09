@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../editor/application/registro_de_travadas.dart';
 import '../../editor/domain/project_store.dart';
 import '../../editor/domain/video_project.dart';
 import 'bundled_project_installation.dart';
@@ -123,35 +124,37 @@ class ProjectRepository {
     return projectFromJsonComPesos(json, pesados);
   }
 
-  Future<void> save(VideoProject project) =>
-      _enqueue(_safeId(project.id), () async {
-        final dir = await _dir();
-        final path = '${dir.path}/${_safeId(project.id)}.json';
-        final pastaDosPesos = await _dirDosPesos();
-        final jaTem = await _idsEmDisco();
-        // O MODELO SAI DO PROJETO. Antes, a geometria de um glTF importado
-        // ia dentro do arquivo: 18,8 MB e quase 350 ms por salvamento
-        // automatico num modelo de 60 mil triangulos, no fio que responde ao
-        // toque. Agora o projeto guarda uma referencia e o modelo vai num
-        // arquivo proprio, escrito uma unica vez.
-        final pesados = <String, Object>{};
-        final mapa = projectToJsonSeparado(
-          project,
-          pesados: pesados,
-          jaGravados: jaTem,
-        );
-        // OS PESOS PRIMEIRO, sempre. Se a gravacao morrer no meio, o que
-        // sobra e um modelo orfao ocupando espaco — nunca um projeto
-        // apontando para um modelo que nao existe.
-        for (final e in pesados.entries) {
-          await compute(_writePeso, (
-            '${pastaDosPesos.path}/${_safeId(e.key)}.json',
-            e.value,
-          ));
-          jaTem.add(e.key);
-        }
-        await compute(_writeProjectJson, (path, mapa));
-      });
+  Future<void> save(VideoProject project) => _enqueue(
+    _safeId(project.id),
+    () async {
+      final dir = await _dir();
+      final path = '${dir.path}/${_safeId(project.id)}.json';
+      final pastaDosPesos = await _dirDosPesos();
+      final jaTem = await _idsEmDisco();
+      // O MODELO SAI DO PROJETO. Antes, a geometria de um glTF importado
+      // ia dentro do arquivo: 18,8 MB e quase 350 ms por salvamento
+      // automatico num modelo de 60 mil triangulos, no fio que responde ao
+      // toque. Agora o projeto guarda uma referencia e o modelo vai num
+      // arquivo proprio, escrito uma unica vez.
+      final pesados = <String, Object>{};
+      final mapa = RegistroDeTravadas.marcando(
+        'gravando o projeto',
+        () =>
+            projectToJsonSeparado(project, pesados: pesados, jaGravados: jaTem),
+      );
+      // OS PESOS PRIMEIRO, sempre. Se a gravacao morrer no meio, o que
+      // sobra e um modelo orfao ocupando espaco — nunca um projeto
+      // apontando para um modelo que nao existe.
+      for (final e in pesados.entries) {
+        await compute(_writePeso, (
+          '${pastaDosPesos.path}/${_safeId(e.key)}.json',
+          e.value,
+        ));
+        jaTem.add(e.key);
+      }
+      await compute(_writeProjectJson, (path, mapa));
+    },
+  );
 
   Future<void> delete(String id) => _enqueue(_safeId(id), () async {
     final dir = await _dir();

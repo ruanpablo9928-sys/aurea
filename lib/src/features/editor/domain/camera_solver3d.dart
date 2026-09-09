@@ -186,10 +186,9 @@ class SolucaoCamera3D {
   }
 
   /// Quantos pontos aguentam segurar um objeto.
-  int get pontosBons => pontosDaQualidade({
-    QualidadeDoPonto.excelente,
-    QualidadeDoPonto.bom,
-  }).length;
+  int get pontosBons =>
+      pontosDaQualidade({QualidadeDoPonto.excelente, QualidadeDoPonto.bom})
+          .length;
 
   SolucaoCamera3D copiarCom({
     List<PoseCamera>? poses,
@@ -303,11 +302,7 @@ class SolucaoCamera3D {
 
 /// Por que uma analise nao deu certo. Cada caso pede uma acao diferente
 /// de quem filmou, e por isso sao mensagens separadas em vez de "erro".
-enum FalhaDoRastreio {
-  poucosPontos,
-  semParalaxe,
-  naoConvergiu,
-}
+enum FalhaDoRastreio { poucosPontos, semParalaxe, naoConvergiu }
 
 /// QUANTO SE PODE CONFIAR NUM PONTO.
 ///
@@ -479,11 +474,7 @@ Mat3? essencialDePares(List<(List<double>, List<double>)> pares) {
   for (final (a, b) in pares) {
     final x1 = (a[0] - m1.cx) * m1.s, y1 = (a[1] - m1.cy) * m1.s;
     final x2 = (b[0] - m2.cx) * m2.s, y2 = (b[1] - m2.cy) * m2.s;
-    linhas.add([
-      x2 * x1, x2 * y1, x2,
-      y2 * x1, y2 * y1, y2,
-      x1, y1, 1,
-    ]);
+    linhas.add([x2 * x1, x2 * y1, x2, y2 * x1, y2 * y1, y2, x1, y1, 1]);
   }
   final v = nucleo(linhas);
   if (v.length != 9) return null;
@@ -747,7 +738,8 @@ double _sampson(Mat3 e, List<double> a, List<double> b) {
 }
 
 /// A pose que poe mais pontos na FRENTE das duas cameras.
-({Mat3 r, List<double> t, Map<int, List<double>> pontos})? escolherPorCheiralidade(
+({Mat3 r, List<double> t, Map<int, List<double>> pontos})?
+escolherPorCheiralidade(
   Mat3 e,
   List<(List<double>, List<double>)> pares,
   List<int> inliers,
@@ -821,16 +813,32 @@ double _sampson(Mat3 e, List<double> a, List<double> b) {
       // d(ponto na camera)/d(incremento) = [-[Xc]x , I].
       final cruz = Mat3.cruzada([xc, yc, zc]);
       final jx = <double>[
-        -(dpx[0] * cruz.at(0, 0) + dpx[1] * cruz.at(1, 0) + dpx[2] * cruz.at(2, 0)),
-        -(dpx[0] * cruz.at(0, 1) + dpx[1] * cruz.at(1, 1) + dpx[2] * cruz.at(2, 1)),
-        -(dpx[0] * cruz.at(0, 2) + dpx[1] * cruz.at(1, 2) + dpx[2] * cruz.at(2, 2)),
-        dpx[0], dpx[1], dpx[2],
+        -(dpx[0] * cruz.at(0, 0) +
+            dpx[1] * cruz.at(1, 0) +
+            dpx[2] * cruz.at(2, 0)),
+        -(dpx[0] * cruz.at(0, 1) +
+            dpx[1] * cruz.at(1, 1) +
+            dpx[2] * cruz.at(2, 1)),
+        -(dpx[0] * cruz.at(0, 2) +
+            dpx[1] * cruz.at(1, 2) +
+            dpx[2] * cruz.at(2, 2)),
+        dpx[0],
+        dpx[1],
+        dpx[2],
       ];
       final jy = <double>[
-        -(dpy[0] * cruz.at(0, 0) + dpy[1] * cruz.at(1, 0) + dpy[2] * cruz.at(2, 0)),
-        -(dpy[0] * cruz.at(0, 1) + dpy[1] * cruz.at(1, 1) + dpy[2] * cruz.at(2, 1)),
-        -(dpy[0] * cruz.at(0, 2) + dpy[1] * cruz.at(1, 2) + dpy[2] * cruz.at(2, 2)),
-        dpy[0], dpy[1], dpy[2],
+        -(dpy[0] * cruz.at(0, 0) +
+            dpy[1] * cruz.at(1, 0) +
+            dpy[2] * cruz.at(2, 0)),
+        -(dpy[0] * cruz.at(0, 1) +
+            dpy[1] * cruz.at(1, 1) +
+            dpy[2] * cruz.at(2, 1)),
+        -(dpy[0] * cruz.at(0, 2) +
+            dpy[1] * cruz.at(1, 2) +
+            dpy[2] * cruz.at(2, 2)),
+        dpy[0],
+        dpy[1],
+        dpy[2],
       ];
 
       for (var a = 0; a < 6; a++) {
@@ -1059,10 +1067,11 @@ SolucaoCamera3D? _resolverComFocal(
   };
 
   // --- 3. ressecao dos demais quadros, saindo do par para os dois lados
-  final ordem = [...quadros]..sort((a, b) {
-    final da = (a - base).abs(), db = (b - base).abs();
-    return da.compareTo(db);
-  });
+  final ordem = [...quadros]
+    ..sort((a, b) {
+      final da = (a - base).abs(), db = (b - base).abs();
+      return da.compareTo(db);
+    });
 
   ({Mat3 r, List<double> t})? vizinhaDe(int q) {
     ({Mat3 r, List<double> t})? melhor;
@@ -1172,10 +1181,11 @@ SolucaoCamera3D? _resolverComFocal(
   // cena. Um objeto colado numa cena assim parece grudado ate a camera
   // mexer, e ai nada.
   final centros = [
-    for (final e in poses.entries) () {
-      final rt = e.value.r.transposta.aplicar(e.value.t);
-      return [-rt[0], -rt[1], -rt[2]];
-    }(),
+    for (final e in poses.entries)
+      () {
+        final rt = e.value.r.transposta.aplicar(e.value.t);
+        return [-rt[0], -rt[1], -rt[2]];
+      }(),
   ];
   var percurso = 0.0;
   for (var i = 0; i < centros.length; i++) {
@@ -1247,15 +1257,13 @@ SolucaoCamera3D? _resolverComFocal(
 /// Devolve o residuo em pixels do quadro analisado, ou null quando nao
 /// ha pares suficientes para medir.
 double? residuoPlanoDaCena(List<PontoSeguido> pontos, int quadros) {
-  final marcos =
-      <int>{
-        0,
-        quadros ~/ 4,
-        quadros ~/ 2,
-        (quadros * 3) ~/ 4,
-        quadros - 1,
-      }.toList()
-        ..sort();
+  final marcos = <int>{
+    0,
+    quadros ~/ 4,
+    quadros ~/ 2,
+    (quadros * 3) ~/ 4,
+    quadros - 1,
+  }.toList()..sort();
   final residuos = <double>[];
   for (var i = 0; i < marcos.length; i++) {
     for (var j = i + 1; j < marcos.length; j++) {
@@ -1465,7 +1473,9 @@ SolucaoCamera3D _arrumarMundo(SolucaoCamera3D s) {
   final seno = norma(eixo);
   final cosseno = produtoInterno(cima, alvo).clamp(-1.0, 1.0);
   final giro = seno < 1e-9
-      ? (cosseno > 0 ? Mat3.identidade : const Mat3([1, 0, 0, 0, -1, 0, 0, 0, -1]))
+      ? (cosseno > 0
+            ? Mat3.identidade
+            : const Mat3([1, 0, 0, 0, -1, 0, 0, 0, -1]))
       : rotacaoDeVetor([
           eixo[0] / seno * math.atan2(seno, cosseno),
           eixo[1] / seno * math.atan2(seno, cosseno),
@@ -1575,7 +1585,9 @@ SolucaoCamera3D definirChao(SolucaoCamera3D s, List<int> idsDoChao) {
   final cosseno = produtoInterno(normal, alvo).clamp(-1.0, 1.0);
   final angulo = math.atan2(seno, cosseno);
   final giro = seno < 1e-9
-      ? (cosseno > 0 ? Mat3.identidade : const Mat3([1, 0, 0, 0, -1, 0, 0, 0, -1]))
+      ? (cosseno > 0
+            ? Mat3.identidade
+            : const Mat3([1, 0, 0, 0, -1, 0, 0, 0, -1]))
       : rotacaoDeVetor([
           eixo[0] / seno * angulo,
           eixo[1] / seno * angulo,
@@ -1583,7 +1595,11 @@ SolucaoCamera3D definirChao(SolucaoCamera3D s, List<int> idsDoChao) {
         ]);
 
   List<double> mover(List<double> v) {
-    final g = giro.aplicar([v[0] - centro[0], v[1] - centro[1], v[2] - centro[2]]);
+    final g = giro.aplicar([
+      v[0] - centro[0],
+      v[1] - centro[1],
+      v[2] - centro[2],
+    ]);
     return g;
   }
 

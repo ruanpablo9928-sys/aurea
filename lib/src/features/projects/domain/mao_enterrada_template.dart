@@ -65,13 +65,11 @@ AnimatedDouble _amostra(double Function(double) f) {
   return AnimatedDouble(f(0), kfs);
 }
 
-AnimatedDouble _chaves(List<(double, double)> pares) => AnimatedDouble(
-  pares.first.$2,
-  [
-    for (final (s, v) in pares)
-      Keyframe(time: _t(s), value: v, ease: Easing.appleStandard),
-  ],
-);
+AnimatedDouble _chaves(List<(double, double)> pares) =>
+    AnimatedDouble(pares.first.$2, [
+      for (final (s, v) in pares)
+        Keyframe(time: _t(s), value: v, ease: Easing.appleStandard),
+    ]);
 
 // --------------------------------------------------------------- areia
 
@@ -338,7 +336,18 @@ MalhaCodigo maoMalha() {
     Vec3(0, 84, 0),
   ];
   const largura = [30.0, 34.0, 38.0, 43.0, 50.0, 58.0, 63.0, 61.0, 55.0, 46.0];
-  const espessura = [19.0, 21.0, 23.0, 25.0, 27.0, 28.0, 28.0, 26.0, 23.0, 19.0];
+  const espessura = [
+    19.0,
+    21.0,
+    23.0,
+    25.0,
+    27.0,
+    28.0,
+    28.0,
+    26.0,
+    23.0,
+    19.0,
+  ];
   // O alto da palma fecha REDONDO e achatado: e o dorso da mao, de onde
   // os dedos saem. Fechado em bico, virava um espeto entre os dedos.
   final palma = _arredondar(eixo, largura, passos: 3, achatar: .55);
@@ -562,12 +571,7 @@ MalhaCodigo ceuMalha({double raio = 3200, int aneis = 18, int lados = 36}) {
         math.sin(lat) * math.sin(lon),
       );
       linha.add(
-        m.vertice(
-          ceu,
-          dir * raio,
-          dir * -1,
-          uv: Offset(j / lados, i / aneis),
-        ),
+        m.vertice(ceu, dir * raio, dir * -1, uv: Offset(j / lados, i / aneis)),
       );
     }
     ids.add(linha);
@@ -669,7 +673,8 @@ List<Camera3D> maoCameras() => [
   _plano(
     'mao_cam_3',
     '03 · Contraluz / 28 mm',
-    (t) => Vec3(190 - (t - maoCortes[2]) * 12, 46 + (t - maoCortes[2]) * 34, 330),
+    (t) =>
+        Vec3(190 - (t - maoCortes[2]) * 12, 46 + (t - maoCortes[2]) * 34, 330),
     (t) => _mao + Vec3(-30, 42 + (t - maoCortes[2]) * 10, -40),
     28,
     (t) => 4 - (t - maoCortes[2]) * .8,

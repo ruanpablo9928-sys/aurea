@@ -45,12 +45,10 @@ const monolitoTriangleBudget = 17000;
 /// e para a GPU; este e o teto que ainda cabe num iPhone 13.
 const monolitoTriangleBudgetComModelos = 80000;
 
-Duration _t(num seconds) =>
-    Duration(microseconds: (seconds * 1000000).round());
+Duration _t(num seconds) => Duration(microseconds: (seconds * 1000000).round());
 AnimatedDouble _ad(double v) => AnimatedDouble(v);
 AnimatedDouble _sample(double Function(double) f) => AnimatedDouble(f(0), [
-  for (var i = 0; i <= 96; i++)
-    Keyframe(time: _t(i / 6), value: f(i / 6)),
+  for (var i = 0; i <= 96; i++) Keyframe(time: _t(i / 6), value: f(i / 6)),
 ]);
 
 /// O BLOCO fica girado: e pela quina que a referencia o mostra.
@@ -87,57 +85,64 @@ Vec3 _direcao(Vec3 local) {
 
 /// O CHAO da floresta: terra escura, folhas caidas, musgo em manchas.
 String _texturaChao() => pngDataUri(512, 512, (px, py, rgb) {
-      final u = px / 512, v = py / 512;
-      final grande = fbm(u * 5 + 3, v * 5 + 9, semente: 81);
-      final fino = fbm(u * 40 + 1, v * 40 + 5, oitavas: 2, semente: 82);
-      final grao = ruido(px * 7 + py * 131) - .5;
-      final musgo = suave(((fbm(u * 7 + 2, v * 7 + 4, semente: 83) - .58) / .12).clamp(0.0, 1.0));
-      var r = .11 + .05 * (grande - .5) + .04 * (fino - .5) + .03 * grao;
-      var g = .09 + .04 * (grande - .5) + .04 * (fino - .5) + .03 * grao;
-      var b = .06 + .02 * (grande - .5) + .02 * (fino - .5) + .02 * grao;
-      r += (.10 - r) * musgo;
-      g += (.16 - g) * musgo;
-      b += (.06 - b) * musgo;
-      // Folhas caidas: pontos um pouco mais claros e quentes.
-      if (ruido(px * 31 + py * 17 + 9) > .93) {
-        r += .10;
-        g += .06;
-      }
-      rgb[0] = canal8(r);
-      rgb[1] = canal8(g);
-      rgb[2] = canal8(b);
-    });
+  final u = px / 512, v = py / 512;
+  final grande = fbm(u * 5 + 3, v * 5 + 9, semente: 81);
+  final fino = fbm(u * 40 + 1, v * 40 + 5, oitavas: 2, semente: 82);
+  final grao = ruido(px * 7 + py * 131) - .5;
+  final musgo = suave(
+    ((fbm(u * 7 + 2, v * 7 + 4, semente: 83) - .58) / .12).clamp(0.0, 1.0),
+  );
+  var r = .11 + .05 * (grande - .5) + .04 * (fino - .5) + .03 * grao;
+  var g = .09 + .04 * (grande - .5) + .04 * (fino - .5) + .03 * grao;
+  var b = .06 + .02 * (grande - .5) + .02 * (fino - .5) + .02 * grao;
+  r += (.10 - r) * musgo;
+  g += (.16 - g) * musgo;
+  b += (.06 - b) * musgo;
+  // Folhas caidas: pontos um pouco mais claros e quentes.
+  if (ruido(px * 31 + py * 17 + 9) > .93) {
+    r += .10;
+    g += .06;
+  }
+  rgb[0] = canal8(r);
+  rgb[1] = canal8(g);
+  rgb[2] = canal8(b);
+});
 
 /// CONCRETO claro, com manchas e poros.
 String _texturaConcreto() => pngDataUri(256, 256, (px, py, rgb) {
-      final u = px / 256, v = py / 256;
-      final mancha = fbm(u * 3 + 7, v * 3 + 1, semente: 91);
-      final poro = fbm(u * 24 + 2, v * 24 + 8, oitavas: 2, semente: 92);
-      final grao = ruido(px * 53 + py * 7) - .5;
-      final base = .62 + .14 * (mancha - .5) + .08 * (poro - .5) + .05 * grao;
-      rgb[0] = canal8(base);
-      rgb[1] = canal8(base + .005);
-      rgb[2] = canal8(base + .01);
-    });
+  final u = px / 256, v = py / 256;
+  final mancha = fbm(u * 3 + 7, v * 3 + 1, semente: 91);
+  final poro = fbm(u * 24 + 2, v * 24 + 8, oitavas: 2, semente: 92);
+  final grao = ruido(px * 53 + py * 7) - .5;
+  final base = .62 + .14 * (mancha - .5) + .08 * (poro - .5) + .05 * grao;
+  rgb[0] = canal8(base);
+  rgb[1] = canal8(base + .005);
+  rgb[2] = canal8(base + .01);
+});
 
 /// A PEDRA DA PORTA: blocos claros com juntas, para o magenta iluminar.
 String _texturaPedra() => pngDataUri(128, 256, (px, py, rgb) {
-      final linha = py ~/ 32;
-      final desl = linha.isEven ? 0 : 32;
-      final jx = ((px + desl) % 64) < 3, jy = (py % 32) < 3;
-      final n = fbm(px / 40 + 3, py / 40 + 5, oitavas: 2, semente: 101);
-      var base = .82 + .12 * (n - .5);
-      if (jx || jy) base -= .35;
-      rgb[0] = canal8(base);
-      rgb[1] = canal8(base * .9);
-      rgb[2] = canal8(base);
-    });
+  final linha = py ~/ 32;
+  final desl = linha.isEven ? 0 : 32;
+  final jx = ((px + desl) % 64) < 3, jy = (py % 32) < 3;
+  final n = fbm(px / 40 + 3, py / 40 + 5, oitavas: 2, semente: 101);
+  var base = .82 + .12 * (n - .5);
+  if (jx || jy) base -= .35;
+  rgb[0] = canal8(base);
+  rgb[1] = canal8(base * .9);
+  rgb[2] = canal8(base);
+});
 
 // ================================================================== NOS
 
 SceneNode _chao() {
   final m = MalhaCodigo([
-    materialCodigo('Chao da floresta', 0xffffffff, rugosidade: .95, imagem: _texturaChao()),
+    materialCodigo(
+      'Chao da floresta',
+      0xffffffff,
+      rugosidade: .95,
+      imagem: _texturaChao(),
+    ),
   ]);
   const n = 36;
   const meio = 3000.0;
@@ -156,8 +161,14 @@ SceneNode _chao() {
         -(altura(x, z + e) - altura(x, z - e)),
       ).normalized;
       // O mapa se repete a cada 600 unidades: detalhe perto, sem estourar.
-      idx.add(m.vertice(0, Vec3(x, altura(x, z), z), nrm,
-          uv: Offset(x / 600, z / 600)));
+      idx.add(
+        m.vertice(
+          0,
+          Vec3(x, altura(x, z), z),
+          nrm,
+          uv: Offset(x / 600, z / 600),
+        ),
+      );
     }
   }
   int at(int i, int j) => j * (n + 1) + i;
@@ -199,27 +210,114 @@ SceneNode _monolito() {
   Vec3 fora(Vec3 local) => _direcao(local);
 
   // Topo, fundo (nao se ve), esquerda, direita, tras.
-  m.quadPlano(0, p(-hw, hh, -hd), p(hw, hh, -hd), p(hw, hh, hd), p(-hw, hh, hd), virado: const Vec3(0, 1, 0));
-  m.quadPlano(0, p(-hw, 0, -hd), p(-hw, hh, -hd), p(-hw, hh, hd), p(-hw, 0, hd), virado: fora(const Vec3(-1, 0, 0)));
-  m.quadPlano(0, p(hw, 0, -hd), p(hw, 0, hd), p(hw, hh, hd), p(hw, hh, -hd), virado: fora(const Vec3(1, 0, 0)));
-  m.quadPlano(0, p(-hw, 0, -hd), p(hw, 0, -hd), p(hw, hh, -hd), p(-hw, hh, -hd), virado: fora(const Vec3(0, 0, -1)));
+  m.quadPlano(
+    0,
+    p(-hw, hh, -hd),
+    p(hw, hh, -hd),
+    p(hw, hh, hd),
+    p(-hw, hh, hd),
+    virado: const Vec3(0, 1, 0),
+  );
+  m.quadPlano(
+    0,
+    p(-hw, 0, -hd),
+    p(-hw, hh, -hd),
+    p(-hw, hh, hd),
+    p(-hw, 0, hd),
+    virado: fora(const Vec3(-1, 0, 0)),
+  );
+  m.quadPlano(
+    0,
+    p(hw, 0, -hd),
+    p(hw, 0, hd),
+    p(hw, hh, hd),
+    p(hw, hh, -hd),
+    virado: fora(const Vec3(1, 0, 0)),
+  );
+  m.quadPlano(
+    0,
+    p(-hw, 0, -hd),
+    p(hw, 0, -hd),
+    p(hw, hh, -hd),
+    p(-hw, hh, -hd),
+    virado: fora(const Vec3(0, 0, -1)),
+  );
 
   // FRENTE em quatro pedacos ao redor da porta.
-  final px0 = _portaCentroLocal.x - _pw / 2, px1 = _portaCentroLocal.x + _pw / 2;
+  final px0 = _portaCentroLocal.x - _pw / 2,
+      px1 = _portaCentroLocal.x + _pw / 2;
   final frente = fora(const Vec3(0, 0, 1));
-  m.quadPlano(0, p(-hw, 0, hd), p(px0, 0, hd), p(px0, hh, hd), p(-hw, hh, hd), virado: frente);
-  m.quadPlano(0, p(px1, 0, hd), p(hw, 0, hd), p(hw, hh, hd), p(px1, hh, hd), virado: frente);
-  m.quadPlano(0, p(px0, _ph, hd), p(px1, _ph, hd), p(px1, hh, hd), p(px0, hh, hd), virado: frente);
+  m.quadPlano(
+    0,
+    p(-hw, 0, hd),
+    p(px0, 0, hd),
+    p(px0, hh, hd),
+    p(-hw, hh, hd),
+    virado: frente,
+  );
+  m.quadPlano(
+    0,
+    p(px1, 0, hd),
+    p(hw, 0, hd),
+    p(hw, hh, hd),
+    p(px1, hh, hd),
+    virado: frente,
+  );
+  m.quadPlano(
+    0,
+    p(px0, _ph, hd),
+    p(px1, _ph, hd),
+    p(px1, hh, hd),
+    p(px0, hh, hd),
+    virado: frente,
+  );
 
   // TUNEL da porta: laterais e teto em concreto, fundo em pedra acesa.
   final zi = hd - _pProfundidade;
-  m.quadPlano(0, p(px0, 0, hd), p(px0, _ph, hd), p(px0, _ph, zi), p(px0, 0, zi), virado: fora(const Vec3(1, 0, 0)));
-  m.quadPlano(0, p(px1, 0, hd), p(px1, 0, zi), p(px1, _ph, zi), p(px1, _ph, hd), virado: fora(const Vec3(-1, 0, 0)));
-  m.quadPlano(0, p(px0, _ph, hd), p(px1, _ph, hd), p(px1, _ph, zi), p(px0, _ph, zi), virado: const Vec3(0, -1, 0));
-  m.triPlano(1, p(px0, 0, zi), p(px1, 0, zi), p(px1, _ph, zi),
-      ua: const Offset(0, 1), ub: const Offset(1, 1), uc: const Offset(1, 0), virado: frente);
-  m.triPlano(1, p(px0, 0, zi), p(px1, _ph, zi), p(px0, _ph, zi),
-      ua: const Offset(0, 1), ub: const Offset(1, 0), uc: const Offset(0, 0), virado: frente);
+  m.quadPlano(
+    0,
+    p(px0, 0, hd),
+    p(px0, _ph, hd),
+    p(px0, _ph, zi),
+    p(px0, 0, zi),
+    virado: fora(const Vec3(1, 0, 0)),
+  );
+  m.quadPlano(
+    0,
+    p(px1, 0, hd),
+    p(px1, 0, zi),
+    p(px1, _ph, zi),
+    p(px1, _ph, hd),
+    virado: fora(const Vec3(-1, 0, 0)),
+  );
+  m.quadPlano(
+    0,
+    p(px0, _ph, hd),
+    p(px1, _ph, hd),
+    p(px1, _ph, zi),
+    p(px0, _ph, zi),
+    virado: const Vec3(0, -1, 0),
+  );
+  m.triPlano(
+    1,
+    p(px0, 0, zi),
+    p(px1, 0, zi),
+    p(px1, _ph, zi),
+    ua: const Offset(0, 1),
+    ub: const Offset(1, 1),
+    uc: const Offset(1, 0),
+    virado: frente,
+  );
+  m.triPlano(
+    1,
+    p(px0, 0, zi),
+    p(px1, _ph, zi),
+    p(px0, _ph, zi),
+    ua: const Offset(0, 1),
+    ub: const Offset(1, 0),
+    uc: const Offset(0, 0),
+    virado: frente,
+  );
 
   return m.no('monolito_bloco', 'Monolito de concreto');
 }
@@ -301,19 +399,19 @@ SceneNode _portal(MonolitoModelos modelos) {
 /// fundo nao fazem. O escaneamento e Z-para-cima: deitar em X poe o
 /// tronco de pe.
 List<SceneNode> _arvoresReais(MonolitoModelos modelos) => [
-      for (var k = 0; k < 1; k++)
-        SceneNode(
-          id: 'monolito_arvore_real_$k',
-          name: 'Arvore escaneada ${k + 1}',
-          size: 420,
-          modelAsset: modelos.arvore,
-          x: _ad(_arvores[k].$1),
-          y: _ad(420),
-          z: _ad(_arvores[k].$2),
-          rotX: _ad(-90),
-          rotZ: _ad(ruido(k + 600) * 360),
-        ),
-    ];
+  for (var k = 0; k < 1; k++)
+    SceneNode(
+      id: 'monolito_arvore_real_$k',
+      name: 'Arvore escaneada ${k + 1}',
+      size: 420,
+      modelAsset: modelos.arvore,
+      x: _ad(_arvores[k].$1),
+      y: _ad(420),
+      z: _ad(_arvores[k].$2),
+      rotX: _ad(-90),
+      rotZ: _ad(ruido(k + 600) * 360),
+    ),
+];
 
 /// Uma HASTE afunilada (tronco, galho): cilindro de [r0] a [r1].
 void _haste(
@@ -334,16 +432,20 @@ void _haste(
     final a0 = 2 * math.pi * k / lados, a1 = 2 * math.pi * (k + 1) / lados;
     final d0 = u * math.cos(a0) + v * math.sin(a0);
     final d1 = u * math.cos(a1) + v * math.sin(a1);
-    m.quadPlano(material, base + d0 * r0, base + d1 * r0, topo + d1 * r1,
-        topo + d0 * r1, virado: d0 + d1);
+    m.quadPlano(
+      material,
+      base + d0 * r0,
+      base + d1 * r0,
+      topo + d1 * r1,
+      topo + d0 * r1,
+      virado: d0 + d1,
+    );
   }
 }
 
 /// ARVORE NUA: tronco afunilado e galhos finos, como as da referencia.
 MalhaCodigo _arvore(int semente, double altura) {
-  final m = MalhaCodigo([
-    materialCodigo('Casca', 0xff2b2622, rugosidade: .95),
-  ]);
+  final m = MalhaCodigo([materialCodigo('Casca', 0xff2b2622, rugosidade: .95)]);
   const cima = Vec3(0, 1, 0);
   _haste(m, 0, Vec3.zero, cima, 13, 5, altura, lados: 7);
   final galhos = 7 + (ruido(semente * 3) * 5).floor();
@@ -351,14 +453,31 @@ MalhaCodigo _arvore(int semente, double altura) {
     final h = altura * (.35 + .6 * ruido(semente * 31 + g));
     final az = 2 * math.pi * ruido(semente * 37 + g * 3);
     final el = (.25 + .5 * ruido(semente * 41 + g * 5)) * math.pi / 2;
-    final dir = Vec3(math.cos(az) * math.cos(el), math.sin(el), math.sin(az) * math.cos(el));
+    final dir = Vec3(
+      math.cos(az) * math.cos(el),
+      math.sin(el),
+      math.sin(az) * math.cos(el),
+    );
     final comp = 110 + 170 * ruido(semente * 43 + g * 7);
     final base = Vec3(0, h, 0);
     _haste(m, 0, base, dir, 4.5, 1.6, comp, lados: 5);
     // Um galho secundario em metade deles.
     if (g.isEven) {
-      final dir2 = Vec3(dir.x + .5 * (ruido(semente + g) - .5), dir.y + .4, dir.z + .5 * (ruido(semente * 7 + g) - .5)).normalized;
-      _haste(m, 0, base + dir * (comp * .55), dir2, 2.2, .9, comp * .5, lados: 4);
+      final dir2 = Vec3(
+        dir.x + .5 * (ruido(semente + g) - .5),
+        dir.y + .4,
+        dir.z + .5 * (ruido(semente * 7 + g) - .5),
+      ).normalized;
+      _haste(
+        m,
+        0,
+        base + dir * (comp * .55),
+        dir2,
+        2.2,
+        .9,
+        comp * .5,
+        lados: 4,
+      );
     }
   }
   return m;
@@ -379,21 +498,30 @@ const _arvores = <(double, double, double, int)>[
 ];
 
 List<SceneNode> _arvoresDaFloresta({int desde = 0}) => [
-      for (var k = desde; k < _arvores.length; k++)
-        _arvore(_arvores[k].$4, _arvores[k].$3).no(
-          'monolito_arvore_$k',
-          'Arvore ${k + 1}',
-          posicao: Vec3(_arvores[k].$1, _arvores[k].$3 / 2, _arvores[k].$2),
-          rotY: _ad(ruido(k + 500) * 360),
-        ),
-    ];
+  for (var k = desde; k < _arvores.length; k++)
+    _arvore(_arvores[k].$4, _arvores[k].$3).no(
+      'monolito_arvore_$k',
+      'Arvore ${k + 1}',
+      posicao: Vec3(_arvores[k].$1, _arvores[k].$3 / 2, _arvores[k].$2),
+      rotY: _ad(ruido(k + 500) * 360),
+    ),
+];
 
 /// A MATA DO FUNDO: troncos em silhueta que a neblina come.
 SceneNode _mata() {
   final m = MalhaCodigo([
     materialCodigo('Tronco distante', 0xff1d1b19, rugosidade: 1),
   ]);
-  _haste(m, 0, const Vec3(0, -500, 0), const Vec3(0, 1, 0), 16, 8, 1000, lados: 5);
+  _haste(
+    m,
+    0,
+    const Vec3(0, -500, 0),
+    const Vec3(0, 1, 0),
+    16,
+    8,
+    1000,
+    lados: 5,
+  );
   return m.no(
     'monolito_mata',
     'Mata do fundo',
@@ -417,7 +545,8 @@ MalhaCodigo _tufo(int variante) {
   final altura = 46.0 + 26 * ruido(variante * 7 + 1);
   const cima = Vec3(0, 1, 0);
   for (var k = 0; k < 4; k++) {
-    final ang = (k / 4) * 2 * math.pi + variante * .7 + ruido(variante * 11 + k) * 1.1;
+    final ang =
+        (k / 4) * 2 * math.pi + variante * .7 + ruido(variante * 11 + k) * 1.1;
     final inclina = .18 + .35 * ruido(variante * 13 + k * 5);
     final h = altura * (.7 + .5 * ruido(variante * 17 + k * 3));
     final dir = Vec3(math.cos(ang), 0, math.sin(ang));
@@ -459,18 +588,22 @@ List<Vec3> _espalhaGrama(int semente, int quantos, double alturaDoTufo) {
 Vec3 _localDe(Vec3 mundo) {
   final a = -_giro * math.pi / 180;
   final dx = mundo.x - _centroDoBloco.x, dz = mundo.z - _centroDoBloco.z;
-  return Vec3(dx * math.cos(a) + dz * math.sin(a), mundo.y, -dx * math.sin(a) + dz * math.cos(a));
+  return Vec3(
+    dx * math.cos(a) + dz * math.sin(a),
+    mundo.y,
+    -dx * math.sin(a) + dz * math.cos(a),
+  );
 }
 
 List<SceneNode> _grama() => [
-      for (var v = 0; v < 6; v++)
-        _tufo(v).no(
-          'monolito_grama_$v',
-          'Grama alta · ${v + 1}',
-          posicao: Vec3.zero,
-          instancias: _espalhaGrama(v + 1, 250, 46.0 + 26 * ruido(v * 7 + 1)),
-        ),
-    ];
+  for (var v = 0; v < 6; v++)
+    _tufo(v).no(
+      'monolito_grama_$v',
+      'Grama alta · ${v + 1}',
+      posicao: Vec3.zero,
+      instancias: _espalhaGrama(v + 1, 250, 46.0 + 26 * ruido(v * 7 + 1)),
+    ),
+];
 
 /// O ARBUSTO da direita: um punhado de folhas escuras num elipsoide.
 SceneNode _arbusto() {
@@ -481,7 +614,14 @@ SceneNode _arbusto() {
     final ang = k * 2 * math.pi / 3;
     final d = Vec3(math.cos(ang), 0, math.sin(ang));
     final lado = Vec3(-d.z, 0, d.x) * 9;
-    m.quadPlano(0, d * 2 - lado, d * 2 + lado, d * 20 + lado + const Vec3(0, 8, 0), d * 20 - lado + const Vec3(0, 8, 0), virado: const Vec3(0, 1, 0));
+    m.quadPlano(
+      0,
+      d * 2 - lado,
+      d * 2 + lado,
+      d * 20 + lado + const Vec3(0, 8, 0),
+      d * 20 - lado + const Vec3(0, 8, 0),
+      virado: const Vec3(0, 1, 0),
+    );
   }
   return m.no(
     'monolito_arbusto',
@@ -493,7 +633,11 @@ SceneNode _arbusto() {
           final a = 2 * math.pi * ruido(i * 3 + 900);
           final r = math.sqrt(ruido(i * 3 + 901));
           final y = ruido(i * 3 + 902);
-          return Vec3(640 + r * math.cos(a) * 150, 20 + y * 190, 420 + r * math.sin(a) * 110);
+          return Vec3(
+            640 + r * math.cos(a) * 150,
+            20 + y * 190,
+            420 + r * math.sin(a) * 110,
+          );
         }(),
     ],
   );
@@ -620,21 +764,27 @@ VideoProject buildMonolitoTemplate({MonolitoModelos? modelos}) {
         duration: monolitoDuration,
         position: AnimatedOffset(centro),
         effects: [
-          EffectInstance(type: EffectType.corrections, params: {
-            'contraste': _ad(.10),
-            'sombras': _ad(-.04),
-            'temperatura': _ad(-.12),
-            'saturacao': _ad(.12),
-          }),
-          EffectInstance(type: EffectType.vignette, params: {
-            'quantidade': _ad(.45),
-            'raio': _ad(.9),
-            'suavidade': _ad(.8),
-          }),
-          EffectInstance(type: EffectType.filmGrain, params: {
-            'intensidade': _ad(.08),
-            'tamanho': _ad(1.3),
-          }),
+          EffectInstance(
+            type: EffectType.corrections,
+            params: {
+              'contraste': _ad(.10),
+              'sombras': _ad(-.04),
+              'temperatura': _ad(-.12),
+              'saturacao': _ad(.12),
+            },
+          ),
+          EffectInstance(
+            type: EffectType.vignette,
+            params: {
+              'quantidade': _ad(.45),
+              'raio': _ad(.9),
+              'suavidade': _ad(.8),
+            },
+          ),
+          EffectInstance(
+            type: EffectType.filmGrain,
+            params: {'intensidade': _ad(.08), 'tamanho': _ad(1.3)},
+          ),
         ],
       ),
       Scene3DLayer(

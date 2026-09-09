@@ -48,8 +48,7 @@ const derivaTriangleBudget = 40000;
 /// Os tempos das tres tomadas, em segundos.
 const derivaTomadas = [0.0, 6.0, 11.0];
 
-Duration _t(num seconds) =>
-    Duration(microseconds: (seconds * 1000000).round());
+Duration _t(num seconds) => Duration(microseconds: (seconds * 1000000).round());
 AnimatedDouble _ad(double v) => AnimatedDouble(v);
 AnimatedDouble _keys(List<(num, num)> values, {Easing ease = Easing.linear}) =>
     AnimatedDouble(values.first.$2.toDouble(), [
@@ -77,21 +76,21 @@ double _giroY(double t) => -140 - 11.7 * t;
 double _giroZ(double t) => 5 + 4.3 * t;
 
 SceneNode _astronauta(ModelAsset3D? modelo) => SceneNode(
-      id: 'deriva_astronauta',
-      name: 'Astronauta',
-      size: 58,
-      // Sem o modelo importado, uma capsula: a cena continua legivel.
-      kind: Element3DKind.capsule,
-      modelAsset: modelo,
-      useModelMaterials: modelo != null,
-      material: const Material3D(baseColor: Color(0xffe6e3dc), roughness: .55),
-      x: _sample((t) => astronautaEm(t).x),
-      y: _sample((t) => astronautaEm(t).y),
-      z: _sample((t) => astronautaEm(t).z),
-      rotX: _sample(_giroX),
-      rotY: _sample(_giroY),
-      rotZ: _sample(_giroZ),
-    );
+  id: 'deriva_astronauta',
+  name: 'Astronauta',
+  size: 58,
+  // Sem o modelo importado, uma capsula: a cena continua legivel.
+  kind: Element3DKind.capsule,
+  modelAsset: modelo,
+  useModelMaterials: modelo != null,
+  material: const Material3D(baseColor: Color(0xffe6e3dc), roughness: .55),
+  x: _sample((t) => astronautaEm(t).x),
+  y: _sample((t) => astronautaEm(t).y),
+  z: _sample((t) => astronautaEm(t).z),
+  rotX: _sample(_giroX),
+  rotY: _sample(_giroY),
+  rotZ: _sample(_giroZ),
+);
 
 // ========================================================== O UNIVERSO
 
@@ -123,23 +122,25 @@ List<SceneNode> _estrelas() {
       Vec3(-h, h, 0),
       virado: const Vec3(0, 0, 1),
     );
-    out.add(m.no(
-      'deriva_estrelas_$k',
-      'Estrelas · $nome',
-      posicao: Vec3.zero,
-      instancias: [
-        for (var i = 0; i < quantas; i++)
-          () {
-            // Distribuicao uniforme na esfera (o cosseno do angulo polar
-            // e que precisa ser uniforme, nao o angulo).
-            final u = ruido(i * 3 + k * 7919 + 11) * 2 - 1;
-            final a = 2 * math.pi * ruido(i * 3 + k * 7919 + 12);
-            final r = 15000 * (.8 + .35 * ruido(i * 3 + k * 7919 + 13));
-            final s = math.sqrt(math.max(0.0, 1 - u * u));
-            return Vec3(r * s * math.cos(a), r * u, r * s * math.sin(a));
-          }(),
-      ],
-    ));
+    out.add(
+      m.no(
+        'deriva_estrelas_$k',
+        'Estrelas · $nome',
+        posicao: Vec3.zero,
+        instancias: [
+          for (var i = 0; i < quantas; i++)
+            () {
+              // Distribuicao uniforme na esfera (o cosseno do angulo polar
+              // e que precisa ser uniforme, nao o angulo).
+              final u = ruido(i * 3 + k * 7919 + 11) * 2 - 1;
+              final a = 2 * math.pi * ruido(i * 3 + k * 7919 + 12);
+              final r = 15000 * (.8 + .35 * ruido(i * 3 + k * 7919 + 13));
+              final s = math.sqrt(math.max(0.0, 1 - u * u));
+              return Vec3(r * s * math.cos(a), r * u, r * s * math.sin(a));
+            }(),
+        ],
+      ),
+    );
   }
   return out;
 }
@@ -147,41 +148,46 @@ List<SceneNode> _estrelas() {
 /// O PLANETA: a casa, longe demais. Textura procedural de um mundo frio
 /// — mares escuros, terra palida, gelo nos polos, nuvens em faixas.
 String _texturaDoPlaneta() => pngDataUri(1024, 512, (px, py, rgb) {
-      final lon = px / 1024, lat = py / 512;
-      // A latitude comprime perto dos polos: amostrar em coordenada
-      // esferica evita as manchas esticadas la em cima.
-      final phi = (lat - .5) * math.pi;
-      final cx = math.cos(phi) * math.cos(lon * 2 * math.pi);
-      final cz = math.cos(phi) * math.sin(lon * 2 * math.pi);
-      final cy = math.sin(phi);
-      final continente = fbm(cx * 2.6 + 4, cz * 2.6 + cy * 1.9 + 7, semente: 301);
-      final detalhe = fbm(cx * 9 + 1, cz * 9 + cy * 6 + 3, oitavas: 2, semente: 302);
-      final terra = suave(((continente - .52) / .10).clamp(0.0, 1.0));
-      // Mar: azul-esverdeado escuro, quase sem saturacao.
-      var r = .035 + .03 * (detalhe - .5);
-      var g = .075 + .04 * (detalhe - .5);
-      var b = .135 + .05 * (detalhe - .5);
-      // Terra: ocre palido, sem viço.
-      r += (.30 + .10 * (detalhe - .5) - r) * terra;
-      g += (.27 + .09 * (detalhe - .5) - g) * terra;
-      b += (.21 + .07 * (detalhe - .5) - b) * terra;
-      // Gelo nos polos, entrando devagar.
-      final gelo = suave(((cy.abs() - .62) / .22).clamp(0.0, 1.0));
-      r += (.80 - r) * gelo;
-      g += (.85 - g) * gelo;
-      b += (.92 - b) * gelo;
-      // Nuvens: faixas alongadas em longitude, como as de verdade.
-      final nuvem = suave(
-        ((fbm(cx * 3.4 + 9, cz * 3.4 + cy * 7.5 + 2, semente: 303) - .55) / .16)
-            .clamp(0.0, 1.0),
-      );
-      r += (.88 - r) * nuvem * .8;
-      g += (.90 - g) * nuvem * .8;
-      b += (.94 - b) * nuvem * .8;
-      rgb[0] = canal8(r);
-      rgb[1] = canal8(g);
-      rgb[2] = canal8(b);
-    });
+  final lon = px / 1024, lat = py / 512;
+  // A latitude comprime perto dos polos: amostrar em coordenada
+  // esferica evita as manchas esticadas la em cima.
+  final phi = (lat - .5) * math.pi;
+  final cx = math.cos(phi) * math.cos(lon * 2 * math.pi);
+  final cz = math.cos(phi) * math.sin(lon * 2 * math.pi);
+  final cy = math.sin(phi);
+  final continente = fbm(cx * 2.6 + 4, cz * 2.6 + cy * 1.9 + 7, semente: 301);
+  final detalhe = fbm(
+    cx * 9 + 1,
+    cz * 9 + cy * 6 + 3,
+    oitavas: 2,
+    semente: 302,
+  );
+  final terra = suave(((continente - .52) / .10).clamp(0.0, 1.0));
+  // Mar: azul-esverdeado escuro, quase sem saturacao.
+  var r = .035 + .03 * (detalhe - .5);
+  var g = .075 + .04 * (detalhe - .5);
+  var b = .135 + .05 * (detalhe - .5);
+  // Terra: ocre palido, sem viço.
+  r += (.30 + .10 * (detalhe - .5) - r) * terra;
+  g += (.27 + .09 * (detalhe - .5) - g) * terra;
+  b += (.21 + .07 * (detalhe - .5) - b) * terra;
+  // Gelo nos polos, entrando devagar.
+  final gelo = suave(((cy.abs() - .62) / .22).clamp(0.0, 1.0));
+  r += (.80 - r) * gelo;
+  g += (.85 - g) * gelo;
+  b += (.92 - b) * gelo;
+  // Nuvens: faixas alongadas em longitude, como as de verdade.
+  final nuvem = suave(
+    ((fbm(cx * 3.4 + 9, cz * 3.4 + cy * 7.5 + 2, semente: 303) - .55) / .16)
+        .clamp(0.0, 1.0),
+  );
+  r += (.88 - r) * nuvem * .8;
+  g += (.90 - g) * nuvem * .8;
+  b += (.94 - b) * nuvem * .8;
+  rgb[0] = canal8(r);
+  rgb[1] = canal8(g);
+  rgb[2] = canal8(b);
+});
 
 /// Esfera de latitude e longitude, com normal por vertice (lisa) e UV
 /// equiretangular — a mesma projecao da textura.
@@ -304,9 +310,17 @@ MalhaCodigo _fragmento(int semente, double tamanho) {
         math.sin(lat) * math.sin(lon),
       );
       // Deformacao forte: destroço nao e pedra, e chapa rasgada.
-      final k = .35 +
-          1.15 * fbm(d.x * 3 + semente * 5, d.z * 3 + d.y * 2.2, semente: 70 + semente);
-      anel.add(Vec3(d.x * tamanho * k, d.y * tamanho * k * .7, d.z * tamanho * k));
+      final k =
+          .35 +
+          1.15 *
+              fbm(
+                d.x * 3 + semente * 5,
+                d.z * 3 + d.y * 2.2,
+                semente: 70 + semente,
+              );
+      anel.add(
+        Vec3(d.x * tamanho * k, d.y * tamanho * k * .7, d.z * tamanho * k),
+      );
     }
     pontos.add(anel);
   }
@@ -328,39 +342,37 @@ MalhaCodigo _fragmento(int semente, double tamanho) {
 /// as instancias giram junto com o no, entao o conjunto roda como um
 /// enxame — que e como destroço de verdade se comporta.
 List<SceneNode> _destrocos() => [
-      for (var k = 0; k < 3; k++)
-        _fragmento(k + 1, 9.0 + k * 7).no(
-          'deriva_destrocos_$k',
-          'Destrocos · grupo ${k + 1}',
-          posicao: Vec3.zero,
-          rotX: _sample((t) => t * (5 + k * 3.5)),
-          rotY: _sample((t) => -t * (4 + k * 2.5)),
-          instancias: [
-            for (var i = 0; i < 9; i++)
-              () {
-                final base = astronautaEm(0);
-                return Vec3(
-                  base.x + (ruido(i * 3 + k * 991 + 1) - .5) * 1500,
-                  base.y + (ruido(i * 3 + k * 991 + 2) - .5) * 700,
-                  base.z + (ruido(i * 3 + k * 991 + 3) - .5) * 1400,
-                );
-              }(),
-          ],
-        ),
-    ];
+  for (var k = 0; k < 3; k++)
+    _fragmento(k + 1, 9.0 + k * 7).no(
+      'deriva_destrocos_$k',
+      'Destrocos · grupo ${k + 1}',
+      posicao: Vec3.zero,
+      rotX: _sample((t) => t * (5 + k * 3.5)),
+      rotY: _sample((t) => -t * (4 + k * 2.5)),
+      instancias: [
+        for (var i = 0; i < 9; i++)
+          () {
+            final base = astronautaEm(0);
+            return Vec3(
+              base.x + (ruido(i * 3 + k * 991 + 1) - .5) * 1500,
+              base.y + (ruido(i * 3 + k * 991 + 2) - .5) * 700,
+              base.z + (ruido(i * 3 + k * 991 + 3) - .5) * 1400,
+            );
+          }(),
+      ],
+    ),
+];
 
 /// O CABO CORTADO: a linha de vida que arrebentou, boiando sozinha.
 /// Nao esta preso a ele — e esse o ponto.
 SceneNode _cabo() {
-  final m = MalhaCodigo([
-    materialCodigo('Cabo', 0xffb9b09a, rugosidade: .8),
-  ]);
+  final m = MalhaCodigo([materialCodigo('Cabo', 0xffb9b09a, rugosidade: .8)]);
   const segmentos = 26, raio = 1.7;
   Vec3 ponto(double s) => Vec3(
-        -150 + 300 * s,
-        26 * math.sin(s * 5.2) * (1 - s * .4),
-        18 * math.sin(s * 8.1 + 1.2),
-      );
+    -150 + 300 * s,
+    26 * math.sin(s * 5.2) * (1 - s * .4),
+    18 * math.sin(s * 8.1 + 1.2),
+  );
   for (var i = 0; i < segmentos; i++) {
     final a = ponto(i / segmentos), b = ponto((i + 1) / segmentos);
     final eixo = (b - a);
@@ -401,77 +413,76 @@ Camera3D _tomada(
   double lente, {
   double Function(double)? roll,
   DepthOfField? dof,
-}) =>
-    Camera3D(
-      id: id,
-      name: nome,
-      posX: _sample((t) => posicao(t).x),
-      posY: _sample((t) => posicao(t).y),
-      posZ: _sample((t) => posicao(t).z),
-      poiX: _sample((t) => alvo(t).x),
-      poiY: _sample((t) => alvo(t).y),
-      poiZ: _sample((t) => alvo(t).z),
-      focalLength: _ad(lente),
-      rotZ: _sample(roll ?? (t) => 0),
-      dof: dof,
-    );
+}) => Camera3D(
+  id: id,
+  name: nome,
+  posX: _sample((t) => posicao(t).x),
+  posY: _sample((t) => posicao(t).y),
+  posZ: _sample((t) => posicao(t).z),
+  poiX: _sample((t) => alvo(t).x),
+  poiY: _sample((t) => alvo(t).y),
+  poiZ: _sample((t) => alvo(t).z),
+  focalLength: _ad(lente),
+  rotZ: _sample(roll ?? (t) => 0),
+  dof: dof,
+);
 
 List<Camera3D> _cameras() => [
-      // 01 · A DERIVA. Grande angular, de longe: ele ocupa pouco quadro,
-      // e o vazio ocupa o resto. A camera se aproxima devagar, como quem
-      // ainda tem esperanca.
-      _tomada(
-        'deriva_cam_1',
-        '01 · A deriva / 35 mm',
-        (t) {
-          final k = 1 - .09 * t;
-          return astronautaEm(t) + Vec3(-330 * k, 118 * k, 470 * k);
-        },
-        astronautaEm,
-        35,
-        roll: (t) => -1.5 - t * .55,
-      ),
-      // 02 · O ULTIMO OLHAR. Lente longa e perto: o fundo comprime, as
-      // estrelas viram bolas fora de foco, e so o capacete fica nitido.
-      _tomada(
-        'deriva_cam_2',
-        '02 · O ultimo olhar / 85 mm',
-        (t) {
-          final a = .85 - (t - 6) * .14;
-          return astronautaEm(t) +
-              Vec3(700 * math.sin(a), 96 + (t - 6) * 4.5, 700 * math.cos(a));
-        },
-        // Mira no CORPO: ele esta girando sem controle, e um ponto fixo
-        // acima do centro nao e a cabeca — e o vazio ao lado dela.
-        astronautaEm,
-        85,
-        roll: (t) => 3 + (t - 6) * .7,
-        dof: DepthOfField(
-          enabled: true,
-          focusDistance: _ad(706),
-          aperture: _ad(24),
-          blurLevel: _ad(100),
-          irisShape: IrisShape.heptagon,
-          irisRoundness: _ad(55),
-          diffractionFringe: _ad(10),
-          // O realce so pega o que e luz de verdade (estrela, sol): o
-          // traje iluminado fica abaixo do limiar e nao vira bola.
-          highlightGain: _ad(14),
-          highlightThreshold: _ad(.9),
-          highlightSaturation: _ad(1.1),
-        ),
-      ),
-      // 03 · O SILENCIO. A camera PARA. Ela nao acompanha mais — ele que
-      // se afasta, e some. Grande angular para o planeta caber e ele nao.
-      _tomada(
-        'deriva_cam_3',
-        '03 · O silencio / 24 mm',
-        (t) => astronautaEm(11) + const Vec3(-520, 150, 880),
-        astronautaEm,
-        24,
-        roll: (t) => -(t - 11) * .45,
-      ),
-    ];
+  // 01 · A DERIVA. Grande angular, de longe: ele ocupa pouco quadro,
+  // e o vazio ocupa o resto. A camera se aproxima devagar, como quem
+  // ainda tem esperanca.
+  _tomada(
+    'deriva_cam_1',
+    '01 · A deriva / 35 mm',
+    (t) {
+      final k = 1 - .09 * t;
+      return astronautaEm(t) + Vec3(-330 * k, 118 * k, 470 * k);
+    },
+    astronautaEm,
+    35,
+    roll: (t) => -1.5 - t * .55,
+  ),
+  // 02 · O ULTIMO OLHAR. Lente longa e perto: o fundo comprime, as
+  // estrelas viram bolas fora de foco, e so o capacete fica nitido.
+  _tomada(
+    'deriva_cam_2',
+    '02 · O ultimo olhar / 85 mm',
+    (t) {
+      final a = .85 - (t - 6) * .14;
+      return astronautaEm(t) +
+          Vec3(700 * math.sin(a), 96 + (t - 6) * 4.5, 700 * math.cos(a));
+    },
+    // Mira no CORPO: ele esta girando sem controle, e um ponto fixo
+    // acima do centro nao e a cabeca — e o vazio ao lado dela.
+    astronautaEm,
+    85,
+    roll: (t) => 3 + (t - 6) * .7,
+    dof: DepthOfField(
+      enabled: true,
+      focusDistance: _ad(706),
+      aperture: _ad(24),
+      blurLevel: _ad(100),
+      irisShape: IrisShape.heptagon,
+      irisRoundness: _ad(55),
+      diffractionFringe: _ad(10),
+      // O realce so pega o que e luz de verdade (estrela, sol): o
+      // traje iluminado fica abaixo do limiar e nao vira bola.
+      highlightGain: _ad(14),
+      highlightThreshold: _ad(.9),
+      highlightSaturation: _ad(1.1),
+    ),
+  ),
+  // 03 · O SILENCIO. A camera PARA. Ela nao acompanha mais — ele que
+  // se afasta, e some. Grande angular para o planeta caber e ele nao.
+  _tomada(
+    'deriva_cam_3',
+    '03 · O silencio / 24 mm',
+    (t) => astronautaEm(11) + const Vec3(-520, 150, 880),
+    astronautaEm,
+    24,
+    roll: (t) => -(t - 11) * .45,
+  ),
+];
 
 // ============================================================= PROJETO
 
@@ -549,22 +560,28 @@ VideoProject buildDerivaTemplate({ModelAsset3D? astronauta}) {
         duration: derivaDuration,
         position: AnimatedOffset(centro),
         effects: [
-          EffectInstance(type: EffectType.corrections, params: {
-            'contraste': _ad(.16),
-            'sombras': _ad(-.10),
-            'altas': _ad(-.05),
-            'temperatura': _ad(-.16),
-            'saturacao': _ad(-.14),
-          }),
-          EffectInstance(type: EffectType.vignette, params: {
-            'quantidade': _ad(.52),
-            'raio': _ad(.88),
-            'suavidade': _ad(.8),
-          }),
-          EffectInstance(type: EffectType.filmGrain, params: {
-            'intensidade': _ad(.07),
-            'tamanho': _ad(1.4),
-          }),
+          EffectInstance(
+            type: EffectType.corrections,
+            params: {
+              'contraste': _ad(.16),
+              'sombras': _ad(-.10),
+              'altas': _ad(-.05),
+              'temperatura': _ad(-.16),
+              'saturacao': _ad(-.14),
+            },
+          ),
+          EffectInstance(
+            type: EffectType.vignette,
+            params: {
+              'quantidade': _ad(.52),
+              'raio': _ad(.88),
+              'suavidade': _ad(.8),
+            },
+          ),
+          EffectInstance(
+            type: EffectType.filmGrain,
+            params: {'intensidade': _ad(.07), 'tamanho': _ad(1.4)},
+          ),
         ],
       ),
       Scene3DLayer(
@@ -578,10 +595,7 @@ VideoProject buildDerivaTemplate({ModelAsset3D? astronauta}) {
         extraCameras: cameras.skip(1).toList(),
         shots: [
           for (var i = 0; i < 3; i++)
-            CameraShot(
-              time: _t(derivaTomadas[i]),
-              cameraId: cameras[i].id,
-            ),
+            CameraShot(time: _t(derivaTomadas[i]), cameraId: cameras[i].id),
         ],
         // Abre do preto e volta para o preto: o filme comeca depois do
         // acidente e termina antes do fim.

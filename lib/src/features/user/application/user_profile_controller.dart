@@ -9,7 +9,8 @@ class UserProfile {
   final String name;
   final String email;
 
-  String get initial => name.trim().isEmpty ? 'A' : name.trim()[0].toUpperCase();
+  String get initial =>
+      name.trim().isEmpty ? 'A' : name.trim()[0].toUpperCase();
 
   UserProfile copyWith({String? name, String? email}) {
     return UserProfile(name: name ?? this.name, email: email ?? this.email);
@@ -44,4 +45,5 @@ class UserProfileController extends Notifier<UserProfile> {
 
 final userProfileProvider =
     NotifierProvider<UserProfileController, UserProfile>(
-        UserProfileController.new);
+      UserProfileController.new,
+    );

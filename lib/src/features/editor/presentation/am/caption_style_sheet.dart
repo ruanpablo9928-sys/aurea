@@ -42,8 +42,11 @@ Future<void> showCaptionStyleSheet(
         // SEM TEMPO POR PALAVRA nao ha o que destacar: a legenda foi
         // gerada em frases. Falhar com dignidade e dizer isso, nao
         // mostrar um controle que nao faz nada.
-        final temPalavras = camada.cues.length > 1 &&
-            camada.cues.every((c) => c.end - c.start < const Duration(seconds: 2));
+        final temPalavras =
+            camada.cues.length > 1 &&
+            camada.cues.every(
+              (c) => c.end - c.start < const Duration(seconds: 2),
+            );
 
         return SafeArea(
           child: ListView(
@@ -83,7 +86,8 @@ Future<void> showCaptionStyleSheet(
                   for (final (nome, preset) in HighlightPresets.todos)
                     _Chip(
                       rotulo: nome,
-                      aceso: h.ativo &&
+                      aceso:
+                          h.ativo &&
                           h.layout == preset.layout &&
                           h.corDestaque == preset.corDestaque,
                       onTap: () => edita((_) => preset),
@@ -109,7 +113,8 @@ Future<void> showCaptionStyleSheet(
                           context,
                           initial: h.corDestaque,
                         );
-                        if (nova != null) edita((s) => s.copyWith(corDestaque: nova));
+                        if (nova != null)
+                          edita((s) => s.copyWith(corDestaque: nova));
                       },
                     ),
                     const SizedBox(width: 10),
@@ -167,8 +172,11 @@ Future<void> showCaptionStyleSheet(
                   opacity: 0.4,
                   child: Row(
                     children: [
-                      const Icon(CupertinoIcons.person_crop_rectangle,
-                          size: 16, color: AmColors.muted),
+                      const Icon(
+                        CupertinoIcons.person_crop_rectangle,
+                        size: 16,
+                        color: AmColors.muted,
+                      ),
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
@@ -224,7 +232,8 @@ Future<void> showCaptionStyleSheet(
                   max: 180,
                   unitsPerPixel: 0.4,
                   height: 40,
-                  onChanged: (v) => edita((s) => s.copyWith(entrelinha: v / 100)),
+                  onChanged: (v) =>
+                      edita((s) => s.copyWith(entrelinha: v / 100)),
                 ),
 
                 const SizedBox(height: 12),
@@ -235,8 +244,11 @@ Future<void> showCaptionStyleSheet(
                   max: 600,
                   unitsPerPixel: 1.6,
                   height: 40,
-                  onChanged: (v) => edita((s) => s.copyWith(
-                      duracaoInflar: Duration(milliseconds: v.round()))),
+                  onChanged: (v) => edita(
+                    (s) => s.copyWith(
+                      duracaoInflar: Duration(milliseconds: v.round()),
+                    ),
+                  ),
                 ),
 
                 const SizedBox(height: 12),
@@ -247,7 +259,8 @@ Future<void> showCaptionStyleSheet(
                       _Chip(
                         rotulo: '$n',
                         aceso: h.contextoPorLado == n,
-                        onTap: () => edita((s) => s.copyWith(contextoPorLado: n)),
+                        onTap: () =>
+                            edita((s) => s.copyWith(contextoPorLado: n)),
                       ),
                       const SizedBox(width: 6),
                     ],
@@ -281,17 +294,17 @@ class _CaminhoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          if (prof == _Prof.pronto)
-            _Chip(rotulo: 'Ajustar', onTap: () => onProf(_Prof.montar))
-          else ...[
-            _Chip(rotulo: 'Pronto', onTap: () => onProf(_Prof.pronto)),
-            const SizedBox(width: 6),
-            if (prof == _Prof.montar)
-              _Chip(rotulo: 'Avancado', onTap: () => onProf(_Prof.avancado)),
-          ],
-        ],
-      );
+    children: [
+      if (prof == _Prof.pronto)
+        _Chip(rotulo: 'Ajustar', onTap: () => onProf(_Prof.montar))
+      else ...[
+        _Chip(rotulo: 'Pronto', onTap: () => onProf(_Prof.pronto)),
+        const SizedBox(width: 6),
+        if (prof == _Prof.montar)
+          _Chip(rotulo: 'Avancado', onTap: () => onProf(_Prof.avancado)),
+      ],
+    ],
+  );
 }
 
 class _Rotulo extends StatelessWidget {
@@ -301,17 +314,17 @@ class _Rotulo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          texto,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-            color: AmColors.muted,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      texto,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+        color: AmColors.muted,
+      ),
+    ),
+  );
 }
 
 class _Chip extends StatelessWidget {
@@ -323,26 +336,26 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: aceso ? AmColors.accentDim : AmColors.chip,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Text(
-            rotulo,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: aceso ? AmColors.accent : AmColors.text,
-            ),
-          ),
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: aceso ? AmColors.accentDim : AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        rotulo,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: aceso ? AmColors.accent : AmColors.text,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _Amostra extends StatelessWidget {
@@ -353,14 +366,14 @@ class _Amostra extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 44,
-          height: 32,
-          decoration: BoxDecoration(
-            color: cor,
-            borderRadius: BorderRadius.circular(9),
-          ),
-        ),
-      );
+    onTap: onTap,
+    child: Container(
+      width: 44,
+      height: 32,
+      decoration: BoxDecoration(
+        color: cor,
+        borderRadius: BorderRadius.circular(9),
+      ),
+    ),
+  );
 }

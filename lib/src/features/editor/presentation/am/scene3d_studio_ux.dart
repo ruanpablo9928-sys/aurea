@@ -472,7 +472,8 @@ Future<void> showAdicionar(
                 subtitulo: switch (kind) {
                   Light3DKind.directional =>
                     'Como o sol: uma direcao, sombras paralelas.',
-                  Light3DKind.point => 'Uma lampada: brilha em volta de um ponto.',
+                  Light3DKind.point =>
+                    'Uma lampada: brilha em volta de um ponto.',
                   Light3DKind.ambient => 'Clareia tudo por igual, sem sombra.',
                   Light3DKind.spot => 'Um cone de luz, como um refletor.',
                 },
@@ -504,7 +505,8 @@ Future<void> showAdicionar(
             key: const ValueKey('adicionar-objeto'),
             icone: CupertinoIcons.cube,
             titulo: 'Objeto 3D',
-            subtitulo: 'Cubo, esfera, plano, cilindro, cone, toro e mais. '
+            subtitulo:
+                'Cubo, esfera, plano, cilindro, cone, toro e mais. '
                 'Ou importe um modelo.',
             chevron: true,
             onTap: () => setSheet(() => nivel = 1),
@@ -953,7 +955,13 @@ Future<void> showAcoesDoItem(
               chevron: true,
               onTap: () {
                 fecharFolhas(ctx, raiz);
-                showOlharPara(raiz, ref, layerId, item.id, aoAlterar: aoAlterar);
+                showOlharPara(
+                  raiz,
+                  ref,
+                  layerId,
+                  item.id,
+                  aoAlterar: aoAlterar,
+                );
               },
             ),
             LinhaDoEstudio(
@@ -1000,7 +1008,9 @@ Future<void> showAcoesDoItem(
             LinhaDoEstudio(
               key: const ValueKey('acao-excluir'),
               icone: CupertinoIcons.trash,
-              titulo: principal ? 'A camera principal nao se exclui' : 'Excluir',
+              titulo: principal
+                  ? 'A camera principal nao se exclui'
+                  : 'Excluir',
               perigo: !principal,
               onTap: principal
                   ? null
@@ -1247,7 +1257,11 @@ Future<void> showLuzes(
               child: Text(
                 'A cena usa a luz padrao do ambiente. Crie uma luz para '
                 'controlar direcao, cor e sombra.',
-                style: TextStyle(fontSize: 12.5, height: 1.35, color: AmColors.muted),
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.35,
+                  color: AmColors.muted,
+                ),
               ),
             ),
           for (final l in layer.scene.lights)
@@ -1542,7 +1556,8 @@ Future<void> showMenuDaCamera(
                   key: const ValueKey('vista-livre'),
                   label: 'Livre',
                   icone: CupertinoIcons.move,
-                  aceso: vista == SceneView.custom1 || vista == SceneView.custom2,
+                  aceso:
+                      vista == SceneView.custom1 || vista == SceneView.custom2,
                   onTap: () {
                     Navigator.pop(ctx);
                     aoVerVista(SceneView.custom1);
@@ -1557,7 +1572,11 @@ Future<void> showMenuDaCamera(
               'As vistas fixas sao ortograficas e nao mexem na camera. '
               'Para a camera assumir uma vista, use "Alinhar camera a '
               'vista" no menu de tres pontos.',
-              style: TextStyle(fontSize: 11.5, height: 1.35, color: AmColors.muted),
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.35,
+                color: AmColors.muted,
+              ),
             ),
           ),
           const SecaoDoEstudio('Enquadrar'),

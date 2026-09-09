@@ -79,7 +79,12 @@ class ResultadoDeEstresse {
   final double medianaMs, p95Ms, piorMs;
   final int travadas;
   final int rssInicioMb, rssPicoMb, rssFimMb;
-  final String nivelInicial, nivelFinal, pressaoPior, motor, gpuEstimada, desenhou;
+  final String nivelInicial,
+      nivelFinal,
+      pressaoPior,
+      motor,
+      gpuEstimada,
+      desenhou;
   final List<String> transicoes;
   final String observacao;
 
@@ -288,7 +293,9 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
       setState(() {
         _rodando = false;
         _indice = -1;
-        _status = _cancelar ? 'Cancelado.' : 'Terminado. Copie o relatorio e envie.';
+        _status = _cancelar
+            ? 'Cancelado.'
+            : 'Terminado. Copie o relatorio e envie.';
       });
     }
   }
@@ -308,7 +315,12 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
     if (receita.video) {
       final v = _video;
       if (v != null) {
-        c.addVideoLayer(Duration.zero, v, 'Video de teste', const Duration(seconds: 10));
+        c.addVideoLayer(
+          Duration.zero,
+          v,
+          'Video de teste',
+          const Duration(seconds: 10),
+        );
       } else {
         obs.add('sem video (o FFmpeg nao gerou o arquivo)');
       }
@@ -330,9 +342,18 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
                 l.copyLayer(
                   effects: receita.efeitos
                       ? [
-                          EffectInstance(type: EffectType.lightGlow, params: const {}),
-                          EffectInstance(type: EffectType.glowVol, params: const {}),
-                          EffectInstance(type: EffectType.filmGrain, params: const {}),
+                          EffectInstance(
+                            type: EffectType.lightGlow,
+                            params: const {},
+                          ),
+                          EffectInstance(
+                            type: EffectType.glowVol,
+                            params: const {},
+                          ),
+                          EffectInstance(
+                            type: EffectType.filmGrain,
+                            params: const {},
+                          ),
                         ]
                       : const [],
                   rotation: receita.motionGraph
@@ -407,7 +428,8 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
     playback.pause();
-    final desenhou = PreviewStats.cena3d.value?.toString() ??
+    final desenhou =
+        PreviewStats.cena3d.value?.toString() ??
         'pintor em CPU (${Scene3DGpu.comoDesenha}: ${Scene3DGpu.motivo})';
     final motor = PreviewStats.cena3d.value?.motor ?? Scene3DGpu.comoDesenha;
     final estimada = bytesLegiveis(controlador.estimativa.value.total);
@@ -419,7 +441,10 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
     final ordenados = List<double>.from(_quadrosMs)..sort();
     double em(double f) => ordenados.isEmpty
         ? 0
-        : ordenados[(f * (ordenados.length - 1)).round().clamp(0, ordenados.length - 1)];
+        : ordenados[(f * (ordenados.length - 1)).round().clamp(
+            0,
+            ordenados.length - 1,
+          )];
     final travadas = _quadrosMs.where((ms) => ms > 34).length;
     await prefs.remove(_kRodando);
     return ResultadoDeEstresse(
@@ -455,7 +480,8 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
     final videos = _videos;
     final container = _container;
     final ouvinte = _ouvinteDoTempo;
-    if (playback != null && ouvinte != null) playback.time.removeListener(ouvinte);
+    if (playback != null && ouvinte != null)
+      playback.time.removeListener(ouvinte);
     _ouvinteDoTempo = null;
     if (mounted) {
       setState(() {
@@ -498,14 +524,18 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
       'orcamento de GPU ${bytesLegiveis(c.orcamentoBytes)} · '
       'teto ${tetoDeQualidade3dRotulo(c.teto)} · motor ${Scene3DGpu.comoDesenha}',
     );
-    b.writeln('texturas de teste: ${_texturas.length} · video de teste: ${_video != null ? 'sim' : 'nao'}');
+    b.writeln(
+      'texturas de teste: ${_texturas.length} · video de teste: ${_video != null ? 'sim' : 'nao'}',
+    );
     b.writeln('');
     for (final r in _resultados) {
       b.writeln(r.linha);
     }
     final vivos = _resultados.where((r) => r.sobreviveu).length;
     b.writeln('');
-    b.writeln('RESUMO: $vivos de ${_resultados.length} cenas sem fechar o app.');
+    b.writeln(
+      'RESUMO: $vivos de ${_resultados.length} cenas sem fechar o app.',
+    );
     return b.toString();
   }
 
@@ -516,7 +546,9 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
     final container = _container;
     final playback = _playback;
     final videos = _videos;
-    final relatorio = _resultados.isEmpty ? (_relatorioAnterior ?? '') : _relatorio();
+    final relatorio = _resultados.isEmpty
+        ? (_relatorioAnterior ?? '')
+        : _relatorio();
     return Scaffold(
       appBar: AppBar(title: const Text('Teste de estresse 3D')),
       body: Column(
@@ -560,7 +592,9 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
                 else
                   FilledButton(
                     onPressed: _prefs == null ? null : _rodarTudo,
-                    child: Text(_resultados.isEmpty ? 'Rodar os nove' : 'Rodar de novo'),
+                    child: Text(
+                      _resultados.isEmpty ? 'Rodar os nove' : 'Rodar de novo',
+                    ),
                   ),
               ],
             ),
@@ -598,10 +632,14 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
                       onPressed: relatorio.isEmpty
                           ? null
                           : () async {
-                              await Clipboard.setData(ClipboardData(text: relatorio));
+                              await Clipboard.setData(
+                                ClipboardData(text: relatorio),
+                              );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Relatorio copiado.')),
+                                  const SnackBar(
+                                    content: Text('Relatorio copiado.'),
+                                  ),
                                 );
                               }
                             },

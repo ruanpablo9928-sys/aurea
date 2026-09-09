@@ -63,7 +63,8 @@ class _TutorialScreenState extends State<TutorialScreen> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _erro = 'Não deu para abrir o vídeo neste aparelho. '
+          () => _erro =
+              'Não deu para abrir o vídeo neste aparelho. '
               'Os passos estão escritos abaixo.',
         );
       }
@@ -172,7 +173,9 @@ class _TutorialScreenState extends State<TutorialScreen> {
                                     child: Icon(
                                       CupertinoIcons.play_circle_fill,
                                       size: 64,
-                                      color: Colors.white.withValues(alpha: .85),
+                                      color: Colors.white.withValues(
+                                        alpha: .85,
+                                      ),
                                     ),
                                   ),
                                 if (_erro != null)

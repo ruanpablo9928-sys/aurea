@@ -318,12 +318,25 @@ Uint8List pixelSortPolar(Uint8List rgba, int w, int h, PixelSortSpec spec) {
     for (var ia = 0; ia < na; ia++) {
       if (!noArco(ia / na * 2 * math.pi)) continue;
       // O raio interno treme por raio: e o "radius variation" da ficha.
-      final jitter = 1 +
-          spec.radiusVariation.clamp(0.0, 1.0) * (_ruido(spec.seed, ia, 7) - 0.5) * 2;
+      final jitter =
+          1 +
+          spec.radiusVariation.clamp(0.0, 1.0) *
+              (_ruido(spec.seed, ia, 7) - 0.5) *
+              2;
       final primeiro = ((rInterno * jitter) / passoR).round().clamp(0, nr);
-      _ordenaLinha(polar, ia * nr * 4, 4, nr, ia, spec, chave, chaveMatte,
-          tmp, idx,
-          primeiroValido: primeiro);
+      _ordenaLinha(
+        polar,
+        ia * nr * 4,
+        4,
+        nr,
+        ia,
+        spec,
+        chave,
+        chaveMatte,
+        tmp,
+        idx,
+        primeiroValido: primeiro,
+      );
     }
   } else {
     final chave = Float32List(na);
@@ -334,9 +347,8 @@ Uint8List pixelSortPolar(Uint8List rgba, int w, int h, PixelSortSpec spec) {
       if (ir * passoR < rInterno) continue;
       // Cada anel comeca num angulo proprio quando ha "start variation":
       // aneis todos alinhados denunciam a grade.
-      final desloc = spec.startVariation.clamp(0.0, 1.0) *
-          _ruido(spec.seed, ir, 11) *
-          na;
+      final desloc =
+          spec.startVariation.clamp(0.0, 1.0) * _ruido(spec.seed, ir, 11) * na;
       final inicioLinha = ((ini / (2 * math.pi)) * na + desloc).round() % na;
       final quantos = (abertura / (2 * math.pi) * na).round().clamp(0, na);
       if (quantos < 2) continue;
@@ -412,5 +424,5 @@ Uint8List pixelSortMatte(Uint8List rgba, int w, int h, PixelSortSpec spec) {
 /// A entrada unica, pelo modo.
 Uint8List pixelSort(Uint8List rgba, int w, int h, PixelSortSpec spec) =>
     spec.mode == PixelSortMode.linear
-        ? pixelSortRows(rgba, w, h, spec)
-        : pixelSortPolar(rgba, w, h, spec);
+    ? pixelSortRows(rgba, w, h, spec)
+    : pixelSortPolar(rgba, w, h, spec);

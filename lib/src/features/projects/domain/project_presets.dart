@@ -52,15 +52,13 @@ abstract final class ProjectPresets {
   static const resolutions = <int>[720, 1080, 2160];
   static const fpsOptions = <int>[24, 30, 60];
 
-  static AspectOption aspectByKey(String key) => aspects.firstWhere(
-        (a) => a.key == key,
-        orElse: () => aspects.first,
-      );
+  static AspectOption aspectByKey(String key) =>
+      aspects.firstWhere((a) => a.key == key, orElse: () => aspects.first);
 
   static String resolutionLabel(int height) => switch (height) {
-        720 => 'HD 720p',
-        1080 => 'Full HD 1080p',
-        2160 => '4K 2160p',
-        _ => '${height}p',
-      };
+    720 => 'HD 720p',
+    1080 => 'Full HD 1080p',
+    2160 => '4K 2160p',
+    _ => '${height}p',
+  };
 }

@@ -2,6 +2,9 @@ import 'dart:collection';
 
 import 'package:flutter/scheduler.dart';
 
+import 'motor3d_modo.dart';
+import 'scene3d_gpu.dart';
+
 /// O QUE TRAVOU O APARELHO, ANOTADO PELO PROPRIO APARELHO.
 ///
 /// Tres tentativas de corrigir "o app congela" falharam porque as
@@ -138,7 +141,19 @@ abstract final class RegistroDeTravadas {
     }
   }
 
-  static void limpar() => _travadas.clear();
+  /// Quantos triangulos a cena 3D pediu no ultimo quadro desenhado
+  /// PELO PINTOR DE CPU. Zero quer dizer que ele nao foi usado.
+  static int trianglesNoPintorDeCpu = 0;
+
+  /// O pintor de CPU acabou de desenhar uma cena deste tamanho.
+  static void marcarCena(int triangulos) {
+    trianglesNoPintorDeCpu = triangulos;
+  }
+
+  static void limpar() {
+    _travadas.clear();
+    trianglesNoPintorDeCpu = 0;
+  }
 
   /// Tudo em texto, para colar numa mensagem.
   static String emTexto() {
@@ -170,4 +185,31 @@ abstract final class RegistroDeTravadas {
     ]..sort((a, b) => b.somaMs.compareTo(a.somaMs));
     return saida;
   }
+}
+
+/// QUEM ESTA DESENHANDO A CENA 3D, E POR QUE.
+///
+/// Esta e a pergunta que faltava responder no aparelho. "O aparelho tem
+/// GPU" nao serve: o que importa e se ESTE modelo, nesta sessao, esta
+/// indo pelo Flutter GPU ou pelo pintor de reserva — e, quando e pela
+/// reserva, qual foi o motivo exato.
+String descreverMotor3D() {
+  final pref = Motor3DPreferencia.instancia;
+  final partes = <String>[
+    'motor=${Scene3DGpu.comoDesenha}',
+    'pronto=${Scene3DGpu.pronto}',
+    'indisponivel=${Scene3DGpu.indisponivel}',
+  ];
+  if (Scene3DGpu.motivo.isNotEmpty) {
+    partes.add('motivo="${Scene3DGpu.motivo}"');
+  }
+  if (RegistroDeTravadas.trianglesNoPintorDeCpu > 0) {
+    partes.add('PINTOU-EM-CPU=${RegistroDeTravadas.trianglesNoPintorDeCpu}tri');
+  }
+  if (pref != null) {
+    partes
+      ..add('modo=${pref.modo.name}')
+      ..add('caiuAntes=${pref.caiu}');
+  }
+  return partes.join(' ');
 }

@@ -22,11 +22,11 @@ class AureaAutor {
 enum _Tipo { bug, ferramenta, efeito, outro }
 
 String _tipoLabel(_Tipo t) => switch (t) {
-      _Tipo.bug => 'Erro / bug',
-      _Tipo.ferramenta => 'Nova ferramenta',
-      _Tipo.efeito => 'Novo efeito',
-      _Tipo.outro => 'Outro',
-    };
+  _Tipo.bug => 'Erro / bug',
+  _Tipo.ferramenta => 'Nova ferramenta',
+  _Tipo.efeito => 'Novo efeito',
+  _Tipo.outro => 'Outro',
+};
 
 /// REPORTAR: o relato vai direto para o e-mail do criador, com os dados
 /// do aparelho ja preenchidos — que e o que normalmente falta num
@@ -79,8 +79,10 @@ class _ReportSheetState extends State<_ReportSheet> {
       b
         ..writeln('---')
         ..writeln('Aurea ${AureaAutor.versao}')
-        ..writeln('Sistema: ${Platform.operatingSystem} '
-            '${Platform.operatingSystemVersion}');
+        ..writeln(
+          'Sistema: ${Platform.operatingSystem} '
+          '${Platform.operatingSystemVersion}',
+        );
     }
     return b.toString();
   }
@@ -108,8 +110,7 @@ class _ReportSheetState extends State<_ReportSheet> {
       return;
     }
     // Sem app de e-mail: o relato nao pode simplesmente sumir.
-    await Clipboard.setData(
-        ClipboardData(text: '$_assunto\n\n$_corpo'));
+    await Clipboard.setData(ClipboardData(text: '$_assunto\n\n$_corpo'));
     if (!mounted) return;
     AureaSnack.show(
       context,
@@ -121,8 +122,7 @@ class _ReportSheetState extends State<_ReportSheet> {
 
   Future<void> _abrir(String url) async {
     try {
-      await launchUrl(Uri.parse(url),
-          mode: LaunchMode.externalApplication);
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (_) {
       if (!mounted) return;
       AureaSnack.show(context, 'Nao consegui abrir o link');
@@ -137,27 +137,40 @@ class _ReportSheetState extends State<_ReportSheet> {
         constraints: BoxConstraints(maxHeight: maxH),
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
-              20, 16, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+            20,
+            16,
+            20,
+            20 + MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(CupertinoIcons.exclamationmark_bubble,
-                      size: 20, color: AmColors.accent),
+                  const Icon(
+                    CupertinoIcons.exclamationmark_bubble,
+                    size: 20,
+                    color: AmColors.accent,
+                  ),
                   const SizedBox(width: 8),
-                  const Text('Reportar',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
+                  const Text(
+                    'Reportar',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
                   const Spacer(),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Icon(CupertinoIcons.xmark,
-                        size: 18, color: AmColors.muted),
+                    child: const Icon(
+                      CupertinoIcons.xmark,
+                      size: 18,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ],
               ),
@@ -166,7 +179,10 @@ class _ReportSheetState extends State<_ReportSheet> {
                 'Erro, sugestao de ferramenta ou de efeito — vai direto '
                 'para o criador do app.',
                 style: TextStyle(
-                    fontSize: 12, height: 1.35, color: AmColors.muted),
+                  fontSize: 12,
+                  height: 1.35,
+                  color: AmColors.muted,
+                ),
               ),
               const SizedBox(height: 14),
               Wrap(
@@ -178,19 +194,24 @@ class _ReportSheetState extends State<_ReportSheet> {
                       onTap: () => setState(() => _tipo = t),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: t == _tipo
                               ? AmColors.accentDim
                               : AmColors.chip,
                           borderRadius: BorderRadius.circular(9),
                         ),
-                        child: Text(_tipoLabel(t),
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: t == _tipo
-                                    ? AmColors.accent
-                                    : AmColors.muted)),
+                        child: Text(
+                          _tipoLabel(t),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: t == _tipo
+                                ? AmColors.accent
+                                : AmColors.muted,
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -218,14 +239,15 @@ class _ReportSheetState extends State<_ReportSheet> {
                     child: Text(
                       'Incluir modelo e versao do sistema',
                       style: const TextStyle(
-                          fontSize: 12, color: AmColors.muted),
+                        fontSize: 12,
+                        color: AmColors.muted,
+                      ),
                     ),
                   ),
                   CupertinoSwitch(
                     value: _incluirAparelho,
                     activeTrackColor: AmColors.accent,
-                    onChanged: (v) =>
-                        setState(() => _incluirAparelho = v),
+                    onChanged: (v) => setState(() => _incluirAparelho = v),
                   ),
                 ],
               ),
@@ -236,21 +258,27 @@ class _ReportSheetState extends State<_ReportSheet> {
                   color: AmColors.accent,
                   borderRadius: BorderRadius.circular(12),
                   onPressed: _enviar,
-                  child: const Text('Enviar',
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF10151D))),
+                  child: const Text(
+                    'Enviar',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF10151D),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
               const Divider(color: AmColors.hairline, height: 1),
               const SizedBox(height: 14),
-              const Text('Criador',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AmColors.text)),
+              const Text(
+                'Criador',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text,
+                ),
+              ),
               const SizedBox(height: 8),
               _link(
                 icon: CupertinoIcons.person_crop_circle,
@@ -262,15 +290,14 @@ class _ReportSheetState extends State<_ReportSheet> {
                 icon: CupertinoIcons.camera,
                 label: 'Instagram',
                 sub: '@${AureaAutor.instagram}',
-                onTap: () => _abrir(
-                    'https://instagram.com/${AureaAutor.instagram}'),
+                onTap: () =>
+                    _abrir('https://instagram.com/${AureaAutor.instagram}'),
               ),
               _link(
                 icon: CupertinoIcons.music_note_2,
                 label: 'TikTok',
                 sub: '@${AureaAutor.tiktok}',
-                onTap: () =>
-                    _abrir('https://tiktok.com/@${AureaAutor.tiktok}'),
+                onTap: () => _abrir('https://tiktok.com/@${AureaAutor.tiktok}'),
               ),
             ],
           ),
@@ -283,56 +310,58 @@ class _ReportSheetState extends State<_ReportSheet> {
     required TextEditingController controller,
     required String hint,
     required int lines,
-  }) =>
-      CupertinoTextField(
-        controller: controller,
-        placeholder: hint,
-        maxLines: lines,
-        minLines: lines,
-        placeholderStyle:
-            const TextStyle(fontSize: 13, color: AmColors.muted),
-        style: const TextStyle(fontSize: 14, color: AmColors.text),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AmColors.chip,
-          borderRadius: BorderRadius.circular(12),
-        ),
-      );
+  }) => CupertinoTextField(
+    controller: controller,
+    placeholder: hint,
+    maxLines: lines,
+    minLines: lines,
+    placeholderStyle: const TextStyle(fontSize: 13, color: AmColors.muted),
+    style: const TextStyle(fontSize: 14, color: AmColors.text),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AmColors.chip,
+      borderRadius: BorderRadius.circular(12),
+    ),
+  );
 
   Widget _link({
     required IconData icon,
     required String label,
     required String sub,
     required VoidCallback onTap,
-  }) =>
-      GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: AmColors.accent),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: const TextStyle(
-                            fontSize: 13, color: AmColors.text)),
-                    Text(sub,
-                        style: const TextStyle(
-                            fontSize: 11, color: AmColors.muted)),
-                  ],
+  }) => GestureDetector(
+    onTap: onTap,
+    behavior: HitTestBehavior.opaque,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AmColors.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 13, color: AmColors.text),
                 ),
-              ),
-              const Icon(CupertinoIcons.chevron_right,
-                  size: 14, color: AmColors.muted),
-            ],
+                Text(
+                  sub,
+                  style: const TextStyle(fontSize: 11, color: AmColors.muted),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+          const Icon(
+            CupertinoIcons.chevron_right,
+            size: 14,
+            color: AmColors.muted,
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// AVISO DE BETA: honesto e discreto, com o caminho para reportar logo
@@ -348,7 +377,9 @@ class BetaBanner extends StatelessWidget {
       onTap: () => showReportSheet(context),
       child: Container(
         padding: EdgeInsets.symmetric(
-            horizontal: 14, vertical: compact ? 10 : 14),
+          horizontal: 14,
+          vertical: compact ? 10 : 14,
+        ),
         decoration: BoxDecoration(
           color: const Color(0x22FFB020),
           borderRadius: BorderRadius.circular(14),
@@ -356,8 +387,11 @@ class BetaBanner extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(CupertinoIcons.exclamationmark_triangle,
-                size: 18, color: Color(0xFFFFB020)),
+            const Icon(
+              CupertinoIcons.exclamationmark_triangle,
+              size: 18,
+              color: Color(0xFFFFB020),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -366,9 +400,10 @@ class BetaBanner extends StatelessWidget {
                   const Text(
                     'Versao beta para testes',
                     style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFFFB020)),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFFFB020),
+                    ),
                   ),
                   if (!compact) ...[
                     const SizedBox(height: 3),
@@ -377,17 +412,21 @@ class BetaBanner extends StatelessWidget {
                       'salvas. Achou um problema ou quer sugerir algo? '
                       'Toque aqui.',
                       style: TextStyle(
-                          fontSize: 11,
-                          height: 1.35,
-                          color: AmColors.muted),
+                        fontSize: 11,
+                        height: 1.35,
+                        color: AmColors.muted,
+                      ),
                     ),
                   ],
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(CupertinoIcons.chevron_right,
-                size: 14, color: Color(0xFFFFB020)),
+            const Icon(
+              CupertinoIcons.chevron_right,
+              size: 14,
+              color: Color(0xFFFFB020),
+            ),
           ],
         ),
       ),

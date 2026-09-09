@@ -71,10 +71,10 @@ Future<ModelAsset3D> carregarAstronauta() async =>
     carregarAstronautaDe(await _pastaPreparada());
 
 Future<ModelAsset3D> carregarAstronautaDe(String pasta) => readModel3DFiles([
-      '$pasta/astronauta.obj',
-      '$pasta/astronauta.mtl',
-      '$pasta/Astronaut_BaseColornew.jpeg',
-    ]);
+  '$pasta/astronauta.obj',
+  '$pasta/astronauta.mtl',
+  '$pasta/Astronaut_BaseColornew.jpeg',
+]);
 
 /// Importa os tres modelos de uma pasta com os arquivos ja no lugar
 /// (a bancada de render usa a pasta de assets do projeto direto).

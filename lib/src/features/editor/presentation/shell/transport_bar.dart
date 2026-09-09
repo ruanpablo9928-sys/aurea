@@ -83,76 +83,77 @@ class EditorTransportBar extends ConsumerWidget {
       child: LayoutBuilder(
         builder: (context, c) {
           final filhos = <Widget>[
-          botao(
-            key: const ValueKey('editor-undo'),
-            icon: CupertinoIcons.arrow_uturn_left,
-            tooltip: 'Desfazer',
-            onTap: controller.canUndo ? controller.undo : null,
-          ),
-          botao(
-            key: const ValueKey('editor-redo'),
-            icon: CupertinoIcons.arrow_uturn_right,
-            tooltip: 'Refazer',
-            onTap: controller.canRedo ? controller.redo : null,
-          ),
-          botao(
-            key: const ValueKey('transport-start'),
-            icon: CupertinoIcons.backward_end,
-            tooltip: 'Início · segure para marcas',
-            onTap: () => playback.seek(Duration.zero),
-            onLongPress: () => menuDasMarcas(context, ref, playback),
-          ),
-          ListenableBuilder(
-            listenable: Listenable.merge([playback.playing, playback.loop]),
-            builder: (context, _) => botao(
-              key: const ValueKey('transport-play'),
-              icon: playback.playing.value
-                  ? CupertinoIcons.pause_fill
-                  : CupertinoIcons.play_fill,
-              tooltip: playback.loop.value
-                  ? 'Repetição ligada · segure para desligar'
-                  : (playback.playing.value ? 'Pausar' : 'Reproduzir'),
-              cor: playback.loop.value ? t.accent : t.text,
-              size: 24,
-              onTap: playback.toggle,
-              onLongPress: () => playback.loop.value = !playback.loop.value,
+            botao(
+              key: const ValueKey('editor-undo'),
+              icon: CupertinoIcons.arrow_uturn_left,
+              tooltip: 'Desfazer',
+              onTap: controller.canUndo ? controller.undo : null,
             ),
-          ),
-          botao(
-            key: const ValueKey('transport-end'),
-            icon: CupertinoIcons.forward_end,
-            tooltip: 'Fim · segure para ir ao tempo',
-            onTap: () => playback.seek(duration),
-            onLongPress: () => _digitarTempo(context, playback, duration, fps),
-          ),
-          botao(
-            key: const ValueKey('camada-duplicar'),
-            icon: CupertinoIcons.plus_square_on_square,
-            tooltip: 'Duplicar camada',
-            onTap: selected == null
-                ? null
-                : () => controller.duplicateLayer(selected),
-          ),
-          // DIVIDIR SEMPRE A VISTA. Estava numa fila de acoes que a
-          // largura da tela escondia atras de "Mais" — e cortar no
-          // cabecote e o gesto mais comum de um editor. Aqui, no
-          // transporte, ele nunca sai da tela.
-          botao(
-            key: const ValueKey('camada-dividir'),
-            icon: CupertinoIcons.scissors,
-            tooltip: 'Dividir a camada no cabeçote',
-            onTap: selected == null
-                ? null
-                : () => controller.splitLayer(selected, playback.time.value),
-          ),
-          botao(
-            key: const ValueKey('transport-expand'),
-            icon: CupertinoIcons.viewfinder,
-            tooltip: 'Expandir prévia',
-            onTap: () => ref
-                .read(editorSessionProvider.notifier)
-                .togglePreviewExpanded(),
-          ),
+            botao(
+              key: const ValueKey('editor-redo'),
+              icon: CupertinoIcons.arrow_uturn_right,
+              tooltip: 'Refazer',
+              onTap: controller.canRedo ? controller.redo : null,
+            ),
+            botao(
+              key: const ValueKey('transport-start'),
+              icon: CupertinoIcons.backward_end,
+              tooltip: 'Início · segure para marcas',
+              onTap: () => playback.seek(Duration.zero),
+              onLongPress: () => menuDasMarcas(context, ref, playback),
+            ),
+            ListenableBuilder(
+              listenable: Listenable.merge([playback.playing, playback.loop]),
+              builder: (context, _) => botao(
+                key: const ValueKey('transport-play'),
+                icon: playback.playing.value
+                    ? CupertinoIcons.pause_fill
+                    : CupertinoIcons.play_fill,
+                tooltip: playback.loop.value
+                    ? 'Repetição ligada · segure para desligar'
+                    : (playback.playing.value ? 'Pausar' : 'Reproduzir'),
+                cor: playback.loop.value ? t.accent : t.text,
+                size: 24,
+                onTap: playback.toggle,
+                onLongPress: () => playback.loop.value = !playback.loop.value,
+              ),
+            ),
+            botao(
+              key: const ValueKey('transport-end'),
+              icon: CupertinoIcons.forward_end,
+              tooltip: 'Fim · segure para ir ao tempo',
+              onTap: () => playback.seek(duration),
+              onLongPress: () =>
+                  _digitarTempo(context, playback, duration, fps),
+            ),
+            botao(
+              key: const ValueKey('camada-duplicar'),
+              icon: CupertinoIcons.plus_square_on_square,
+              tooltip: 'Duplicar camada',
+              onTap: selected == null
+                  ? null
+                  : () => controller.duplicateLayer(selected),
+            ),
+            // DIVIDIR SEMPRE A VISTA. Estava numa fila de acoes que a
+            // largura da tela escondia atras de "Mais" — e cortar no
+            // cabecote e o gesto mais comum de um editor. Aqui, no
+            // transporte, ele nunca sai da tela.
+            botao(
+              key: const ValueKey('camada-dividir'),
+              icon: CupertinoIcons.scissors,
+              tooltip: 'Dividir a camada no cabeçote',
+              onTap: selected == null
+                  ? null
+                  : () => controller.splitLayer(selected, playback.time.value),
+            ),
+            botao(
+              key: const ValueKey('transport-expand'),
+              icon: CupertinoIcons.viewfinder,
+              tooltip: 'Expandir prévia',
+              onTap: () => ref
+                  .read(editorSessionProvider.notifier)
+                  .togglePreviewExpanded(),
+            ),
           ];
           final fatia = c.maxWidth.isFinite && filhos.isNotEmpty
               ? (c.maxWidth / filhos.length).clamp(36.0, AureaTokens.minTap)
@@ -161,7 +162,10 @@ class EditorTransportBar extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               for (final f in filhos)
-                SizedBox(width: fatia, child: Center(child: f)),
+                SizedBox(
+                  width: fatia,
+                  child: Center(child: f),
+                ),
             ],
           );
         },

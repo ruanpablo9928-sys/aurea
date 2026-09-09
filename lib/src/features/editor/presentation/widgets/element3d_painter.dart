@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../domain/rotacao_de_tela.dart';
+
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -17,11 +18,7 @@ import '../../domain/layer.dart';
 /// como nas particulas — girar em torno do eixo de visao equivale a
 /// girar a imagem projetada.
 class Element3DPainter extends CustomPainter {
-  Element3DPainter({
-    required this.layer,
-    this.rotXDeg = 0,
-    this.rotYDeg = 0,
-  });
+  Element3DPainter({required this.layer, this.rotXDeg = 0, this.rotYDeg = 0});
 
   final Element3DLayer layer;
   final double rotXDeg;
@@ -85,9 +82,15 @@ class Element3DPainter extends CustomPainter {
     // IMAGEM: chega do cache; se ainda nao chegou, a face sai lisa e o
     // cache avisa quando carregar.
     final imgPath = layer.imagePath;
-    final img = imgPath == null ? null : TextureCache.instance.imageFor(imgPath);
-    var lminX = double.infinity, lminY = double.infinity, lminZ = double.infinity;
-    var lmaxX = -double.infinity, lmaxY = -double.infinity, lmaxZ = -double.infinity;
+    final img = imgPath == null
+        ? null
+        : TextureCache.instance.imageFor(imgPath);
+    var lminX = double.infinity,
+        lminY = double.infinity,
+        lminZ = double.infinity;
+    var lmaxX = -double.infinity,
+        lmaxY = -double.infinity,
+        lmaxZ = -double.infinity;
     if (img != null) {
       for (final v in mesh.verts) {
         if (v[0] < lminX) lminX = v[0];
@@ -103,7 +106,11 @@ class Element3DPainter extends CustomPainter {
     ui.ImageShader? shader;
     if (img != null) {
       shader = ui.ImageShader(
-          img, TileMode.clamp, TileMode.clamp, Matrix4.identity().storage);
+        img,
+        TileMode.clamp,
+        TileMode.clamp,
+        Matrix4.identity().storage,
+      );
     }
 
     for (final (_, f) in order) {
@@ -200,6 +207,7 @@ class Element3DPainter extends CustomPainter {
           }
           return Offset(faixa(v[0], lminX, lmaxX), faixa(v[1], lminY, lmaxY));
         }
+
         final n = face.length - 2;
         final positions = Float32List(n * 6);
         final coords = Float32List(n * 6);
@@ -219,8 +227,12 @@ class Element3DPainter extends CustomPainter {
           }
         }
         canvas.drawVertices(
-          ui.Vertices.raw(ui.VertexMode.triangles, positions,
-              textureCoordinates: coords, colors: colors),
+          ui.Vertices.raw(
+            ui.VertexMode.triangles,
+            positions,
+            textureCoordinates: coords,
+            colors: colors,
+          ),
           BlendMode.modulate,
           Paint()..shader = shader,
         );
@@ -230,7 +242,9 @@ class Element3DPainter extends CustomPainter {
       }
       if (reflexo != null && amount > 0.002) {
         canvas.drawPath(
-            path, Paint()..color = reflexo.withValues(alpha: amount));
+          path,
+          Paint()..color = reflexo.withValues(alpha: amount),
+        );
       }
       if (layer.edges) {
         stroke.color = edgeColor;
@@ -241,7 +255,5 @@ class Element3DPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(Element3DPainter old) =>
-      old.layer != layer ||
-      old.rotXDeg != rotXDeg ||
-      old.rotYDeg != rotYDeg;
+      old.layer != layer || old.rotXDeg != rotXDeg || old.rotYDeg != rotYDeg;
 }

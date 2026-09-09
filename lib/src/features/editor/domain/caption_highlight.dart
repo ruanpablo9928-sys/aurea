@@ -34,19 +34,19 @@ enum HighlightLayout {
 
 extension HighlightLayoutX on HighlightLayout {
   String get rotulo => switch (this) {
-        HighlightLayout.atravessada => 'Atravessada',
-        HighlightLayout.empilhada => 'Empilhada',
-        HighlightLayout.dupla => 'Dupla',
-        HighlightLayout.costura => 'Costura',
-        HighlightLayout.sozinha => 'Sozinha',
-      };
+    HighlightLayout.atravessada => 'Atravessada',
+    HighlightLayout.empilhada => 'Empilhada',
+    HighlightLayout.dupla => 'Dupla',
+    HighlightLayout.costura => 'Costura',
+    HighlightLayout.sozinha => 'Sozinha',
+  };
 
   /// Quantas palavras de contexto o arranjo comporta de cada lado.
   int get contextoPorLado => switch (this) {
-        HighlightLayout.sozinha => 0,
-        HighlightLayout.dupla => 1,
-        _ => 2,
-      };
+    HighlightLayout.sozinha => 0,
+    HighlightLayout.dupla => 1,
+    _ => 2,
+  };
 }
 
 /// O TETO DO CONTEXTO. A frase inteira em volta polui; duas de cada lado
@@ -259,20 +259,20 @@ class CaptionHighlightStyle {
     int? contextoPorLado,
     bool? atrasDaPessoa,
   }) => CaptionHighlightStyle(
-        ativo: ativo ?? this.ativo,
-        layout: layout ?? this.layout,
-        destaque: destaque ?? this.destaque,
-        corDestaque: corDestaque ?? this.corDestaque,
-        corContexto: corContexto ?? this.corContexto,
-        fonteDestaque: fonteDestaque ?? this.fonteDestaque,
-        fonteContexto: fonteContexto ?? this.fonteContexto,
-        maiusculas: maiusculas ?? this.maiusculas,
-        tracking: tracking ?? this.tracking,
-        entrelinha: entrelinha ?? this.entrelinha,
-        duracaoInflar: duracaoInflar ?? this.duracaoInflar,
-        contextoPorLado: contextoPorLado ?? this.contextoPorLado,
-        atrasDaPessoa: atrasDaPessoa ?? this.atrasDaPessoa,
-      );
+    ativo: ativo ?? this.ativo,
+    layout: layout ?? this.layout,
+    destaque: destaque ?? this.destaque,
+    corDestaque: corDestaque ?? this.corDestaque,
+    corContexto: corContexto ?? this.corContexto,
+    fonteDestaque: fonteDestaque ?? this.fonteDestaque,
+    fonteContexto: fonteContexto ?? this.fonteContexto,
+    maiusculas: maiusculas ?? this.maiusculas,
+    tracking: tracking ?? this.tracking,
+    entrelinha: entrelinha ?? this.entrelinha,
+    duracaoInflar: duracaoInflar ?? this.duracaoInflar,
+    contextoPorLado: contextoPorLado ?? this.contextoPorLado,
+    atrasDaPessoa: atrasDaPessoa ?? this.atrasDaPessoa,
+  );
 }
 
 /// OS CINCO PRESETS — a profundidade Pronto do estilo Destaque.

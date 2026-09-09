@@ -84,12 +84,8 @@ Path parseSvgPathData(String data) {
       case 'S':
       case 's':
         final rel = cmd == 's';
-        final x1 = lastCmd == 'C' || lastCmd == 'S'
-            ? 2 * cx - lastCx
-            : cx;
-        final y1 = lastCmd == 'C' || lastCmd == 'S'
-            ? 2 * cy - lastCy
-            : cy;
+        final x1 = lastCmd == 'C' || lastCmd == 'S' ? 2 * cx - lastCx : cx;
+        final y1 = lastCmd == 'C' || lastCmd == 'S' ? 2 * cy - lastCy : cy;
         final x2 = (rel ? cx : 0) + num_();
         final y2 = (rel ? cy : 0) + num_();
         final x = (rel ? cx : 0) + num_();
@@ -116,12 +112,8 @@ Path parseSvgPathData(String data) {
       case 'T':
       case 't':
         final rel = cmd == 't';
-        final x1 = lastCmd == 'Q' || lastCmd == 'T'
-            ? 2 * cx - lastCx
-            : cx;
-        final y1 = lastCmd == 'Q' || lastCmd == 'T'
-            ? 2 * cy - lastCy
-            : cy;
+        final x1 = lastCmd == 'Q' || lastCmd == 'T' ? 2 * cx - lastCx : cx;
+        final y1 = lastCmd == 'Q' || lastCmd == 'T' ? 2 * cy - lastCy : cy;
         final x = (rel ? cx : 0) + num_();
         final y = (rel ? cy : 0) + num_();
         path.quadraticBezierTo(x1, y1, x, y);
@@ -159,8 +151,18 @@ Path parseSvgPathData(String data) {
 }
 
 /// Arco eliptico SVG -> arcToPoint do Flutter (mesma semantica).
-void _arcTo(Path path, double x0, double y0, double x, double y, double rx,
-    double ry, double rotDeg, bool largeArc, bool sweep) {
+void _arcTo(
+  Path path,
+  double x0,
+  double y0,
+  double x,
+  double y,
+  double rx,
+  double ry,
+  double rotDeg,
+  bool largeArc,
+  bool sweep,
+) {
   if (rx <= 0 || ry <= 0) {
     path.lineTo(x, y);
     return;
@@ -194,12 +196,14 @@ Path fitPathToBox(Path source, double size) {
   final b = source.getBounds();
   if (b.isEmpty) return source;
   final s = size / math.max(b.width, b.height);
-  return source.transform(Float64List.fromList([
-    s, 0, 0, 0, //
-    0, s, 0, 0, //
-    0, 0, 1, 0, //
-    -b.center.dx * s, -b.center.dy * s, 0, 1,
-  ]));
+  return source.transform(
+    Float64List.fromList([
+      s, 0, 0, 0, //
+      0, s, 0, 0, //
+      0, 0, 1, 0, //
+      -b.center.dx * s, -b.center.dy * s, 0, 1,
+    ]),
+  );
 }
 
 /// SVG PATH DATA -> [BezierPath], com os NOS de verdade.
@@ -359,7 +363,11 @@ BezierPath svgPathToBezier(String data) {
       case 'A':
       case 'a':
         final rel = cmd == 'a';
-        num_(); num_(); num_(); num_(); num_(); // rx ry rot large sweep
+        num_();
+        num_();
+        num_();
+        num_();
+        num_(); // rx ry rot large sweep
         final x = (rel ? cx : 0) + num_(), y = (rel ? cy : 0) + num_();
         reta(x, y);
         lastCmd = cmd;

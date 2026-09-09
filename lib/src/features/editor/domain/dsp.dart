@@ -31,9 +31,14 @@ class Biquad {
     return y;
   }
 
-  static Biquad _norm(double b0, double b1, double b2, double a0, double a1,
-          double a2) =>
-      Biquad(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0);
+  static Biquad _norm(
+    double b0,
+    double b1,
+    double b2,
+    double a0,
+    double a1,
+    double a2,
+  ) => Biquad(b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0);
 }
 
 /// As formulas do livro do Robert Bristow-Johnson, que e de onde vem o
@@ -43,7 +48,13 @@ Biquad highPass(int rate, double fc, {double q = math.sqrt1_2}) {
   final cos = math.cos(w0);
   final alpha = math.sin(w0) / (2 * q);
   return Biquad._norm(
-      (1 + cos) / 2, -(1 + cos), (1 + cos) / 2, 1 + alpha, -2 * cos, 1 - alpha);
+    (1 + cos) / 2,
+    -(1 + cos),
+    (1 + cos) / 2,
+    1 + alpha,
+    -2 * cos,
+    1 - alpha,
+  );
 }
 
 Biquad lowPass(int rate, double fc, {double q = math.sqrt1_2}) {
@@ -51,7 +62,13 @@ Biquad lowPass(int rate, double fc, {double q = math.sqrt1_2}) {
   final cos = math.cos(w0);
   final alpha = math.sin(w0) / (2 * q);
   return Biquad._norm(
-      (1 - cos) / 2, 1 - cos, (1 - cos) / 2, 1 + alpha, -2 * cos, 1 - alpha);
+    (1 - cos) / 2,
+    1 - cos,
+    (1 - cos) / 2,
+    1 + alpha,
+    -2 * cos,
+    1 - alpha,
+  );
 }
 
 Biquad highShelf(int rate, double fc, double gainDb, {double q = 0.707}) {

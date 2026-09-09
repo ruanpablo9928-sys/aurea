@@ -26,7 +26,8 @@ double fbm(double x, double z, {int oitavas = 3, int semente = 0}) {
     final tx = suave(fx - ix), tz = suave(fz - iz);
     double canto(int a, int b) =>
         ruido(a * 73856093 ^ b * 19349663 ^ (semente + o) * 83492791);
-    final v = (canto(ix, iz) * (1 - tx) + canto(ix + 1, iz) * tx) * (1 - tz) +
+    final v =
+        (canto(ix, iz) * (1 - tx) + canto(ix + 1, iz) * tx) * (1 - tz) +
         (canto(ix, iz + 1) * (1 - tx) + canto(ix + 1, iz + 1) * tx) * tz;
     soma += v * peso;
     total += peso;
@@ -42,7 +43,11 @@ int canal8(double v) => (v * 255).round().clamp(0, 255);
 /// PNG minimo em Dart puro (RGB, zlib do dart:io), como data URI: o
 /// cache de texturas le `data:` direto, e o projeto salvo carrega a
 /// textura junto — sem depender de arquivo no aparelho.
-String pngDataUri(int w, int h, void Function(int x, int y, Uint8List rgb) pixel) {
+String pngDataUri(
+  int w,
+  int h,
+  void Function(int x, int y, Uint8List rgb) pixel,
+) {
   final raw = Uint8List(h * (1 + w * 3));
   final rgb = Uint8List(3);
   var k = 0;

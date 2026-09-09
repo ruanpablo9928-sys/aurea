@@ -21,11 +21,15 @@ Future<void> showPathEditSheet(
   String layerId,
   String maskId,
   PlaybackController playback, {
+
   /// [maskId] e o id de um item ShapeBezier da forma, nao de mascara.
   bool forma = false,
 }) async {
-  ref.read(pathEditTargetProvider.notifier).state =
-      PathEditTarget(layerId, maskId, forma: forma);
+  ref.read(pathEditTargetProvider.notifier).state = PathEditTarget(
+    layerId,
+    maskId,
+    forma: forma,
+  );
   ref.read(pathEditSelectedProvider.notifier).state = null;
 
   await showParamSheet(
@@ -54,8 +58,7 @@ Future<void> showPathEditSheet(
         final t = playback.time.value;
         final caminho = animado.valueAt(layer.localTime(t));
         final sel = ref.watch(pathEditSelectedProvider);
-        final temNo =
-            sel != null && sel >= 0 && sel < caminho.vertices.length;
+        final temNo = sel != null && sel >= 0 && sel < caminho.vertices.length;
 
         void editar(BezierPath Function(BezierPath) fn) {
           if (forma) {
@@ -76,26 +79,36 @@ Future<void> showPathEditSheet(
                 Row(
                   children: [
                     const Expanded(
-                      child: Text('Editar nos',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: AmColors.text)),
+                      child: Text(
+                        'Editar nos',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
-                    Text('${caminho.vertices.length} nos',
-                        style: const TextStyle(
-                            fontSize: 12, color: AmColors.muted)),
+                    Text(
+                      '${caminho.vertices.length} nos',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AmColors.muted,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   temNo
                       ? 'No ${sel + 1} selecionado. Arraste as bolinhas '
-                          'azuis para curvar.'
+                            'azuis para curvar.'
                       : 'Toque num no para selecionar, ou EM CIMA da '
-                          'linha para criar um no ali.',
+                            'linha para criar um no ali.',
                   style: const TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
@@ -103,7 +116,8 @@ Future<void> showPathEditSheet(
                   children: [
                     Expanded(
                       child: _Acao(
-                        icone: caminho.vertices.isNotEmpty &&
+                        icone:
+                            caminho.vertices.isNotEmpty &&
                                 temNo &&
                                 caminho.vertices[sel].corner
                             ? CupertinoIcons.circle
@@ -128,8 +142,9 @@ Future<void> showPathEditSheet(
                             : () {
                                 editar((c) => removeVertex(c, sel));
                                 ref
-                                    .read(pathEditSelectedProvider.notifier)
-                                    .state = null;
+                                        .read(pathEditSelectedProvider.notifier)
+                                        .state =
+                                    null;
                               },
                       ),
                     ),
@@ -144,10 +159,16 @@ Future<void> showPathEditSheet(
                         onTap: () {
                           if (forma) {
                             controller.toggleShapeBezierKeyframe(
-                                layerId, maskId, t);
+                              layerId,
+                              maskId,
+                              t,
+                            );
                           } else {
                             controller.toggleMaskPathKeyframe(
-                                layerId, maskId, t);
+                              layerId,
+                              maskId,
+                              t,
+                            );
                           }
                           setSheetState(() {});
                         },
@@ -159,13 +180,16 @@ Future<void> showPathEditSheet(
                 Text(
                   forma
                       ? 'Com o caminho animado, cada ajuste cria keyframe no '
-                          'tempo atual — e entre dois keyframes a forma '
-                          'VIRA a outra: os vertices sao casados sozinhos.'
+                            'tempo atual — e entre dois keyframes a forma '
+                            'VIRA a outra: os vertices sao casados sozinhos.'
                       : 'Com o caminho animado, cada ajuste cria keyframe no '
-                          'tempo atual — e assim que a mascara acompanha '
-                          'alguem andando na cena.',
+                            'tempo atual — e assim que a mascara acompanha '
+                            'alguem andando na cena.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
               ],
             ),
@@ -208,10 +232,12 @@ class _Acao extends StatelessWidget {
           children: [
             Icon(icone, size: 18, color: cor),
             const SizedBox(height: 5),
-            Text(rotulo,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: cor)),
+            Text(
+              rotulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: cor),
+            ),
           ],
         ),
       ),

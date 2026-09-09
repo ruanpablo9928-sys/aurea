@@ -11,7 +11,10 @@ import 'dart:ui';
 typedef LayoutBox = ({String id, Offset center, Size size});
 
 Rect _rectOf(LayoutBox b) => Rect.fromCenter(
-    center: b.center, width: b.size.width, height: b.size.height);
+  center: b.center,
+  width: b.size.width,
+  height: b.size.height,
+);
 
 enum AlignEdge { left, centerH, right, top, centerV, bottom }
 
@@ -95,18 +98,19 @@ Map<String, Offset> distributeLayers(
 ) {
   if (boxes.length < 3) return const {};
   final horizontal = axis == DistributeAxis.horizontal;
-  final sorted = [...boxes]..sort((a, b) => horizontal
-      ? a.center.dx.compareTo(b.center.dx)
-      : a.center.dy.compareTo(b.center.dy));
+  final sorted = [...boxes]
+    ..sort(
+      (a, b) => horizontal
+          ? a.center.dx.compareTo(b.center.dx)
+          : a.center.dy.compareTo(b.center.dy),
+    );
 
   final out = <String, Offset>{};
   final n = sorted.length;
 
   if (mode == DistributeMode.byCenter) {
-    final firstC =
-        horizontal ? sorted.first.center.dx : sorted.first.center.dy;
-    final lastC =
-        horizontal ? sorted.last.center.dx : sorted.last.center.dy;
+    final firstC = horizontal ? sorted.first.center.dx : sorted.first.center.dy;
+    final lastC = horizontal ? sorted.last.center.dx : sorted.last.center.dy;
     final step = (lastC - firstC) / (n - 1);
     for (var i = 1; i < n - 1; i++) {
       final b = sorted[i];
@@ -124,8 +128,9 @@ Map<String, Offset> distributeLayers(
   final startEdge = horizontal
       ? _rectOf(sorted.first).right
       : _rectOf(sorted.first).bottom;
-  final endEdge =
-      horizontal ? _rectOf(sorted.last).left : _rectOf(sorted.last).top;
+  final endEdge = horizontal
+      ? _rectOf(sorted.last).left
+      : _rectOf(sorted.last).top;
   var inner = 0.0;
   for (var i = 1; i < n - 1; i++) {
     inner += horizontal ? sorted[i].size.width : sorted[i].size.height;
@@ -136,8 +141,7 @@ Map<String, Offset> distributeLayers(
     final b = sorted[i];
     final extent = horizontal ? b.size.width : b.size.height;
     final v = cursor + extent / 2;
-    final moved =
-        horizontal ? Offset(v, b.center.dy) : Offset(b.center.dx, v);
+    final moved = horizontal ? Offset(v, b.center.dy) : Offset(b.center.dx, v);
     if (moved != b.center) out[b.id] = moved;
     cursor += extent + gap;
   }
@@ -160,10 +164,11 @@ Map<String, Duration> sequenceStarts(
   var cursor = layers.first.start;
   for (final l in layers) {
     out[l.id] = cursor;
-    final advance = step ??
+    final advance =
+        step ??
         Duration(
-            microseconds:
-                (l.duration.inMicroseconds * (1 - overlap)).round());
+          microseconds: (l.duration.inMicroseconds * (1 - overlap)).round(),
+        );
     cursor += advance;
   }
   return out;
@@ -178,12 +183,10 @@ Map<String, Duration> distributeInTime(
   final sorted = [...layers]..sort((a, b) => a.start.compareTo(b.start));
   final first = sorted.first.start;
   final last = sorted.last.start;
-  final stepUs =
-      (last - first).inMicroseconds / (sorted.length - 1);
+  final stepUs = (last - first).inMicroseconds / (sorted.length - 1);
   final out = <String, Duration>{};
   for (var i = 1; i < sorted.length - 1; i++) {
-    out[sorted[i].id] =
-        first + Duration(microseconds: (stepUs * i).round());
+    out[sorted[i].id] = first + Duration(microseconds: (stepUs * i).round());
   }
   return out;
 }
@@ -208,9 +211,12 @@ Map<String, Offset> spaceLayers(
 ) {
   if (boxes.length < 2) return const {};
   final horizontal = axis == DistributeAxis.horizontal;
-  final sorted = [...boxes]..sort((a, b) => horizontal
-      ? a.center.dx.compareTo(b.center.dx)
-      : a.center.dy.compareTo(b.center.dy));
+  final sorted = [...boxes]
+    ..sort(
+      (a, b) => horizontal
+          ? a.center.dx.compareTo(b.center.dx)
+          : a.center.dy.compareTo(b.center.dy),
+    );
 
   final out = <String, Offset>{};
   var cursor = horizontal
@@ -220,8 +226,7 @@ Map<String, Offset> spaceLayers(
     final b = sorted[i];
     final extent = horizontal ? b.size.width : b.size.height;
     final v = cursor + gap + extent / 2;
-    final moved =
-        horizontal ? Offset(v, b.center.dy) : Offset(b.center.dx, v);
+    final moved = horizontal ? Offset(v, b.center.dy) : Offset(b.center.dx, v);
     if (moved != b.center) out[b.id] = moved;
     cursor += gap + extent;
   }

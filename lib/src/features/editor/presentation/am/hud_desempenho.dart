@@ -94,7 +94,7 @@ class _HudDesempenhoState extends State<HudDesempenho> {
       'CPU ${_cpuMs.toStringAsFixed(1)}   GPU ${_gpuMs.toStringAsFixed(1)} ms',
       if (cena != null)
         '${cena.motor}  ${(cena.triangulos / 1000).toStringAsFixed(0)}K tri  '
-        '${cena.chamadas} chamadas  ${cena.texturas} tex',
+            '${cena.chamadas} chamadas  ${cena.texturas} tex',
       if (PreviewStats.rssMb.value > 0) 'RAM ${PreviewStats.rssMb.value} MB',
     ];
     if (_detalhe && Perfil3D.ligado) {

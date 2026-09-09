@@ -26,8 +26,8 @@ class EffectPreset {
     this.builtIn = false,
     DateTime? createdAt,
     this.author = '',
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime(2026);
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? DateTime(2026);
 
   final String id;
   final String name;
@@ -43,18 +43,17 @@ class EffectPreset {
   final DateTime createdAt;
   final String author;
 
-  EffectPreset copyWith({String? name, List<String>? tags}) =>
-      EffectPreset(
-        id: id,
-        name: name ?? this.name,
-        effects: effects,
-        tags: tags ?? this.tags,
-        category: category,
-        suggestedDuration: suggestedDuration,
-        builtIn: builtIn,
-        createdAt: createdAt,
-        author: author,
-      );
+  EffectPreset copyWith({String? name, List<String>? tags}) => EffectPreset(
+    id: id,
+    name: name ?? this.name,
+    effects: effects,
+    tags: tags ?? this.tags,
+    category: category,
+    suggestedDuration: suggestedDuration,
+    builtIn: builtIn,
+    createdAt: createdAt,
+    author: author,
+  );
 }
 
 /// SALVAR (§2.4): a pilha vira preset com os keyframes deslocados para o
@@ -76,15 +75,17 @@ EffectPreset saveEffectPreset({
     suggestedDuration: layerDuration,
     effects: [
       for (final e in effects)
-        e.copyWith(params: {
-          for (final entry in e.params.entries)
-            entry.key: _normalizeTrack(
-              entry.value,
-              relative: _isRelative(e.type, entry.key),
-              ref: ref,
-              shift: -layerStart,
-            ),
-        }),
+        e.copyWith(
+          params: {
+            for (final entry in e.params.entries)
+              entry.key: _normalizeTrack(
+                entry.value,
+                relative: _isRelative(e.type, entry.key),
+                ref: ref,
+                shift: -layerStart,
+              ),
+          },
+        ),
     ],
   );
 }
@@ -99,8 +100,8 @@ List<EffectInstance> applyEffectPreset(
   Duration? stretchTo,
 }) {
   final ref = _refSize(targetSize);
-  final factor = (stretchTo == null ||
-          preset.suggestedDuration.inMicroseconds == 0)
+  final factor =
+      (stretchTo == null || preset.suggestedDuration.inMicroseconds == 0)
       ? 1.0
       : stretchTo.inMicroseconds / preset.suggestedDuration.inMicroseconds;
   return [
@@ -125,10 +126,7 @@ List<EffectInstance> applyEffectPreset(
 
 /// TOLERANCIA DE VERSAO (§2.5): parametros que nao existem mais no
 /// efeito sao descartados com aviso, nunca falham em silencio.
-typedef PresetCompat = ({
-  List<EffectInstance> effects,
-  List<String> warnings,
-});
+typedef PresetCompat = ({List<EffectInstance> effects, List<String> warnings});
 
 PresetCompat reconcilePreset(EffectPreset preset) {
   final warnings = <String>[];
@@ -157,16 +155,19 @@ PresetCompat reconcilePreset(EffectPreset preset) {
                       ease: k.ease,
                     ),
                 ],
-                entry.value.loop);
+                entry.value.loop,
+              );
       } else {
         warnings.add(
-            '"${entry.key}" nao existe mais em ${spec.name} e foi ignorado.');
+          '"${entry.key}" nao existe mais em ${spec.name} e foi ignorado.',
+        );
       }
     }
     for (final p in spec.params.entries) {
       kept.putIfAbsent(p.key, () {
         warnings.add(
-            '"${p.value.label}" e novo em ${spec.name}: entrou no padrao.');
+          '"${p.value.label}" e novo em ${spec.name}: entrou no padrao.',
+        );
         return AnimatedDouble(p.value.initial);
       });
     }
@@ -192,15 +193,10 @@ AnimatedDouble _normalizeTrack(
   required Duration shift,
 }) {
   final f = relative ? 1 / ref : 1.0;
-  return AnimatedDouble(
-    track.base * f,
-    [
-      for (final k in track.keyframes)
-        Keyframe<double>(
-            time: k.time + shift, value: k.value * f, ease: k.ease),
-    ],
-    track.loop,
-  );
+  return AnimatedDouble(track.base * f, [
+    for (final k in track.keyframes)
+      Keyframe<double>(time: k.time + shift, value: k.value * f, ease: k.ease),
+  ], track.loop);
 }
 
 AnimatedDouble _denormalizeTrack(
@@ -211,21 +207,16 @@ AnimatedDouble _denormalizeTrack(
   required double timeScale,
 }) {
   final f = relative ? ref : 1.0;
-  return AnimatedDouble(
-    track.base * f,
-    [
-      for (final k in track.keyframes)
-        Keyframe<double>(
-          time: shift +
-              Duration(
-                  microseconds:
-                      (k.time.inMicroseconds * timeScale).round()),
-          value: k.value * f,
-          ease: k.ease,
-        ),
-    ],
-    track.loop,
-  );
+  return AnimatedDouble(track.base * f, [
+    for (final k in track.keyframes)
+      Keyframe<double>(
+        time:
+            shift +
+            Duration(microseconds: (k.time.inMicroseconds * timeScale).round()),
+        value: k.value * f,
+        ease: k.ease,
+      ),
+  ], track.loop);
 }
 
 /// ASSAR EM KEYFRAMES (PR-C3): converte o movimento PROCEDURAL do
@@ -263,22 +254,30 @@ BakedTracks bakeProceduralMotion({
 
   for (var i = 0; i <= frames; i++) {
     final t = Duration(microseconds: i * frameUs);
-    pos.add(Keyframe<Offset>(
-      time: t,
-      value: basePosition + sampleOffset(t),
-      ease: Easing.linear,
-    ));
+    pos.add(
+      Keyframe<Offset>(
+        time: t,
+        value: basePosition + sampleOffset(t),
+        ease: Easing.linear,
+      ),
+    );
     if (sampleRotation != null) {
-      rot.add(Keyframe<double>(
+      rot.add(
+        Keyframe<double>(
           time: t,
           value: baseRotation + sampleRotation(t),
-          ease: Easing.linear));
+          ease: Easing.linear,
+        ),
+      );
     }
     if (sampleScale != null) {
-      scl.add(Keyframe<double>(
+      scl.add(
+        Keyframe<double>(
           time: t,
           value: baseScale * sampleScale(t),
-          ease: Easing.linear));
+          ease: Easing.linear,
+        ),
+      );
     }
   }
 
@@ -296,115 +295,149 @@ BakedTracks bakeProceduralMotion({
 /// BIBLIOTECA DE FABRICA (§2.4): presets prontos por categoria, somente
 /// leitura.
 List<EffectPreset> factoryPresets() => [
-      EffectPreset(
-        name: 'Cor de filme',
-        category: 'Cor',
-        builtIn: true,
-        tags: ['cor', 'cinema'],
-        effects: [
-          EffectInstance(type: EffectType.curves, params: {
-            'contraste': AnimatedDouble(0.18),
-            'brilho': AnimatedDouble(-0.04),
-            'sombras': AnimatedDouble(0.12),
-            'altas': AnimatedDouble(0.05),
-          }),
-          EffectInstance(type: EffectType.vibrance, params: {
-            'vibracao': AnimatedDouble(0.25),
-            'saturacao': AnimatedDouble(-0.08),
-            'protecaoPele': AnimatedDouble(0.8),
-          }),
-          EffectInstance(type: EffectType.filmGrain, params: {
-            'intensidade': AnimatedDouble(0.18),
-            'tamanho': AnimatedDouble(1.4),
-            'semente': AnimatedDouble(7),
-          }),
-        ],
+  EffectPreset(
+    name: 'Cor de filme',
+    category: 'Cor',
+    builtIn: true,
+    tags: ['cor', 'cinema'],
+    effects: [
+      EffectInstance(
+        type: EffectType.curves,
+        params: {
+          'contraste': AnimatedDouble(0.18),
+          'brilho': AnimatedDouble(-0.04),
+          'sombras': AnimatedDouble(0.12),
+          'altas': AnimatedDouble(0.05),
+        },
       ),
-      EffectPreset(
-        name: 'Sonho suave',
-        category: 'Luz',
-        builtIn: true,
-        tags: ['glow', 'sonho'],
-        effects: [
-          EffectInstance(type: EffectType.glowVol, params: {
-            'radius': AnimatedDouble(0.06),
-            'exposure': AnimatedDouble(0.9),
-            'red_radius_multiplier': AnimatedDouble(1.15),
-            'threshold': AnimatedDouble(0.7),
-          }),
-          EffectInstance(type: EffectType.vignette, params: {
-            'quantidade': AnimatedDouble(0.35),
-            'raio': AnimatedDouble(0.9),
-          }),
-        ],
+      EffectInstance(
+        type: EffectType.vibrance,
+        params: {
+          'vibracao': AnimatedDouble(0.25),
+          'saturacao': AnimatedDouble(-0.08),
+          'protecaoPele': AnimatedDouble(0.8),
+        },
       ),
-      EffectPreset(
-        name: 'Glitch de impacto',
-        category: 'Glitch',
-        builtIn: true,
-        tags: ['glitch', 'edit'],
-        suggestedDuration: const Duration(milliseconds: 600),
-        effects: [
-          EffectInstance(type: EffectType.glitch, params: {
-            'quantidade': AnimatedDouble(1)
-                .withKeyframe(Duration.zero, 1.6)
-                .withKeyframe(const Duration(milliseconds: 600), 0),
-            'velocidade': AnimatedDouble(6),
-            'rgb': AnimatedDouble(0.8),
-            'semente': AnimatedDouble(11),
-          }),
-          EffectInstance(type: EffectType.digitalDamage, params: {
-            'blocos': AnimatedDouble(10),
-            'intervalo': AnimatedDouble(0.08),
-            'semente': AnimatedDouble(3),
-          }),
-        ],
+      EffectInstance(
+        type: EffectType.filmGrain,
+        params: {
+          'intensidade': AnimatedDouble(0.18),
+          'tamanho': AnimatedDouble(1.4),
+          'semente': AnimatedDouble(7),
+        },
       ),
-      EffectPreset(
-        name: 'Camera na mao',
-        category: 'Distorcao',
-        builtIn: true,
-        tags: ['shake', 'tremor'],
-        effects: [
-          EffectInstance(type: EffectType.tremor, params: {
-            'amplitude': AnimatedDouble(18),
-            'frequency': AnimatedDouble(3.5),
-            'style': AnimatedDouble(0),
-            'tilt_random_amplitude': AnimatedDouble(0.05),
-            'seed': AnimatedDouble(4),
-          }),
-        ],
+    ],
+  ),
+  EffectPreset(
+    name: 'Sonho suave',
+    category: 'Luz',
+    builtIn: true,
+    tags: ['glow', 'sonho'],
+    effects: [
+      EffectInstance(
+        type: EffectType.glowVol,
+        params: {
+          'radius': AnimatedDouble(0.06),
+          'exposure': AnimatedDouble(0.9),
+          'red_radius_multiplier': AnimatedDouble(1.15),
+          'threshold': AnimatedDouble(0.7),
+        },
       ),
-      EffectPreset(
-        name: 'Overlay de fogo',
-        category: 'Luz',
-        builtIn: true,
-        tags: ['unmult', 'overlay', 'fogo'],
-        effects: [
-          EffectInstance(type: EffectType.unmult, params: {
-            'limiar': AnimatedDouble(0.05),
-            'suavidade': AnimatedDouble(0.6),
-          }),
-          EffectInstance(type: EffectType.lightGlow, params: {
-            'diffusion': AnimatedDouble(0.3),
-            'intensity': AnimatedDouble(0.6),
-          }, color: const Color(0xFFFF8A2B)),
-        ],
+      EffectInstance(
+        type: EffectType.vignette,
+        params: {
+          'quantidade': AnimatedDouble(0.35),
+          'raio': AnimatedDouble(0.9),
+        },
       ),
-      EffectPreset(
-        name: 'Zoom de soco',
-        category: 'Distorcao',
-        builtIn: true,
-        tags: ['zoom', 'impacto'],
-        suggestedDuration: const Duration(milliseconds: 400),
-        effects: [
-          EffectInstance(type: EffectType.zoomWarp, params: {
-            'quantidade': AnimatedDouble(0)
-                .withKeyframe(Duration.zero, 0.35)
-                .withKeyframe(const Duration(milliseconds: 400), 0),
-            'rastro': AnimatedDouble(0.5),
-            'amostras': AnimatedDouble(6),
-          }),
-        ],
+    ],
+  ),
+  EffectPreset(
+    name: 'Glitch de impacto',
+    category: 'Glitch',
+    builtIn: true,
+    tags: ['glitch', 'edit'],
+    suggestedDuration: const Duration(milliseconds: 600),
+    effects: [
+      EffectInstance(
+        type: EffectType.glitch,
+        params: {
+          'quantidade': AnimatedDouble(1)
+              .withKeyframe(Duration.zero, 1.6)
+              .withKeyframe(const Duration(milliseconds: 600), 0),
+          'velocidade': AnimatedDouble(6),
+          'rgb': AnimatedDouble(0.8),
+          'semente': AnimatedDouble(11),
+        },
       ),
-    ];
+      EffectInstance(
+        type: EffectType.digitalDamage,
+        params: {
+          'blocos': AnimatedDouble(10),
+          'intervalo': AnimatedDouble(0.08),
+          'semente': AnimatedDouble(3),
+        },
+      ),
+    ],
+  ),
+  EffectPreset(
+    name: 'Camera na mao',
+    category: 'Distorcao',
+    builtIn: true,
+    tags: ['shake', 'tremor'],
+    effects: [
+      EffectInstance(
+        type: EffectType.tremor,
+        params: {
+          'amplitude': AnimatedDouble(18),
+          'frequency': AnimatedDouble(3.5),
+          'style': AnimatedDouble(0),
+          'tilt_random_amplitude': AnimatedDouble(0.05),
+          'seed': AnimatedDouble(4),
+        },
+      ),
+    ],
+  ),
+  EffectPreset(
+    name: 'Overlay de fogo',
+    category: 'Luz',
+    builtIn: true,
+    tags: ['unmult', 'overlay', 'fogo'],
+    effects: [
+      EffectInstance(
+        type: EffectType.unmult,
+        params: {
+          'limiar': AnimatedDouble(0.05),
+          'suavidade': AnimatedDouble(0.6),
+        },
+      ),
+      EffectInstance(
+        type: EffectType.lightGlow,
+        params: {
+          'diffusion': AnimatedDouble(0.3),
+          'intensity': AnimatedDouble(0.6),
+        },
+        color: const Color(0xFFFF8A2B),
+      ),
+    ],
+  ),
+  EffectPreset(
+    name: 'Zoom de soco',
+    category: 'Distorcao',
+    builtIn: true,
+    tags: ['zoom', 'impacto'],
+    suggestedDuration: const Duration(milliseconds: 400),
+    effects: [
+      EffectInstance(
+        type: EffectType.zoomWarp,
+        params: {
+          'quantidade': AnimatedDouble(0)
+              .withKeyframe(Duration.zero, 0.35)
+              .withKeyframe(const Duration(milliseconds: 400), 0),
+          'rastro': AnimatedDouble(0.5),
+          'amostras': AnimatedDouble(6),
+        },
+      ),
+    ],
+  ),
+];

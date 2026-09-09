@@ -109,12 +109,14 @@ class PyramidWaveformPainter extends CustomPainter {
       final hBaixo = math.sqrt(baixo.abs()) * half;
       if (hAlto > 0 || hBaixo > 0) {
         canvas.drawLine(
-            Offset(dx, mid - hAlto), Offset(dx, mid + hBaixo), contorno);
+          Offset(dx, mid - hAlto),
+          Offset(dx, mid + hBaixo),
+          contorno,
+        );
       }
       final hRms = math.sqrt(rms) * half;
       if (hRms > 0.5) {
-        canvas.drawLine(
-            Offset(dx, mid - hRms), Offset(dx, mid + hRms), corpo);
+        canvas.drawLine(Offset(dx, mid - hRms), Offset(dx, mid + hRms), corpo);
       }
     }
   }
@@ -232,8 +234,7 @@ class FilmstripPainter extends CustomPainter {
       final x = i * tileW;
       // Qual instante do ARQUIVO esta neste ponto da barra.
       final f = a + (x / size.width) * span;
-      final idx =
-          (f * frames.length).floor().clamp(0, frames.length - 1);
+      final idx = (f * frames.length).floor().clamp(0, frames.length - 1);
       final img = frames[idx];
       canvas.drawImageRect(
         img,

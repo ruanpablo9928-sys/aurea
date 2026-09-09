@@ -42,8 +42,7 @@ const colinaWidth = 1280.0;
 const colinaHeight = 720.0;
 const colinaTriangleBudget = 15500;
 
-Duration _t(num seconds) =>
-    Duration(microseconds: (seconds * 1000000).round());
+Duration _t(num seconds) => Duration(microseconds: (seconds * 1000000).round());
 AnimatedDouble _ad(double v) => AnimatedDouble(v);
 AnimatedDouble _keys(List<(num, num)> values, {Easing ease = Easing.linear}) =>
     AnimatedDouble(values.first.$2.toDouble(), [
@@ -54,8 +53,7 @@ AnimatedDouble _keys(List<(num, num)> values, {Easing ease = Easing.linear}) =>
 /// Amostra uma funcao do tempo a cada 1/6 s: a camera e a poeira se
 /// movem por curva continua, e o editor ve keyframes de verdade.
 AnimatedDouble _sample(double Function(double) f) => AnimatedDouble(f(0), [
-  for (var i = 0; i <= 36; i++)
-    Keyframe(time: _t(i / 6), value: f(i / 6)),
+  for (var i = 0; i <= 36; i++) Keyframe(time: _t(i / 6), value: f(i / 6)),
 ]);
 
 /// O SOL: atras e a direita, baixo. A direcao em que a luz VIAJA; o
@@ -71,7 +69,8 @@ double colinaAltura(double x, double z) {
   final dx = x / 1.18, dz = z - 30;
   final r2 = dx * dx + dz * dz;
   final morro = 238 * math.exp(-r2 / (440 * 440));
-  final ondas = 42 * (fbm(x / 720 + 3.1, z / 720 + 7.7) - .5) +
+  final ondas =
+      42 * (fbm(x / 720 + 3.1, z / 720 + 7.7) - .5) +
       11 * (fbm(x / 170 + 9.3, z / 170 + 1.2, semente: 4) - .5);
   final fundo = .045 * math.max(0.0, -z - 520);
   return morro + ondas + fundo;
@@ -95,56 +94,58 @@ const _mapaLado = 768;
 const _mapaMeio = 1500.0;
 
 String _texturaChao() => pngDataUri(_mapaLado, _mapaLado, (px, py, rgb) {
-      final x = -_mapaMeio + px * 2 * _mapaMeio / _mapaLado;
-      final z = -_mapaMeio + py * 2 * _mapaMeio / _mapaLado;
-      final grande = fbm(x / 520 + 3, z / 520 + 9, semente: 11);
-      final fino = fbm(x / 62 + 1, z / 62 + 5, oitavas: 2, semente: 12);
-      final grao = ruido(px * 7 + py * 131) - .5;
-      final seco =
-          math.max(0.0, fbm(x / 640 + 5, z / 640 + 2, semente: 13) - .58) *
-              2.4;
-      var r = .21 + .09 * (grande - .5) + .06 * (fino - .5) + .035 * grao;
-      var g = .48 + .16 * (grande - .5) + .12 * (fino - .5) + .06 * grao;
-      var b = .11 + .04 * (grande - .5) + .03 * (fino - .5);
-      r += .26 * seco;
-      g += .10 * seco;
-      b -= .04 * seco;
-      // TERRA na encosta: mascara de ruido com borda suave, so no anel
-      // do morro, nunca no topo (a TV pousa na grama).
-      final dist = math.sqrt(x * x + (z - 30) * (z - 30));
-      final anel = suave(((dist - 130) / 90).clamp(0.0, 1.0)) *
-          (1 - suave(((dist - 520) / 120).clamp(0.0, 1.0)));
-      final mancha = fbm(x / 230 + 2, z / 230 + 8, semente: 41);
-      final terra = suave(((mancha - .60) / .10).clamp(0.0, 1.0)) * anel;
-      final tn = fbm(x / 40, z / 40, oitavas: 2, semente: 21);
-      final tr = .40 + .16 * (tn - .5) + .05 * grao;
-      final tg = .21 + .09 * (tn - .5) + .04 * grao;
-      final tb = .12 + .05 * (tn - .5) + .03 * grao;
-      r += (tr - r) * terra;
-      g += (tg - g) * terra;
-      b += (tb - b) * terra;
-      // CAMPO DISTANTE: mais escuro e azulado.
-      final longe = suave(((dist - 800) / 700).clamp(0.0, 1.0)) * .55;
-      r += (.10 - r) * longe;
-      g += (.24 - g) * longe;
-      b += (.18 - b) * longe;
-      rgb[0] = canal8(r);
-      rgb[1] = canal8(g);
-      rgb[2] = canal8(b);
-    });
+  final x = -_mapaMeio + px * 2 * _mapaMeio / _mapaLado;
+  final z = -_mapaMeio + py * 2 * _mapaMeio / _mapaLado;
+  final grande = fbm(x / 520 + 3, z / 520 + 9, semente: 11);
+  final fino = fbm(x / 62 + 1, z / 62 + 5, oitavas: 2, semente: 12);
+  final grao = ruido(px * 7 + py * 131) - .5;
+  final seco =
+      math.max(0.0, fbm(x / 640 + 5, z / 640 + 2, semente: 13) - .58) * 2.4;
+  var r = .21 + .09 * (grande - .5) + .06 * (fino - .5) + .035 * grao;
+  var g = .48 + .16 * (grande - .5) + .12 * (fino - .5) + .06 * grao;
+  var b = .11 + .04 * (grande - .5) + .03 * (fino - .5);
+  r += .26 * seco;
+  g += .10 * seco;
+  b -= .04 * seco;
+  // TERRA na encosta: mascara de ruido com borda suave, so no anel
+  // do morro, nunca no topo (a TV pousa na grama).
+  final dist = math.sqrt(x * x + (z - 30) * (z - 30));
+  final anel =
+      suave(((dist - 130) / 90).clamp(0.0, 1.0)) *
+      (1 - suave(((dist - 520) / 120).clamp(0.0, 1.0)));
+  final mancha = fbm(x / 230 + 2, z / 230 + 8, semente: 41);
+  final terra = suave(((mancha - .60) / .10).clamp(0.0, 1.0)) * anel;
+  final tn = fbm(x / 40, z / 40, oitavas: 2, semente: 21);
+  final tr = .40 + .16 * (tn - .5) + .05 * grao;
+  final tg = .21 + .09 * (tn - .5) + .04 * grao;
+  final tb = .12 + .05 * (tn - .5) + .03 * grao;
+  r += (tr - r) * terra;
+  g += (tg - g) * terra;
+  b += (tb - b) * terra;
+  // CAMPO DISTANTE: mais escuro e azulado.
+  final longe = suave(((dist - 800) / 700).clamp(0.0, 1.0)) * .55;
+  r += (.10 - r) * longe;
+  g += (.24 - g) * longe;
+  b += (.18 - b) * longe;
+  rgb[0] = canal8(r);
+  rgb[1] = canal8(g);
+  rgb[2] = canal8(b);
+});
 
 /// ROCHA: cinza-castanho com veios.
 String _texturaRocha() => pngDataUri(128, 128, (x, y, rgb) {
-      final u = x / 128, v = y / 128;
-      final n = fbm(u * 5, v * 5, semente: 31);
-      final veio = math.max(
-          0.0, .5 - (fbm(u * 9, v * 2.5, semente: 32) - .5).abs() * 6);
-      final grao = ruido(x * 53 + y * 7) - .5;
-      final base = .36 + .24 * (n - .5) + .06 * grao - .10 * veio;
-      rgb[0] = canal8(base + .04);
-      rgb[1] = canal8(base);
-      rgb[2] = canal8(base - .04);
-    });
+  final u = x / 128, v = y / 128;
+  final n = fbm(u * 5, v * 5, semente: 31);
+  final veio = math.max(
+    0.0,
+    .5 - (fbm(u * 9, v * 2.5, semente: 32) - .5).abs() * 6,
+  );
+  final grao = ruido(x * 53 + y * 7) - .5;
+  final base = .36 + .24 * (n - .5) + .06 * grao - .10 * veio;
+  rgb[0] = canal8(base + .04);
+  rgb[1] = canal8(base);
+  rgb[2] = canal8(base - .04);
+});
 
 // ============================================================== NOS
 
@@ -185,14 +186,14 @@ SceneNode _terreno() {
 
 /// A SERRA AO FUNDO: um perfil de cumes que a neblina come.
 SceneNode _serra() {
-  final m = MalhaCodigo([
-    materialCodigo('Serra', 0xff26343f, rugosidade: 1),
-  ]);
+  final m = MalhaCodigo([materialCodigo('Serra', 0xff26343f, rugosidade: 1)]);
   const n = 80;
   final frente = <int>[], cume = <int>[], tras = <int>[];
   for (var i = 0; i <= n; i++) {
     final x = -4400 + i * 8800 / n;
-    var h = 150 + 240 * fbm(x / 1500 + 4, 0.3, semente: 51) +
+    var h =
+        150 +
+        240 * fbm(x / 1500 + 4, 0.3, semente: 51) +
         90 * fbm(x / 420 + 1, 0.7, oitavas: 2, semente: 52);
     // Mais alta a direita, como na referencia.
     h += 260 * suave(((x - 200) / 2600).clamp(0.0, 1.0));
@@ -216,12 +217,18 @@ SceneNode _serra() {
 /// laminas vira para o outro lado, para o tufo nao ficar uniforme.
 MalhaCodigo _tufo(int variante) {
   final m = MalhaCodigo([
-    materialCodigo('Grama · lamina', 0xff78a532, rugosidade: .6, doisLados: true),
+    materialCodigo(
+      'Grama · lamina',
+      0xff78a532,
+      rugosidade: .6,
+      doisLados: true,
+    ),
   ]);
   final altura = 22.0 + 12 * ruido(variante * 7 + 1);
   const cima = Vec3(0, 1, 0);
   for (var k = 0; k < 4; k++) {
-    final ang = (k / 4) * 2 * math.pi + variante * .7 + ruido(variante * 11 + k) * 1.1;
+    final ang =
+        (k / 4) * 2 * math.pi + variante * .7 + ruido(variante * 11 + k) * 1.1;
     final inclina = .22 + .40 * ruido(variante * 13 + k * 5);
     final h = altura * (.7 + .5 * ruido(variante * 17 + k * 3));
     final dir = Vec3(math.cos(ang), 0, math.sin(ang));
@@ -296,12 +303,14 @@ List<SceneNode> _grama() {
   for (var v = 0; v < 8; v++) {
     final m = _tufo(v);
     final altura = 22.0 + 12 * ruido(v * 7 + 1);
-    out.add(m.no(
-      'colina_grama_$v',
-      'Grama · tufos ${v + 1}',
-      posicao: Vec3.zero,
-      instancias: _espalha(v + 1, 215, altura),
-    ));
+    out.add(
+      m.no(
+        'colina_grama_$v',
+        'Grama · tufos ${v + 1}',
+        posicao: Vec3.zero,
+        instancias: _espalha(v + 1, 215, altura),
+      ),
+    );
   }
   return out;
 }
@@ -321,8 +330,16 @@ MalhaCodigo _flor(int cor, int semente) {
     final dir = Vec3(math.cos(ang), 0, math.sin(ang));
     final lado = Vec3(-dir.z, 0, dir.x) * 3.4;
     final ponta = centro + dir * 7.6 + const Vec3(0, 1.2, 0);
-    final ia = m.vertice(0, centro + lado * .5 + dir * .6 + const Vec3(0, .6, 0), n);
-    final ib = m.vertice(0, centro - lado * .5 + dir * .6 + const Vec3(0, .6, 0), n);
+    final ia = m.vertice(
+      0,
+      centro + lado * .5 + dir * .6 + const Vec3(0, .6, 0),
+      n,
+    );
+    final ib = m.vertice(
+      0,
+      centro - lado * .5 + dir * .6 + const Vec3(0, .6, 0),
+      n,
+    );
     final ic = m.vertice(0, ponta, n);
     m.tri(0, ia, ib, ic);
   }
@@ -330,13 +347,25 @@ MalhaCodigo _flor(int cor, int semente) {
 }
 
 List<SceneNode> _flores() => [
-      _flor(0xffe0502a, 100).no('colina_flores_vermelhas', 'Flores · laranja',
-          posicao: Vec3.zero, instancias: _espalha(31, 110, 15)),
-      _flor(0xfff3efe4, 200).no('colina_flores_brancas', 'Flores · brancas',
-          posicao: Vec3.zero, instancias: _espalha(32, 70, 15)),
-      _flor(0xfff0c030, 300).no('colina_flores_amarelas', 'Flores · amarelas',
-          posicao: Vec3.zero, instancias: _espalha(33, 42, 15)),
-    ];
+  _flor(0xffe0502a, 100).no(
+    'colina_flores_vermelhas',
+    'Flores · laranja',
+    posicao: Vec3.zero,
+    instancias: _espalha(31, 110, 15),
+  ),
+  _flor(0xfff3efe4, 200).no(
+    'colina_flores_brancas',
+    'Flores · brancas',
+    posicao: Vec3.zero,
+    instancias: _espalha(32, 70, 15),
+  ),
+  _flor(0xfff0c030, 300).no(
+    'colina_flores_amarelas',
+    'Flores · amarelas',
+    posicao: Vec3.zero,
+    instancias: _espalha(33, 42, 15),
+  ),
+];
 
 /// ROCHA: esfera deformada por ruido, faces PLANAS (o pintor sombreia
 /// por face quando nao ha normal por vertice), com a textura de pedra
@@ -361,14 +390,26 @@ SceneNode _rocha(int k) {
     final anel = <Vec3>[];
     for (var l = 0; l < lados; l++) {
       final lon = 2 * math.pi * l / lados;
-      final d = Vec3(math.sin(lat) * math.cos(lon), math.cos(lat),
-          math.sin(lat) * math.sin(lon));
-      final deform = .80 +
+      final d = Vec3(
+        math.sin(lat) * math.cos(lon),
+        math.cos(lat),
+        math.sin(lat) * math.sin(lon),
+      );
+      final deform =
+          .80 +
           .36 *
-              fbm(d.x * 2.2 + r.$7 * 9, d.z * 2.2 + d.y * 1.7,
-                  semente: 60 + r.$7);
-      anel.add(Vec3(r.$1 + d.x * r.$4 * deform, cy + d.y * r.$5 * deform,
-          r.$3 + d.z * r.$6 * deform));
+              fbm(
+                d.x * 2.2 + r.$7 * 9,
+                d.z * 2.2 + d.y * 1.7,
+                semente: 60 + r.$7,
+              );
+      anel.add(
+        Vec3(
+          r.$1 + d.x * r.$4 * deform,
+          cy + d.y * r.$5 * deform,
+          r.$3 + d.z * r.$6 * deform,
+        ),
+      );
     }
     pontos.add(anel);
   }
@@ -381,12 +422,28 @@ SceneNode _rocha(int k) {
       // Para fora: a face vira para longe do centro da rocha.
       final fora = ((p00 + p10 + p01) * (1 / 3) - centro);
       if (a > 0) {
-        m.triPlano(0, p00, p01, p10,
-            ua: uv(a, l), ub: uv(a, l + 1), uc: uv(a + 1, l), virado: fora);
+        m.triPlano(
+          0,
+          p00,
+          p01,
+          p10,
+          ua: uv(a, l),
+          ub: uv(a, l + 1),
+          uc: uv(a + 1, l),
+          virado: fora,
+        );
       }
       if (a < aneis - 1) {
-        m.triPlano(0, p01, p11, p10,
-            ua: uv(a, l + 1), ub: uv(a + 1, l + 1), uc: uv(a + 1, l), virado: fora);
+        m.triPlano(
+          0,
+          p01,
+          p11,
+          p10,
+          ua: uv(a, l + 1),
+          ub: uv(a + 1, l + 1),
+          uc: uv(a + 1, l),
+          virado: fora,
+        );
       }
     }
   }
@@ -423,8 +480,11 @@ SceneNode _tv() {
     final dz = <double>[];
     for (var l = 0; l <= lados; l++) {
       final lon = 2 * math.pi * l / lados + math.pi / lados;
-      final d = Vec3(math.sin(lat) * math.cos(lon), math.cos(lat),
-          math.sin(lat) * math.sin(lon));
+      final d = Vec3(
+        math.sin(lat) * math.cos(lon),
+        math.cos(lat),
+        math.sin(lat) * math.sin(lon),
+      );
       final p = Vec3(sup(d.x, hw), sup(d.y, hh), sup(d.z, hd));
       anel.add(m.vertice(0, p, d));
       dz.add(d.z);
@@ -456,18 +516,43 @@ SceneNode _tv() {
   // folga na frente da placa.
   const frente = Vec3(0, 0, 1);
   const tw = 54.0 * e, th = 42.0 * e, zf = hd + 4;
-  const cx = -4.0 * e, cy = 2.0 * e; // a tela a esquerda: o painel mora a direita
+  const cx = -4.0 * e,
+      cy = 2.0 * e; // a tela a esquerda: o painel mora a direita
   const bw = 72.0 * e, bh = 55.0 * e;
   // A MOLDURA em quatro tiras que NAO passam por baixo da tela: assim
   // nenhum triangulo dela disputa a ordenacao com a tela.
-  m.quadPlano(1, Vec3(-bw, bh, zf), Vec3(bw, bh, zf), Vec3(bw, cy + th, zf),
-      Vec3(-bw, cy + th, zf), virado: frente);
-  m.quadPlano(1, Vec3(-bw, cy - th, zf), Vec3(bw, cy - th, zf),
-      Vec3(bw, -bh, zf), Vec3(-bw, -bh, zf), virado: frente);
-  m.quadPlano(1, Vec3(-bw, cy + th, zf), Vec3(cx - tw, cy + th, zf),
-      Vec3(cx - tw, cy - th, zf), Vec3(-bw, cy - th, zf), virado: frente);
-  m.quadPlano(1, Vec3(cx + tw, cy + th, zf), Vec3(bw, cy + th, zf),
-      Vec3(bw, cy - th, zf), Vec3(cx + tw, cy - th, zf), virado: frente);
+  m.quadPlano(
+    1,
+    Vec3(-bw, bh, zf),
+    Vec3(bw, bh, zf),
+    Vec3(bw, cy + th, zf),
+    Vec3(-bw, cy + th, zf),
+    virado: frente,
+  );
+  m.quadPlano(
+    1,
+    Vec3(-bw, cy - th, zf),
+    Vec3(bw, cy - th, zf),
+    Vec3(bw, -bh, zf),
+    Vec3(-bw, -bh, zf),
+    virado: frente,
+  );
+  m.quadPlano(
+    1,
+    Vec3(-bw, cy + th, zf),
+    Vec3(cx - tw, cy + th, zf),
+    Vec3(cx - tw, cy - th, zf),
+    Vec3(-bw, cy - th, zf),
+    virado: frente,
+  );
+  m.quadPlano(
+    1,
+    Vec3(cx + tw, cy + th, zf),
+    Vec3(bw, cy + th, zf),
+    Vec3(bw, cy - th, zf),
+    Vec3(cx + tw, cy - th, zf),
+    virado: frente,
+  );
   const g = 3;
   final tela = <List<int>>[];
   for (var j = 0; j <= g; j++) {
@@ -475,8 +560,9 @@ SceneNode _tv() {
     for (var i = 0; i <= g; i++) {
       final u = i / g * 2 - 1, v = j / g * 2 - 1;
       final bojo = 4.0 * (1 - u * u * .8) * (1 - v * v * .8);
-      linha.add(m.vertice(
-          2, Vec3(cx + u * tw, cy - v * th, zf + 1 + bojo), frente));
+      linha.add(
+        m.vertice(2, Vec3(cx + u * tw, cy - v * th, zf + 1 + bojo), frente),
+      );
     }
     tela.add(linha);
   }
@@ -489,9 +575,14 @@ SceneNode _tv() {
   }
 
   // PAINEL de botoes a direita da tela, com dois botoes.
-  m.quadPlano(3, Vec3(58 * e, 20 * e, zf + .6), Vec3(70 * e, 20 * e, zf + .6),
-      Vec3(70 * e, -26 * e, zf + .6), Vec3(58 * e, -26 * e, zf + .6),
-      virado: frente);
+  m.quadPlano(
+    3,
+    Vec3(58 * e, 20 * e, zf + .6),
+    Vec3(70 * e, 20 * e, zf + .6),
+    Vec3(70 * e, -26 * e, zf + .6),
+    Vec3(58 * e, -26 * e, zf + .6),
+    virado: frente,
+  );
   for (final y in [8.0 * e, -10.0 * e]) {
     _cilindro(m, 4, Vec3(64 * e, y, zf + .6), frente, 2.8, 3.0, lados: 8);
   }
@@ -499,8 +590,7 @@ SceneNode _tv() {
   // PES.
   for (final x in [-52.0 * e, 52.0 * e]) {
     for (final z in [-40.0 * e, 40.0 * e]) {
-      _cilindro(m, 5, Vec3(x, -hh - 5, z), const Vec3(0, 1, 0), 5, 6,
-          lados: 8);
+      _cilindro(m, 5, Vec3(x, -hh - 5, z), const Vec3(0, 1, 0), 5, 6, lados: 8);
     }
   }
 
@@ -524,8 +614,15 @@ SceneNode _tv() {
 }
 
 /// Cilindro de faces planas, de [base] ao longo de [eixo].
-void _cilindro(MalhaCodigo m, int material, Vec3 base, Vec3 eixo, double raio,
-    double comprimento, {int lados = 8}) {
+void _cilindro(
+  MalhaCodigo m,
+  int material,
+  Vec3 base,
+  Vec3 eixo,
+  double raio,
+  double comprimento, {
+  int lados = 8,
+}) {
   final e = eixo.normalized;
   final ref = e.y.abs() < .9 ? const Vec3(0, 1, 0) : const Vec3(1, 0, 0);
   final u = ref.cross(e).normalized, v = e.cross(u);
@@ -534,8 +631,14 @@ void _cilindro(MalhaCodigo m, int material, Vec3 base, Vec3 eixo, double raio,
     final a0 = 2 * math.pi * k / lados, a1 = 2 * math.pi * (k + 1) / lados;
     final r0 = (u * math.cos(a0) + v * math.sin(a0)) * raio;
     final r1 = (u * math.cos(a1) + v * math.sin(a1)) * raio;
-    m.quadPlano(material, base + r0, base + r1, topo + r1, topo + r0,
-        virado: r0 + r1);
+    m.quadPlano(
+      material,
+      base + r0,
+      base + r1,
+      topo + r1,
+      topo + r0,
+      virado: r0 + r1,
+    );
     m.triPlano(material, topo, topo + r0, topo + r1, virado: e);
   }
 }
@@ -543,15 +646,33 @@ void _cilindro(MalhaCodigo m, int material, Vec3 base, Vec3 eixo, double raio,
 /// POEIRA NO AR: pontos claros sem luz, que a profundidade de campo
 /// transforma nas bolas de bokeh da referencia. Sobem devagar.
 SceneNode _poeira() {
-  final m = MalhaCodigo([
-    materialCodigo('Poeira', 0xffeadcbd, semLuz: true),
-  ]);
+  final m = MalhaCodigo([materialCodigo('Poeira', 0xffeadcbd, semLuz: true)]);
   // Um tetraedro minusculo por particula.
   const s = .8;
-  m.triPlano(0, const Vec3(-s, -s, -s), const Vec3(s, -s, -s), const Vec3(0, s, 0));
-  m.triPlano(0, const Vec3(s, -s, -s), const Vec3(0, -s, s), const Vec3(0, s, 0));
-  m.triPlano(0, const Vec3(0, -s, s), const Vec3(-s, -s, -s), const Vec3(0, s, 0));
-  m.triPlano(0, const Vec3(-s, -s, -s), const Vec3(0, -s, s), const Vec3(s, -s, -s));
+  m.triPlano(
+    0,
+    const Vec3(-s, -s, -s),
+    const Vec3(s, -s, -s),
+    const Vec3(0, s, 0),
+  );
+  m.triPlano(
+    0,
+    const Vec3(s, -s, -s),
+    const Vec3(0, -s, s),
+    const Vec3(0, s, 0),
+  );
+  m.triPlano(
+    0,
+    const Vec3(0, -s, s),
+    const Vec3(-s, -s, -s),
+    const Vec3(0, s, 0),
+  );
+  m.triPlano(
+    0,
+    const Vec3(-s, -s, -s),
+    const Vec3(0, -s, s),
+    const Vec3(s, -s, -s),
+  );
   return m.no(
     'colina_poeira',
     'Poeira · bokeh',
@@ -576,10 +697,10 @@ SceneNode _poeira() {
 /// Os numeros vem da medicao da tela da TV no video (48 -> 72 px de
 /// largura = aproximacao de 1,5x; o deslocamento lateral e a orbita).
 Vec3 _alvo(double t) => Vec3(
-      0 + 34 * math.sin(t * .9),
-      colinaAltura(0, 40) + 50 + 8 * math.sin(t * 1.3),
-      40,
-    );
+  0 + 34 * math.sin(t * .9),
+  colinaAltura(0, 40) + 50 + 8 * math.sin(t * 1.3),
+  40,
+);
 
 Vec3 _posicaoDaCamera(double t) {
   final e = suave((t / 6).clamp(0.0, 1.0));
@@ -630,7 +751,9 @@ VideoProject buildColinaTvTemplate() {
     environment: EnvironmentKind.porDoSol,
     envReflect: .45,
     panorama: const Panorama3D(
-        preset: PanoramaPreset.porDoSol, rotationDegrees: 35),
+      preset: PanoramaPreset.porDoSol,
+      rotationDegrees: 35,
+    ),
     // A neblina e a cor do ceu no horizonte: a serra some nela.
     fogColor: const Color(0xff6f8ea3),
     fogDensity: .00022,
@@ -686,22 +809,28 @@ VideoProject buildColinaTvTemplate() {
         duration: colinaDuration,
         position: AnimatedOffset(centro),
         effects: [
-          EffectInstance(type: EffectType.corrections, params: {
-            'exposicao': _ad(.08),
-            'contraste': _ad(.12),
-            'sombras': _ad(.05),
-            'temperatura': _ad(.06),
-            'saturacao': _ad(.18),
-          }),
-          EffectInstance(type: EffectType.vignette, params: {
-            'quantidade': _ad(.38),
-            'raio': _ad(.95),
-            'suavidade': _ad(.75),
-          }),
-          EffectInstance(type: EffectType.filmGrain, params: {
-            'intensidade': _ad(.05),
-            'tamanho': _ad(1.2),
-          }),
+          EffectInstance(
+            type: EffectType.corrections,
+            params: {
+              'exposicao': _ad(.08),
+              'contraste': _ad(.12),
+              'sombras': _ad(.05),
+              'temperatura': _ad(.06),
+              'saturacao': _ad(.18),
+            },
+          ),
+          EffectInstance(
+            type: EffectType.vignette,
+            params: {
+              'quantidade': _ad(.38),
+              'raio': _ad(.95),
+              'suavidade': _ad(.75),
+            },
+          ),
+          EffectInstance(
+            type: EffectType.filmGrain,
+            params: {'intensidade': _ad(.05), 'tamanho': _ad(1.2)},
+          ),
         ],
       ),
       Scene3DLayer(

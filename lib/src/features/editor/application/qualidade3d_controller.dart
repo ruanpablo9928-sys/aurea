@@ -32,7 +32,8 @@ import 'sistema_nativo.dart';
 class ControladorDeQualidade3D with WidgetsBindingObserver {
   ControladorDeQualidade3D._();
 
-  static final ControladorDeQualidade3D instancia = ControladorDeQualidade3D._();
+  static final ControladorDeQualidade3D instancia =
+      ControladorDeQualidade3D._();
 
   static const _kTeto = 'qualidade3d_teto';
 
@@ -40,13 +41,17 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
   final ValueNotifier<Qualidade3D> nivel = ValueNotifier(Qualidade3D.alta);
 
   /// Quao perto do limite (o pior entre estimativa e memoria real).
-  final ValueNotifier<NivelDePressao> pressao = ValueNotifier(NivelDePressao.seguro);
+  final ValueNotifier<NivelDePressao> pressao = ValueNotifier(
+    NivelDePressao.seguro,
+  );
 
   /// Por que o nivel e o que e — para o overlay e para o relatorio.
   final ValueNotifier<String> motivo = ValueNotifier('sem cena 3D');
 
   /// A ultima estimativa, no nivel escolhido pelo orcamento.
-  final ValueNotifier<EstimativaGpu> estimativa = ValueNotifier(EstimativaGpu.vazia);
+  final ValueNotifier<EstimativaGpu> estimativa = ValueNotifier(
+    EstimativaGpu.vazia,
+  );
 
   /// Toda mudanca de nivel, para o relatorio de estresse.
   final List<String> historico = [];
@@ -205,7 +210,11 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
   }
 
   /// O que a sonda leu (separado para os testes injetarem valores).
-  void atualizarSistema({MemoriaDoSistema? memoria, int termico = 0, int? rssBytes}) {
+  void atualizarSistema({
+    MemoriaDoSistema? memoria,
+    int termico = 0,
+    int? rssBytes,
+  }) {
     if (memoria != null) {
       informarRam(memoria.total);
       disponivelBytes = memoria.disponivel;
@@ -228,7 +237,8 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
     } else if (d < 0 || d > 400 * mb) {
       _tetoDeMemoria = Qualidade3D.ultra;
     }
-    if (d >= 0 && d < 80 * mb) _emergencia('memoria disponivel abaixo de 80 MB');
+    if (d >= 0 && d < 80 * mb)
+      _emergencia('memoria disponivel abaixo de 80 MB');
     _recalcular(
       termico >= 2
           ? 'aparelho esquentando'
@@ -268,7 +278,8 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
     }
     if (_rapidos >= 120 && _degrausPorTempo > 0) {
       final desde = _ultimaDescida;
-      if (desde != null && agora().difference(desde) < const Duration(seconds: 5)) {
+      if (desde != null &&
+          agora().difference(desde) < const Duration(seconds: 5)) {
         return;
       }
       _degrausPorTempo--;
@@ -314,7 +325,8 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
     // A memoria REAL do sistema tambem e pressao, mesmo que a estimativa
     // esteja folgada: e ela que o jetsam olha.
     if (memoriaBaixa || (d >= 0 && d < 150 * mb)) {
-      p = NivelDePressao.values[math.max(p.index, NivelDePressao.pressao.index)];
+      p = NivelDePressao
+          .values[math.max(p.index, NivelDePressao.pressao.index)];
     } else if (d >= 0 && d < 300 * mb) {
       p = NivelDePressao.values[math.max(p.index, NivelDePressao.alerta.index)];
     }
@@ -329,7 +341,8 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
       if (historico.length > 200) historico.removeAt(0);
       nivel.value = novo;
       motivo.value = porQue;
-    } else if (motivo.value != porQue && (porQue.startsWith('orcamento') || porQue.startsWith('teto'))) {
+    } else if (motivo.value != porQue &&
+        (porQue.startsWith('orcamento') || porQue.startsWith('teto'))) {
       motivo.value = porQue;
     }
   }

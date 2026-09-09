@@ -72,8 +72,9 @@ class EffectPresetStore {
     try {
       final f = await _arquivo();
       await f.writeAsString(
-          jsonEncode([for (final p in _presets) effectPresetToJson(p)]),
-          flush: true);
+        jsonEncode([for (final p in _presets) effectPresetToJson(p)]),
+        flush: true,
+      );
     } catch (_) {}
   }
 
@@ -85,7 +86,10 @@ class EffectPresetStore {
 
   Future<void> remove(String id) async {
     await load();
-    _presets = [for (final p in _presets) if (p.id != id) p];
+    _presets = [
+      for (final p in _presets)
+        if (p.id != id) p,
+    ];
     await _persist();
   }
 
@@ -106,27 +110,28 @@ class EffectPresetStore {
 }
 
 Map<String, dynamic> effectPresetToJson(EffectPreset p) => {
-      'id': p.id,
-      'name': p.name,
-      'tags': p.tags,
-      'category': p.category,
-      'durationUs': p.suggestedDuration.inMicroseconds,
-      'createdAt': p.createdAt.toIso8601String(),
-      'author': p.author,
-      'effects': [for (final e in p.effects) effectToJson(e)],
-    };
+  'id': p.id,
+  'name': p.name,
+  'tags': p.tags,
+  'category': p.category,
+  'durationUs': p.suggestedDuration.inMicroseconds,
+  'createdAt': p.createdAt.toIso8601String(),
+  'author': p.author,
+  'effects': [for (final e in p.effects) effectToJson(e)],
+};
 
 EffectPreset effectPresetFromJson(Map<String, dynamic> m) => EffectPreset(
-      id: m['id'] as String?,
-      name: m['name'] as String? ?? 'Preset',
-      tags: [for (final t in (m['tags'] as List? ?? const [])) t.toString()],
-      category: m['category'] as String? ?? 'Meus',
-      suggestedDuration:
-          Duration(microseconds: (m['durationUs'] as num?)?.toInt() ?? 2000000),
-      createdAt: DateTime.tryParse(m['createdAt'] as String? ?? ''),
-      author: m['author'] as String? ?? '',
-      effects: [
-        for (final e in (m['effects'] as List? ?? const []))
-          if (e is Map<String, dynamic>) effectFromJson(e),
-      ],
-    );
+  id: m['id'] as String?,
+  name: m['name'] as String? ?? 'Preset',
+  tags: [for (final t in (m['tags'] as List? ?? const [])) t.toString()],
+  category: m['category'] as String? ?? 'Meus',
+  suggestedDuration: Duration(
+    microseconds: (m['durationUs'] as num?)?.toInt() ?? 2000000,
+  ),
+  createdAt: DateTime.tryParse(m['createdAt'] as String? ?? ''),
+  author: m['author'] as String? ?? '',
+  effects: [
+    for (final e in (m['effects'] as List? ?? const []))
+      if (e is Map<String, dynamic>) effectFromJson(e),
+  ],
+);

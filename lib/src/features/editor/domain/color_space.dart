@@ -16,7 +16,9 @@ import 'dart:math' as math;
 /// sRGB (0..1) -> linear (0..1).
 double srgbToLinear(double c) {
   final v = c.clamp(0.0, 1.0);
-  return v <= 0.04045 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4) as double;
+  return v <= 0.04045
+      ? v / 12.92
+      : math.pow((v + 0.055) / 1.055, 2.4) as double;
 }
 
 /// linear (0..1) -> sRGB (0..1).

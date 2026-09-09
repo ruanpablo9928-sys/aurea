@@ -16,7 +16,10 @@ import 'am_widgets.dart';
 /// muitas vezes sabe o andamento, e digitar acerta mais rapido do que
 /// reanalisar.
 Future<void> showBeatsSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   var band = BeatBand.grave;
   var sensibilidade = 50.0;
   var denominador = 4;
@@ -43,9 +46,7 @@ Future<void> showBeatsSheet(
           setSheetState(() => rodando = false);
           AureaSnack.show(
             sheetContext,
-            n == null
-                ? 'Nao achei ritmo nessa faixa'
-                : '$n marcas de batida',
+            n == null ? 'Nao achei ritmo nessa faixa' : '$n marcas de batida',
           );
         }
 
@@ -59,9 +60,10 @@ Future<void> showBeatsSheet(
                 const Text(
                   'FAIXA DE FREQUENCIA',
                   style: TextStyle(
-                      fontSize: 10.5,
-                      letterSpacing: 0.6,
-                      color: AmColors.muted),
+                    fontSize: 10.5,
+                    letterSpacing: 0.6,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -86,7 +88,10 @@ Future<void> showBeatsSheet(
                   'Bumbo e chimbal atacam em instantes diferentes. Cortar '
                   'no grave e cortar no pulso; no agudo, na levada.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 14),
 
@@ -102,9 +107,10 @@ Future<void> showBeatsSheet(
                 const Text(
                   'SUBDIVISAO',
                   style: TextStyle(
-                      fontSize: 10.5,
-                      letterSpacing: 0.6,
-                      color: AmColors.muted),
+                    fontSize: 10.5,
+                    letterSpacing: 0.6,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -132,7 +138,10 @@ Future<void> showBeatsSheet(
                   'Em compasso 4/4: 1/4 poe uma marca em cada tempo, 1/8 '
                   'duas, 1/1 uma por compasso.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
 
                 const SizedBox(height: 14),
@@ -140,30 +149,37 @@ Future<void> showBeatsSheet(
                   children: [
                     const SizedBox(
                       width: 110,
-                      child: Text('Andamento',
-                          style: TextStyle(
-                              fontSize: 12, color: AmColors.muted)),
+                      child: Text(
+                        'Andamento',
+                        style: TextStyle(fontSize: 12, color: AmColors.muted),
+                      ),
                     ),
                     Expanded(
                       child: Text(
                         project.bpm == null
                             ? 'ainda nao analisado'
                             : '${project.bpm!.toStringAsFixed(1)} bpm '
-                                '· ${project.beats.length} marcas',
+                                  '· ${project.beats.length} marcas',
                         style: const TextStyle(
-                            fontSize: 12.5, color: AmColors.text),
+                          fontSize: 12.5,
+                          color: AmColors.text,
+                        ),
                       ),
                     ),
                     if (project.bpm != null) ...[
                       _MiniBotao(
                         label: '−',
-                        onTap: () => controller.setBpm(project.bpm! - 1,
-                            denominador: denominador),
+                        onTap: () => controller.setBpm(
+                          project.bpm! - 1,
+                          denominador: denominador,
+                        ),
                       ),
                       _MiniBotao(
                         label: '+',
-                        onTap: () => controller.setBpm(project.bpm! + 1,
-                            denominador: denominador),
+                        onTap: () => controller.setBpm(
+                          project.bpm! + 1,
+                          denominador: denominador,
+                        ),
                       ),
                     ],
                   ],
@@ -183,12 +199,13 @@ Future<void> showBeatsSheet(
                       rodando
                           ? 'Ouvindo a faixa...'
                           : (project.beats.isEmpty
-                              ? 'Detectar batidas'
-                              : 'Detectar de novo'),
+                                ? 'Detectar batidas'
+                                : 'Detectar de novo'),
                       style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.accent),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.accent,
+                      ),
                     ),
                   ),
                 ),
@@ -200,8 +217,9 @@ Future<void> showBeatsSheet(
                         child: _Secundario(
                           label: 'Cortar nas batidas',
                           onTap: () {
-                            final n =
-                                controller.cutAtMarkers(usarBatidas: true);
+                            final n = controller.cutAtMarkers(
+                              usarBatidas: true,
+                            );
                             AureaSnack.show(sheetContext, '$n cortes');
                           },
                         ),
@@ -238,26 +256,26 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          height: 38,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selecionado ? AmColors.accentDim : AmColors.chip,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: selecionado ? FontWeight.w700 : FontWeight.w500,
-              color: selecionado ? AmColors.accent : AmColors.text,
-            ),
-          ),
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      height: 38,
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: selecionado ? AmColors.accentDim : AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: selecionado ? FontWeight.w700 : FontWeight.w500,
+          color: selecionado ? AmColors.accent : AmColors.text,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _MiniBotao extends StatelessWidget {
@@ -268,21 +286,23 @@ class _MiniBotao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 34,
-          margin: const EdgeInsets.only(left: 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(label,
-              style: const TextStyle(fontSize: 16, color: AmColors.text)),
-        ),
-      );
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      width: 38,
+      height: 34,
+      margin: const EdgeInsets.only(left: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 16, color: AmColors.text),
+      ),
+    ),
+  );
 }
 
 class _Secundario extends StatelessWidget {
@@ -293,19 +313,21 @@ class _Secundario extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(label,
-              style: const TextStyle(fontSize: 12.5, color: AmColors.text)),
-        ),
-      );
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12.5, color: AmColors.text),
+      ),
+    ),
+  );
 }
 
 class _Linha extends StatelessWidget {
@@ -325,30 +347,32 @@ class _Linha extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(label,
-                style:
-                    const TextStyle(fontSize: 12, color: AmColors.muted)),
-          ),
-          Expanded(
-            child: AmTickRuler(
-  value: value.clamp(min, max),
-  min: min,
-  max: max,
-  unitsPerPixel: ((max) - (min)) / 420,
-  height: 40,
-  onChanged: onChanged,
-),
-          ),
-          SizedBox(
-            width: 42,
-            child: Text(value.toStringAsFixed(0),
-                textAlign: TextAlign.right,
-                style:
-                    const TextStyle(fontSize: 12, color: AmColors.text)),
-          ),
-        ],
-      );
+    children: [
+      SizedBox(
+        width: 110,
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AmColors.muted),
+        ),
+      ),
+      Expanded(
+        child: AmTickRuler(
+          value: value.clamp(min, max),
+          min: min,
+          max: max,
+          unitsPerPixel: ((max) - (min)) / 420,
+          height: 40,
+          onChanged: onChanged,
+        ),
+      ),
+      SizedBox(
+        width: 42,
+        child: Text(
+          value.toStringAsFixed(0),
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontSize: 12, color: AmColors.text),
+        ),
+      ),
+    ],
+  );
 }

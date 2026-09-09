@@ -89,8 +89,7 @@ abstract final class PreviewStats {
   static void idle() {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (_windowStartMs != 0 && now - _windowStartMs >= 1000) {
-      compsPerSec.value =
-          (_count * 1000 / (now - _windowStartMs)).round();
+      compsPerSec.value = (_count * 1000 / (now - _windowStartMs)).round();
       _count = 0;
       _windowStartMs = now;
     }
@@ -132,8 +131,7 @@ abstract final class PreviewStats {
       _intervals.add((now - _lastTickUs) / 1000.0);
       if (_intervals.length > 32) _intervals.removeAt(0);
       if (_intervals.length >= 8) {
-        final mean =
-            _intervals.reduce((a, b) => a + b) / _intervals.length;
+        final mean = _intervals.reduce((a, b) => a + b) / _intervals.length;
         var acc = 0.0;
         for (final v in _intervals) {
           acc += (v - mean) * (v - mean);
@@ -170,8 +168,7 @@ typedef FrameReport = ({
 /// mediana, travadas (> 2x a mediana), intervalo medio entre travadas e
 /// o DESVIO desse intervalo — desvio baixo significa ciclo regular, e
 /// ciclo regular aponta causa mecanica.
-FrameReport analyzeIntervals(List<double> intervalsMs,
-    {double driftMs = 0}) {
+FrameReport analyzeIntervals(List<double> intervalsMs, {double driftMs = 0}) {
   if (intervalsMs.isEmpty) {
     return (
       medianMs: 0,
@@ -180,7 +177,7 @@ FrameReport analyzeIntervals(List<double> intervalsMs,
       gapSdS: 0,
       peakMs: 0,
       driftMs: driftMs,
-      seconds: 0
+      seconds: 0,
     );
   }
   final sorted = List<double>.of(intervalsMs)..sort();
@@ -243,8 +240,9 @@ abstract final class FrameLog {
   static int _lastUs = 0;
 
   /// Snapshot para a UI (recalculado no maximo 1x/s).
-  static final ValueNotifier<FrameReport?> report =
-      ValueNotifier<FrameReport?>(null);
+  static final ValueNotifier<FrameReport?> report = ValueNotifier<FrameReport?>(
+    null,
+  );
   static int _lastReportMs = 0;
 
   static void reset() {

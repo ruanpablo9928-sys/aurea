@@ -1876,11 +1876,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
             // O PAINEL DE DESEMPENHO, so em build de desenvolvimento: e
             // aqui que se ve o quadro cair, e por qual fase.
             if (mostrarHudDesempenho)
-              const Positioned(
-                right: 6,
-                top: 6,
-                child: HudDesempenho(),
-              ),
+              const Positioned(right: 6, top: 6, child: HudDesempenho()),
           ],
         ),
       ),

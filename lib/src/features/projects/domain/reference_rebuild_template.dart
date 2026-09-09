@@ -790,14 +790,30 @@ List<Layer> _swordScene() {
   for (var side = 0; side < 2; side++) {
     final idx = out.indexWhere((l) => l.id == 'rebuild_reflection$side');
     final reflection = out[idx];
-    final masks = [for (var q = 140; q < 208; q++)
-      _map(place(blade, q), (p) => p - reflection.position.valueAt(
-        referenceFrame(q) - referenceFrame(140)))];
+    final masks = [
+      for (var q = 140; q < 208; q++)
+        _map(
+          place(blade, q),
+          (p) =>
+              p -
+              reflection.position.valueAt(
+                referenceFrame(q) - referenceFrame(140),
+              ),
+        ),
+    ];
     out[idx] = out[idx].copyLayer(
-      masks: [LayerMask(name: 'Silhueta da lamina', path: AnimatedPath(masks.first, [
-        for (var i = 0; i < masks.length; i++) Keyframe(
-          time: referenceFrame(140 + i) - referenceFrame(140), value: masks[i]),
-      ]))],
+      masks: [
+        LayerMask(
+          name: 'Silhueta da lamina',
+          path: AnimatedPath(masks.first, [
+            for (var i = 0; i < masks.length; i++)
+              Keyframe(
+                time: referenceFrame(140 + i) - referenceFrame(140),
+                value: masks[i],
+              ),
+          ]),
+        ),
+      ],
     );
   }
   out.add(

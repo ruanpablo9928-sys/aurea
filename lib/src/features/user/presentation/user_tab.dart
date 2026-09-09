@@ -19,8 +19,7 @@ class UserTab extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surfaceHigh,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Editar perfil'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -30,8 +29,7 @@ class UserTab extends ConsumerWidget {
               placeholder: 'Nome',
               textCapitalization: TextCapitalization.words,
               style: TextStyle(color: AppColors.onDark, fontSize: 16),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(12),
@@ -43,8 +41,7 @@ class UserTab extends ConsumerWidget {
               placeholder: 'E-mail (opcional)',
               keyboardType: TextInputType.emailAddress,
               style: TextStyle(color: AppColors.onDark, fontSize: 16),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(12),
@@ -127,18 +124,24 @@ class UserTab extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text(profile.name,
-                    style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  profile.name,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 if (profile.email.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(profile.email,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    child: Text(
+                      profile.email,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 const SizedBox(height: 14),
                 CupertinoButton(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 8),
+                    horizontal: 18,
+                    vertical: 8,
+                  ),
                   color: AppColors.surfaceHigh,
                   borderRadius: BorderRadius.circular(20),
                   onPressed: () => _editProfile(context, ref),
@@ -184,8 +187,7 @@ class UserTab extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                Icon(CupertinoIcons.cloud,
-                    color: AppColors.muted, size: 20),
+                Icon(CupertinoIcons.cloud, color: AppColors.muted, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(

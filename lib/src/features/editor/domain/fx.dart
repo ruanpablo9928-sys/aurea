@@ -18,7 +18,9 @@ double fxNoiseSigned(int seed, int channel, double x) =>
 
 /// Hash uniforme [0, 1) por (seed, canal, slot) — para tiques discretos.
 double fxHash01(int seed, int channel, int slot) {
-  var s = (seed * 0x9E3779B9 ^ (channel + 1) * 0x85EBCA6B ^
+  var s =
+      (seed * 0x9E3779B9 ^
+          (channel + 1) * 0x85EBCA6B ^
           (slot + 1) * 0xC2B2AE35) &
       0xFFFFFFFF;
   s ^= (s << 13) & 0xFFFFFFFF;
@@ -41,8 +43,9 @@ double integratedPhase(AnimatedDouble frequency, Duration t) {
   var phase = 0.0;
   var prev = frequency.valueAt(Duration.zero);
   for (var i = 1; i <= cells; i++) {
-    final f = frequency
-        .valueAt(Duration(microseconds: (i * grid * 1e6).round()));
+    final f = frequency.valueAt(
+      Duration(microseconds: (i * grid * 1e6).round()),
+    );
     phase += (prev + f) / 2 * grid;
     prev = f;
   }
@@ -68,8 +71,7 @@ class TremorSample {
 
   static const none = TremorSample(0, 0, 1, 0);
 
-  bool get isNeutral =>
-      dx == 0 && dy == 0 && scale == 1 && rotationDeg == 0;
+  bool get isNeutral => dx == 0 && dy == 0 && scale == 1 && rotationDeg == 0;
 }
 
 /// Estilos: 0 = Normal (constante), 1 = Nervoso (rajadas entre pausas),
@@ -145,8 +147,11 @@ TremorSample tremorSample({
       // NERVOSO: fica quieto e dispara em rajadas. `stillness` diz o
       // quanto do tempo e pausa; `twitchFrequency`, com que pressa as
       // rajadas se sucedem.
-      final burst =
-          valueNoise01(seed * 7 + 99, twitchFrequency * 2.75, phase * 0.35);
+      final burst = valueNoise01(
+        seed * 7 + 99,
+        twitchFrequency * 2.75,
+        phase * 0.35,
+      );
       gate = burst > stillness.clamp(0.0, 0.99) ? 1.0 : 0.05;
     case 2:
       // AOS SALTOS: a fase e quantizada — a imagem fica parada e pula.
@@ -177,12 +182,7 @@ TremorSample tremorSample({
       ? fxNoiseSigned(seed, 4, px) * tiltDeg
       : tilt.valueAt(seed, 4, px) * 30;
 
-  return TremorSample(
-    dx,
-    dy,
-    1 + zoomExtra * gate,
-    giro * gate,
-  );
+  return TremorSample(dx, dy, 1 + zoomExtra * gate, giro * gate);
 }
 
 /// -------------------------------------------------------- Glitch Modular
@@ -251,9 +251,8 @@ GlitchState glitchState({
   final (slideOn, slideV) = op(1, slide, 1.0);
   if (slideOn) {
     dx = slideV * 200 * master;
-    dy = (fxHash01(seed, 71, (tau / intervalSec).floor()) * 2 - 1) *
-        46 *
-        master;
+    dy =
+        (fxHash01(seed, 71, (tau / intervalSec).floor()) * 2 - 1) * 46 * master;
     rgbSep = rgbAmt.clamp(0, 1) * 26 * master;
   }
   final (scOn, scV) = op(2, scaleAmt, 1.35);
@@ -289,15 +288,22 @@ List<double> hueRotateMatrix(double degrees) {
     0.213 + c * 0.787 - s * 0.213,
     0.715 - c * 0.715 - s * 0.715,
     0.072 - c * 0.072 + s * 0.928,
-    0, 0,
+    0,
+    0,
     0.213 - c * 0.213 + s * 0.143,
     0.715 + c * 0.285 + s * 0.140,
     0.072 - c * 0.072 - s * 0.283,
-    0, 0,
+    0,
+    0,
     0.213 - c * 0.213 - s * 0.787,
     0.715 - c * 0.715 + s * 0.715,
     0.072 + c * 0.928 + s * 0.072,
-    0, 0,
-    0, 0, 0, 1, 0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
   ];
 }

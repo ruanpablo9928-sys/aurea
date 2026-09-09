@@ -24,28 +24,30 @@ enum ShapePathOp {
 }
 
 String shapePathOpLabel(ShapePathOp o) => switch (o) {
-      ShapePathOp.offset => 'Deslocar',
-      ShapePathOp.roundCorners => 'Arredondar',
-      ShapePathOp.zigZag => 'Zig zag',
-      ShapePathOp.puckerBloat => 'Inchar',
-      ShapePathOp.twist => 'Torcer',
-      ShapePathOp.wiggle => 'Baguncar',
-      ShapePathOp.merge => 'Combinar',
-    };
+  ShapePathOp.offset => 'Deslocar',
+  ShapePathOp.roundCorners => 'Arredondar',
+  ShapePathOp.zigZag => 'Zig zag',
+  ShapePathOp.puckerBloat => 'Inchar',
+  ShapePathOp.twist => 'Torcer',
+  ShapePathOp.wiggle => 'Baguncar',
+  ShapePathOp.merge => 'Combinar',
+};
 
 String mergeModeLabel(MergeMode m) => switch (m) {
-      MergeMode.union => 'Unir',
-      MergeMode.subtract => 'Subtrair',
-      MergeMode.intersect => 'Interseccao',
-      MergeMode.exclude => 'Excluir',
-    };
+  MergeMode.union => 'Unir',
+  MergeMode.subtract => 'Subtrair',
+  MergeMode.intersect => 'Interseccao',
+  MergeMode.exclude => 'Excluir',
+};
 
 /// Passo de amostragem, em pixels. Menor = mais liso e mais caro.
 const shapeSampleStep = 3.0;
 
 /// Amostra um caminho em polilinhas fechadas ou abertas.
-List<(List<Offset>, bool)> samplePath(Path path,
-    {double step = shapeSampleStep}) {
+List<(List<Offset>, bool)> samplePath(
+  Path path, {
+  double step = shapeSampleStep,
+}) {
   final out = <(List<Offset>, bool)>[];
   for (final metric in path.computeMetrics()) {
     final len = metric.length;
@@ -139,7 +141,7 @@ Path offsetPath(Path source, double amount, {double step = shapeSampleStep}) {
         for (var i = 0; i < pts.length; i++)
           pts[i] + Offset(nrm[i].dx * amount, nrm[i].dy * amount),
       ],
-      closed
+      closed,
     ));
   }
   return _fromPolys(out);
@@ -157,8 +159,12 @@ Path offsetPath(Path source, double amount, {double step = shapeSampleStep}) {
 /// ate a amostra vizinha. Essa distincao e a diferenca entre funcionar e
 /// nao fazer nada: com amostragem de 3 px, a amostra vizinha esta a 3 px
 /// e o raio ficaria preso nesse valor.
-Path roundCorners(Path source, double radius,
-    {double step = shapeSampleStep, double minAngleDeg = 25}) {
+Path roundCorners(
+  Path source,
+  double radius, {
+  double step = shapeSampleStep,
+  double minAngleDeg = 25,
+}) {
   if (radius <= 0.01) return source;
   final polys = samplePath(source, step: step);
   final cosLimite = math.cos((180 - minAngleDeg) * math.pi / 180);
@@ -255,8 +261,13 @@ Path roundCorners(Path source, double radius,
 ///
 /// [ridges] e quantas cristas por segmento amostrado — e o que decide se
 /// sai uma serra fina ou uma onda larga.
-Path zigZag(Path source, double amplitude, double ridges,
-    {double step = shapeSampleStep, bool smooth = false}) {
+Path zigZag(
+  Path source,
+  double amplitude,
+  double ridges, {
+  double step = shapeSampleStep,
+  bool smooth = false,
+}) {
   if (amplitude.abs() < 0.01) return source;
   final polys = samplePath(source, step: step);
   final out = <(List<Offset>, bool)>[];
@@ -271,8 +282,9 @@ Path zigZag(Path source, double amplitude, double ridges,
       final k = smooth
           ? math.sin(fase * math.pi)
           : (fase.floor().isEven ? 1.0 : -1.0);
-      novo.add(pts[i] +
-          Offset(nrm[i].dx * amplitude * k, nrm[i].dy * amplitude * k));
+      novo.add(
+        pts[i] + Offset(nrm[i].dx * amplitude * k, nrm[i].dy * amplitude * k),
+      );
     }
     out.add((novo, closed));
   }
@@ -286,8 +298,7 @@ Path zigZag(Path source, double amplitude, double ridges,
 ///
 /// Positivo incha (a forma fica bojuda), negativo encolhe (fica de
 /// estrela). E o operador que transforma circulo em flor.
-Path puckerBloat(Path source, double amount,
-    {double step = shapeSampleStep}) {
+Path puckerBloat(Path source, double amount, {double step = shapeSampleStep}) {
   if (amount.abs() < 0.001) return source;
   final polys = samplePath(source, step: step);
   final out = <(List<Offset>, bool)>[];
@@ -358,11 +369,10 @@ Path twist(Path source, double angleDeg, {double step = shapeSampleStep}) {
             final d = v.distance;
             final a = rad * (d / raio);
             final cos = math.cos(a), sin = math.sin(a);
-            return c +
-                Offset(v.dx * cos - v.dy * sin, v.dx * sin + v.dy * cos);
+            return c + Offset(v.dx * cos - v.dy * sin, v.dx * sin + v.dy * cos);
           }(),
       ],
-      closed
+      closed,
     ));
   }
   return _fromPolys(out);
@@ -393,8 +403,7 @@ Path wigglePath(
     for (var i = 0; i < pts.length; i++) {
       final x = i * math.max(0.05, detail) + evolution;
       final n = _valueNoise(x, seed) * 2 - 1;
-      novo.add(pts[i] +
-          Offset(nrm[i].dx * amount * n, nrm[i].dy * amount * n));
+      novo.add(pts[i] + Offset(nrm[i].dx * amount * n, nrm[i].dy * amount * n));
     }
     out.add((novo, closed));
   }

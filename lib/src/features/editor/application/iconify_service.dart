@@ -28,14 +28,18 @@ class IconifyService {
   final HttpClient _http = HttpClient()
     ..connectionTimeout = const Duration(seconds: 8);
 
-  Map<String, ({String title, String spdx, bool permissive})>?
-      _collections;
+  Map<String, ({String title, String spdx, bool permissive})>? _collections;
   final Map<String, String> _bodyCache = {};
 
   Future<Map<String, dynamic>?> _getJson(String path) async {
     try {
-      final req = await _http.getUrl(Uri.https(_base, path.split('?').first,
-          path.contains('?') ? Uri.splitQueryString(path.split('?')[1]) : null));
+      final req = await _http.getUrl(
+        Uri.https(
+          _base,
+          path.split('?').first,
+          path.contains('?') ? Uri.splitQueryString(path.split('?')[1]) : null,
+        ),
+      );
       final res = await req.close();
       if (res.statusCode != 200) return null;
       final body = await res.transform(utf8.decoder).join();
@@ -48,8 +52,7 @@ class IconifyService {
   Future<void> _ensureCollections() async {
     if (_collections != null) return;
     final json = await _getJson('/collections');
-    final out =
-        <String, ({String title, String spdx, bool permissive})>{};
+    final out = <String, ({String title, String spdx, bool permissive})>{};
     if (json != null) {
       for (final e in json.entries) {
         final info = e.value as Map<String, dynamic>;
@@ -72,19 +75,25 @@ class IconifyService {
   ({String title, bool permissive}) licenseOf(String prefix) {
     final info = _collections?[prefix];
     if (info == null) return (title: '?', permissive: false);
-    return (title: info.spdx.isEmpty ? info.title : info.spdx,
-        permissive: info.permissive);
+    return (
+      title: info.spdx.isEmpty ? info.title : info.spdx,
+      permissive: info.permissive,
+    );
   }
 
   /// Busca icones; com [permissiveOnly] filtra para conjuntos sem
   /// exigencia de atribuicao (padrao LIGADO). Se a lista de colecoes
   /// nao carregou (rede fraca), o filtro FALHA ABERTO: mostrar tudo com
   /// selo "?" e melhor que fingir que nao ha resultados.
-  Future<List<(String prefix, String name)>> search(String query,
-      {bool permissiveOnly = true, int limit = 48}) async {
+  Future<List<(String prefix, String name)>> search(
+    String query, {
+    bool permissiveOnly = true,
+    int limit = 48,
+  }) async {
     await _ensureCollections();
     final json = await _getJson(
-        '/search?query=${Uri.encodeQueryComponent(query)}&limit=96');
+      '/search?query=${Uri.encodeQueryComponent(query)}&limit=96',
+    );
     if (json == null) return const [];
     final applyFilter = permissiveOnly && collectionsLoaded;
     final out = <(String, String)>[];
@@ -101,7 +110,8 @@ class IconifyService {
   /// Path data (atributos `d` concatenados) dos icones pedidos, em LOTE
   /// por prefixo, com cache em memoria e disco.
   Future<Map<String, String>> pathDataFor(
-      List<(String prefix, String name)> icons) async {
+    List<(String prefix, String name)> icons,
+  ) async {
     final out = <String, String>{};
     final missing = <String, List<String>>{};
 
@@ -130,13 +140,12 @@ class IconifyService {
     }
 
     for (final e in missing.entries) {
-      final json = await _getJson(
-          '/${e.key}.json?icons=${e.value.join(',')}');
+      final json = await _getJson('/${e.key}.json?icons=${e.value.join(',')}');
       final iconsJson = json?['icons'] as Map<String, dynamic>?;
       if (iconsJson == null) continue;
       for (final name in e.value) {
-        final body = (iconsJson[name]
-            as Map<String, dynamic>?)?['body'] as String?;
+        final body =
+            (iconsJson[name] as Map<String, dynamic>?)?['body'] as String?;
         if (body == null) continue;
         // Extrai todos os `d="..."` do body (a maioria dos conjuntos
         // usa um unico <path>).
@@ -157,5 +166,6 @@ class IconifyService {
   }
 }
 
-final iconifyServiceProvider =
-    Provider<IconifyService>((ref) => IconifyService());
+final iconifyServiceProvider = Provider<IconifyService>(
+  (ref) => IconifyService(),
+);

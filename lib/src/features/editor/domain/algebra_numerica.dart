@@ -25,11 +25,8 @@ class Mat3 {
 
   double at(int linha, int coluna) => m[linha * 3 + coluna];
 
-  Mat3 get transposta => Mat3([
-    m[0], m[3], m[6],
-    m[1], m[4], m[7],
-    m[2], m[5], m[8],
-  ]);
+  Mat3 get transposta =>
+      Mat3([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
 
   Mat3 operator *(Mat3 o) {
     final r = List<double>.filled(9, 0);
@@ -284,9 +281,7 @@ List<double> vetorDeRotacao(Mat3 r) {
       math.sqrt(math.max(0, (r.at(1, 1) + 1) / 2)),
       math.sqrt(math.max(0, (r.at(2, 2) + 1) / 2)),
     ];
-    final maior = d[0] >= d[1] && d[0] >= d[2]
-        ? 0
-        : (d[1] >= d[2] ? 1 : 2);
+    final maior = d[0] >= d[1] && d[0] >= d[2] ? 0 : (d[1] >= d[2] ? 1 : 2);
     final eixo = List<double>.from(d);
     if (maior == 0) {
       if (r.at(0, 1) < 0) eixo[1] = -eixo[1];

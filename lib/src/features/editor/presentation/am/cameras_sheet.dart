@@ -47,17 +47,23 @@ Future<void> showCamerasSheet(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Cameras',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Cameras',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   'Playhead em ${formatTime(local)}. Toque numa camera '
                   'para CORTAR para ela aqui.',
                   style: const TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
@@ -72,7 +78,8 @@ Future<void> showCamerasSheet(
                         local,
                         cameras[i].id,
                         transition: Duration(
-                            milliseconds: (transicao * 1000).round()),
+                          milliseconds: (transicao * 1000).round(),
+                        ),
                       );
                       setSheetState(() {});
                     },
@@ -80,7 +87,9 @@ Future<void> showCamerasSheet(
                         ? null
                         : () {
                             controller.removeScene3DCamera(
-                                layerId, cameras[i].id);
+                              layerId,
+                              cameras[i].id,
+                            );
                             setSheetState(() {});
                           },
                   ),
@@ -90,30 +99,33 @@ Future<void> showCamerasSheet(
                   children: [
                     const SizedBox(
                       width: 74,
-                      child: Text('Transicao',
-                          style: TextStyle(
-                              fontSize: 12, color: AmColors.muted)),
+                      child: Text(
+                        'Transicao',
+                        style: TextStyle(fontSize: 12, color: AmColors.muted),
+                      ),
                     ),
                     Expanded(
                       child: AmTickRuler(
-  value: transicao,
-  min: 0,
-  max: 3,
-  unitsPerPixel: ((3) - (0)) / 420,
-  height: 40,
-  onChanged: (v) =>
-                            setSheetState(() => transicao = v),
-),
+                        value: transicao,
+                        min: 0,
+                        max: 3,
+                        unitsPerPixel: ((3) - (0)) / 420,
+                        height: 40,
+                        onChanged: (v) => setSheetState(() => transicao = v),
+                      ),
                     ),
                     SizedBox(
                       width: 66,
                       child: Text(
-                          transicao < 0.05
-                              ? 'corte'
-                              : '${transicao.toStringAsFixed(1)} s',
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                              fontSize: 11, color: AmColors.text)),
+                        transicao < 0.05
+                            ? 'corte'
+                            : '${transicao.toStringAsFixed(1)} s',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -121,65 +133,82 @@ Future<void> showCamerasSheet(
                   'Zero e corte seco. Maior que zero derrete de uma '
                   'camera na outra.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
 
                 const SizedBox(height: 14),
                 // A PONTE COM A COMPOSICAO: todo rig de camera e "camera
                 // parenteada a um nulo". Sem isto, orbita, tripe, dolly,
                 // camera na mao e dolly zoom estao todos quebrados.
-                const Text('Seguir um nulo da composicao',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AmColors.text)),
+                const Text(
+                  'Seguir um nulo da composicao',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                Builder(builder: (context) {
-                  final nulos =
-                      project.layers.whereType<NullLayer>().toList();
-                  if (nulos.isEmpty) {
-                    return const Text(
-                      'Nao ha objeto nulo no projeto. Crie um e a camera '
-                      'pode segui-lo — girar o nulo orbita a cena.',
-                      style: TextStyle(
-                          fontSize: 11, height: 1.35, color: AmColors.muted),
-                    );
-                  }
-                  return Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          controller.setSceneCameraCompParent(layerId, null);
-                          setSheetState(() {});
-                        },
-                        child: _Pastilha(
-                          rotulo: 'Nenhum',
-                          aceso: layer.cameraParentLayerId == null,
+                Builder(
+                  builder: (context) {
+                    final nulos = project.layers
+                        .whereType<NullLayer>()
+                        .toList();
+                    if (nulos.isEmpty) {
+                      return const Text(
+                        'Nao ha objeto nulo no projeto. Crie um e a camera '
+                        'pode segui-lo — girar o nulo orbita a cena.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: AmColors.muted,
                         ),
-                      ),
-                      for (final n in nulos)
+                      );
+                    }
+                    return Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
                         GestureDetector(
                           onTap: () {
-                            controller.setSceneCameraCompParent(
-                                layerId, n.id);
+                            controller.setSceneCameraCompParent(layerId, null);
                             setSheetState(() {});
                           },
                           child: _Pastilha(
-                            rotulo: n.name,
-                            aceso: layer.cameraParentLayerId == n.id,
+                            rotulo: 'Nenhum',
+                            aceso: layer.cameraParentLayerId == null,
                           ),
                         ),
-                    ],
-                  );
-                }),
+                        for (final n in nulos)
+                          GestureDetector(
+                            onTap: () {
+                              controller.setSceneCameraCompParent(
+                                layerId,
+                                n.id,
+                              );
+                              setSheetState(() {});
+                            },
+                            child: _Pastilha(
+                              rotulo: n.name,
+                              aceso: layer.cameraParentLayerId == n.id,
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
                 const SizedBox(height: 4),
                 const Text(
                   'A camera herda posicao e rotacao do nulo — nunca a '
                   'escala. Camera nao tem escala.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
 
                 const SizedBox(height: 14),
@@ -195,21 +224,27 @@ Future<void> showCamerasSheet(
                       color: AmColors.accentDim,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text('Nova camera (enquadramento atual)',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AmColors.accent)),
+                    child: const Text(
+                      'Nova camera (enquadramento atual)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AmColors.accent,
+                      ),
+                    ),
                   ),
                 ),
 
                 if (tomadas.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  const Text('Tomadas',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AmColors.text)),
+                  const Text(
+                    'Tomadas',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AmColors.text,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   for (final t in tomadas)
                     _LinhaTomada(
@@ -221,8 +256,7 @@ Future<void> showCamerasSheet(
                       transicao: t.isCut
                           ? 'corte'
                           : '${(t.transition.inMilliseconds / 1000).toStringAsFixed(1)} s',
-                      onIr: () => playback
-                          .seek(layer.startTime + t.time),
+                      onIr: () => playback.seek(layer.startTime + t.time),
                       onApagar: () {
                         controller.removeCameraShot(layerId, t.time);
                         setSheetState(() {});
@@ -233,13 +267,17 @@ Future<void> showCamerasSheet(
                     onTap: () {
                       controller.clearCameraShots(layerId);
                       setSheetState(() {});
-                      AureaSnack.show(sheetContext, 'Tomadas removidas',
-                          actionLabel: 'Desfazer',
-                          onAction: controller.undo);
+                      AureaSnack.show(
+                        sheetContext,
+                        'Tomadas removidas',
+                        actionLabel: 'Desfazer',
+                        onAction: controller.undo,
+                      );
                     },
-                    child: const Text('Limpar tomadas',
-                        style: TextStyle(
-                            fontSize: 12, color: AmColors.pink)),
+                    child: const Text(
+                      'Limpar tomadas',
+                      style: TextStyle(fontSize: 12, color: AmColors.pink),
+                    ),
                   ),
                 ],
               ],
@@ -259,17 +297,19 @@ class _Pastilha extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        decoration: BoxDecoration(
-          color: aceso ? AmColors.accentDim : AmColors.chip,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(rotulo,
-            style: TextStyle(
-                fontSize: 11,
-                color: aceso ? AmColors.accent : AmColors.muted)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+    decoration: BoxDecoration(
+      color: aceso ? AmColors.accentDim : AmColors.chip,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      rotulo,
+      style: TextStyle(
+        fontSize: 11,
+        color: aceso ? AmColors.accent : AmColors.muted,
+      ),
+    ),
+  );
 }
 
 class _LinhaCamera extends StatelessWidget {
@@ -289,40 +329,42 @@ class _LinhaCamera extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onCortar,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            children: [
-              Icon(
-                noAr
-                    ? CupertinoIcons.videocam_fill
-                    : CupertinoIcons.videocam,
-                size: 18,
-                color: noAr ? AmColors.accent : AmColors.muted,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  principal ? '$nome (principal)' : nome,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: noAr ? AmColors.accent : AmColors.text),
-                ),
-              ),
-              if (onApagar != null)
-                GestureDetector(
-                  onTap: onApagar,
-                  child: const Icon(CupertinoIcons.trash,
-                      size: 15, color: AmColors.muted),
-                ),
-            ],
+    onTap: onCortar,
+    behavior: HitTestBehavior.opaque,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          Icon(
+            noAr ? CupertinoIcons.videocam_fill : CupertinoIcons.videocam,
+            size: 18,
+            color: noAr ? AmColors.accent : AmColors.muted,
           ),
-        ),
-      );
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              principal ? '$nome (principal)' : nome,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: noAr ? AmColors.accent : AmColors.text,
+              ),
+            ),
+          ),
+          if (onApagar != null)
+            GestureDetector(
+              onTap: onApagar,
+              child: const Icon(
+                CupertinoIcons.trash,
+                size: 15,
+                color: AmColors.muted,
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _LinhaTomada extends StatelessWidget {
@@ -342,36 +384,42 @@ class _LinhaTomada extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onIr,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 74,
-                child: Text(tempo,
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.accent)),
-              ),
-              Expanded(
-                child: Text(camera ?? 'camera apagada',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.text)),
-              ),
-              Text(transicao,
-                  style: const TextStyle(
-                      fontSize: 11, color: AmColors.muted)),
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: onApagar,
-                child: const Icon(CupertinoIcons.xmark,
-                    size: 14, color: AmColors.muted),
-              ),
-            ],
+    onTap: onIr,
+    behavior: HitTestBehavior.opaque,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 74,
+            child: Text(
+              tempo,
+              style: const TextStyle(fontSize: 12, color: AmColors.accent),
+            ),
           ),
-        ),
-      );
+          Expanded(
+            child: Text(
+              camera ?? 'camera apagada',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AmColors.text),
+            ),
+          ),
+          Text(
+            transicao,
+            style: const TextStyle(fontSize: 11, color: AmColors.muted),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: onApagar,
+            child: const Icon(
+              CupertinoIcons.xmark,
+              size: 14,
+              color: AmColors.muted,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

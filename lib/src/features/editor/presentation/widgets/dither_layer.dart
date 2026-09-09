@@ -56,8 +56,7 @@ class DitherLayer extends StatefulWidget {
     if (_tried) return;
     _tried = true;
     try {
-      _program =
-          await ui.FragmentProgram.fromAsset('shaders/dither.frag');
+      _program = await ui.FragmentProgram.fromAsset('shaders/dither.frag');
     } catch (_) {
       // Aparelho sem suporte: segue sem dithering, nao quebra.
       _program = null;
@@ -112,23 +111,25 @@ class _DitherLayerState extends State<DitherLayer> {
 
     if (DitherLayer.comoFiltro) {
       // O filtro roda na textura da camada, em pixels de dispositivo.
-      return LayoutBuilder(builder: (context, c) {
-        final w = c.hasBoundedWidth ? c.maxWidth : 1.0;
-        final h = c.hasBoundedHeight ? c.maxHeight : 1.0;
-        shader
-          ..setFloat(0, (w * widget.pixelRatio).ceilToDouble())
-          ..setFloat(1, (h * widget.pixelRatio).ceilToDouble())
-          ..setFloat(2, widget.strength)
-          ..setFloat(3, seed);
-        ui.ImageFilter? filtro;
-        try {
-          filtro = ui.ImageFilter.shader(shader);
-        } catch (_) {
-          filtro = null;
-        }
-        if (filtro == null) return widget.child;
-        return ImageFiltered(imageFilter: filtro, child: widget.child);
-      });
+      return LayoutBuilder(
+        builder: (context, c) {
+          final w = c.hasBoundedWidth ? c.maxWidth : 1.0;
+          final h = c.hasBoundedHeight ? c.maxHeight : 1.0;
+          shader
+            ..setFloat(0, (w * widget.pixelRatio).ceilToDouble())
+            ..setFloat(1, (h * widget.pixelRatio).ceilToDouble())
+            ..setFloat(2, widget.strength)
+            ..setFloat(3, seed);
+          ui.ImageFilter? filtro;
+          try {
+            filtro = ui.ImageFilter.shader(shader);
+          } catch (_) {
+            filtro = null;
+          }
+          if (filtro == null) return widget.child;
+          return ImageFiltered(imageFilter: filtro, child: widget.child);
+        },
+      );
     }
 
     return FxSnapshot(
@@ -154,14 +155,24 @@ class _DitherPainter extends SnapshotPainter {
   final double seed;
 
   @override
-  void paint(PaintingContext context, Offset offset, Size size,
-      PaintingContextCallback painter) {
+  void paint(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    PaintingContextCallback painter,
+  ) {
     painter(context, offset);
   }
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     if (size.isEmpty) return;
     // A foto tem size x pixelRatio pixels; o shader amostra em pixels de
     // tela, entao desenha-se a foto do tamanho dela e o canvas escala.

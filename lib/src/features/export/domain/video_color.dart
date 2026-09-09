@@ -67,7 +67,8 @@ class CorDoVideo {
   final int altura;
 
   /// HDR de verdade (PQ ou HLG): precisa de tonemap para virar SDR.
-  bool get hdr => transferencia == 'smpte2084' || transferencia == 'arib-std-b67';
+  bool get hdr =>
+      transferencia == 'smpte2084' || transferencia == 'arib-std-b67';
 
   /// HD pelo criterio dos players: 720 linhas ou 1280 colunas.
   bool get hd => largura >= 1280 || altura >= 720;
@@ -104,7 +105,12 @@ String _encaixe(CorDoVideo cor, int largura, int altura) =>
 /// `setparams` etiqueta os quadros com a decisao tomada (vale para
 /// quem nao tinha etiqueta); `in_color_matrix`/`in_range` no `scale`
 /// cravam a mesma decisao na unica conversao YUV->RGB que acontece.
-String filtroSdr(CorDoVideo cor, {required int fps, required int largura, required int altura}) =>
+String filtroSdr(
+  CorDoVideo cor, {
+  required int fps,
+  required int largura,
+  required int altura,
+}) =>
     'fps=$fps'
     ',setparams=colorspace=${cor.matrizResolvida}:range=${cor.faixaResolvida}'
     ',${_encaixe(cor, largura, altura)}';
@@ -116,8 +122,18 @@ String filtroSdr(CorDoVideo cor, {required int fps, required int largura, requir
 /// acinzentado e sem cor: os valores PQ eram lidos como se fossem
 /// gama comum. O resultado nao e identico ao tonemap da Apple, mas e
 /// a mesma imagem — e nao a lavada de antes.
-String filtroHdrParaSdr(CorDoVideo cor, {required int fps, required int largura, required int altura}) {
-  const sdr = CorDoVideo(matriz: 'bt709', faixa: 'tv', largura: 1920, altura: 1080);
+String filtroHdrParaSdr(
+  CorDoVideo cor, {
+  required int fps,
+  required int largura,
+  required int altura,
+}) {
+  const sdr = CorDoVideo(
+    matriz: 'bt709',
+    faixa: 'tv',
+    largura: 1920,
+    altura: 1080,
+  );
   return 'fps=$fps'
       ',zscale=t=linear:npl=100'
       ',format=gbrpf32le'
@@ -131,12 +147,22 @@ String filtroHdrParaSdr(CorDoVideo cor, {required int fps, required int largura,
 /// Filtro de reserva: o de antes, so que em RGB. Serve se um FFmpeg
 /// nao conhecer alguma opcao das receitas acima — um quadro com a cor
 /// aproximada vale mais que exportacao nenhuma.
-String filtroDeReserva({required int fps, required int largura, required int altura}) =>
+String filtroDeReserva({
+  required int fps,
+  required int largura,
+  required int altura,
+}) =>
     'fps=$fps,scale=$largura:$altura:force_original_aspect_ratio=decrease,format=rgb24';
 
 /// As receitas, na ordem em que se tenta.
-List<String> receitasDeExtracao(CorDoVideo cor, {required int fps, required int largura, required int altura}) => [
-  if (cor.hdr) filtroHdrParaSdr(cor, fps: fps, largura: largura, altura: altura),
+List<String> receitasDeExtracao(
+  CorDoVideo cor, {
+  required int fps,
+  required int largura,
+  required int altura,
+}) => [
+  if (cor.hdr)
+    filtroHdrParaSdr(cor, fps: fps, largura: largura, altura: altura),
   filtroSdr(cor, fps: fps, largura: largura, altura: altura),
   filtroDeReserva(fps: fps, largura: largura, altura: altura),
 ];

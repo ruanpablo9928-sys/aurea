@@ -63,36 +63,38 @@ Future<void> showEffectGallery(
               ...EffectPresetStore.instance.presets,
             ];
 
-            Widget chip(String texto, bool aceso, VoidCallback onTap, {Key? key}) =>
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    key: key,
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onTap,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: aceso ? AmColors.actionDim : AmColors.chip,
-                        borderRadius: BorderRadius.circular(9),
-                        border: aceso
-                            ? Border.all(color: AmColors.action)
-                            : null,
-                      ),
-                      child: Text(
-                        texto,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: aceso ? AmColors.action : AmColors.text,
-                        ),
-                      ),
+            Widget chip(
+              String texto,
+              bool aceso,
+              VoidCallback onTap, {
+              Key? key,
+            }) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                key: key,
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: aceso ? AmColors.actionDim : AmColors.chip,
+                    borderRadius: BorderRadius.circular(9),
+                    border: aceso ? Border.all(color: AmColors.action) : null,
+                  ),
+                  child: Text(
+                    texto,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: aceso ? AmColors.action : AmColors.text,
                     ),
                   ),
-                );
+                ),
+              ),
+            );
 
             return SafeArea(
               child: Padding(
@@ -130,7 +132,10 @@ Future<void> showEffectGallery(
                       key: const ValueKey('galeria-busca'),
                       controller: search,
                       placeholder: 'glow, rgb split, pixelate...',
-                      style: const TextStyle(fontSize: 14, color: AmColors.text),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AmColors.text,
+                      ),
                       onChanged: (v) => setSheetState(() {
                         query = v;
                         showPresets = false;
@@ -236,7 +241,9 @@ Future<void> showEffectGallery(
                             )
                           : LayoutBuilder(
                               builder: (context, c) {
-                                final colunas = (c.maxWidth / 118).floor().clamp(2, 5);
+                                final colunas = (c.maxWidth / 118)
+                                    .floor()
+                                    .clamp(2, 5);
                                 return GridView.builder(
                                   key: const ValueKey('galeria-grade'),
                                   padding: const EdgeInsets.only(bottom: 8),
@@ -258,7 +265,9 @@ Future<void> showEffectGallery(
                                       pro: pro,
                                       favorito: favs.contains(spec.id),
                                       onFavorito: () => ref
-                                          .read(effectFavoritesProvider.notifier)
+                                          .read(
+                                            effectFavoritesProvider.notifier,
+                                          )
                                           .toggle(spec.id),
                                       onTap: () {
                                         controller.addEffect(layerId, type);
@@ -330,7 +339,10 @@ class _EffectTile extends StatelessWidget {
                         ),
                         child: Text(
                           'custo ${spec.cost}',
-                          style: const TextStyle(fontSize: 9, color: Colors.white),
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -348,9 +360,13 @@ class _EffectTile extends StatelessWidget {
                             width: 32,
                             height: 32,
                             child: Icon(
-                              favorito ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                              favorito
+                                  ? CupertinoIcons.star_fill
+                                  : CupertinoIcons.star,
                               size: 16,
-                              color: favorito ? AmColors.action : Colors.white70,
+                              color: favorito
+                                  ? AmColors.action
+                                  : Colors.white70,
                             ),
                           ),
                         ),

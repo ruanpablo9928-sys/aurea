@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/blob_track.dart';
 import '../../domain/pixel_sort.dart';
+
 import 'package:flutter/rendering.dart';
 
 /// EFEITOS DO LOTE 2.
@@ -125,19 +126,23 @@ class _FxSnapshotState extends State<FxSnapshot> {
 
   @override
   Widget build(BuildContext context) => SnapshotWidget(
-        controller: _controller,
-        mode: widget.mode,
-        painter: widget.painter,
-        child: widget.child,
-      );
+    controller: _controller,
+    mode: widget.mode,
+    painter: widget.painter,
+    child: widget.child,
+  );
 }
 
 /// Base comum: quando o snapshot nao esta disponivel, pinta o filho
 /// normalmente em vez de sumir com ele.
 abstract class _FxPainter extends SnapshotPainter {
   @override
-  void paint(PaintingContext context, Offset offset, Size size,
-      PaintingContextCallback painter) {
+  void paint(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    PaintingContextCallback painter,
+  ) {
     painter(context, offset);
   }
 }
@@ -148,10 +153,8 @@ Rect _dst(Offset offset, Size size) => offset & size;
 ui.ImageShader _imageShader(ui.Image image, Offset offset, Size size) {
   final m = Matrix4.identity()
     ..translateByDouble(offset.dx, offset.dy, 0, 1)
-    ..scaleByDouble(
-        size.width / image.width, size.height / image.height, 1, 1);
-  return ui.ImageShader(
-      image, TileMode.clamp, TileMode.clamp, m.storage);
+    ..scaleByDouble(size.width / image.width, size.height / image.height, 1, 1);
+  return ui.ImageShader(image, TileMode.clamp, TileMode.clamp, m.storage);
 }
 
 /// Desenha uma malha deformada: para cada no da grade, [displace]
@@ -185,7 +188,9 @@ void _drawMesh(
   for (var j = 0; j < rows; j++) {
     for (var i = 0; i < cols; i++) {
       final a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-      indices..addAll([a, b, c])..addAll([b, d, c]);
+      indices
+        ..addAll([a, b, c])
+        ..addAll([b, d, c]);
     }
   }
 
@@ -224,15 +229,21 @@ class TurbulentDisplacePainter extends _FxPainter {
   final int seed;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     if (amount.abs() < 0.5 || size.isEmpty) {
       context.canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(0, 0, image.width.toDouble(),
-              image.height.toDouble()),
-          _dst(offset, size),
-          Paint()..filterQuality = FilterQuality.low);
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        _dst(offset, size),
+        Paint()..filterQuality = FilterQuality.low,
+      );
       return;
     }
     final oct = complexity.round().clamp(1, 5);
@@ -285,15 +296,21 @@ class BendPainter extends _FxPainter {
   final double anchor;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     if (amount.abs() < 0.5 || size.isEmpty) {
       context.canvas.drawImageRect(
-          image,
-          Rect.fromLTWH(
-              0, 0, image.width.toDouble(), image.height.toDouble()),
-          _dst(offset, size),
-          Paint()..filterQuality = FilterQuality.low);
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        _dst(offset, size),
+        Paint()..filterQuality = FilterQuality.low,
+      );
       return;
     }
     final k = curvature.clamp(0.2, 4.0);
@@ -307,11 +324,10 @@ class BendPainter extends _FxPainter {
       displace: (u, v) {
         // Perfil de arco: 0 nas pontas, 1 na ancora.
         final t = vertical ? v : u;
-        final d = (t - anchor).abs() / math.max(1e-6, math.max(anchor, 1 - anchor));
+        final d =
+            (t - anchor).abs() / math.max(1e-6, math.max(anchor, 1 - anchor));
         final w = math.pow(1 - d.clamp(0.0, 1.0), k).toDouble();
-        return vertical
-            ? Offset(amount * w, 0)
-            : Offset(0, amount * w);
+        return vertical ? Offset(amount * w, 0) : Offset(0, amount * w);
       },
     );
   }
@@ -448,42 +464,68 @@ class PixelSortPainter extends _FxPainter {
   }
 
   PixelSortSpec get _spec => PixelSortSpec(
-        mode: PixelSortMode.values[mode.clamp(0, 2)],
-        threshold: threshold,
-        above: aboveThreshold,
-        reverse: reverse,
-        key: PixelSortKey.values[sortBy.clamp(0, 2)],
-        maxRun: length,
-        // 0..1000 na ficha -> 0..100 na conta (probabilidade / 1000).
-        restart: randomRestart / 10.0,
-        seed: seed,
-        matteBlur: matteBlur.round().clamp(0, 20),
-        centerX: centerX,
-        centerY: centerY,
-        startAngle: startAngle,
-        degreesSorted: degreesSorted,
-        innerRadius: innerRadius,
-        radiusVariation: radiusVariation,
-        startVariation: startVariation,
-        thickness: thickness,
-      );
+    mode: PixelSortMode.values[mode.clamp(0, 2)],
+    threshold: threshold,
+    above: aboveThreshold,
+    reverse: reverse,
+    key: PixelSortKey.values[sortBy.clamp(0, 2)],
+    maxRun: length,
+    // 0..1000 na ficha -> 0..100 na conta (probabilidade / 1000).
+    restart: randomRestart / 10.0,
+    seed: seed,
+    matteBlur: matteBlur.round().clamp(0, 20),
+    centerX: centerX,
+    centerY: centerY,
+    startAngle: startAngle,
+    degreesSorted: degreesSorted,
+    innerRadius: innerRadius,
+    radiusVariation: radiusVariation,
+    startVariation: startVariation,
+    thickness: thickness,
+  );
 
   String get _assinatura => [
-        mode, sortAngle, threshold, aboveThreshold, reverse, sortBy, length,
-        randomRestart, seed, sortResolution, downsample, matteBlur, centerX,
-        centerY, startAngle, degreesSorted, innerRadius, radiusVariation,
-        startVariation, thickness,
-      ].join('|');
+    mode,
+    sortAngle,
+    threshold,
+    aboveThreshold,
+    reverse,
+    sortBy,
+    length,
+    randomRestart,
+    seed,
+    sortResolution,
+    downsample,
+    matteBlur,
+    centerX,
+    centerY,
+    startAngle,
+    degreesSorted,
+    innerRadius,
+    radiusVariation,
+    startVariation,
+    thickness,
+  ].join('|');
 
   bool get _linearComAngulo => mode == 0 && sortAngle.abs() % 360 > 0.01;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     if (size.isEmpty) return;
     final src = Rect.fromLTWH(
-        0, 0, image.width.toDouble(), image.height.toDouble());
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     final dst = _dst(offset, size);
 
     // DIAGNOSTICO: os modos de "Show" sao como se descobre por que o
@@ -511,8 +553,7 @@ class PixelSortPainter extends _FxPainter {
     // foi exatamente o que apareceu na primeira prova no aparelho.
     // "Soft edges" escolhe o quanto suavizar, nunca se suaviza.
     final pintura = Paint()
-      ..filterQuality =
-          softEdges ? FilterQuality.medium : FilterQuality.low;
+      ..filterQuality = softEdges ? FilterQuality.medium : FilterQuality.low;
 
     if (pronto == null) {
       canvas.drawImageRect(image, src, dst, pintura);
@@ -520,7 +561,11 @@ class PixelSortPainter extends _FxPainter {
       canvas.save();
       canvas.clipRect(dst);
       final bufRect = Rect.fromLTWH(
-          0, 0, pronto.width.toDouble(), pronto.height.toDouble());
+        0,
+        0,
+        pronto.width.toDouble(),
+        pronto.height.toDouble(),
+      );
       if (_cache.anguloRad.abs() > 1e-6) {
         // O buffer foi girado por -angulo antes de ordenar; desgira.
         final e = _cache.escala;
@@ -530,9 +575,10 @@ class PixelSortPainter extends _FxPainter {
           pronto,
           bufRect,
           Rect.fromCenter(
-              center: Offset.zero,
-              width: pronto.width / e * (size.width / image.width),
-              height: pronto.height / e * (size.height / image.height)),
+            center: Offset.zero,
+            width: pronto.width / e * (size.width / image.width),
+            height: pronto.height / e * (size.height / image.height),
+          ),
           pintura,
         );
       } else {
@@ -550,8 +596,9 @@ class PixelSortPainter extends _FxPainter {
         dst,
         Paint()
           ..filterQuality = FilterQuality.low
-          ..color = Colors.white
-              .withValues(alpha: blendWithOriginal.clamp(0.0, 1.0)),
+          ..color = Colors.white.withValues(
+            alpha: blendWithOriginal.clamp(0.0, 1.0),
+          ),
       );
     }
   }
@@ -561,8 +608,10 @@ class PixelSortPainter extends _FxPainter {
   /// fora o anterior: so o quadro mais recente interessa.
   void _agendar(ui.Image image) {
     final assinatura = _assinatura;
-    final lado = (sortResolution / downsample.clamp(1.0, 4.0))
-        .clamp(64.0, 1080.0);
+    final lado = (sortResolution / downsample.clamp(1.0, 4.0)).clamp(
+      64.0,
+      1080.0,
+    );
     final escala = lado / math.max(image.width, image.height);
     final w = math.max(2, (image.width * escala).round());
     final h = math.max(2, (image.height * escala).round());
@@ -579,8 +628,11 @@ class PixelSortPainter extends _FxPainter {
     c.translate(bufW / 2, bufH / 2);
     if (girar) c.rotate(-ang);
     c.scale(escala, escala);
-    c.drawImage(image, Offset(-image.width / 2, -image.height / 2),
-        Paint()..filterQuality = FilterQuality.low);
+    c.drawImage(
+      image,
+      Offset(-image.width / 2, -image.height / 2),
+      Paint()..filterQuality = FilterQuality.low,
+    );
     final pequena = rec.endRecording().toImageSync(bufW, bufH);
 
     final pedido = _Pedido(
@@ -628,7 +680,11 @@ class PixelSortPainter extends _FxPainter {
         Rect.fromLTWH(dst.left, dst.top + i * passo, dst.width, passo),
         Paint()
           ..color = Color.fromRGBO(
-              (v * 255).round(), (v * 255).round(), (v * 255).round(), 1),
+            (v * 255).round(),
+            (v * 255).round(),
+            (v * 255).round(),
+            1,
+          ),
       );
     }
   }
@@ -637,7 +693,11 @@ class PixelSortPainter extends _FxPainter {
   void _mostrarMatte(Canvas canvas, ui.Image image, Rect src, Rect dst) {
     canvas.saveLayer(dst, Paint());
     canvas.drawImageRect(
-        image, src, dst, Paint()..filterQuality = FilterQuality.low);
+      image,
+      src,
+      dst,
+      Paint()..filterQuality = FilterQuality.low,
+    );
     // Luminancia -> preto e branco, cortada no limiar.
     final corte = (threshold * 255).round().clamp(0, 255).toDouble();
     canvas.saveLayer(
@@ -651,7 +711,11 @@ class PixelSortPainter extends _FxPainter {
         ]),
     );
     canvas.drawImageRect(
-        image, src, dst, Paint()..filterQuality = FilterQuality.low);
+      image,
+      src,
+      dst,
+      Paint()..filterQuality = FilterQuality.low,
+    );
     canvas.restore();
     canvas.restore();
   }
@@ -746,8 +810,9 @@ class _SortCache extends ChangeNotifier {
   Future<void> rodar(_Pedido pedido) async {
     ocupado = true;
     try {
-      final dados =
-          await pedido.imagem.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final dados = await pedido.imagem.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
       pedido.imagem.dispose();
       if (dados == null) return;
       final bytes = dados.buffer.asUint8List();
@@ -790,7 +855,12 @@ class _SortCache extends ChangeNotifier {
 
       final done = Completer<ui.Image>();
       ui.decodeImageFromPixels(
-          saida, pedido.w, pedido.h, ui.PixelFormat.rgba8888, done.complete);
+        saida,
+        pedido.w,
+        pedido.h,
+        ui.PixelFormat.rgba8888,
+        done.complete,
+      );
       final nova = await done.future;
 
       resultado?.dispose();
@@ -836,8 +906,7 @@ Uint8List _ordenarEmIsolate(Map<String, Object> m) {
     startVariation: m['startVariation'] as double,
     thickness: m['thickness'] as double,
   );
-  return pixelSort(
-      m['bytes'] as Uint8List, m['w'] as int, m['h'] as int, spec);
+  return pixelSort(m['bytes'] as Uint8List, m['w'] as int, m['h'] as int, spec);
 }
 
 // -------------------------------------------------------- CC Semear
@@ -862,11 +931,21 @@ class ScatterizePainter extends _FxPainter {
   final int seed;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     final src = Rect.fromLTWH(
-        0, 0, image.width.toDouble(), image.height.toDouble());
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     if (transfer < 0.999) {
       canvas.drawImageRect(
         image,
@@ -874,14 +953,19 @@ class ScatterizePainter extends _FxPainter {
         _dst(offset, size),
         Paint()
           ..filterQuality = FilterQuality.low
-          ..color = Colors.white
-              .withValues(alpha: (1 - transfer).clamp(0.0, 1.0)),
+          ..color = Colors.white.withValues(
+            alpha: (1 - transfer).clamp(0.0, 1.0),
+          ),
       );
     }
     if (spread < 0.5 || size.isEmpty) {
       if (transfer >= 0.999) {
-        canvas.drawImageRect(image, src, _dst(offset, size),
-            Paint()..filterQuality = FilterQuality.low);
+        canvas.drawImageRect(
+          image,
+          src,
+          _dst(offset, size),
+          Paint()..filterQuality = FilterQuality.low,
+        );
       }
       return;
     }
@@ -908,7 +992,11 @@ class ScatterizePainter extends _FxPainter {
         final cellW = size.width / cols;
         final cellH = size.height / rows;
         final s = Rect.fromLTWH(
-            i * cellW * sx, j * cellH * sy, cellW * sx, cellH * sy);
+          i * cellW * sx,
+          j * cellH * sy,
+          cellW * sx,
+          cellH * sy,
+        );
         final cx = offset.dx + i * cellW + cellW / 2 + dx;
         final cy = offset.dy + j * cellH + cellH / 2 + dy;
 
@@ -918,8 +1006,7 @@ class ScatterizePainter extends _FxPainter {
         canvas.drawImageRect(
           image,
           s,
-          Rect.fromCenter(
-              center: Offset.zero, width: cellW, height: cellH),
+          Rect.fromCenter(center: Offset.zero, width: cellW, height: cellH),
           paint,
         );
         canvas.restore();
@@ -981,12 +1068,22 @@ class MotionTilePainter extends _FxPainter {
   final bool horizontalPhase;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     if (size.isEmpty) return;
     final src = Rect.fromLTWH(
-        0, 0, image.width.toDouble(), image.height.toDouble());
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
 
     final tw = size.width * (tileW / 100).clamp(0.05, 3.0);
     final th = size.height * (tileH / 100).clamp(0.05, 3.0);
@@ -995,8 +1092,7 @@ class MotionTilePainter extends _FxPainter {
 
     final cx = offset.dx + size.width * centerX;
     final cy = offset.dy + size.height * centerY;
-    final area = Rect.fromCenter(
-        center: Offset(cx, cy), width: ow, height: oh);
+    final area = Rect.fromCenter(center: Offset(cx, cy), width: ow, height: oh);
 
     final nx = (ow / tw).ceil() + 2;
     final ny = (oh / th).ceil() + 2;
@@ -1025,7 +1121,10 @@ class MotionTilePainter extends _FxPainter {
         // Fora da area de saida o ladrilho nem e desenhado: a saida e
         // uma janela, e desenhar por tras dela e trabalho jogado fora.
         final quadro = Rect.fromCenter(
-            center: Offset(x + tw / 2, y + th / 2), width: tw, height: th);
+          center: Offset(x + tw / 2, y + th / 2),
+          width: tw,
+          height: th,
+        );
         if (!quadro.overlaps(area)) continue;
 
         canvas.save();
@@ -1073,14 +1172,28 @@ class SplitPainter extends _FxPainter {
   final double softness;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     final src = Rect.fromLTWH(
-        0, 0, image.width.toDouble(), image.height.toDouble());
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     if (split.abs() < 0.5 || size.isEmpty) {
-      canvas.drawImageRect(image, src, _dst(offset, size),
-          Paint()..filterQuality = FilterQuality.low);
+      canvas.drawImageRect(
+        image,
+        src,
+        _dst(offset, size),
+        Paint()..filterQuality = FilterQuality.low,
+      );
       return;
     }
 
@@ -1106,17 +1219,23 @@ class SplitPainter extends _FxPainter {
       final path = Path()
         ..moveTo(cut.dx - dir.dx * big, cut.dy - dir.dy * big)
         ..lineTo(cut.dx + dir.dx * big, cut.dy + dir.dy * big)
-        ..lineTo(cut.dx + dir.dx * big + nrm.dx * big * side,
-            cut.dy + dir.dy * big + nrm.dy * big * side)
-        ..lineTo(cut.dx - dir.dx * big + nrm.dx * big * side,
-            cut.dy - dir.dy * big + nrm.dy * big * side)
+        ..lineTo(
+          cut.dx + dir.dx * big + nrm.dx * big * side,
+          cut.dy + dir.dy * big + nrm.dy * big * side,
+        )
+        ..lineTo(
+          cut.dx - dir.dx * big + nrm.dx * big * side,
+          cut.dy - dir.dy * big + nrm.dy * big * side,
+        )
         ..close();
       canvas.clipPath(path);
       canvas.translate(nrm.dx * split * side, nrm.dy * split * side);
       if (softness > 0.01) {
         paint.imageFilter = ui.ImageFilter.blur(
-            sigmaX: softness * 8, sigmaY: softness * 8,
-            tileMode: TileMode.decal);
+          sigmaX: softness * 8,
+          sigmaY: softness * 8,
+          tileMode: TileMode.decal,
+        );
       }
       canvas.drawImageRect(image, src, _dst(offset, size), paint);
       canvas.restore();
@@ -1147,16 +1266,30 @@ class UnsharpMaskPainter extends _FxPainter {
   final double threshold;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     final src = Rect.fromLTWH(
-        0, 0, image.width.toDouble(), image.height.toDouble());
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     final dst = _dst(offset, size);
     final a = amount.clamp(0.0, 3.0);
     if (a < 0.01) {
-      canvas.drawImageRect(image, src, dst,
-          Paint()..filterQuality = FilterQuality.low);
+      canvas.drawImageRect(
+        image,
+        src,
+        dst,
+        Paint()..filterQuality = FilterQuality.low,
+      );
       return;
     }
 
@@ -1178,7 +1311,10 @@ class UnsharpMaskPainter extends _FxPainter {
       Paint()
         ..filterQuality = FilterQuality.low
         ..imageFilter = ui.ImageFilter.blur(
-            sigmaX: radius, sigmaY: radius, tileMode: TileMode.decal)
+          sigmaX: radius,
+          sigmaY: radius,
+          tileMode: TileMode.decal,
+        )
         ..colorFilter = ColorFilter.matrix(_gain(a * (1 - threshold)))
         ..blendMode = BlendMode.difference,
     );
@@ -1186,11 +1322,11 @@ class UnsharpMaskPainter extends _FxPainter {
   }
 
   static List<double> _gain(double g) => <double>[
-        g, 0, 0, 0, 0, //
-        0, g, 0, 0, 0, //
-        0, 0, g, 0, 0, //
-        0, 0, 0, 1, 0,
-      ];
+    g, 0, 0, 0, 0, //
+    0, g, 0, 0, 0, //
+    0, 0, g, 0, 0, //
+    0, 0, 0, 1, 0,
+  ];
 
   @override
   bool shouldRepaint(covariant UnsharpMaskPainter old) =>
@@ -1233,8 +1369,7 @@ class VhsPainter extends CustomPainter {
     }
 
     // Faixa de cabecote descendo: a marca registrada da fita.
-    final bandY =
-        ((t * 0.22) % 1.0) * (size.height + 160) - 80;
+    final bandY = ((t * 0.22) % 1.0) * (size.height + 160) - 80;
     canvas.drawRect(
       Rect.fromLTWH(0, bandY, size.width, 46),
       Paint()
@@ -1259,11 +1394,14 @@ class VhsPainter extends CustomPainter {
         final r1 = fxNoise(i.toDouble(), frame.toDouble(), seed);
         final r2 = fxNoise(i.toDouble(), frame.toDouble() + 1, seed + 9);
         final r3 = fxNoise(i.toDouble(), frame.toDouble() + 2, seed + 19);
-        paint.color =
-            Colors.white.withValues(alpha: 0.05 + r3 * 0.30 * noise);
+        paint.color = Colors.white.withValues(alpha: 0.05 + r3 * 0.30 * noise);
         canvas.drawRect(
-          Rect.fromLTWH(r1 * size.width, r2 * size.height,
-              4 + r3 * 60, 1 + r3 * 2),
+          Rect.fromLTWH(
+            r1 * size.width,
+            r2 * size.height,
+            4 + r3 * 60,
+            1 + r3 * 2,
+          ),
           paint,
         );
       }
@@ -1308,11 +1446,14 @@ class FilmDamagePainter extends CustomPainter {
         final r1 = fxNoise(i.toDouble(), frame.toDouble(), seed);
         final r2 = fxNoise(i.toDouble(), frame.toDouble(), seed + 41);
         final r3 = fxNoise(i.toDouble(), frame.toDouble(), seed + 83);
-        paint.color = (r3 > 0.5 ? Colors.black : Colors.white)
-            .withValues(alpha: 0.20 + r3 * 0.45);
+        paint.color = (r3 > 0.5 ? Colors.black : Colors.white).withValues(
+          alpha: 0.20 + r3 * 0.45,
+        );
         canvas.drawCircle(
-            Offset(r1 * size.width, r2 * size.height), 0.6 + r3 * 2.2,
-            paint);
+          Offset(r1 * size.width, r2 * size.height),
+          0.6 + r3 * 2.2,
+          paint,
+        );
       }
     }
 
@@ -1326,8 +1467,9 @@ class FilmDamagePainter extends CustomPainter {
         canvas.drawRect(
           Rect.fromLTWH(x, 0, 0.8 + r2 * 1.6, size.height),
           Paint()
-            ..color = Colors.white
-                .withValues(alpha: 0.10 + r2 * 0.22 * scratches),
+            ..color = Colors.white.withValues(
+              alpha: 0.10 + r2 * 0.22 * scratches,
+            ),
         );
       }
     }
@@ -1339,10 +1481,7 @@ class FilmDamagePainter extends CustomPainter {
           ..shader = ui.Gradient.radial(
             Offset(size.width / 2, size.height / 2),
             size.longestSide * 0.62,
-            [
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.55 * burn),
-            ],
+            [Colors.transparent, Colors.black.withValues(alpha: 0.55 * burn)],
             [0.55, 1.0],
           ),
       );
@@ -1381,14 +1520,28 @@ class GlitchifyPainter extends _FxPainter {
   final int seed;
 
   @override
-  void paintSnapshot(PaintingContext context, Offset offset, Size size,
-      ui.Image image, Size sourceSize, double pixelRatio) {
+  void paintSnapshot(
+    PaintingContext context,
+    Offset offset,
+    Size size,
+    ui.Image image,
+    Size sourceSize,
+    double pixelRatio,
+  ) {
     final canvas = context.canvas;
     final src = Rect.fromLTWH(
-        0, 0, image.width.toDouble(), image.height.toDouble());
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
     final dst = _dst(offset, size);
-    canvas.drawImageRect(image, src, dst,
-        Paint()..filterQuality = FilterQuality.low);
+    canvas.drawImageRect(
+      image,
+      src,
+      dst,
+      Paint()..filterQuality = FilterQuality.low,
+    );
     if (intensity < 0.01 || size.isEmpty) return;
 
     // O tique: o glitch nao e continuo, ele ACONTECE em instantes.
@@ -1409,8 +1562,7 @@ class GlitchifyPainter extends _FxPainter {
       final dx = (r3 - 0.5) * 2 * shift;
 
       final sRect = Rect.fromLTWH(0, y * sy, image.width.toDouble(), h * sy);
-      final dRect =
-          Rect.fromLTWH(offset.dx + dx, offset.dy + y, size.width, h);
+      final dRect = Rect.fromLTWH(offset.dx + dx, offset.dy + y, size.width, h);
 
       if (colorSplit > 0.02) {
         // Cada bloco puxa um canal para um lado: o corte de cor.
@@ -1426,8 +1578,12 @@ class GlitchifyPainter extends _FxPainter {
           );
         }
       }
-      canvas.drawImageRect(image, sRect, dRect,
-          Paint()..filterQuality = FilterQuality.none);
+      canvas.drawImageRect(
+        image,
+        sRect,
+        dRect,
+        Paint()..filterQuality = FilterQuality.none,
+      );
     }
 
     if (lineNoise > 0.01) {
@@ -1437,8 +1593,12 @@ class GlitchifyPainter extends _FxPainter {
         final r = fxNoise(i.toDouble(), tick.toDouble(), seed + 211);
         paint.color = Colors.white.withValues(alpha: 0.06 + r * 0.22);
         canvas.drawRect(
-          Rect.fromLTWH(offset.dx, offset.dy + r * size.height,
-              size.width, 1 + r * 2),
+          Rect.fromLTWH(
+            offset.dx,
+            offset.dy + r * size.height,
+            size.width,
+            1 + r * 2,
+          ),
           paint,
         );
       }
@@ -1447,11 +1607,11 @@ class GlitchifyPainter extends _FxPainter {
   }
 
   static List<double> _channel(int ch) => <double>[
-        ch == 0 ? 1 : 0, 0, 0, 0, 0, //
-        0, ch == 1 ? 1 : 0, 0, 0, 0, //
-        0, 0, ch == 2 ? 1 : 0, 0, 0, //
-        0, 0, 0, 1, 0,
-      ];
+    ch == 0 ? 1 : 0, 0, 0, 0, 0, //
+    0, ch == 1 ? 1 : 0, 0, 0, 0, //
+    0, 0, ch == 2 ? 1 : 0, 0, 0, //
+    0, 0, 0, 1, 0,
+  ];
 
   @override
   bool shouldRepaint(covariant GlitchifyPainter old) =>
@@ -1543,8 +1703,12 @@ class BlobTrackerPainter extends CustomPainter {
           Blob(
             id: b.id,
             area: b.area,
-            rect: Rect.fromLTRB(b.rect.left * ex, b.rect.top * ey,
-                b.rect.right * ex, b.rect.bottom * ey),
+            rect: Rect.fromLTRB(
+              b.rect.left * ex,
+              b.rect.top * ey,
+              b.rect.right * ex,
+              b.rect.bottom * ey,
+            ),
           ),
       ];
     }
@@ -1558,9 +1722,11 @@ class BlobTrackerPainter extends CustomPainter {
         () {
           final fx = fxNoise(i.toDouble(), 0, seed);
           final fy = fxNoise(i.toDouble(), 1, seed + 7);
-          final x = (0.5 + math.sin(segundos * 0.7 + fx * 6.28) * 0.28) *
+          final x =
+              (0.5 + math.sin(segundos * 0.7 + fx * 6.28) * 0.28) *
               (size.width - lado);
-          final y = (0.5 + math.cos(segundos * 0.5 + fy * 6.28) * 0.28) *
+          final y =
+              (0.5 + math.cos(segundos * 0.5 + fy * 6.28) * 0.28) *
               (size.height - lado);
           return Blob(
             id: i + 1,
@@ -1663,18 +1829,22 @@ class BlobTrackerPainter extends CustomPainter {
 
       if (fill > 0.01) {
         canvas.drawRect(
-            r,
-            Paint()
-              ..color = cor.withValues(
-                  alpha: (fill / 100).clamp(0.0, 1.0) *
-                      (opacity / 100).clamp(0.0, 1.0)));
+          r,
+          Paint()
+            ..color = cor.withValues(
+              alpha:
+                  (fill / 100).clamp(0.0, 1.0) *
+                  (opacity / 100).clamp(0.0, 1.0),
+            ),
+        );
       }
 
       switch (style) {
         case 1:
           // CANTOS: o comprimento e % da caixa, entao caixa pequena tem
           // canto pequeno — em pixel fixo, o canto engoliria a caixa.
-          final cl = math.min(r.width, r.height) *
+          final cl =
+              math.min(r.width, r.height) *
               (cornerLength.clamp(1.0, 50.0) / 100);
           for (final (px, py, sx, sy) in [
             (r.left, r.top, 1.0, 1.0),
@@ -1682,21 +1852,24 @@ class BlobTrackerPainter extends CustomPainter {
             (r.left, r.bottom, 1.0, -1.0),
             (r.right, r.bottom, -1.0, -1.0),
           ]) {
-            canvas.drawLine(
-                Offset(px, py), Offset(px + cl * sx, py), traco);
-            canvas.drawLine(
-                Offset(px, py), Offset(px, py + cl * sy), traco);
+            canvas.drawLine(Offset(px, py), Offset(px + cl * sx, py), traco);
+            canvas.drawLine(Offset(px, py), Offset(px, py + cl * sy), traco);
           }
         case 2:
-          canvas.drawCircle(
-              r.center, math.min(r.width, r.height) / 2, traco);
+          canvas.drawCircle(r.center, math.min(r.width, r.height) / 2, traco);
         case 3:
           final c = r.center;
           final l = math.min(r.width, r.height) / 2;
           canvas.drawLine(
-              Offset(c.dx - l, c.dy), Offset(c.dx + l, c.dy), traco);
+            Offset(c.dx - l, c.dy),
+            Offset(c.dx + l, c.dy),
+            traco,
+          );
           canvas.drawLine(
-              Offset(c.dx, c.dy - l), Offset(c.dx, c.dy + l), traco);
+            Offset(c.dx, c.dy - l),
+            Offset(c.dx, c.dy + l),
+            traco,
+          );
         case 4:
           break;
         default:
@@ -1705,14 +1878,16 @@ class BlobTrackerPainter extends CustomPainter {
 
       if (showCenter) {
         canvas.drawCircle(
-            r.center, math.max(1.5, thickness), Paint()..color = cor);
+          r.center,
+          math.max(1.5, thickness),
+          Paint()..color = cor,
+        );
       }
 
       if (showCaption) {
         final texto = switch (captionContent) {
           1 => 'ID ${b.id} · ${b.area}px',
-          2 =>
-            'ID ${b.id} · ${r.left.round()},${r.top.round()}',
+          2 => 'ID ${b.id} · ${r.left.round()},${r.top.round()}',
           _ => 'ID ${b.id}',
         };
         final tp = TextPainter(

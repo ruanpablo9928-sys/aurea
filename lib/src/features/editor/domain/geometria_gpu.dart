@@ -189,7 +189,9 @@ Map<Material3D, GrupoGpu> montarGruposGpu({
       final a = verts[ia], b = verts[ib], c = verts[ic];
       final ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
       final vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-      final wx = uy * vz - uz * vy, wy = uz * vx - ux * vz, wz = ux * vy - uy * vx;
+      final wx = uy * vz - uz * vy,
+          wy = uz * vx - ux * vz,
+          wz = ux * vy - uy * vx;
       if (wx * nx + wy * ny + wz * nz < 0) {
         final tmp = ib;
         ib = ic;
@@ -198,7 +200,8 @@ Map<Material3D, GrupoGpu> montarGruposGpu({
       for (final vi in [ia, ib, ic]) {
         final p = verts[vi];
         if (lisa) {
-          final mapa = grupo._mapa ??= Int32List(verts.length)..fillRange(0, verts.length, -1);
+          final mapa = grupo._mapa ??= Int32List(verts.length)
+            ..fillRange(0, verts.length, -1);
           var idx = mapa[vi];
           if (idx < 0) {
             final n = normais[vi]!;

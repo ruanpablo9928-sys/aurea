@@ -16,16 +16,16 @@ enum AutoEditZoom { nenhum, sutil, forte }
 extension AutoEditZoomX on AutoEditZoom {
   /// A escala que o zoom alcanca. 1,0 e nao mexer.
   double get escala => switch (this) {
-        AutoEditZoom.nenhum => 1.0,
-        AutoEditZoom.sutil => 1.06,
-        AutoEditZoom.forte => 1.18,
-      };
+    AutoEditZoom.nenhum => 1.0,
+    AutoEditZoom.sutil => 1.06,
+    AutoEditZoom.forte => 1.18,
+  };
 
   String get rotulo => switch (this) {
-        AutoEditZoom.nenhum => 'Nenhum',
-        AutoEditZoom.sutil => 'Sutil',
-        AutoEditZoom.forte => 'Forte',
-      };
+    AutoEditZoom.nenhum => 'Nenhum',
+    AutoEditZoom.sutil => 'Sutil',
+    AutoEditZoom.forte => 'Forte',
+  };
 }
 
 class AutoEditStyle {
@@ -65,17 +65,17 @@ class AutoEditStyle {
     AutoEditZoom? zoom,
     CaptionMode? captionMode,
   }) => AutoEditStyle(
-        id: id,
-        nome: nome,
-        descricao: descricao,
-        captionMode: captionMode ?? this.captionMode,
-        ritmo: ritmo ?? this.ritmo,
-        zoom: zoom ?? this.zoom,
-        legendar: legendar,
-        normalizar: normalizar,
-        melhorarVoz: melhorarVoz,
-        ducking: ducking,
-      );
+    id: id,
+    nome: nome,
+    descricao: descricao,
+    captionMode: captionMode ?? this.captionMode,
+    ritmo: ritmo ?? this.ritmo,
+    zoom: zoom ?? this.zoom,
+    legendar: legendar,
+    normalizar: normalizar,
+    melhorarVoz: melhorarVoz,
+    ducking: ducking,
+  );
 }
 
 abstract final class AutoEditStyles {
@@ -91,7 +91,8 @@ abstract final class AutoEditStyles {
   static const podcast = AutoEditStyle(
     id: AutoEditStyleId.podcast,
     nome: 'Podcast',
-    descricao: 'Legenda em caixa, zoom lento a cada frase, musica cedendo '
+    descricao:
+        'Legenda em caixa, zoom lento a cada frase, musica cedendo '
         'sob a fala.',
     captionMode: CaptionMode.frases,
     ritmo: 0.5,
@@ -103,7 +104,8 @@ abstract final class AutoEditStyles {
   static const viral = AutoEditStyle(
     id: AutoEditStyleId.viral,
     nome: 'Viral',
-    descricao: 'Karaoke palavra por palavra, zoom rapido, corte seco nos '
+    descricao:
+        'Karaoke palavra por palavra, zoom rapido, corte seco nos '
         'silencios.',
     captionMode: CaptionMode.palavra,
     ritmo: 1.0,

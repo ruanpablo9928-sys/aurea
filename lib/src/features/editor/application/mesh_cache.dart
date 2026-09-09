@@ -55,7 +55,8 @@ class MeshCache {
       final ext = path.split('.').last;
       if (ext.toLowerCase() == 'fbx' && looksLikeBinaryFbx(bytes)) {
         throw const MeshImportException(
-            'FBX binario nao e suportado: exporte como FBX ASCII ou OBJ.');
+          'FBX binario nao e suportado: exporte como FBX ASCII ou OBJ.',
+        );
       }
       final r = await compute(_parse, (String.fromCharCodes(bytes), ext));
       _meshes[path] = r.mesh;

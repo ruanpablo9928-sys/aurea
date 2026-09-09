@@ -34,22 +34,22 @@ enum ExportCodec {
 enum ExportSize { original, p2160, p1440, p1080, p720, p480 }
 
 int? exportSizeHeight(ExportSize s) => switch (s) {
-      ExportSize.original => null,
-      ExportSize.p2160 => 2160,
-      ExportSize.p1440 => 1440,
-      ExportSize.p1080 => 1080,
-      ExportSize.p720 => 720,
-      ExportSize.p480 => 480,
-    };
+  ExportSize.original => null,
+  ExportSize.p2160 => 2160,
+  ExportSize.p1440 => 1440,
+  ExportSize.p1080 => 1080,
+  ExportSize.p720 => 720,
+  ExportSize.p480 => 480,
+};
 
 String exportSizeLabel(ExportSize s) => switch (s) {
-      ExportSize.original => 'Original',
-      ExportSize.p2160 => '4K',
-      ExportSize.p1440 => '1440p',
-      ExportSize.p1080 => '1080p',
-      ExportSize.p720 => '720p',
-      ExportSize.p480 => '480p',
-    };
+  ExportSize.original => 'Original',
+  ExportSize.p2160 => '4K',
+  ExportSize.p1440 => '1440p',
+  ExportSize.p1080 => '1080p',
+  ExportSize.p720 => '720p',
+  ExportSize.p480 => '480p',
+};
 
 String exportCodecLabel(ExportCodec c) =>
     c == ExportCodec.hevc ? 'HEVC (H.265)' : 'H.264';
@@ -95,16 +95,14 @@ class ExportSettings {
     bool clearBitrate = false,
     ExportCodec? codec,
     ExportFormat? format,
-  }) =>
-      ExportSettings(
-        size: size ?? this.size,
-        fps: clearFps ? null : (fps ?? this.fps),
-        quality: quality ?? this.quality,
-        bitrateMbps:
-            clearBitrate ? null : (bitrateMbps ?? this.bitrateMbps),
-        codec: codec ?? this.codec,
-        format: format ?? this.format,
-      );
+  }) => ExportSettings(
+    size: size ?? this.size,
+    fps: clearFps ? null : (fps ?? this.fps),
+    quality: quality ?? this.quality,
+    bitrateMbps: clearBitrate ? null : (bitrateMbps ?? this.bitrateMbps),
+    codec: codec ?? this.codec,
+    format: format ?? this.format,
+  );
 
   /// O tamanho de saida para um projeto de [w]x[h].
   ///
@@ -151,8 +149,7 @@ class ExportSettings {
   /// Quantos megabytes o video deve ocupar, aproximadamente. Serve para
   /// a tela avisar ANTES de gastar dez minutos rendendo.
   double estimatedMegabytes(int w, int h, int fps, Duration duration) {
-    final bits = bitrateFor(w, h, fps) *
-        (duration.inMilliseconds / 1000.0);
+    final bits = bitrateFor(w, h, fps) * (duration.inMilliseconds / 1000.0);
     return bits / 8 / 1024 / 1024;
   }
 }

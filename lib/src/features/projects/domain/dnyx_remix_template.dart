@@ -503,7 +503,14 @@ VideoProject buildDnyxRemixTemplate(Map<String, String> assets) {
       143,
       photo,
       pw,
-      heightScale: (q) => _at([(43, 128/190), (60, 128/190), (65,.85), (68,1), (110, 1), (114, 128 / 190)], q),
+      heightScale: (q) => _at([
+        (43, 128 / 190),
+        (60, 128 / 190),
+        (65, .85),
+        (68, 1),
+        (110, 1),
+        (114, 128 / 190),
+      ], q),
       turn: (q) => _at([
         (43, 0),
         (62, 0),

@@ -152,10 +152,14 @@ double areaDaMalha(Element3DMesh mesh) {
   var area = 0.0;
   for (final f in mesh.faces) {
     for (var i = 1; i + 1 < f.length; i++) {
-      final a = mesh.verts[f[0]], b = mesh.verts[f[i]], c = mesh.verts[f[i + 1]];
+      final a = mesh.verts[f[0]],
+          b = mesh.verts[f[i]],
+          c = mesh.verts[f[i + 1]];
       final ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
       final vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-      final wx = uy * vz - uz * vy, wy = uz * vx - ux * vz, wz = ux * vy - uy * vx;
+      final wx = uy * vz - uz * vy,
+          wy = uz * vx - ux * vz,
+          wz = ux * vy - uy * vx;
       area += math.sqrt(wx * wx + wy * wy + wz * wz) / 2;
     }
   }

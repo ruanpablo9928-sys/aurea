@@ -168,9 +168,11 @@ NoiseProfile noiseProfileFrom(Float32List trecho, int rate) {
   final janela = hannWindow(kJanelaRuido);
   final soma = Float64List(kJanelaRuido);
   var quadros = 0;
-  for (var inicio = 0;
-      inicio + kJanelaRuido <= trecho.length;
-      inicio += kJanelaRuido ~/ 2) {
+  for (
+    var inicio = 0;
+    inicio + kJanelaRuido <= trecho.length;
+    inicio += kJanelaRuido ~/ 2
+  ) {
     final re = Float64List(kJanelaRuido);
     final im = Float64List(kJanelaRuido);
     for (var i = 0; i < kJanelaRuido; i++) {

@@ -31,7 +31,9 @@ final textPresets = <TextPreset>[
         ],
         properties: [
           AnimatorProperty(
-              type: TextAnimProp.opacity, value: AnimatedDouble(0)),
+            type: TextAnimProp.opacity,
+            value: AnimatedDouble(0),
+          ),
         ],
       ),
     ],
@@ -45,14 +47,20 @@ final textPresets = <TextPreset>[
           RangeSelector(
             shape: SelectorShape.rampUp,
             start: _sweep01(
-                const Duration(milliseconds: 1100), Easing.easeInOut),
+              const Duration(milliseconds: 1100),
+              Easing.easeInOut,
+            ),
           ),
         ],
         properties: [
           AnimatorProperty(
-              type: TextAnimProp.positionY, value: AnimatedDouble(90)),
+            type: TextAnimProp.positionY,
+            value: AnimatedDouble(90),
+          ),
           AnimatorProperty(
-              type: TextAnimProp.opacity, value: AnimatedDouble(0)),
+            type: TextAnimProp.opacity,
+            value: AnimatedDouble(0),
+          ),
         ],
       ),
     ],
@@ -71,7 +79,9 @@ final textPresets = <TextPreset>[
         ],
         properties: [
           AnimatorProperty(
-              type: TextAnimProp.opacity, value: AnimatedDouble(0)),
+            type: TextAnimProp.opacity,
+            value: AnimatedDouble(0),
+          ),
         ],
       ),
     ],
@@ -85,14 +95,17 @@ final textPresets = <TextPreset>[
           RangeSelector(
             shape: SelectorShape.rampUp,
             start: _sweep01(
-                const Duration(milliseconds: 1000), Easing.overshoot),
+              const Duration(milliseconds: 1000),
+              Easing.overshoot,
+            ),
           ),
         ],
         properties: [
+          AnimatorProperty(type: TextAnimProp.scale, value: AnimatedDouble(0)),
           AnimatorProperty(
-              type: TextAnimProp.scale, value: AnimatedDouble(0)),
-          AnimatorProperty(
-              type: TextAnimProp.opacity, value: AnimatedDouble(0)),
+            type: TextAnimProp.opacity,
+            value: AnimatedDouble(0),
+          ),
         ],
       ),
     ],
@@ -105,17 +118,22 @@ final textPresets = <TextPreset>[
         selectors: [
           RangeSelector(
             shape: SelectorShape.rampUp,
-            start: _sweep01(
-                const Duration(milliseconds: 1400), Easing.easeOut),
+            start: _sweep01(const Duration(milliseconds: 1400), Easing.easeOut),
           ),
         ],
         properties: [
           AnimatorProperty(
-              type: TextAnimProp.positionY, value: AnimatedDouble(-140)),
+            type: TextAnimProp.positionY,
+            value: AnimatedDouble(-140),
+          ),
           AnimatorProperty(
-              type: TextAnimProp.rotation, value: AnimatedDouble(-18)),
+            type: TextAnimProp.rotation,
+            value: AnimatedDouble(-18),
+          ),
           AnimatorProperty(
-              type: TextAnimProp.opacity, value: AnimatedDouble(0)),
+            type: TextAnimProp.opacity,
+            value: AnimatedDouble(0),
+          ),
         ],
       ),
     ],
@@ -133,9 +151,13 @@ final textPresets = <TextPreset>[
         ],
         properties: [
           AnimatorProperty(
-              type: TextAnimProp.positionY, value: AnimatedDouble(16)),
+            type: TextAnimProp.positionY,
+            value: AnimatedDouble(16),
+          ),
           AnimatorProperty(
-              type: TextAnimProp.rotation, value: AnimatedDouble(10)),
+            type: TextAnimProp.rotation,
+            value: AnimatedDouble(10),
+          ),
         ],
       ),
     ],
@@ -157,7 +179,9 @@ final textPresets = <TextPreset>[
         ],
         properties: [
           AnimatorProperty(
-              type: TextAnimProp.positionY, value: AnimatedDouble(-46)),
+            type: TextAnimProp.positionY,
+            value: AnimatedDouble(-46),
+          ),
         ],
       ),
     ],

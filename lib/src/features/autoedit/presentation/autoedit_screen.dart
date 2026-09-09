@@ -94,11 +94,13 @@ class _AutoEditScreenState extends ConsumerState<AutoEditScreen> {
     // PROJETO COMUM, pelo caminho comum: o AutoEdit nao tem formato
     // proprio de arquivo nem camada especial. Abrir e editar depois e
     // igual a qualquer projeto feito a mao.
-    controller.openProject(VideoProject(
-      name: 'AutoEdit',
-      createdAt: DateTime.now(),
-      layers: const [],
-    ));
+    controller.openProject(
+      VideoProject(
+        name: 'AutoEdit',
+        createdAt: DateTime.now(),
+        layers: const [],
+      ),
+    );
     final id = await controller.importVideoAwaitingDuration(
       Duration.zero,
       video,
@@ -141,78 +143,77 @@ class _AutoEditScreenState extends ConsumerState<AutoEditScreen> {
   // ------------------------------------------------------- 1 escolher
 
   Widget _telaEscolher() => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    padding: const EdgeInsets.all(20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Um video falado entra, um projeto editavel sai.',
+          style: TextStyle(fontSize: 17, height: 1.35, color: AmColors.text),
+        ),
+        const SizedBox(height: 8),
+        // A VANTAGEM REAL sobre os concorrentes de nuvem, dita na
+        // tela e nao em nota de rodape.
+        Row(
           children: [
-            const Text(
-              'Um video falado entra, um projeto editavel sai.',
-              style: TextStyle(
-                fontSize: 17,
-                height: 1.35,
-                color: AmColors.text,
-              ),
+            const Icon(
+              CupertinoIcons.lock_shield,
+              size: 15,
+              color: AmColors.accent,
             ),
-            const SizedBox(height: 8),
-            // A VANTAGEM REAL sobre os concorrentes de nuvem, dita na
-            // tela e nao em nota de rodape.
-            Row(
-              children: [
-                const Icon(CupertinoIcons.lock_shield,
-                    size: 15, color: AmColors.accent),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Tudo acontece no aparelho. O video nao e enviado para '
-                    'lugar nenhum.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
-                      color: AmColors.accent.withValues(alpha: 0.9),
-                    ),
-                  ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Tudo acontece no aparelho. O video nao e enviado para '
+                'lugar nenhum.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.3,
+                  color: AmColors.accent.withValues(alpha: 0.9),
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 50,
-              child: FilledButton.icon(
-                icon: const Icon(CupertinoIcons.videocam, size: 19),
-                label: const Text('Escolher video'),
-                onPressed: _escolherVideo,
               ),
             ),
           ],
         ),
-      );
+        const SizedBox(height: 24),
+        SizedBox(
+          height: 50,
+          child: FilledButton.icon(
+            icon: const Icon(CupertinoIcons.videocam, size: 19),
+            label: const Text('Escolher video'),
+            onPressed: _escolherVideo,
+          ),
+        ),
+      ],
+    ),
+  );
 
   // --------------------------------------------------------- 2 estilo
 
   Widget _telaEstilo() => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            'Escolha o estilo',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AmColors.text,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Cada um e um conjunto de ajustes prontos. Da para mudar tudo '
-            'depois, no editor.',
-            style: TextStyle(fontSize: 12, color: AmColors.muted, height: 1.3),
-          ),
-          const SizedBox(height: 14),
-          for (final e in AutoEditStyles.todos) ...[
-            _CartaoEstilo(estilo: e, onTap: () => _rodar(e)),
-            const SizedBox(height: 8),
-          ],
-        ],
-      );
+    padding: const EdgeInsets.all(16),
+    children: [
+      const Text(
+        'Escolha o estilo',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: AmColors.text,
+        ),
+      ),
+      const SizedBox(height: 4),
+      const Text(
+        'Cada um e um conjunto de ajustes prontos. Da para mudar tudo '
+        'depois, no editor.',
+        style: TextStyle(fontSize: 12, color: AmColors.muted, height: 1.3),
+      ),
+      const SizedBox(height: 14),
+      for (final e in AutoEditStyles.todos) ...[
+        _CartaoEstilo(estilo: e, onTap: () => _rodar(e)),
+        const SizedBox(height: 8),
+      ],
+    ],
+  );
 
   // ---------------------------------------------------- 3 trabalhando
 
@@ -271,7 +272,7 @@ class _AutoEditScreenState extends ConsumerState<AutoEditScreen> {
           plano.cortes.isEmpty
               ? '${plano.falas.length} falas legendadas.'
               : '${plano.falas.length} falas · '
-                  '${plano.economia.inSeconds} s de silencio cortados.',
+                    '${plano.economia.inSeconds} s de silencio cortados.',
           style: const TextStyle(fontSize: 13, color: AmColors.muted),
         ),
         const SizedBox(height: 20),
@@ -357,17 +358,17 @@ class _Rotulo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          texto,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-            color: AmColors.muted,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      texto,
+      style: const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+        color: AmColors.muted,
+      ),
+    ),
+  );
 }
 
 class _CartaoEstilo extends StatelessWidget {
@@ -378,38 +379,38 @@ class _CartaoEstilo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(14),
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            estilo.nome,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AmColors.text,
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                estilo.nome,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AmColors.text,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                estilo.descricao,
-                style: const TextStyle(
-                  fontSize: 12,
-                  height: 1.3,
-                  color: AmColors.muted,
-                ),
-              ),
-            ],
+          const SizedBox(height: 3),
+          Text(
+            estilo.descricao,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.3,
+              color: AmColors.muted,
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class _LinhaPasso extends StatelessWidget {

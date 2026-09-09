@@ -20,12 +20,12 @@ enum AutoEditStepId { transcrever, cortar, legendar, zoom, audio }
 
 extension AutoEditStepIdX on AutoEditStepId {
   String get rotulo => switch (this) {
-        AutoEditStepId.transcrever => 'Transcrevendo',
-        AutoEditStepId.cortar => 'Cortando silencios',
-        AutoEditStepId.legendar => 'Legendando',
-        AutoEditStepId.zoom => 'Aplicando zooms',
-        AutoEditStepId.audio => 'Tratando audio',
-      };
+    AutoEditStepId.transcrever => 'Transcrevendo',
+    AutoEditStepId.cortar => 'Cortando silencios',
+    AutoEditStepId.legendar => 'Legendando',
+    AutoEditStepId.zoom => 'Aplicando zooms',
+    AutoEditStepId.audio => 'Tratando audio',
+  };
 }
 
 enum AutoEditStepState { esperando, correndo, feito, pulado }
@@ -62,9 +62,11 @@ class AutoEditRun {
   bool get terminou =>
       erro != null ||
       cancelado ||
-      passos.every((p) =>
-          p.estado == AutoEditStepState.feito ||
-          p.estado == AutoEditStepState.pulado);
+      passos.every(
+        (p) =>
+            p.estado == AutoEditStepState.feito ||
+            p.estado == AutoEditStepState.pulado,
+      );
 }
 
 /// O AUTOEDIT.
@@ -104,8 +106,7 @@ class AutoEditRunner {
 
     void publica() => onProgresso(AutoEditRun(passos: passos, plano: null));
 
-    AutoEditRun cancelado() =>
-        AutoEditRun(passos: passos, cancelado: true);
+    AutoEditRun cancelado() => AutoEditRun(passos: passos, cancelado: true);
 
     void marca(AutoEditStepId id, AutoEditStepState e, [String? d]) {
       passos = [
@@ -120,12 +121,14 @@ class AutoEditRunner {
     var falas = <Cue>[];
     if (estilo.legendar || estilo.zoom != AutoEditZoom.nenhum) {
       try {
-        falas = await _ref.read(transcriptionServiceProvider).transcribeMedia(
-              videoPath,
-              mode: estilo.captionMode,
-            );
+        falas = await _ref
+            .read(transcriptionServiceProvider)
+            .transcribeMedia(videoPath, mode: estilo.captionMode);
       } catch (e) {
-        return AutoEditRun(passos: passos, erro: 'Nao consegui transcrever: $e');
+        return AutoEditRun(
+          passos: passos,
+          erro: 'Nao consegui transcrever: $e',
+        );
       }
       if (_cancelado) return cancelado();
     }
@@ -144,17 +147,11 @@ class AutoEditRunner {
         ? const <(Duration, Duration)>[]
         : detectSilence(picos);
 
-    final plano = planejar(
-      estilo: estilo,
-      silencios: silencios,
-      falas: falas,
-    );
+    final plano = planejar(estilo: estilo, silencios: silencios, falas: falas);
     marca(
       AutoEditStepId.cortar,
       plano.cortes.isEmpty ? AutoEditStepState.pulado : AutoEditStepState.feito,
-      plano.cortes.isEmpty
-          ? 'nada a cortar'
-          : '-${plano.economia.inSeconds} s',
+      plano.cortes.isEmpty ? 'nada a cortar' : '-${plano.economia.inSeconds} s',
     );
     marca(
       AutoEditStepId.legendar,
@@ -208,9 +205,7 @@ class AutoEditRunner {
         if (estilo.melhorarVoz) {
           controller.updateAudioSpec(
             layerId,
-            (a) => a.copyWith(
-              processing: a.processing.copyWith(voice: 1),
-            ),
+            (a) => a.copyWith(processing: a.processing.copyWith(voice: 1)),
           );
         }
         // O ducking so tem sentido com outra trilha: a musica desce

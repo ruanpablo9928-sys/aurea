@@ -20,7 +20,8 @@ enum ModoDeTranscricao {
 
   String get explicacao => switch (this) {
     auto => 'Com internet, na nuvem; sem, no aparelho.',
-    nuvem => 'Groq Whisper, pelo servidor do Aurea. Usa sua conta da comunidade.',
+    nuvem =>
+      'Groq Whisper, pelo servidor do Aurea. Usa sua conta da comunidade.',
     local => 'whisper.cpp no aparelho. O áudio não sai do celular.',
   };
 }

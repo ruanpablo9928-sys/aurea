@@ -36,21 +36,17 @@ class CameraShot {
     Duration? time,
     String? cameraId,
     Duration? transition,
-  }) =>
-      CameraShot(
-        time: time ?? this.time,
-        cameraId: cameraId ?? this.cameraId,
-        transition: transition ?? this.transition,
-      );
+  }) => CameraShot(
+    time: time ?? this.time,
+    cameraId: cameraId ?? this.cameraId,
+    transition: transition ?? this.transition,
+  );
 }
 
 double _lerp(double a, double b, double t) => a + (b - a) * t;
 
-Vec3 _lerpVec(Vec3 a, Vec3 b, double t) => Vec3(
-      _lerp(a.x, b.x, t),
-      _lerp(a.y, b.y, t),
-      _lerp(a.z, b.z, t),
-    );
+Vec3 _lerpVec(Vec3 a, Vec3 b, double t) =>
+    Vec3(_lerp(a.x, b.x, t), _lerp(a.y, b.y, t), _lerp(a.z, b.z, t));
 
 /// Mistura duas cameras de render.
 ///

@@ -15,11 +15,7 @@ import '../shell/layer_actions.dart';
 /// Icone do tipo na cor do tipo · nome (toque = renomear) · Duplicar ·
 /// Excluir · Mais (todas as acoes com rotulo). Mesma posicao sempre.
 class LayerHeader extends ConsumerWidget {
-  const LayerHeader({
-    super.key,
-    required this.layer,
-    required this.onMore,
-  });
+  const LayerHeader({super.key, required this.layer, required this.onMore});
 
   final Layer layer;
   final VoidCallback onMore;
@@ -47,7 +43,11 @@ class LayerHeader extends ConsumerWidget {
                     const SizedBox(height: 1),
                     Text(
                       rotulo,
-                      style: TextStyle(fontSize: 9, height: 1.1, color: t.muted),
+                      style: TextStyle(
+                        fontSize: 9,
+                        height: 1.1,
+                        color: t.muted,
+                      ),
                     ),
                   ],
                 ),
@@ -127,36 +127,40 @@ class MultiSelectionPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AureaTokens.of(context);
     final n = targets.length;
-    Widget acao(Key key, IconData icon, String rotulo, VoidCallback onTap,
-        {bool perigo = false}) =>
-        GestureDetector(
-          key: key,
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Container(
-            width: 84,
-            height: 64,
-            decoration: BoxDecoration(
-              color: t.chip,
-              borderRadius: BorderRadius.circular(AureaTokens.radius),
+    Widget acao(
+      Key key,
+      IconData icon,
+      String rotulo,
+      VoidCallback onTap, {
+      bool perigo = false,
+    }) => GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 84,
+        height: 64,
+        decoration: BoxDecoration(
+          color: t.chip,
+          borderRadius: BorderRadius.circular(AureaTokens.radius),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 22, color: perigo ? t.danger : t.text),
+            const SizedBox(height: 4),
+            Text(
+              rotulo,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: perigo ? t.danger : t.text,
+              ),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 22, color: perigo ? t.danger : t.text),
-                const SizedBox(height: 4),
-                Text(
-                  rotulo,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: perigo ? t.danger : t.text,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+          ],
+        ),
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -225,7 +229,8 @@ class MultiSelectionPanel extends ConsumerWidget {
                 const ValueKey('selecao-vincular'),
                 CupertinoIcons.link,
                 'Vincular',
-                () => vincularSelecao(context, ref, targets, playback.time.value),
+                () =>
+                    vincularSelecao(context, ref, targets, playback.time.value),
               ),
               const SizedBox(width: 8),
               acao(

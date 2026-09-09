@@ -214,7 +214,9 @@ Future<void> showAudioSheet(
                     max: 1,
                     decimals: 2,
                     onChanged: (v) => edit(
-                      (a) => a.copyWith(processing: a.processing.copyWith(denoise: v)),
+                      (a) => a.copyWith(
+                        processing: a.processing.copyWith(denoise: v),
+                      ),
                     ),
                   ),
                   _Slider(
@@ -224,7 +226,9 @@ Future<void> showAudioSheet(
                     max: 1,
                     decimals: 2,
                     onChanged: (v) => edit(
-                      (a) => a.copyWith(processing: a.processing.copyWith(voice: v)),
+                      (a) => a.copyWith(
+                        processing: a.processing.copyWith(voice: v),
+                      ),
                     ),
                   ),
                   _Slider(
@@ -234,7 +238,9 @@ Future<void> showAudioSheet(
                     max: 1,
                     decimals: 2,
                     onChanged: (v) => edit(
-                      (a) => a.copyWith(processing: a.processing.copyWith(deEsser: v)),
+                      (a) => a.copyWith(
+                        processing: a.processing.copyWith(deEsser: v),
+                      ),
                     ),
                   ),
                   _Slider(
@@ -245,7 +251,9 @@ Future<void> showAudioSheet(
                     decimals: 1,
                     suffix: ' dB',
                     onChanged: (v) => edit(
-                      (a) => a.copyWith(processing: a.processing.copyWith(lowDb: v)),
+                      (a) => a.copyWith(
+                        processing: a.processing.copyWith(lowDb: v),
+                      ),
                     ),
                   ),
                   _Slider(
@@ -256,7 +264,9 @@ Future<void> showAudioSheet(
                     decimals: 1,
                     suffix: ' dB',
                     onChanged: (v) => edit(
-                      (a) => a.copyWith(processing: a.processing.copyWith(midDb: v)),
+                      (a) => a.copyWith(
+                        processing: a.processing.copyWith(midDb: v),
+                      ),
                     ),
                   ),
                   _Slider(
@@ -267,7 +277,9 @@ Future<void> showAudioSheet(
                     decimals: 1,
                     suffix: ' dB',
                     onChanged: (v) => edit(
-                      (a) => a.copyWith(processing: a.processing.copyWith(highDb: v)),
+                      (a) => a.copyWith(
+                        processing: a.processing.copyWith(highDb: v),
+                      ),
                     ),
                   ),
                 ],

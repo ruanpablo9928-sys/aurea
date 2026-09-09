@@ -114,16 +114,16 @@ List<Keyframe<double>> keyframesDeZoom(
     // Alterna: uma frase fecha, a proxima volta. Zoom que so fecha
     // termina o video de nariz colado na tela.
     final fecha = i.isEven;
-    out.add(Keyframe(
-      time: t,
-      value: fecha ? 1.0 : alvo,
-      ease: Easing.appleStandard,
-    ));
-    out.add(Keyframe(
-      time: t + duracao,
-      value: fecha ? alvo : 1.0,
-      ease: Easing.interfaceSpring,
-    ));
+    out.add(
+      Keyframe(time: t, value: fecha ? 1.0 : alvo, ease: Easing.appleStandard),
+    );
+    out.add(
+      Keyframe(
+        time: t + duracao,
+        value: fecha ? alvo : 1.0,
+        ease: Easing.interfaceSpring,
+      ),
+    );
   }
   return out;
 }
@@ -182,11 +182,7 @@ AutoEditPlan planejar({
     estilo: estilo,
     cortes: cortes,
     silencios: silencios,
-    zoom: keyframesDeZoom(
-      trocasDeFrase(falas),
-      estilo.zoom,
-      ate: duracao,
-    ),
+    zoom: keyframesDeZoom(trocasDeFrase(falas), estilo.zoom, ate: duracao),
     falas: estilo.legendar ? falas : const [],
   );
 }

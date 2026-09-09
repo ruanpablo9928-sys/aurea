@@ -17,6 +17,7 @@ import 'dart:ui' show Color;
 import 'element3d.dart';
 import 'keyframe.dart';
 import 'scene3d.dart';
+
 enum TesteDeEstresse {
   objetos100,
   poligonos1M,
@@ -176,21 +177,14 @@ Scene3D cenaObjetos100({Color? fundo = const Color(0xFF0B0E14)}) {
         x: AnimatedDouble(-315.0 + col * 70),
         y: AnimatedDouble(-315.0 + lin * 70),
         z: AnimatedDouble(((i * 37) % 200) - 100.0),
-        rotY: AnimatedDouble(
-          0,
-          [
-            Keyframe(time: Duration.zero, value: 0),
-            Keyframe(time: const Duration(seconds: 5), value: 360),
-          ],
-        ),
+        rotY: AnimatedDouble(0, [
+          Keyframe(time: Duration.zero, value: 0),
+          Keyframe(time: const Duration(seconds: 5), value: 360),
+        ]),
       ),
     );
   }
-  return Scene3D(
-    nodes: nodes,
-    lights: luzesBasicas(),
-    background: fundo,
-  );
+  return Scene3D(nodes: nodes, lights: luzesBasicas(), background: fundo);
 }
 
 /// TESTE 2 — um milhao de poligonos numa malha so (esfera de 720 x 700).
@@ -209,13 +203,10 @@ Scene3D cenaPoligonos1M() {
           roughness: 0.35,
         ),
         size: 260,
-        rotY: AnimatedDouble(
-          0,
-          [
-            Keyframe(time: Duration.zero, value: 0),
-            Keyframe(time: const Duration(seconds: 5), value: 180),
-          ],
-        ),
+        rotY: AnimatedDouble(0, [
+          Keyframe(time: Duration.zero, value: 0),
+          Keyframe(time: const Duration(seconds: 5), value: 180),
+        ]),
       ),
     ],
     lights: luzesBasicas(),
@@ -242,13 +233,10 @@ Scene3D cenaTexturasGrandes(List<String> caminhos) {
         size: 120,
         x: AnimatedDouble(-300.0 + (i % 3) * 300),
         y: AnimatedDouble(i < 3 ? -150 : 150),
-        rotY: AnimatedDouble(
-          0,
-          [
-            Keyframe(time: Duration.zero, value: 0),
-            Keyframe(time: const Duration(seconds: 5), value: 360),
-          ],
-        ),
+        rotY: AnimatedDouble(0, [
+          Keyframe(time: Duration.zero, value: 0),
+          Keyframe(time: const Duration(seconds: 5), value: 360),
+        ]),
       ),
     );
   }
@@ -328,34 +316,25 @@ Scene3D cenaPbrAnimada() {
         size: 40,
         x: AnimatedDouble(math.cos(ang) * raio),
         z: AnimatedDouble(math.sin(ang) * raio),
-        y: AnimatedDouble(
-          0,
-          [
-            Keyframe(time: Duration.zero, value: -120.0 + (i % 7) * 40),
-            Keyframe(
-              time: const Duration(milliseconds: 2500),
-              value: 120.0 - (i % 7) * 40,
-            ),
-            Keyframe(
-              time: const Duration(seconds: 5),
-              value: -120.0 + (i % 7) * 40,
-            ),
-          ],
-        ),
-        rotX: AnimatedDouble(
-          0,
-          [
-            Keyframe(time: Duration.zero, value: 0),
-            Keyframe(time: const Duration(seconds: 5), value: 720),
-          ],
-        ),
-        rotZ: AnimatedDouble(
-          0,
-          [
-            Keyframe(time: Duration.zero, value: 0),
-            Keyframe(time: const Duration(seconds: 5), value: -360),
-          ],
-        ),
+        y: AnimatedDouble(0, [
+          Keyframe(time: Duration.zero, value: -120.0 + (i % 7) * 40),
+          Keyframe(
+            time: const Duration(milliseconds: 2500),
+            value: 120.0 - (i % 7) * 40,
+          ),
+          Keyframe(
+            time: const Duration(seconds: 5),
+            value: -120.0 + (i % 7) * 40,
+          ),
+        ]),
+        rotX: AnimatedDouble(0, [
+          Keyframe(time: Duration.zero, value: 0),
+          Keyframe(time: const Duration(seconds: 5), value: 720),
+        ]),
+        rotZ: AnimatedDouble(0, [
+          Keyframe(time: Duration.zero, value: 0),
+          Keyframe(time: const Duration(seconds: 5), value: -360),
+        ]),
       ),
     );
   }
@@ -400,7 +379,9 @@ Scene3D cenaExtrema(List<String> texturas) {
 }
 
 /// As nove receitas, na ordem do pedido.
-List<ReceitaDeEstresse> receitasDeEstresse({List<String> texturas = const []}) => [
+List<ReceitaDeEstresse> receitasDeEstresse({
+  List<String> texturas = const [],
+}) => [
   ReceitaDeEstresse(
     id: TesteDeEstresse.objetos100,
     titulo: '100 objetos',

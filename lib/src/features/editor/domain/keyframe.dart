@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/animation.dart';
+
 import 'expression_engine.dart';
 
 /// Tipo de easing do segmento (taxonomia oficial do Alight Motion).
@@ -472,8 +473,7 @@ class AnimatedDouble {
   final String? expression;
 
   bool get isAnimated => keyframes.isNotEmpty;
-  bool get hasExpression =>
-      expression != null && expression!.trim().isNotEmpty;
+  bool get hasExpression => expression != null && expression!.trim().isNotEmpty;
 
   bool hasKeyframeAt(Duration t) =>
       keyframes.any((k) => (k.time - t).abs() < _epsilon);
@@ -490,8 +490,7 @@ class AnimatedDouble {
   /// Compilada UMA vez por texto. `valueAt` roda por quadro e por
   /// parametro; compilar ali seria o fim do preview. O teto evita que
   /// uma expressao editada letra a letra encha a memoria de arvores.
-  static final Map<String, (CompiledExpression?, ExpressionError?)> _cache =
-      {};
+  static final Map<String, (CompiledExpression?, ExpressionError?)> _cache = {};
   static (CompiledExpression?, ExpressionError?) _compilada(String fonte) {
     final pronta = _cache[fonte];
     if (pronta != null) return pronta;
@@ -631,15 +630,23 @@ class AnimatedDouble {
   }
 
   /// Troca o easing do keyframe em [t], se existir.
-  AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(base, [
-    for (final k in keyframes)
-      if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
-  ], loop, expression);
+  AnimatedDouble withEase(Duration t, Easing ease) => AnimatedDouble(
+    base,
+    [
+      for (final k in keyframes)
+        if ((k.time - t).abs() < _epsilon) k.copyWith(ease: ease) else k,
+    ],
+    loop,
+    expression,
+  );
 
   /// Aplica a curva a TODOS os segmentos ("Paste Curve to All Keyframes").
-  AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(base, [
-    for (final k in keyframes) k.copyWith(ease: ease),
-  ], loop, expression);
+  AnimatedDouble withEaseAll(Easing ease) => AnimatedDouble(
+    base,
+    [for (final k in keyframes) k.copyWith(ease: ease)],
+    loop,
+    expression,
+  );
 
   /// INVERTER NO TEMPO (assistente PR-X7): espelha os keyframes dentro
   /// do proprio intervalo — o percurso passa a correr de tras para

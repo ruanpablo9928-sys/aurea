@@ -196,9 +196,7 @@ class _Rastreio3DScreenState extends ConsumerState<Rastreio3DScreen> {
   }
 
   Future<void> _definirChao({bool automatico = false}) async {
-    final ids = automatico
-        ? maiorPlano(_s.nuvem)?.ids
-        : _escolhidos.toList();
+    final ids = automatico ? maiorPlano(_s.nuvem)?.ids : _escolhidos.toList();
     if (ids == null || ids.length < 3) {
       AureaSnack.show(
         context,
@@ -292,7 +290,8 @@ class _Rastreio3DScreenState extends ConsumerState<Rastreio3DScreen> {
   String? _cenaDoClipe({bool criarSePreciso = true}) {
     final projeto = ref.read(editorControllerProvider);
     for (final l in projeto.layers) {
-      if (l is Scene3DLayer && l.name.contains(widget.layerId.substring(0, 4))) {
+      if (l is Scene3DLayer &&
+          l.name.contains(widget.layerId.substring(0, 4))) {
         return l.id;
       }
     }
@@ -334,7 +333,9 @@ class _Rastreio3DScreenState extends ConsumerState<Rastreio3DScreen> {
       // ele continua editável com as ferramentas de texto que já
       // existem — fonte, cor, animação — em vez de virar uma malha que
       // só esta tela sabe mexer.
-      final antes = {for (final l in ref.read(editorControllerProvider).layers) l.id};
+      final antes = {
+        for (final l in ref.read(editorControllerProvider).layers) l.id,
+      };
       _c.addTextLayer(Duration.zero, text: 'Seu texto');
       for (final l in ref.read(editorControllerProvider).layers) {
         if (!antes.contains(l.id) && l is TextLayer) textura = l.id;
@@ -425,7 +426,8 @@ class _Rastreio3DScreenState extends ConsumerState<Rastreio3DScreen> {
                       _quadros[_indice],
                       fit: BoxFit.cover,
                       gaplessPlayback: true,
-                      errorBuilder: (_, _, _) => ColoredBox(color: AmColors.panel),
+                      errorBuilder: (_, _, _) =>
+                          ColoredBox(color: AmColors.panel),
                     )
                   else
                     ColoredBox(color: AmColors.panel),
@@ -779,7 +781,9 @@ class _Acao extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: destaque ? AmColors.accent.withValues(alpha: .16) : AmColors.panel,
+        color: destaque
+            ? AmColors.accent.withValues(alpha: .16)
+            : AmColors.panel,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -817,7 +821,11 @@ class _Acao extends StatelessWidget {
 }
 
 class _Faixa extends StatelessWidget {
-  const _Faixa({required this.chave, required this.texto, this.destaque = false});
+  const _Faixa({
+    required this.chave,
+    required this.texto,
+    this.destaque = false,
+  });
 
   final String chave;
   final String texto;
@@ -883,10 +891,7 @@ class _PintorDosPontos extends CustomPainter {
     if (p == null) return null;
     final v = projetar(p.rotacao, p.translacao, x);
     if (v == null) return null;
-    return Offset(
-          centro.dx + v[0] * focalPx,
-          centro.dy + v[1] * focalPx,
-        ) *
+    return Offset(centro.dx + v[0] * focalPx, centro.dy + v[1] * focalPx) *
         escala;
   }
 
@@ -939,7 +944,11 @@ class _PintorDosPontos extends CustomPainter {
       final cor = _cores[qualidade(e.key)] ?? const Color(0xFF8FD3FF);
       if (escolhido) {
         canvas
-          ..drawCircle(p, 7, Paint()..color = Colors.white.withValues(alpha: .9))
+          ..drawCircle(
+            p,
+            7,
+            Paint()..color = Colors.white.withValues(alpha: .9),
+          )
           ..drawCircle(p, 4, Paint()..color = cor);
       } else {
         // O X é o desenho do After Effects, e é melhor do que um ponto
@@ -950,8 +959,16 @@ class _PintorDosPontos extends CustomPainter {
           ..strokeWidth = 1.6
           ..strokeCap = StrokeCap.round;
         canvas
-          ..drawLine(p + const Offset(-3.5, -3.5), p + const Offset(3.5, 3.5), t)
-          ..drawLine(p + const Offset(3.5, -3.5), p + const Offset(-3.5, 3.5), t);
+          ..drawLine(
+            p + const Offset(-3.5, -3.5),
+            p + const Offset(3.5, 3.5),
+            t,
+          )
+          ..drawLine(
+            p + const Offset(3.5, -3.5),
+            p + const Offset(-3.5, 3.5),
+            t,
+          );
       }
     }
 
@@ -1031,7 +1048,8 @@ class _FolhaAvancada extends StatelessWidget {
                       ? CupertinoIcons.checkmark_circle_fill
                       : CupertinoIcons.circle,
                   titulo: m.emPalavras,
-                  detalhe: '${m.explicacao} '
+                  detalhe:
+                      '${m.explicacao} '
                       '${m.fps} quadros/s, ${m.pontos} pontos.',
                   destaque: m == modo,
                   onTap: () => onModo(m),

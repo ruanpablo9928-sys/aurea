@@ -67,9 +67,15 @@ class PlanoDoRastreio implements PlanoLike {
   /// A matriz que leva do plano para o mundo, em colunas (X, Y, Z), com
   /// Y na normal — é a orientação que um objeto colado aqui recebe.
   Mat3 get orientacao => Mat3([
-    eixoX[0], normal[0], eixoZ[0],
-    eixoX[1], normal[1], eixoZ[1],
-    eixoX[2], normal[2], eixoZ[2],
+    eixoX[0],
+    normal[0],
+    eixoZ[0],
+    eixoX[1],
+    normal[1],
+    eixoZ[1],
+    eixoX[2],
+    normal[2],
+    eixoZ[2],
   ]);
 
   /// Os três ângulos de Euler que o motor 3D usa, em graus (X, Y, Z).
@@ -177,7 +183,8 @@ PlanoDoRastreio? planoDosPontos(
   var eixoX = normalizar(auto.vetores[2]);
   if (norma(eixoX) < .5) {
     eixoX = normalizar(produtoVetorial(normal, [0, 0, 1]));
-    if (norma(eixoX) < .5) eixoX = normalizar(produtoVetorial(normal, [1, 0, 0]));
+    if (norma(eixoX) < .5)
+      eixoX = normalizar(produtoVetorial(normal, [1, 0, 0]));
   }
   // Ortogonaliza contra a normal: a decomposição já devolve eixos
   // ortogonais, mas o desempate acima pode ter trazido um vetor torto.

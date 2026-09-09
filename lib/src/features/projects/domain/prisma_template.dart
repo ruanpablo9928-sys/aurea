@@ -120,14 +120,24 @@ String _gradiente(int topo, int meio, int base) {
 /// pedra. O polo do poco fica em +y.
 MalhaCodigo _gema() {
   final m = MalhaCodigo([
-    materialCodigo('Pessego', 0xfff4b46c, rugosidade: .42, metal: .06, brilho: .05),
+    materialCodigo(
+      'Pessego',
+      0xfff4b46c,
+      rugosidade: .42,
+      metal: .06,
+      brilho: .05,
+    ),
     materialCodigo('Poco', 0xff6a1a4e, rugosidade: .5, brilho: .35),
   ]);
   const anelY = 0.4472;
   const anelR = 0.8944;
   Vec3 anel(int i, bool cima) {
     final a = 2 * math.pi * i / 5 + (cima ? 0 : math.pi / 5);
-    return Vec3(anelR * math.cos(a), cima ? anelY : -anelY, anelR * math.sin(a));
+    return Vec3(
+      anelR * math.cos(a),
+      cima ? anelY : -anelY,
+      anelR * math.sin(a),
+    );
   }
 
   const fundo = Vec3(0, -1, 0);
@@ -150,7 +160,11 @@ MalhaCodigo _gema() {
 
 /// Uma esfera lisa com UV (u = volta, v = altura): o gradiente da
 /// textura corre de cima para baixo sem costura.
-MalhaCodigo _esferaUV(List<Map<String, dynamic>> materiais, {int stacks = 14, int slices = 24}) {
+MalhaCodigo _esferaUV(
+  List<Map<String, dynamic>> materiais, {
+  int stacks = 14,
+  int slices = 24,
+}) {
   final m = MalhaCodigo(materiais);
   final grade = <List<int>>[];
   for (var st = 0; st <= stacks; st++) {
@@ -161,7 +175,9 @@ MalhaCodigo _esferaUV(List<Map<String, dynamic>> materiais, {int stacks = 14, in
     for (var sl = 0; sl <= slices; sl++) {
       final a = 2 * math.pi * sl / slices;
       final p = Vec3(r * math.cos(a), y, r * math.sin(a));
-      linha.add(m.vertice(0, p, p.normalized, uv: Offset(sl / slices, st / stacks)));
+      linha.add(
+        m.vertice(0, p, p.normalized, uv: Offset(sl / slices, st / stacks)),
+      );
     }
     grade.add(linha);
   }
@@ -176,7 +192,12 @@ MalhaCodigo _esferaUV(List<Map<String, dynamic>> materiais, {int stacks = 14, in
 
 /// Um anel chapado no plano XY (normal +z), entre [rIn] e [rOut], com a
 /// textura correndo de cima para baixo pelo anel inteiro.
-MalhaCodigo _anel(List<Map<String, dynamic>> materiais, double rIn, double rOut, {int seg = 48}) {
+MalhaCodigo _anel(
+  List<Map<String, dynamic>> materiais,
+  double rIn,
+  double rOut, {
+  int seg = 48,
+}) {
   final m = MalhaCodigo(materiais);
   Offset uv(double x, double y) => Offset(.5, (rOut - y) / (2 * rOut));
   for (var i = 0; i < seg; i++) {
@@ -185,8 +206,26 @@ MalhaCodigo _anel(List<Map<String, dynamic>> materiais, double rIn, double rOut,
     final p1 = Vec3(rOut * math.cos(a0), rOut * math.sin(a0), 0);
     final p2 = Vec3(rOut * math.cos(a1), rOut * math.sin(a1), 0);
     final p3 = Vec3(rIn * math.cos(a1), rIn * math.sin(a1), 0);
-    m.triPlano(0, p0, p1, p2, ua: uv(p0.x, p0.y), ub: uv(p1.x, p1.y), uc: uv(p2.x, p2.y), virado: const Vec3(0, 0, 1));
-    m.triPlano(0, p0, p2, p3, ua: uv(p0.x, p0.y), ub: uv(p2.x, p2.y), uc: uv(p3.x, p3.y), virado: const Vec3(0, 0, 1));
+    m.triPlano(
+      0,
+      p0,
+      p1,
+      p2,
+      ua: uv(p0.x, p0.y),
+      ub: uv(p1.x, p1.y),
+      uc: uv(p2.x, p2.y),
+      virado: const Vec3(0, 0, 1),
+    );
+    m.triPlano(
+      0,
+      p0,
+      p2,
+      p3,
+      ua: uv(p0.x, p0.y),
+      ub: uv(p2.x, p2.y),
+      uc: uv(p3.x, p3.y),
+      virado: const Vec3(0, 0, 1),
+    );
   }
   return m;
 }
@@ -194,18 +233,50 @@ MalhaCodigo _anel(List<Map<String, dynamic>> materiais, double rIn, double rOut,
 /// Um quadrado 2 x 2 no plano XY com gradiente vertical.
 MalhaCodigo _quadrado(List<Map<String, dynamic>> materiais) {
   final m = MalhaCodigo(materiais);
-  const a = Vec3(-1, -1, 0), b = Vec3(1, -1, 0), c = Vec3(1, 1, 0), d = Vec3(-1, 1, 0);
-  m.triPlano(0, a, b, c, ua: const Offset(0, 1), ub: const Offset(1, 1), uc: const Offset(1, 0), virado: const Vec3(0, 0, 1));
-  m.triPlano(0, a, c, d, ua: const Offset(0, 1), ub: const Offset(1, 0), uc: const Offset(0, 0), virado: const Vec3(0, 0, 1));
+  const a = Vec3(-1, -1, 0),
+      b = Vec3(1, -1, 0),
+      c = Vec3(1, 1, 0),
+      d = Vec3(-1, 1, 0);
+  m.triPlano(
+    0,
+    a,
+    b,
+    c,
+    ua: const Offset(0, 1),
+    ub: const Offset(1, 1),
+    uc: const Offset(1, 0),
+    virado: const Vec3(0, 0, 1),
+  );
+  m.triPlano(
+    0,
+    a,
+    c,
+    d,
+    ua: const Offset(0, 1),
+    ub: const Offset(1, 0),
+    uc: const Offset(0, 0),
+    virado: const Vec3(0, 0, 1),
+  );
   return m;
 }
 
 /// Uma barra fina no plano XY — a faisca e o feixe. [comprimento] no eixo
 /// escolhido, [espessura] no outro; a caixa fica unitaria no maior lado.
-MalhaCodigo _barra(List<Map<String, dynamic>> materiais, {required bool vertical, double espessura = .012}) {
+MalhaCodigo _barra(
+  List<Map<String, dynamic>> materiais, {
+  required bool vertical,
+  double espessura = .012,
+}) {
   final m = MalhaCodigo(materiais);
   final hx = vertical ? espessura : 1.0, hy = vertical ? 1.0 : espessura;
-  m.quadPlano(0, Vec3(-hx, -hy, 0), Vec3(hx, -hy, 0), Vec3(hx, hy, 0), Vec3(-hx, hy, 0), virado: const Vec3(0, 0, 1));
+  m.quadPlano(
+    0,
+    Vec3(-hx, -hy, 0),
+    Vec3(hx, -hy, 0),
+    Vec3(hx, hy, 0),
+    Vec3(-hx, hy, 0),
+    virado: const Vec3(0, 0, 1),
+  );
   return m;
 }
 
@@ -237,8 +308,18 @@ SceneNode _no(
   modelAsset: m.asset(nome),
 );
 
-List<Map<String, dynamic>> _chapado(String nome, String textura, {double brilho = 0}) => [
-  materialCodigo(nome, 0xffffffff, semLuz: true, imagem: textura, brilho: brilho),
+List<Map<String, dynamic>> _chapado(
+  String nome,
+  String textura, {
+  double brilho = 0,
+}) => [
+  materialCodigo(
+    nome,
+    0xffffffff,
+    semLuz: true,
+    imagem: textura,
+    brilho: brilho,
+  ),
 ];
 
 // ============================================================= CAMERAS
@@ -297,7 +378,12 @@ Scene3DLayer _camada(
   effects: efeitos,
 );
 
-EffectInstance _glow(String id, {double limiar = 74, double raio = 28, double forca = 120}) => EffectInstance(
+EffectInstance _glow(
+  String id, {
+  double limiar = 74,
+  double raio = 28,
+  double forca = 120,
+}) => EffectInstance(
   id: id,
   type: EffectType.lightGlow,
   color: const Color(0xfffff3e4),
@@ -446,7 +532,10 @@ Scene3DLayer _cenaAnel() {
   ];
   double raio(double t) {
     if (t < .6) return 205 * _suave(t / .6);
-    if (t > 2.0) return 205 + 70 * math.sin(2 * math.pi * .42 * 1.4) + (t - 2.0) / .6 * 190;
+    if (t > 2.0)
+      return 205 +
+          70 * math.sin(2 * math.pi * .42 * 1.4) +
+          (t - 2.0) / .6 * 190;
     return 205 + 70 * math.sin(2 * math.pi * .42 * (t - .6));
   }
 
@@ -460,9 +549,17 @@ Scene3DLayer _cenaAnel() {
   for (var i = 0; i < 6; i++) {
     final (topo, meio, base) = cores[i];
     final m = _esferaUV([
-      materialCodigo('Disco ${i + 1}', 0xffffffff, semLuz: true, imagem: _gradiente(topo, meio, base)),
+      materialCodigo(
+        'Disco ${i + 1}',
+        0xffffffff,
+        semLuz: true,
+        imagem: _gradiente(topo, meio, base),
+      ),
     ]);
-    double angulo(double t) => 2 * math.pi * i / 6 + 1.1 * t + .25 * math.sin(2 * math.pi * .3 * t + i);
+    double angulo(double t) =>
+        2 * math.pi * i / 6 +
+        1.1 * t +
+        .25 * math.sin(2 * math.pi * .3 * t + i);
     nos.add(
       _no(
         m,
@@ -618,12 +715,19 @@ Scene3DLayer _cenaAlvo() {
       isNull: true,
       x: _keys([(0, 300), (.3, 0)], ease: Easing.easeOut),
       y: _keys([(0, -280), (.3, 0)], ease: Easing.easeOut),
-      scale: _keys([(0, .12), (.3, 1), (3.3, 1), (4.45, 4.6)], ease: Easing.easeIn),
+      scale: _keys([
+        (0, .12),
+        (.3, 1),
+        (3.3, 1),
+        (4.45, 4.6),
+      ], ease: Easing.easeIn),
       rotZ: _keys([(0, 45), (.95, 45), (1.35, 0), (2.3, 0), (4.5, 40)]),
       rotX: _keys([(1.3, 0), (1.75, 55), (2.3, 0)]),
     ),
     _no(
-      _quadrado(_chapado('Quadrado', _gradiente(0xfff5a18a, 0xffee6c8a, 0xff8c4fb3))),
+      _quadrado(
+        _chapado('Quadrado', _gradiente(0xfff5a18a, 0xffee6c8a, 0xff8c4fb3)),
+      ),
       'prisma_alvo_quadrado',
       'Quadrado',
       tamanho: 330,
@@ -639,7 +743,11 @@ Scene3DLayer _cenaAlvo() {
     final rIn = 42.0 + 40 * k, rOut = rIn + 36;
     nos.add(
       _no(
-        _anel(_chapado('Anel ${k + 1}', _gradiente(topo, meio, base)), rIn, rOut),
+        _anel(
+          _chapado('Anel ${k + 1}', _gradiente(topo, meio, base)),
+          rIn,
+          rOut,
+        ),
         'prisma_alvo_anel_$k',
         'Anel ${k + 1}',
         tamanho: rOut,
@@ -692,7 +800,13 @@ Scene3DLayer _cenaCones() {
     reflectivity: 1,
   );
   final pilula = _esferaUV([
-    materialCodigo('Pilula', 0xffffffff, semLuz: true, brilho: .3, imagem: _gradiente(0xff9cc7ff, 0xffffffff, 0xff4a78e8)),
+    materialCodigo(
+      'Pilula',
+      0xffffffff,
+      semLuz: true,
+      brilho: .3,
+      imagem: _gradiente(0xff9cc7ff, 0xffffffff, 0xff4a78e8),
+    ),
   ]);
   final cena = Scene3D(
     showFloorGrid: false,
@@ -814,9 +928,11 @@ Scene3DLayer _cenaCones() {
 /// em que o loop comeca.
 Scene3DLayer _cenaFeixe() {
   final quente = _gradiente(0xfff8c29a, 0xffee5a4e, 0xfffae49a);
-  final feixe = _barra([
-    materialCodigo('Feixe', 0xfffff1d8, semLuz: true, brilho: .9),
-  ], vertical: false, espessura: .004);
+  final feixe = _barra(
+    [materialCodigo('Feixe', 0xfffff1d8, semLuz: true, brilho: .9)],
+    vertical: false,
+    espessura: .004,
+  );
   final cena = Scene3D(
     showFloorGrid: false,
     background: null,
@@ -830,13 +946,27 @@ Scene3DLayer _cenaFeixe() {
       ])
         _no(
           _esferaUV([
-            materialCodigo(nome, 0xffffffff, semLuz: true, brilho: .12, imagem: quente),
+            materialCodigo(
+              nome,
+              0xffffffff,
+              semLuz: true,
+              brilho: .12,
+              imagem: quente,
+            ),
           ]),
           id,
           nome,
           tamanho: 205,
-          x: _keys([(0, 620 * sinal), (1.0, 150 * sinal), (1.45, 0)], ease: Easing.easeOut),
-          y: _keys([(0, 520 * sinal), (1.0, 170 * sinal), (1.45, 212 * sinal)], ease: Easing.easeOut),
+          x: _keys([
+            (0, 620 * sinal),
+            (1.0, 150 * sinal),
+            (1.45, 0),
+          ], ease: Easing.easeOut),
+          y: _keys([
+            (0, 520 * sinal),
+            (1.0, 170 * sinal),
+            (1.45, 212 * sinal),
+          ], ease: Easing.easeOut),
           escala: _keys([(0, .6), (.6, 1)], ease: Easing.easeOut),
         ),
       _no(
@@ -861,7 +991,12 @@ Scene3DLayer _cenaFeixe() {
         ),
         size: 900,
         z: _ad(60),
-        scale: _keys([(1.5, 0), (1.8, .3), (2.1, .7), (2.4, 2.4)], ease: Easing.easeIn),
+        scale: _keys([
+          (1.5, 0),
+          (1.8, .3),
+          (2.1, .7),
+          (2.4, 2.4),
+        ], ease: Easing.easeIn),
         rotZ: _keys([(1.5, 40), (2.3, 22)]),
       ),
     ],
@@ -885,18 +1020,30 @@ Scene3DLayer _cenaFeixe() {
 /// cena: magenta e azul nas gemas, ambar no anel, magenta no alvo, rosa e
 /// laranja no feixe.
 Scene3DLayer _fundo() {
-  SceneNode brilho(String id, String nome, int cor, double x, double y, double tamanho, List<(num, num)> escala) =>
-      SceneNode(
-        id: id,
-        name: nome,
-        kind: Element3DKind.sphere,
-        material: Material3D(name: nome, baseColor: Color(cor), kind: MaterialKind.unlit, opacity: .62),
-        size: tamanho,
-        x: _ad(x),
-        y: _ad(y),
-        z: _ad(-2600),
-        scale: _keys(escala),
-      );
+  SceneNode brilho(
+    String id,
+    String nome,
+    int cor,
+    double x,
+    double y,
+    double tamanho,
+    List<(num, num)> escala,
+  ) => SceneNode(
+    id: id,
+    name: nome,
+    kind: Element3DKind.sphere,
+    material: Material3D(
+      name: nome,
+      baseColor: Color(cor),
+      kind: MaterialKind.unlit,
+      opacity: .62,
+    ),
+    size: tamanho,
+    x: _ad(x),
+    y: _ad(y),
+    z: _ad(-2600),
+    scale: _keys(escala),
+  );
   final cena = Scene3D(
     showFloorGrid: false,
     background: const Color(0xff070609),
@@ -904,21 +1051,47 @@ Scene3DLayer _fundo() {
     environment: EnvironmentKind.estudio,
     envReflect: 0,
     nodes: [
-      brilho('prisma_fundo_magenta', 'Brilho magenta', 0xffb0247a, -1500, -1200, 1100, [
-        (0, 1), (2.4, 1), (2.7, 0), (6.0, 0), (6.3, 1), (10.3, 1), (10.6, 0),
-      ]),
+      brilho(
+        'prisma_fundo_magenta',
+        'Brilho magenta',
+        0xffb0247a,
+        -1500,
+        -1200,
+        1100,
+        [(0, 1), (2.4, 1), (2.7, 0), (6.0, 0), (6.3, 1), (10.3, 1), (10.6, 0)],
+      ),
       brilho('prisma_fundo_azul', 'Brilho azul', 0xff2c55c8, 1450, 1250, 950, [
-        (0, .9), (2.4, .9), (2.7, 0), (6.0, 0), (6.3, .6), (10.3, .6), (10.6, 0),
+        (0, .9),
+        (2.4, .9),
+        (2.7, 0),
+        (6.0, 0),
+        (6.3, .6),
+        (10.3, .6),
+        (10.6, 0),
       ]),
-      brilho('prisma_fundo_ambar', 'Brilho ambar', 0xffe0a23a, 1500, 1300, 1000, [
-        (0, 0), (2.3, 0), (2.6, 1), (4.6, 1), (4.9, 0),
-      ]),
+      brilho(
+        'prisma_fundo_ambar',
+        'Brilho ambar',
+        0xffe0a23a,
+        1500,
+        1300,
+        1000,
+        [(0, 0), (2.3, 0), (2.6, 1), (4.6, 1), (4.9, 0)],
+      ),
       brilho('prisma_fundo_rosa', 'Brilho rosa', 0xffd0507a, 1500, 900, 1000, [
-        (0, 0), (14.6, 0), (14.9, 1),
+        (0, 0),
+        (14.6, 0),
+        (14.9, 1),
       ]),
-      brilho('prisma_fundo_laranja', 'Brilho laranja', 0xffe07a2a, -1500, -1000, 1100, [
-        (0, 0), (14.6, 0), (14.9, 1),
-      ]),
+      brilho(
+        'prisma_fundo_laranja',
+        'Brilho laranja',
+        0xffe07a2a,
+        -1500,
+        -1000,
+        1100,
+        [(0, 0), (14.6, 0), (14.9, 1)],
+      ),
     ],
   );
   return _camada(
@@ -929,7 +1102,11 @@ Scene3DLayer _fundo() {
     cena: cena,
     camera: _cameraFixa('prisma_cam_fundo', 'Fundo / 40 mm'),
     efeitos: [
-      EffectInstance(id: 'prisma_fx_fundo_blur', type: EffectType.gaussianBlur, params: {'raio': _ad(190)}),
+      EffectInstance(
+        id: 'prisma_fx_fundo_blur',
+        type: EffectType.gaussianBlur,
+        params: {'raio': _ad(190)},
+      ),
     ],
   );
 }
@@ -1002,7 +1179,9 @@ int prismaTriangles(VideoProject p) {
   for (final layer in p.layers) {
     if (layer is! Scene3DLayer) continue;
     for (final n in layer.scene.nodes) {
-      final tris = n.modelAsset?.triangleCount ?? (n.isNull ? 0 : element3DMesh(n.kind).faces.length);
+      final tris =
+          n.modelAsset?.triangleCount ??
+          (n.isNull ? 0 : element3DMesh(n.kind).faces.length);
       total += tris * math.max(1, n.instances.length);
     }
   }

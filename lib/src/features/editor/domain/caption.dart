@@ -81,10 +81,10 @@ enum CaptionMode {
 }
 
 String captionModeLabel(CaptionMode m) => switch (m) {
-      CaptionMode.frases => 'Frases',
-      CaptionMode.curtas => 'Curtas',
-      CaptionMode.palavra => 'Palavra por palavra',
-    };
+  CaptionMode.frases => 'Frases',
+  CaptionMode.curtas => 'Curtas',
+  CaptionMode.palavra => 'Palavra por palavra',
+};
 
 /// Agrupa cues de UMA palavra em blocos curtos: junta enquanto couber em
 /// [maxWords]/[maxChars] e a pausa ate a proxima palavra for menor que
@@ -105,9 +105,7 @@ List<Cue> groupWordCues(
     final w = sorted[i];
     final joined = '${texts.join(' ')} ${w.text.trim()}';
     final gap = w.start - end;
-    if (texts.length >= maxWords ||
-        joined.length > maxChars ||
-        gap > maxGap) {
+    if (texts.length >= maxWords || joined.length > maxChars || gap > maxGap) {
       out.add(Cue(start: start, end: end, text: texts.join(' ')));
       texts = [w.text.trim()];
       start = w.start;
@@ -176,16 +174,22 @@ List<Cue> normalizeCues(
   return [
     for (final cue in merged)
       cue.copyWith(
-        text: wrapCaptionText(cue.text,
-            maxCharsPerLine: maxCharsPerLine, maxLines: maxLines),
+        text: wrapCaptionText(
+          cue.text,
+          maxCharsPerLine: maxCharsPerLine,
+          maxLines: maxLines,
+        ),
       ),
   ];
 }
 
 /// Quebra o texto em ate [maxLines] linhas de [maxCharsPerLine], nunca no
 /// meio de palavra. Excedente fica na ultima linha (sem cortar conteudo).
-String wrapCaptionText(String text,
-    {int maxCharsPerLine = 42, int maxLines = 2}) {
+String wrapCaptionText(
+  String text, {
+  int maxCharsPerLine = 42,
+  int maxLines = 2,
+}) {
   final words = text
       .replaceAll('\n', ' ')
       .split(RegExp(r'\s+'))
@@ -211,8 +215,7 @@ String wrapCaptionText(String text,
 // ------------------------------------------------------------------- SRT
 
 Duration _parseSrtTime(String s) {
-  final m =
-      RegExp(r'(\d+):(\d+):(\d+)[,.](\d+)').firstMatch(s.trim());
+  final m = RegExp(r'(\d+):(\d+):(\d+)[,.](\d+)').firstMatch(s.trim());
   if (m == null) return Duration.zero;
   return Duration(
     hours: int.parse(m.group(1)!),
@@ -243,10 +246,8 @@ List<Cue> parseSrt(String content) {
       .where((b) => b.trim().isNotEmpty);
   final cues = <Cue>[];
   for (final block in blocks) {
-    final lines =
-        block.split('\n').where((l) => l.trim().isNotEmpty).toList();
-    final timeIdx = lines.indexWhere(
-        (l) => _timeRe.allMatches(l).length >= 2);
+    final lines = block.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    final timeIdx = lines.indexWhere((l) => _timeRe.allMatches(l).length >= 2);
     if (timeIdx < 0) continue;
     final times = _timeRe.allMatches(lines[timeIdx]).toList();
     final text = lines.sublist(timeIdx + 1).join('\n').trim();

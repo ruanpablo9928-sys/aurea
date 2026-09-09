@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../domain/rotacao_de_tela.dart';
+
 import 'dart:typed_data';
 import 'dart:ui' show PointMode;
 

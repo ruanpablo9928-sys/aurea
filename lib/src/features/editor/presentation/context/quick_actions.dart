@@ -105,13 +105,13 @@ List<QuickAction> quickActionsFor(
       ),
       QuickAction(
         key: 'mudo',
-        icon: mudo ? CupertinoIcons.speaker_slash_fill : CupertinoIcons.speaker_slash,
+        icon: mudo
+            ? CupertinoIcons.speaker_slash_fill
+            : CupertinoIcons.speaker_slash,
         label: mudo ? 'Ativar som' : 'Mudo',
         aceso: mudo,
-        onTap: () => controller.updateAudioSpec(
-          id,
-          (s) => s.copyWith(muted: !mudo),
-        ),
+        onTap: () =>
+            controller.updateAudioSpec(id, (s) => s.copyWith(muted: !mudo)),
       ),
     ],
     if (layer is VideoLayer)
@@ -299,7 +299,9 @@ List<QuickAction> quickActionsFor(
           if (!context.mounted) return;
           AureaSnack.show(
             context,
-            n == 0 ? 'Nao achei um assunto claro' : 'Reenquadrado com $n keyframes',
+            n == 0
+                ? 'Nao achei um assunto claro'
+                : 'Reenquadrado com $n keyframes',
             actionLabel: n == 0 ? null : 'Desfazer',
             onAction: controller.undo,
           );
@@ -448,47 +450,43 @@ class QuickActionsRow extends StatelessWidget {
 
   Widget _acao(BuildContext context, AureaTokens t, QuickAction a) {
     {
-          return Tooltip(
-            message: a.label,
-            child: GestureDetector(
-              key: ValueKey('acao-${a.key}'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (!a.enabled) {
-                  showReasonToast(context, a.reason);
-                  return;
-                }
-                a.onTap();
-              },
-              child: Opacity(
-                opacity: a.enabled ? 1 : .35,
-                child: SizedBox(
-                  width: 62,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        a.icon,
-                        size: 21,
-                        color: a.aceso ? t.accent : t.text,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        a.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: a.aceso ? t.accent : t.muted,
-                        ),
-                      ),
-                    ],
+      return Tooltip(
+        message: a.label,
+        child: GestureDetector(
+          key: ValueKey('acao-${a.key}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (!a.enabled) {
+              showReasonToast(context, a.reason);
+              return;
+            }
+            a.onTap();
+          },
+          child: Opacity(
+            opacity: a.enabled ? 1 : .35,
+            child: SizedBox(
+              width: 62,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(a.icon, size: 21, color: a.aceso ? t.accent : t.text),
+                  const SizedBox(height: 3),
+                  Text(
+                    a.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: a.aceso ? t.accent : t.muted,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-          );
+          ),
+        ),
+      );
     }
   }
 }

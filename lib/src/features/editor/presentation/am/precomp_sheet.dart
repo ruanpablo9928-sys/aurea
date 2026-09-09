@@ -13,8 +13,12 @@ import 'am_widgets.dart';
 /// da composicao. Com a duracao interna e o remapeamento, o grupo passa
 /// a ser uma composicao dentro da composicao: da para congelar, inverter,
 /// e fazer rampa de velocidade sem tocar em nenhum filho.
-Future<void> showPrecompSheet(BuildContext context, WidgetRef ref,
-    String layerId, PlaybackController playback) async {
+Future<void> showPrecompSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+  PlaybackController playback,
+) async {
   await showParamSheet(
     context,
     title: 'Precomp',
@@ -42,17 +46,23 @@ Future<void> showPrecompSheet(BuildContext context, WidgetRef ref,
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Precomp',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Precomp',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 const Text(
                   'O grupo passa a ter tempo proprio: da para congelar, '
                   'inverter e acelerar tudo o que esta dentro de uma vez.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
@@ -64,19 +74,26 @@ Future<void> showPrecompSheet(BuildContext context, WidgetRef ref,
                   decimals: 2,
                   suffix: ' s',
                   onChanged: (v) {
-                    controller.updatePrecomp(layerId,
-                        sourceDuration: Duration(
-                            microseconds: (v * 1000000).round()));
+                    controller.updatePrecomp(
+                      layerId,
+                      sourceDuration: Duration(
+                        microseconds: (v * 1000000).round(),
+                      ),
+                    );
                     redesenha();
                   },
                 ),
                 if (layer.sourceDuration != null)
-                  _Botao('Igualar a barra (${segBarra.toStringAsFixed(2)} s)',
-                      () {
-                    controller.updatePrecomp(layerId,
-                        clearSourceDuration: true);
-                    redesenha();
-                  }),
+                  _Botao(
+                    'Igualar a barra (${segBarra.toStringAsFixed(2)} s)',
+                    () {
+                      controller.updatePrecomp(
+                        layerId,
+                        clearSourceDuration: true,
+                      );
+                      redesenha();
+                    },
+                  ),
 
                 const SizedBox(height: 10),
                 _Toggle(
@@ -128,7 +145,10 @@ Future<void> showPrecompSheet(BuildContext context, WidgetRef ref,
                     'keyframe de tempo — dois keyframes distantes viram '
                     'camera lenta, dois proximos viram aceleracao.',
                     style: TextStyle(
-                        fontSize: 11, height: 1.35, color: AmColors.muted),
+                      fontSize: 11,
+                      height: 1.35,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ],
 
@@ -145,7 +165,10 @@ Future<void> showPrecompSheet(BuildContext context, WidgetRef ref,
                   'Sem quadro proprio, os filhos compoem direto com o pai '
                   '— e a forma vetorial nao pixela ao ampliar.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 _Toggle(
@@ -173,19 +196,21 @@ class _Botao extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AmColors.chip,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Text(label,
-              style: const TextStyle(fontSize: 12, color: AmColors.text)),
-        ),
-      );
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AmColors.chip,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12, color: AmColors.text),
+      ),
+    ),
+  );
 }
 
 class _Ruler extends StatelessWidget {
@@ -209,35 +234,37 @@ class _Ruler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 104,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, color: AmColors.muted)),
-            ),
-            Expanded(
-              child: AmTickRuler(
-                value: value,
-                min: min,
-                max: max,
-                unitsPerPixel: (max - min) / 400,
-                height: 40,
-                onChanged: onChanged,
-              ),
-            ),
-            SizedBox(
-              width: 62,
-              child: Text('${value.toStringAsFixed(decimals)}$suffix',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontSize: 12, color: AmColors.text)),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 104,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AmColors.muted),
+          ),
         ),
-      );
+        Expanded(
+          child: AmTickRuler(
+            value: value,
+            min: min,
+            max: max,
+            unitsPerPixel: (max - min) / 400,
+            height: 40,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 62,
+          child: Text(
+            '${value.toStringAsFixed(decimals)}$suffix',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 12, color: AmColors.text),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Toggle extends StatelessWidget {
@@ -253,20 +280,21 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AmColors.text)),
-            ),
-            CupertinoSwitch(
-              value: value,
-              activeTrackColor: AmColors.accent,
-              onChanged: onChanged,
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: AmColors.text),
+          ),
         ),
-      );
+        CupertinoSwitch(
+          value: value,
+          activeTrackColor: AmColors.accent,
+          onChanged: onChanged,
+        ),
+      ],
+    ),
+  );
 }

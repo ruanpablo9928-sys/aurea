@@ -59,10 +59,18 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
   late TextEditingController _hex;
 
   static const _swatches = <Color>[
-    Color(0xFFFFFFFF), Color(0xFF000000), Color(0xFFB8FF3D),
-    Color(0xFF7C62FF), Color(0xFF35C4E7), Color(0xFF2BE3A0),
-    Color(0xFFFFB020), Color(0xFFFF6B6B), Color(0xFFFF4FA3),
-    Color(0xFF8B94A3), Color(0xFF1E242E), Color(0xFFE9EDF2),
+    Color(0xFFFFFFFF),
+    Color(0xFF000000),
+    Color(0xFFB8FF3D),
+    Color(0xFF7C62FF),
+    Color(0xFF35C4E7),
+    Color(0xFF2BE3A0),
+    Color(0xFFFFB020),
+    Color(0xFFFF6B6B),
+    Color(0xFFFF4FA3),
+    Color(0xFF8B94A3),
+    Color(0xFF1E242E),
+    Color(0xFFE9EDF2),
   ];
 
   @override
@@ -113,18 +121,25 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
         constraints: BoxConstraints(maxHeight: maxH),
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
-              18, 14, 18, 16 + MediaQuery.of(context).viewInsets.bottom),
+            18,
+            14,
+            18,
+            16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Text('Cor',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: AmColors.text)),
+                  const Text(
+                    'Cor',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Container(
                     width: 34,
@@ -139,11 +154,14 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     onPressed: () => Navigator.of(context).pop(_current),
-                    child: const Text('Pronto',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AmColors.accent)),
+                    child: const Text(
+                      'Pronto',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AmColors.accent,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -201,9 +219,10 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
               // HEX + valores.
               Row(
                 children: [
-                  const Text('HEX',
-                      style: TextStyle(
-                          fontSize: 12, color: AmColors.muted)),
+                  const Text(
+                    'HEX',
+                    style: TextStyle(fontSize: 12, color: AmColors.muted),
+                  ),
                   const SizedBox(width: 8),
                   SizedBox(
                     width: 110,
@@ -217,16 +236,21 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
                       inputFormatters: [
                         LengthLimitingTextInputFormatter(7),
                         FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9a-fA-F#]')),
+                          RegExp(r'[0-9a-fA-F#]'),
+                        ),
                       ],
                       style: const TextStyle(
-                          fontSize: 14, color: AmColors.text),
+                        fontSize: 14,
+                        color: AmColors.text,
+                      ),
                       decoration: InputDecoration(
                         isDense: true,
                         filled: true,
                         fillColor: AmColors.chip,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 9),
+                          horizontal: 10,
+                          vertical: 9,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide.none,
@@ -236,18 +260,17 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
                   ),
                   const Spacer(),
                   Text(
-                    widget.withAlpha
-                        ? '${(_alpha * 100).round()}%'
-                        : '',
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.muted),
+                    widget.withAlpha ? '${(_alpha * 100).round()}%' : '',
+                    style: const TextStyle(fontSize: 12, color: AmColors.muted),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
 
-              const Text('Rapidas',
-                  style: TextStyle(fontSize: 12, color: AmColors.muted)),
+              const Text(
+                'Rapidas',
+                style: TextStyle(fontSize: 12, color: AmColors.muted),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 10,
@@ -323,8 +346,7 @@ class _Strip extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: CustomPaint(
-                      size: Size(w, height), painter: painter),
+                  child: CustomPaint(size: Size(w, height), painter: painter),
                 ),
                 Positioned(
                   left: (position.clamp(0.0, 1.0) * w) - 7,
@@ -361,8 +383,7 @@ class _SvPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    final rrect =
-        RRect.fromRectAndRadius(rect, const Radius.circular(10));
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(10));
     canvas.save();
     canvas.clipRRect(rrect);
 
@@ -371,10 +392,7 @@ class _SvPainter extends CustomPainter {
       rect,
       Paint()
         ..shader = LinearGradient(
-          colors: [
-            Colors.white,
-            HSVColor.fromAHSV(1, hue, 1, 1).toColor(),
-          ],
+          colors: [Colors.white, HSVColor.fromAHSV(1, hue, 1, 1).toColor()],
         ).createShader(rect),
     );
     // Por cima: transparente -> preto.
@@ -391,20 +409,26 @@ class _SvPainter extends CustomPainter {
 
     final p = Offset(saturation * size.width, (1 - value) * size.height);
     canvas.drawCircle(
-        p, 9, Paint()..color = Colors.white.withValues(alpha: 0.9)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5);
+      p,
+      9,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
     canvas.drawCircle(
-        p, 9, Paint()..color = Colors.black.withValues(alpha: 0.35)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1);
+      p,
+      9,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
   }
 
   @override
   bool shouldRepaint(_SvPainter old) =>
-      old.hue != hue ||
-      old.saturation != saturation ||
-      old.value != value;
+      old.hue != hue || old.saturation != saturation || old.value != value;
 }
 
 class _HuePainter extends CustomPainter {
@@ -441,17 +465,15 @@ class _AlphaPainter extends CustomPainter {
     for (var y = 0.0; y < size.height; y += s) {
       for (var x = 0.0; x < size.width; x += s) {
         final even = ((x / s).floor() + (y / s).floor()).isEven;
-        canvas.drawRect(
-            Rect.fromLTWH(x, y, s, s), even ? a : b);
+        canvas.drawRect(Rect.fromLTWH(x, y, s, s), even ? a : b);
       }
     }
     final rect = Offset.zero & size;
     canvas.drawRect(
       rect,
       Paint()
-        ..shader = LinearGradient(
-          colors: [color.withValues(alpha: 0), color],
-        ).createShader(rect),
+        ..shader = LinearGradient(colors: [color.withValues(alpha: 0), color])
+            .createShader(rect),
     );
   }
 
@@ -508,9 +530,10 @@ class ColorWell extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(label!,
-              style:
-                  const TextStyle(fontSize: 12, color: AmColors.muted)),
+          child: Text(
+            label!,
+            style: const TextStyle(fontSize: 12, color: AmColors.muted),
+          ),
         ),
         well,
       ],

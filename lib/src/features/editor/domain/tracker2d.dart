@@ -49,13 +49,7 @@ class TrackPoint {
 
 /// Correlacao cruzada normalizada entre o molde de [a] centrado em [ca] e
 /// a mesma janela de [b] centrada em [cb]. Devolve -1..1.
-double ncc(
-  GrayFrame a,
-  Offset ca,
-  GrayFrame b,
-  Offset cb,
-  int raio,
-) {
+double ncc(GrayFrame a, Offset ca, GrayFrame b, Offset cb, int raio) {
   final ax = ca.dx.round(), ay = ca.dy.round();
   final bx = cb.dx.round(), by = cb.dy.round();
 
@@ -144,8 +138,14 @@ List<TrackPoint> trackSequence(
   var atual = inicio;
 
   for (var i = 1; i < frames.length; i++) {
-    final (p, s) = matchPatch(frames.first, inicio, frames[i],
-        patch: patch, busca: busca, seed: atual);
+    final (p, s) = matchPatch(
+      frames.first,
+      inicio,
+      frames[i],
+      patch: patch,
+      busca: busca,
+      seed: atual,
+    );
     // Perdeu o alvo: fica onde estava em vez de pular para o outro lado
     // da tela — um salto e sempre pior que um travamento.
     if (s < 0.35) {
@@ -193,9 +193,7 @@ List<Offset> stabilizeOffsets(List<TrackPoint> track, {int janela = 15}) {
   if (track.isEmpty) return const [];
   final reais = [for (final p in track) p.position];
   final suaves = smoothPath(reais, janela: janela);
-  return [
-    for (var i = 0; i < reais.length; i++) suaves[i] - reais[i],
-  ];
+  return [for (var i = 0; i < reais.length; i++) suaves[i] - reais[i]];
 }
 
 /// Quanto a imagem precisa ser AMPLIADA para o deslocamento nao mostrar
@@ -203,11 +201,7 @@ List<Offset> stabilizeOffsets(List<TrackPoint> track, {int janela = 15}) {
 ///
 /// Estabilizar sem ampliar mostra o vazio nas bordas — e o defeito que
 /// denuncia estabilizacao caseira na hora.
-double stabilizeZoom(
-  List<Offset> offsets,
-  int width,
-  int height,
-) {
+double stabilizeZoom(List<Offset> offsets, int width, int height) {
   if (offsets.isEmpty || width <= 0 || height <= 0) return 1;
   var maxX = 0.0, maxY = 0.0;
   for (final o in offsets) {

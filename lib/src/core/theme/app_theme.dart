@@ -77,13 +77,17 @@ abstract final class AppTheme {
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
       hoverColor: Colors.transparent,
-      highlightColor: (claro ? Colors.black : Colors.white).withValues(alpha: 0.05),
+      highlightColor: (claro ? Colors.black : Colors.white).withValues(
+        alpha: 0.05,
+      ),
 
       // Navegacao com a fisica/transicao do iOS em todas as plataformas.
-      pageTransitionsTheme: const PageTransitionsTheme(builders: {
-        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-      }),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       cupertinoOverrideTheme: CupertinoThemeData(
         brightness: claro ? Brightness.light : Brightness.dark,
         primaryColor: AppColors.lime,

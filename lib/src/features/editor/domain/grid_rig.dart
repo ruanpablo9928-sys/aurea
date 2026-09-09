@@ -34,18 +34,18 @@ class GridRig {
     AnimatedDouble? transition,
     this.proximity,
     this.controllerId,
-  })  : assets = List.unmodifiable(assets ?? const <String>[]),
-        spacingX = spacingX ?? AnimatedDouble(260),
-        spacingY = spacingY ?? AnimatedDouble(260),
-        radius = radius ?? AnimatedDouble(320),
-        gridRotationDeg = gridRotationDeg ?? AnimatedDouble(0),
-        twistDeg = twistDeg ?? AnimatedDouble(0),
-        staggerDeg = staggerDeg ?? AnimatedDouble(0),
-        zDepth = zDepth ?? AnimatedDouble(0),
-        scaleFront = scaleFront ?? AnimatedDouble(1),
-        scaleBack = scaleBack ?? AnimatedDouble(1),
-        randomOffset = randomOffset ?? AnimatedDouble(0),
-        transition = transition ?? AnimatedDouble(1);
+  }) : assets = List.unmodifiable(assets ?? const <String>[]),
+       spacingX = spacingX ?? AnimatedDouble(260),
+       spacingY = spacingY ?? AnimatedDouble(260),
+       radius = radius ?? AnimatedDouble(320),
+       gridRotationDeg = gridRotationDeg ?? AnimatedDouble(0),
+       twistDeg = twistDeg ?? AnimatedDouble(0),
+       staggerDeg = staggerDeg ?? AnimatedDouble(0),
+       zDepth = zDepth ?? AnimatedDouble(0),
+       scaleFront = scaleFront ?? AnimatedDouble(1),
+       scaleBack = scaleBack ?? AnimatedDouble(1),
+       randomOffset = randomOffset ?? AnimatedDouble(0),
+       transition = transition ?? AnimatedDouble(1);
 
   /// Ordem da lista = indice do asset.
   final List<String> assets;
@@ -137,10 +137,10 @@ class GridRig {
       seed: seed ?? this.seed,
       shuffle: shuffle ?? this.shuffle,
       transition: transition ?? this.transition,
-      proximity:
-          clearProximity ? null : (proximity ?? this.proximity),
-      controllerId:
-          clearController ? null : (controllerId ?? this.controllerId),
+      proximity: clearProximity ? null : (proximity ?? this.proximity),
+      controllerId: clearController
+          ? null
+          : (controllerId ?? this.controllerId),
     );
   }
 }
@@ -148,36 +148,35 @@ class GridRig {
 /// Trilha animavel da grade por nome — usada pelo controller e pelo
 /// editor de curvas ('transition' e o morph).
 AnimatedDouble? gridTrackOf(GridRig g, String key) => switch (key) {
-      'spacingX' => g.spacingX,
-      'spacingY' => g.spacingY,
-      'radius' => g.radius,
-      'rotation' => g.gridRotationDeg,
-      'twist' => g.twistDeg,
-      'stagger' => g.staggerDeg,
-      'zDepth' => g.zDepth,
-      'scaleFront' => g.scaleFront,
-      'scaleBack' => g.scaleBack,
-      'randomOffset' => g.randomOffset,
-      'transition' => g.transition,
-      _ => null,
-    };
+  'spacingX' => g.spacingX,
+  'spacingY' => g.spacingY,
+  'radius' => g.radius,
+  'rotation' => g.gridRotationDeg,
+  'twist' => g.twistDeg,
+  'stagger' => g.staggerDeg,
+  'zDepth' => g.zDepth,
+  'scaleFront' => g.scaleFront,
+  'scaleBack' => g.scaleBack,
+  'randomOffset' => g.randomOffset,
+  'transition' => g.transition,
+  _ => null,
+};
 
 /// Substitui uma trilha da grade por nome (par do [gridTrackOf]).
-GridRig gridWithTrack(GridRig g, String key, AnimatedDouble v) =>
-    switch (key) {
-      'spacingX' => g.copyWith(spacingX: v),
-      'spacingY' => g.copyWith(spacingY: v),
-      'radius' => g.copyWith(radius: v),
-      'rotation' => g.copyWith(gridRotationDeg: v),
-      'twist' => g.copyWith(twistDeg: v),
-      'stagger' => g.copyWith(staggerDeg: v),
-      'zDepth' => g.copyWith(zDepth: v),
-      'scaleFront' => g.copyWith(scaleFront: v),
-      'scaleBack' => g.copyWith(scaleBack: v),
-      'randomOffset' => g.copyWith(randomOffset: v),
-      'transition' => g.copyWith(transition: v),
-      _ => g,
-    };
+GridRig gridWithTrack(GridRig g, String key, AnimatedDouble v) => switch (key) {
+  'spacingX' => g.copyWith(spacingX: v),
+  'spacingY' => g.copyWith(spacingY: v),
+  'radius' => g.copyWith(radius: v),
+  'rotation' => g.copyWith(gridRotationDeg: v),
+  'twist' => g.copyWith(twistDeg: v),
+  'stagger' => g.copyWith(staggerDeg: v),
+  'zDepth' => g.copyWith(zDepth: v),
+  'scaleFront' => g.copyWith(scaleFront: v),
+  'scaleBack' => g.copyWith(scaleBack: v),
+  'randomOffset' => g.copyWith(randomOffset: v),
+  'transition' => g.copyWith(transition: v),
+  _ => g,
+};
 
 /// Grupo de proximidade: o effector e uma ESFERA em 3D (raio de 200 =
 /// tambem 200 de profundidade); o asset reage ao effector mais proximo —
@@ -194,11 +193,11 @@ class ProximityGroup {
     this.opacityMin = 1,
     this.opacityMax = 1,
     AnimatedDouble? attract,
-  })  : effector = effector ?? AnimatedOffset(Offset.zero),
-        effectorZ = effectorZ ?? AnimatedDouble(0),
-        radius = radius ?? AnimatedDouble(220),
-        falloff = falloff ?? AnimatedDouble(220),
-        attract = attract ?? AnimatedDouble(0);
+  }) : effector = effector ?? AnimatedOffset(Offset.zero),
+       effectorZ = effectorZ ?? AnimatedDouble(0),
+       radius = radius ?? AnimatedDouble(220),
+       falloff = falloff ?? AnimatedDouble(220),
+       attract = attract ?? AnimatedDouble(0);
 
   final bool enabled;
 
@@ -273,8 +272,7 @@ typedef _RigValues = ({
 
 /// Layout cru (sem parametros comuns) de um modo. Modo fora de 1..3 e
 /// grampeado.
-({Offset pos, double z}) _layoutAt(
-    _RigValues v, double mode, int i, int n) {
+({Offset pos, double z}) _layoutAt(_RigValues v, double mode, int i, int n) {
   final m = mode.round().clamp(1, 3);
   switch (m) {
     case 1: // Retangular (§3.1)
@@ -283,18 +281,14 @@ typedef _RigValues = ({
       final col = i % c;
       final row = i ~/ c;
       return (
-        pos: Offset(
-          (col - (c - 1) / 2) * v.sx,
-          (row - (rows - 1) / 2) * v.sy,
-        ),
+        pos: Offset((col - (c - 1) / 2) * v.sx, (row - (rows - 1) / 2) * v.sy),
         z: 0,
       );
     case 2: // Radial (§3.2): horario a partir do topo.
       final s = v.spread <= 0 ? n.toDouble() : v.spread;
       final theta = 2 * math.pi * i / s;
       return (
-        pos: Offset(
-            v.radius * math.sin(theta), -v.radius * math.cos(theta)),
+        pos: Offset(v.radius * math.sin(theta), -v.radius * math.cos(theta)),
         z: 0,
       );
     default: // Esferico (§3.4): espiral de Fibonacci.
@@ -335,11 +329,23 @@ int gridEffectiveIndex(GridRig rig, int i, int n) {
 /// aplicacao). Tudo funcao pura: mesmo (rig, i, t) -> mesmo resultado.
 /// [spacingMul]/[rotationAdd]/[twistAdd] vem do nulo CONTROLADOR
 /// (escala/rotZ/rotY dele); nos padroes (1/0/0) nada muda.
-GridPlacement gridPlacementAt(GridRig rig, int i, int n, Duration t,
-    {double spacingMul = 1, double rotationAdd = 0, double twistAdd = 0}) {
+GridPlacement gridPlacementAt(
+  GridRig rig,
+  int i,
+  int n,
+  Duration t, {
+  double spacingMul = 1,
+  double rotationAdd = 0,
+  double twistAdd = 0,
+}) {
   if (n <= 0) {
     return const GridPlacement(
-        pos: Offset.zero, z: 0, rotationDeg: 0, scale: 1, opacity: 1);
+      pos: Offset.zero,
+      z: 0,
+      rotationDeg: 0,
+      scale: 1,
+      opacity: 1,
+    );
   }
   final idx = gridEffectiveIndex(rig, i, n);
 
@@ -394,9 +400,8 @@ GridPlacement gridPlacementAt(GridRig rig, int i, int n, Duration t,
 
   // 6. twist + stagger (o stagger e o valor do ULTIMO asset).
   final frac = n <= 1 ? 0.0 : idx / (n - 1);
-  final rot = rig.twistDeg.valueAt(t) +
-      twistAdd +
-      rig.staggerDeg.valueAt(t) * frac;
+  final rot =
+      rig.twistDeg.valueAt(t) + twistAdd + rig.staggerDeg.valueAt(t) * frac;
 
   // 7. escala por posicao (Off: t = i/(N-1)).
   final scaleFront = rig.scaleFront.valueAt(t);
@@ -413,8 +418,7 @@ GridPlacement gridPlacementAt(GridRig rig, int i, int n, Duration t,
     final falloff = math.max(1.0, prox.falloff.valueAt(t));
     final delta = pos - e;
     final dz = z - ez;
-    final d = math.sqrt(
-        delta.dx * delta.dx + delta.dy * delta.dy + dz * dz);
+    final d = math.sqrt(delta.dx * delta.dx + delta.dy * delta.dy + dz * dz);
     double w;
     if (d <= radius) {
       w = 1;
@@ -426,8 +430,7 @@ GridPlacement gridPlacementAt(GridRig rig, int i, int n, Duration t,
     }
     if (w > 0) {
       scale *= prox.scaleMin + (prox.scaleMax - prox.scaleMin) * w;
-      opacity *=
-          prox.opacityMin + (prox.opacityMax - prox.opacityMin) * w;
+      opacity *= prox.opacityMin + (prox.opacityMax - prox.opacityMin) * w;
       final attract = prox.attract.valueAt(t);
       if (attract != 0 && d > 1e-3) {
         final dir = Offset(-delta.dx / d, -delta.dy / d);

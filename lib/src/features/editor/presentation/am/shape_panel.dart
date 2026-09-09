@@ -51,15 +51,19 @@ class ShapePanel extends ConsumerStatefulWidget {
 
 /// Uma trilha da aba: de onde ler e como escrever.
 class _Trilha {
-  const _Trilha(this.label, this.min, this.max,
-      {required this.read,
-      required this.write,
-      required this.toggle,
-      required this.ease,
-      required this.easeAll,
-      this.scale = 1,
-      this.suffix = '',
-      this.decimals = 0});
+  const _Trilha(
+    this.label,
+    this.min,
+    this.max, {
+    required this.read,
+    required this.write,
+    required this.toggle,
+    required this.ease,
+    required this.easeAll,
+    this.scale = 1,
+    this.suffix = '',
+    this.decimals = 0,
+  });
 
   final String label;
   final double min;
@@ -101,62 +105,112 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
     return null;
   }
 
-  List<_Trilha> _paramTrilhas(EditorController c, String id, ShapeLayer l,
-      ShapeParametric sp, ShapeTool tool) {
-    _Trilha p(String key, String label, double min, double max,
-            {double scale = 1, String suffix = '', int decimals = 0}) =>
-        _Trilha(label, min, max,
-            read: (layer) {
-              final s = layer is ShapeLayer ? _param(layer) : null;
-              return s == null ? null : shapeParamTrackOf(s, key);
-            },
-            write: (t, v) => c.editShapeParam(id, key, t, v),
-            toggle: (t) => c.toggleShapeParamKeyframe(id, key, t),
-            ease: (seg, e) => c.setShapeParamSegmentEase(id, key, seg, e),
-            easeAll: (e) => c.applyEaseToAllShapeParamSegments(id, key, e),
-            scale: scale,
-            suffix: suffix,
-            decimals: decimals);
+  List<_Trilha> _paramTrilhas(
+    EditorController c,
+    String id,
+    ShapeLayer l,
+    ShapeParametric sp,
+    ShapeTool tool,
+  ) {
+    _Trilha p(
+      String key,
+      String label,
+      double min,
+      double max, {
+      double scale = 1,
+      String suffix = '',
+      int decimals = 0,
+    }) => _Trilha(
+      label,
+      min,
+      max,
+      read: (layer) {
+        final s = layer is ShapeLayer ? _param(layer) : null;
+        return s == null ? null : shapeParamTrackOf(s, key);
+      },
+      write: (t, v) => c.editShapeParam(id, key, t, v),
+      toggle: (t) => c.toggleShapeParamKeyframe(id, key, t),
+      ease: (seg, e) => c.setShapeParamSegmentEase(id, key, seg, e),
+      easeAll: (e) => c.applyEaseToAllShapeParamSegments(id, key, e),
+      scale: scale,
+      suffix: suffix,
+      decimals: decimals,
+    );
     final pct = sp.roundnessPercent;
     switch (tool) {
       case ShapeTool.size:
         return switch (sp.kind) {
           ParamShapeKind.rect || ParamShapeKind.ellipse => [
-              p('sizeX', 'Largura', 1, 2000),
-              p('sizeY', 'Altura', 1, 2000),
-            ],
+            p('sizeX', 'Largura', 1, 2000),
+            p('sizeY', 'Altura', 1, 2000),
+          ],
           ParamShapeKind.star => [
-              p('outerRadius', 'Raio externo', 1, 1200),
-              p('innerRadius', 'Raio interno', 0, 1200),
-            ],
+            p('outerRadius', 'Raio externo', 1, 1200),
+            p('innerRadius', 'Raio interno', 0, 1200),
+          ],
           ParamShapeKind.sector => [
-              p('outerRadius', 'Raio', 1, 1200),
-              p('sectorInner', 'Miolo', 0, 1, scale: 100, suffix: '%'),
-            ],
+            p('outerRadius', 'Raio', 1, 1200),
+            p('sectorInner', 'Miolo', 0, 1, scale: 100, suffix: '%'),
+          ],
           ParamShapeKind.polygon => [p('outerRadius', 'Raio', 1, 1200)],
         };
       case ShapeTool.corners:
         return switch (sp.kind) {
           ParamShapeKind.star => [
-              p('outerRoundness', 'Cantos externos', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-              p('innerRoundness', 'Cantos internos', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-            ],
+            p(
+              'outerRoundness',
+              'Cantos externos',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+            p(
+              'innerRoundness',
+              'Cantos internos',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+          ],
           ParamShapeKind.rect => [
-              p('cornerTopLeft', 'Superior esq.', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-              p('cornerTopRight', 'Superior dir.', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-              p('cornerBottomRight', 'Inferior dir.', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-              p('cornerBottomLeft', 'Inferior esq.', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-            ],
+            p(
+              'cornerTopLeft',
+              'Superior esq.',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+            p(
+              'cornerTopRight',
+              'Superior dir.',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+            p(
+              'cornerBottomRight',
+              'Inferior dir.',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+            p(
+              'cornerBottomLeft',
+              'Inferior esq.',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+          ],
           _ => [
-              p('roundness', 'Raio de canto', 0, pct ? 100 : 400,
-                  suffix: pct ? '%' : ''),
-            ],
+            p(
+              'roundness',
+              'Raio de canto',
+              0,
+              pct ? 100 : 400,
+              suffix: pct ? '%' : '',
+            ),
+          ],
         };
       case ShapeTool.points:
         return [p('points', 'Pontas', 3, 24)];
@@ -173,25 +227,38 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
   }
 
   List<_Trilha> _itemTrilhas(
-      EditorController c, String id, ShapeLayer l, ShapeTool tool) {
-    _Trilha item(String itemId, String key, String label, double min,
-            double max, {double scale = 1, String suffix = ''}) =>
-        _Trilha(label, min, max,
-            read: (layer) {
-              if (layer is! ShapeLayer) return null;
-              for (final i in layer.contents) {
-                if (i.id == itemId) return EditorController.shapeItemTrack(i, key);
-              }
-              return null;
-            },
-            write: (t, v) => c.editShapeItemTrack(id, itemId, key, t, v),
-            toggle: (t) => c.toggleShapeItemTrackKeyframe(id, itemId, key, t),
-            ease: (seg, e) =>
-                c.setShapeItemTrackSegmentEase(id, itemId, key, seg, e),
-            easeAll: (e) =>
-                c.applyEaseToAllShapeItemTrackSegments(id, itemId, key, e),
-            scale: scale,
-            suffix: suffix);
+    EditorController c,
+    String id,
+    ShapeLayer l,
+    ShapeTool tool,
+  ) {
+    _Trilha item(
+      String itemId,
+      String key,
+      String label,
+      double min,
+      double max, {
+      double scale = 1,
+      String suffix = '',
+    }) => _Trilha(
+      label,
+      min,
+      max,
+      read: (layer) {
+        if (layer is! ShapeLayer) return null;
+        for (final i in layer.contents) {
+          if (i.id == itemId) return EditorController.shapeItemTrack(i, key);
+        }
+        return null;
+      },
+      write: (t, v) => c.editShapeItemTrack(id, itemId, key, t, v),
+      toggle: (t) => c.toggleShapeItemTrackKeyframe(id, itemId, key, t),
+      ease: (seg, e) => c.setShapeItemTrackSegmentEase(id, itemId, key, seg, e),
+      easeAll: (e) =>
+          c.applyEaseToAllShapeItemTrackSegments(id, itemId, key, e),
+      scale: scale,
+      suffix: suffix,
+    );
     switch (tool) {
       case ShapeTool.stroke:
         final s = _stroke(l);
@@ -223,14 +290,23 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
         ts.any((t) => t != null && t.isAnimated);
     final abas = <ParamTab>[];
     if (sp != null) {
-      abas.add(ParamTab(
+      abas.add(
+        ParamTab(
           id: ShapeTool.size.name,
           label: 'Tamanho',
           animated: anim([
-            sp.sizeX, sp.sizeY, sp.outerRadius, sp.innerRadius, sp.sectorInner
-          ])));
-      if (sp.kind != ParamShapeKind.ellipse && sp.kind != ParamShapeKind.sector) {
-        abas.add(ParamTab(
+            sp.sizeX,
+            sp.sizeY,
+            sp.outerRadius,
+            sp.innerRadius,
+            sp.sectorInner,
+          ]),
+        ),
+      );
+      if (sp.kind != ParamShapeKind.ellipse &&
+          sp.kind != ParamShapeKind.sector) {
+        abas.add(
+          ParamTab(
             id: ShapeTool.corners.name,
             label: 'Cantos',
             animated: anim([
@@ -241,36 +317,56 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
               sp.cornerBottomLeft,
               sp.outerRoundness,
               sp.innerRoundness,
-            ])));
+            ]),
+          ),
+        );
       }
       if (sp.kind == ParamShapeKind.polygon || sp.kind == ParamShapeKind.star) {
-        abas.add(ParamTab(
+        abas.add(
+          ParamTab(
             id: ShapeTool.points.name,
             label: 'Pontas',
-            animated: anim([sp.points])));
+            animated: anim([sp.points]),
+          ),
+        );
       }
       if (sp.kind == ParamShapeKind.sector) {
-        abas.add(ParamTab(
+        abas.add(
+          ParamTab(
             id: ShapeTool.angle.name,
             label: 'Angulo',
-            animated: anim([sp.startAngle, sp.sweep])));
+            animated: anim([sp.startAngle, sp.sweep]),
+          ),
+        );
       }
-      abas.add(ParamTab(
+      abas.add(
+        ParamTab(
           id: ShapeTool.rotation.name,
           label: 'Rotacao',
-          animated: anim([sp.shapeRotation])));
+          animated: anim([sp.shapeRotation]),
+        ),
+      );
     }
     final stroke = _stroke(l);
-    abas.add(ParamTab(
+    abas.add(
+      ParamTab(
         id: ShapeTool.stroke.name,
         label: 'Traco',
-        animated: stroke?.dashOffset.isAnimated ?? false));
+        animated: stroke?.dashOffset.isAnimated ?? false,
+      ),
+    );
     final trim = _trim(l);
-    abas.add(ParamTab(
+    abas.add(
+      ParamTab(
         id: ShapeTool.draw.name,
         label: 'Desenhar',
-        animated: trim != null &&
-            (trim.start.isAnimated || trim.end.isAnimated || trim.offset.isAnimated)));
+        animated:
+            trim != null &&
+            (trim.start.isAnimated ||
+                trim.end.isAnimated ||
+                trim.offset.isAnimated),
+      ),
+    );
     abas.add(ParamTab(id: ShapeTool.nodes.name, label: 'Pontos'));
     return abas;
   }
@@ -333,19 +429,20 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
           onCurva: principal == null
               ? null
               : () => showTrackCurveSheet(
-                    context,
-                    ref,
-                    widget.playback,
-                    label: principal.label,
-                    layerId: id,
-                    trackOf: principal.read,
-                    onSetEase: principal.ease,
-                    onSetEaseAll: principal.easeAll,
-                  ),
+                  context,
+                  ref,
+                  widget.playback,
+                  label: principal.label,
+                  layerId: id,
+                  trackOf: principal.read,
+                  onSetEase: principal.ease,
+                  onSetEaseAll: principal.easeAll,
+                ),
           abas: abas,
           abaAtiva: tool.name,
-          onAba: (nome) => widget
-              .onToolChanged(ShapeTool.values.firstWhere((e) => e.name == nome)),
+          onAba: (nome) => widget.onToolChanged(
+            ShapeTool.values.firstWhere((e) => e.name == nome),
+          ),
           corpo: Padding(
             padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
             child: _corpo(context, controller, id, layer, sp, tool, trilhas, t),
@@ -356,21 +453,20 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
   }
 
   bool _ehParametrica(ShapeTool tool) => switch (tool) {
-        ShapeTool.size ||
-        ShapeTool.corners ||
-        ShapeTool.points ||
-        ShapeTool.angle ||
-        ShapeTool.rotation =>
-          true,
-        _ => false,
-      };
+    ShapeTool.size ||
+    ShapeTool.corners ||
+    ShapeTool.points ||
+    ShapeTool.angle ||
+    ShapeTool.rotation => true,
+    _ => false,
+  };
 
   String _semTrilha(ShapeTool tool) => switch (tool) {
-        ShapeTool.stroke => 'Ligue o traco primeiro',
-        ShapeTool.draw => 'Ligue o Desenhar primeiro',
-        ShapeTool.nodes => 'Os keyframes dos pontos ficam no Edit Points',
-        _ => 'Nada para cravar aqui',
-      };
+    ShapeTool.stroke => 'Ligue o traco primeiro',
+    ShapeTool.draw => 'Ligue o Desenhar primeiro',
+    ShapeTool.nodes => 'Os keyframes dos pontos ficam no Edit Points',
+    _ => 'Nada para cravar aqui',
+  };
 
   Widget _corpo(
     BuildContext context,
@@ -384,7 +480,10 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
   ) {
     switch (tool) {
       case ShapeTool.nodes:
-        return _Pontos(onEditPoints: widget.onEditPoints, parametrica: sp != null);
+        return _Pontos(
+          onEditPoints: widget.onEditPoints,
+          parametrica: sp != null,
+        );
       case ShapeTool.stroke:
         return _Traco(
           layer: layer,
@@ -394,7 +493,8 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
           onLigar: () => setState(() => controller.ensureShapeStroke(id)),
           onDesligar: () => setState(() => controller.removeShapeStroke(id)),
           onUpdate: (fn) => controller.updateShapeStroke(id, fn),
-          onSombra: () => showLayerStylesSheet(context, ref, id, widget.playback),
+          onSombra: () =>
+              showLayerStylesSheet(context, ref, id, widget.playback),
         );
       case ShapeTool.draw:
         return _Desenhar(
@@ -407,7 +507,8 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
         );
       case ShapeTool.size:
         if (sp != null &&
-            (sp.kind == ParamShapeKind.rect || sp.kind == ParamShapeKind.ellipse) &&
+            (sp.kind == ParamShapeKind.rect ||
+                sp.kind == ParamShapeKind.ellipse) &&
             trilhas.length == 2) {
           return _Tamanho(
             layer: layer,
@@ -429,11 +530,10 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
             onDepth: (v) => setState(() => _compoundAdvanced = v),
             onAddGeometry: (kind) =>
                 controller.addCompoundShapeGeometry(id, kind),
-            onAddMerge: () =>
-                controller.addPathOperator(id, ShapePathOp.merge),
+            onAddMerge: () => controller.addPathOperator(id, ShapePathOp.merge),
             onSetMerge: (operator, mode) {
-              final delta = (mode.index - operator.mode.index +
-                      MergeMode.values.length) %
+              final delta =
+                  (mode.index - operator.mode.index + MergeMode.values.length) %
                   MergeMode.values.length;
               for (var i = 0; i < delta; i++) {
                 controller.cycleMergeMode(id, operator.id);
@@ -472,26 +572,27 @@ class _CompoundShapeEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget depth(String label, bool value) => Expanded(
-          child: GestureDetector(
-            onTap: () => onDepth(value),
-            child: Container(
-              height: 32,
-              alignment: Alignment.center,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(
-                color: advanced == value ? AmColors.accent : AmColors.bg,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: advanced == value
-                          ? AmColors.bg
-                          : AmColors.muted)),
+      child: GestureDetector(
+        onTap: () => onDepth(value),
+        child: Container(
+          height: 32,
+          alignment: Alignment.center,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: advanced == value ? AmColors.accent : AmColors.bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: advanced == value ? AmColors.bg : AmColors.muted,
             ),
           ),
-        );
+        ),
+      ),
+    );
 
     final merges = layer.contents.whereType<MergePathsOperator>().toList();
     return Column(
@@ -504,9 +605,10 @@ class _CompoundShapeEditor extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text('Adicionar geometria ao composto',
-                          style: TextStyle(
-                              fontSize: 11, color: AmColors.muted)),
+                      const Text(
+                        'Adicionar geometria ao composto',
+                        style: TextStyle(fontSize: 11, color: AmColors.muted),
+                      ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -516,9 +618,13 @@ class _CompoundShapeEditor extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               onPressed: () =>
                                   onAddGeometry(ParamShapeKind.rect),
-                              child: const Text('Retangulo',
-                                  style: TextStyle(
-                                      fontSize: 11, color: AmColors.text)),
+                              child: const Text(
+                                'Retangulo',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AmColors.text,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -528,9 +634,13 @@ class _CompoundShapeEditor extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               onPressed: () =>
                                   onAddGeometry(ParamShapeKind.ellipse),
-                              child: const Text('Circulo',
-                                  style: TextStyle(
-                                      fontSize: 11, color: AmColors.text)),
+                              child: const Text(
+                                'Circulo',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AmColors.text,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -547,11 +657,14 @@ class _CompoundShapeEditor extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Combinar caminhos',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AmColors.text)),
+                              const Text(
+                                'Combinar caminhos',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AmColors.text,
+                                ),
+                              ),
                               const SizedBox(height: 7),
                               Wrap(
                                 spacing: 6,
@@ -562,13 +675,16 @@ class _CompoundShapeEditor extends StatelessWidget {
                                       onTap: () => onSetMerge(merge, mode),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 9, vertical: 6),
+                                          horizontal: 9,
+                                          vertical: 6,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: merge.mode == mode
                                               ? AmColors.accent
                                               : AmColors.chip,
-                                          borderRadius:
-                                              BorderRadius.circular(7),
+                                          borderRadius: BorderRadius.circular(
+                                            7,
+                                          ),
                                         ),
                                         child: Text(
                                           mergeModeLabel(mode),
@@ -625,8 +741,10 @@ class _Reguas extends StatelessWidget {
     final local = layer.localTime(t);
     if (trilhas.isEmpty) {
       return const Center(
-        child: Text('Esta forma nao tem esse numero',
-            style: TextStyle(fontSize: 13, color: AmColors.muted)),
+        child: Text(
+          'Esta forma nao tem esse numero',
+          style: TextStyle(fontSize: 13, color: AmColors.muted),
+        ),
       );
     }
     return Column(
@@ -638,10 +756,11 @@ class _Reguas extends StatelessWidget {
           children: [
             for (final tr in trilhas)
               AmValueChip(
-                  text:
-                      '${amNumber((tr.read(layer)?.valueAt(local) ?? 0) * tr.scale, tr.decimals)}${tr.suffix}',
-                  label: tr.label,
-                  width: trilhas.length > 2 ? 76 : 112),
+                text:
+                    '${amNumber((tr.read(layer)?.valueAt(local) ?? 0) * tr.scale, tr.decimals)}${tr.suffix}',
+                label: tr.label,
+                width: trilhas.length > 2 ? 76 : 112,
+              ),
           ],
         ),
         const SizedBox(height: 8),
@@ -698,9 +817,10 @@ class _Tamanho extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Icon(
-                    linked ? CupertinoIcons.link : CupertinoIcons.link_circle,
-                    size: 20,
-                    color: linked ? AmColors.accent : AmColors.muted),
+                  linked ? CupertinoIcons.link : CupertinoIcons.link_circle,
+                  size: 20,
+                  color: linked ? AmColors.accent : AmColors.muted,
+                ),
               ),
             ),
             AmValueChip(text: amNumber(h, 0), label: 'Altura', width: 112),
@@ -772,8 +892,10 @@ class _Traco extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Sem traco',
-                style: TextStyle(fontSize: 13, color: AmColors.muted)),
+            const Text(
+              'Sem traco',
+              style: TextStyle(fontSize: 13, color: AmColors.muted),
+            ),
             const SizedBox(height: 10),
             _Botao(texto: 'Ligar traco', onTap: onLigar, cheio: true),
             const SizedBox(height: 8),
@@ -795,7 +917,8 @@ class _Traco extends StatelessWidget {
               min: tr.min * tr.scale,
               max: tr.max * tr.scale,
               upp: (tr.max - tr.min) * tr.scale / 420,
-              display: tr.label == 'Tracejado' &&
+              display:
+                  tr.label == 'Tracejado' &&
                       (tr.read(layer)?.valueAt(local) ?? 0) <= 0
                   ? 'Solido'
                   : '${amNumber((tr.read(layer)?.valueAt(local) ?? 0) * tr.scale, tr.decimals)}${tr.suffix}',
@@ -806,9 +929,12 @@ class _Traco extends StatelessWidget {
           Row(
             children: [
               const SizedBox(
-                  width: 92,
-                  child: Text('Cor',
-                      style: TextStyle(fontSize: 13, color: AmColors.muted))),
+                width: 92,
+                child: Text(
+                  'Cor',
+                  style: TextStyle(fontSize: 13, color: AmColors.muted),
+                ),
+              ),
               for (final c in const [
                 Color(0xFFFFFFFF),
                 Color(0xFFB8FF3D),
@@ -828,8 +954,9 @@ class _Traco extends StatelessWidget {
                       color: c,
                       shape: BoxShape.circle,
                       border: Border.all(
-                          color: s.color == c ? Colors.white : AmColors.hairline,
-                          width: s.color == c ? 2.5 : 1),
+                        color: s.color == c ? Colors.white : AmColors.hairline,
+                        width: s.color == c ? 2.5 : 1,
+                      ),
                     ),
                   ),
                 ),
@@ -887,7 +1014,9 @@ class _Desenhar extends StatelessWidget {
     }
     return Column(
       children: [
-        Expanded(child: _Reguas(layer: layer, trilhas: trilhas, t: t)),
+        Expanded(
+          child: _Reguas(layer: layer, trilhas: trilhas, t: t),
+        ),
         Align(
           alignment: Alignment.centerRight,
           child: _Botao(texto: 'Tirar', onTap: onDesligar),
@@ -952,11 +1081,15 @@ class _Linha extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-              width: 92,
-              child: Text(label,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: animado ? AmColors.accent : AmColors.muted))),
+            width: 92,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: animado ? AmColors.accent : AmColors.muted,
+              ),
+            ),
+          ),
           Expanded(
             child: AmTickRuler(
               value: value,
@@ -968,11 +1101,13 @@ class _Linha extends StatelessWidget {
             ),
           ),
           SizedBox(
-              width: 58,
-              child: Text(display,
-                  textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(fontSize: 13, color: AmColors.accent))),
+            width: 58,
+            child: Text(
+              display,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AmColors.accent),
+            ),
+          ),
         ],
       ),
     );
@@ -996,11 +1131,14 @@ class _Botao extends StatelessWidget {
           color: cheio ? AmColors.accent : AmColors.chip,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Text(texto,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: cheio ? const Color(0xFF0B0E12) : AmColors.accent)),
+        child: Text(
+          texto,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: cheio ? const Color(0xFF0B0E12) : AmColors.accent,
+          ),
+        ),
       ),
     );
   }

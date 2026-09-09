@@ -41,15 +41,55 @@ class AddToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final principais = <(AddTarget, IconData, String, Color)>[
-      (AddTarget.midia, CupertinoIcons.photo_on_rectangle, 'Mídia', layerKindColor(LayerKind.video)),
-      (AddTarget.audio, CupertinoIcons.music_note, 'Áudio', layerKindColor(LayerKind.audio)),
-      (AddTarget.texto, CupertinoIcons.textformat, 'Texto', layerKindColor(LayerKind.text)),
-      (AddTarget.forma, CupertinoIcons.square_on_circle, 'Forma', layerKindColor(LayerKind.shape)),
-      (AddTarget.efeito, CupertinoIcons.wand_stars, 'Efeito', layerKindColor(LayerKind.adjustment)),
-      (AddTarget.icone, CupertinoIcons.smiley, 'Ícone', layerKindColor(LayerKind.shape)),
-      (AddTarget.grupo, CupertinoIcons.folder, 'Grupo', layerKindColor(LayerKind.group)),
+      (
+        AddTarget.midia,
+        CupertinoIcons.photo_on_rectangle,
+        'Mídia',
+        layerKindColor(LayerKind.video),
+      ),
+      (
+        AddTarget.audio,
+        CupertinoIcons.music_note,
+        'Áudio',
+        layerKindColor(LayerKind.audio),
+      ),
+      (
+        AddTarget.texto,
+        CupertinoIcons.textformat,
+        'Texto',
+        layerKindColor(LayerKind.text),
+      ),
+      (
+        AddTarget.forma,
+        CupertinoIcons.square_on_circle,
+        'Forma',
+        layerKindColor(LayerKind.shape),
+      ),
+      (
+        AddTarget.efeito,
+        CupertinoIcons.wand_stars,
+        'Efeito',
+        layerKindColor(LayerKind.adjustment),
+      ),
+      (
+        AddTarget.icone,
+        CupertinoIcons.smiley,
+        'Ícone',
+        layerKindColor(LayerKind.shape),
+      ),
+      (
+        AddTarget.grupo,
+        CupertinoIcons.folder,
+        'Grupo',
+        layerKindColor(LayerKind.group),
+      ),
       if (pro)
-        (AddTarget.objeto, CupertinoIcons.cube, 'Objeto', layerKindColor(LayerKind.element3d)),
+        (
+          AddTarget.objeto,
+          CupertinoIcons.cube,
+          'Objeto',
+          layerKindColor(LayerKind.element3d),
+        ),
     ];
     final projeto = <(AddTarget, IconData, String)>[
       (AddTarget.legendas, CupertinoIcons.captions_bubble, 'Legendas'),
@@ -64,7 +104,8 @@ class AddToolbar extends StatelessWidget {
         return ListView(
           padding: EdgeInsets.zero,
           children: [
-            if (empty && !compacto) EstadoVazio(onMidia: () => onTarget(AddTarget.midia)),
+            if (empty && !compacto)
+              EstadoVazio(onMidia: () => onTarget(AddTarget.midia)),
             SizedBox(
               height: compacto ? 64 : 84,
               child: ListView.separated(
@@ -146,7 +187,11 @@ class _Tile extends StatelessWidget {
                 color: t.chip,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icone, size: compacto ? 22 : 26, color: Color.lerp(cor, t.text, .45)),
+              child: Icon(
+                icone,
+                size: compacto ? 22 : 26,
+                color: Color.lerp(cor, t.text, .45),
+              ),
             ),
             const SizedBox(height: 4),
             Text(

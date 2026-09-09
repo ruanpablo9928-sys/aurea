@@ -83,18 +83,11 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _Compositor(
-        conta: conta,
-        responderA: responderA,
-        repostar: repostar,
-      ),
+      builder: (_) =>
+          _Compositor(conta: conta, responderA: responderA, repostar: repostar),
     );
     if (post == null) return;
-    await _publicar(
-      post,
-      respondeA: responderA?.id,
-      repostaDe: repostar?.id,
-    );
+    await _publicar(post, respondeA: responderA?.id, repostaDe: repostar?.id);
   }
 
   /// PUBLICA DE VERDADE: guarda aqui, sobe o arquivo, manda o post.
@@ -218,9 +211,8 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
     final novo = pack.project.copyWith(name: pack.name).comIdNovo();
     ref.read(projectsControllerProvider.notifier).add(novo);
     ref.read(editorControllerProvider.notifier).openProject(novo);
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const EditorScreen()));
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const EditorScreen()));
   }
 
   /// TENTAR DE NOVO um post que ficou para tras.
@@ -1679,7 +1671,9 @@ class _CompositorState extends ConsumerState<_Compositor> {
   Future<void> _anexarProjeto() async {
     final projetos = ref.read(projectsControllerProvider);
     if (projetos.isEmpty) {
-      setState(() => _erro = 'Você ainda não tem nenhum projeto para publicar.');
+      setState(
+        () => _erro = 'Você ainda não tem nenhum projeto para publicar.',
+      );
       return;
     }
     final escolhido = await showModalBottomSheet<VideoProject>(
@@ -2035,11 +2029,7 @@ class _EscolherProjeto extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  CupertinoIcons.cube_box,
-                  size: 18,
-                  color: AppColors.muted,
-                ),
+                Icon(CupertinoIcons.cube_box, size: 18, color: AppColors.muted),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(

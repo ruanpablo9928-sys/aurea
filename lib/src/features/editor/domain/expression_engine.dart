@@ -47,7 +47,12 @@ import 'dart:math' as math;
 /// Um erro de expressao com LUGAR. "Expression Error" sozinho nao ajuda
 /// ninguem; o que resolve e a linha, a coluna e o trecho.
 class ExpressionError implements Exception {
-  ExpressionError(this.mensagem, {this.linha = 1, this.coluna = 1, this.trecho});
+  ExpressionError(
+    this.mensagem, {
+    this.linha = 1,
+    this.coluna = 1,
+    this.trecho,
+  });
 
   final String mensagem;
   final int linha;
@@ -82,9 +87,7 @@ class _Lexer {
   final String fonte;
   int _i = 0, _linha = 1, _coluna = 1;
 
-  static const _duplos = [
-    '===', '!==', '==', '!=', '<=', '>=', '&&', '||',
-  ];
+  static const _duplos = ['===', '!==', '==', '!=', '<=', '>=', '&&', '||'];
 
   List<_Token> tokens() {
     final out = <_Token>[];
@@ -97,8 +100,8 @@ class _Lexer {
       final l = _linha, c = _coluna;
       final ch = fonte[_i];
 
-      if (_ehDigito(ch) || (ch == '.' && _i + 1 < fonte.length &&
-          _ehDigito(fonte[_i + 1]))) {
+      if (_ehDigito(ch) ||
+          (ch == '.' && _i + 1 < fonte.length && _ehDigito(fonte[_i + 1]))) {
         final ini = _i;
         while (_i < fonte.length &&
             (_ehDigito(fonte[_i]) || fonte[_i] == '.')) {
@@ -107,8 +110,12 @@ class _Lexer {
         final txt = fonte.substring(ini, _i);
         final v = double.tryParse(txt);
         if (v == null) {
-          throw ExpressionError('Numero invalido', linha: l, coluna: c,
-              trecho: txt);
+          throw ExpressionError(
+            'Numero invalido',
+            linha: l,
+            coluna: c,
+            trecho: txt,
+          );
         }
         out.add(_Token(_T.numero, txt, l, c, v));
         continue;
@@ -132,8 +139,11 @@ class _Lexer {
           _avancar();
         }
         if (_i >= fonte.length) {
-          throw ExpressionError('Texto sem aspas de fechamento',
-              linha: l, coluna: c);
+          throw ExpressionError(
+            'Texto sem aspas de fechamento',
+            linha: l,
+            coluna: c,
+          );
         }
         _avancar(); // fecha
         out.add(_Token(_T.texto, buf.toString(), l, c));
@@ -170,8 +180,12 @@ class _Lexer {
         continue;
       }
 
-      throw ExpressionError('Caractere que a linguagem nao conhece',
-          linha: l, coluna: c, trecho: ch);
+      throw ExpressionError(
+        'Caractere que a linguagem nao conhece',
+        linha: l,
+        coluna: c,
+        trecho: ch,
+      );
     }
   }
 
@@ -218,8 +232,8 @@ class _Lexer {
     _coluna++;
   }
 
-  static bool _ehDigito(String c) => c.codeUnitAt(0) >= 48 &&
-      c.codeUnitAt(0) <= 57;
+  static bool _ehDigito(String c) =>
+      c.codeUnitAt(0) >= 48 && c.codeUnitAt(0) <= 57;
   static bool _ehLetra(String c) {
     final u = c.codeUnitAt(0);
     return (u >= 65 && u <= 90) || (u >= 97 && u <= 122) || u == 95 || u == 36;
@@ -336,9 +350,12 @@ class _Parser {
 
   _Token _consumir(String op) {
     if (!_ehOp(op)) {
-      throw ExpressionError('Esperava "$op"',
-          linha: _atual.linha, coluna: _atual.coluna,
-          trecho: _atual.lexema.isEmpty ? null : _atual.lexema);
+      throw ExpressionError(
+        'Esperava "$op"',
+        linha: _atual.linha,
+        coluna: _atual.coluna,
+        trecho: _atual.lexema.isEmpty ? null : _atual.lexema,
+      );
     }
     return tokens[_i++];
   }
@@ -373,8 +390,11 @@ class _Parser {
     if (_ehNome('var') || _ehNome('const') || _ehNome('let')) {
       _i++;
       if (_atual.tipo != _T.nome) {
-        throw ExpressionError('Esperava um nome depois de var',
-            linha: _atual.linha, coluna: _atual.coluna);
+        throw ExpressionError(
+          'Esperava um nome depois de var',
+          linha: _atual.linha,
+          coluna: _atual.coluna,
+        );
       }
       final nome = tokens[_i++].lexema;
       _consumir('=');
@@ -426,7 +446,9 @@ class _Parser {
     var e = _comparacao();
     while (_ehOp('==') || _ehOp('!=') || _ehOp('===') || _ehOp('!==')) {
       final t = tokens[_i++];
-      final op = t.lexema == '===' ? '==' : (t.lexema == '!==' ? '!=' : t.lexema);
+      final op = t.lexema == '==='
+          ? '=='
+          : (t.lexema == '!==' ? '!=' : t.lexema);
       e = _BinarioNo(op, e, _comparacao(), t);
     }
     return e;
@@ -485,8 +507,11 @@ class _Parser {
       } else if (_ehOp('.')) {
         final t = tokens[_i++];
         if (_atual.tipo != _T.nome) {
-          throw ExpressionError('Esperava um nome depois do ponto',
-              linha: _atual.linha, coluna: _atual.coluna);
+          throw ExpressionError(
+            'Esperava um nome depois do ponto',
+            linha: _atual.linha,
+            coluna: _atual.coluna,
+          );
         }
         e = _MembroNo(e, tokens[_i++].lexema, t);
       } else if (_ehOp('[')) {
@@ -532,11 +557,18 @@ class _Parser {
           _consumir(']');
           return _ListaNo(itens);
         }
-        throw ExpressionError('Nao esperava "${t.lexema}" aqui',
-            linha: t.linha, coluna: t.coluna, trecho: t.lexema);
+        throw ExpressionError(
+          'Nao esperava "${t.lexema}" aqui',
+          linha: t.linha,
+          coluna: t.coluna,
+          trecho: t.lexema,
+        );
       case _T.fim:
-        throw ExpressionError('A expressao termina antes do esperado',
-            linha: t.linha, coluna: t.coluna);
+        throw ExpressionError(
+          'A expressao termina antes do esperado',
+          linha: t.linha,
+          coluna: t.coluna,
+        );
     }
   }
 }
@@ -684,13 +716,19 @@ class ExpressionEvaluator {
         final i = _num(_no(indice), tok).round();
         if (a is List) {
           if (i < 0 || i >= a.length) {
-            throw ExpressionError('Indice $i fora da lista de ${a.length}',
-                linha: tok.linha, coluna: tok.coluna);
+            throw ExpressionError(
+              'Indice $i fora da lista de ${a.length}',
+              linha: tok.linha,
+              coluna: tok.coluna,
+            );
           }
           return a[i];
         }
-        throw ExpressionError('Isto nao e uma lista',
-            linha: tok.linha, coluna: tok.coluna);
+        throw ExpressionError(
+          'Isto nao e uma lista',
+          linha: tok.linha,
+          coluna: tok.coluna,
+        );
       case _MembroNo(:final alvo, :final nome, :final tok):
         _passo(tok);
         return _membro(alvo, nome, tok);
@@ -759,16 +797,19 @@ class ExpressionEvaluator {
       final v = a[nome];
       if (v != null) return v;
     }
-    throw ExpressionError('"$nome" nao existe aqui',
-        linha: tok.linha, coluna: tok.coluna, trecho: nome);
+    throw ExpressionError(
+      '"$nome" nao existe aqui',
+      linha: tok.linha,
+      coluna: tok.coluna,
+      trecho: nome,
+    );
   }
 
   // -------------------------------------------------------- funcoes
 
   Object _chamada(_No alvo, List<_No> argsNo, _Token tok) {
     final args = [for (final a in argsNo) _no(a)];
-    double n(int i, [double p = 0]) =>
-        i < args.length ? _num(args[i], tok) : p;
+    double n(int i, [double p = 0]) => i < args.length ? _num(args[i], tok) : p;
 
     var nome = '';
     if (alvo is _NomeNo) {
@@ -886,8 +927,8 @@ class ExpressionEvaluator {
     final i = t.floor();
     final f = _suave(t - i);
     double h(int k) {
-      var x = (k * 374761393 + base * 668265263 + canal * 2246822519) &
-          0x7fffffff;
+      var x =
+          (k * 374761393 + base * 668265263 + canal * 2246822519) & 0x7fffffff;
       x = ((x ^ (x >> 13)) * 1274126177) & 0x7fffffff;
       return (x ^ (x >> 16)) / 0x7fffffff;
     }
@@ -923,8 +964,14 @@ class ExpressionEvaluator {
     return v0 + (v1 - v0) * k;
   }
 
-  static double _comCurva(double t, double t0, double t1, double v0, double v1,
-      double Function(double) curva) {
+  static double _comCurva(
+    double t,
+    double t0,
+    double t1,
+    double v0,
+    double v1,
+    double Function(double) curva,
+  ) {
     if (t1 == t0) return t <= t0 ? v0 : v1;
     final k = ((t - t0) / (t1 - t0)).clamp(0.0, 1.0);
     return v0 + (v1 - v0) * curva(k);
@@ -954,26 +1001,33 @@ class ExpressionEvaluator {
       final n = math.max(a?.length ?? 0, b?.length ?? 0);
       return [
         for (var i = 0; i < n; i++)
-          _conta(op, a == null ? _num(e, tok) : _num(a[i], tok),
-              b == null ? _num(d, tok) : _num(b[i], tok), tok),
+          _conta(
+            op,
+            a == null ? _num(e, tok) : _num(a[i], tok),
+            b == null ? _num(d, tok) : _num(b[i], tok),
+            tok,
+          ),
       ];
     }
     return _conta(op, _num(e, tok), _num(d, tok), tok);
   }
 
   double _conta(String op, double a, double b, _Token tok) => switch (op) {
-        '+' => a + b,
-        '-' => a - b,
-        '*' => a * b,
-        '/' => b == 0 ? 0 : a / b,
-        '%' => b == 0 ? 0 : a % b,
-        '<' => a < b ? 1 : 0,
-        '>' => a > b ? 1 : 0,
-        '<=' => a <= b ? 1 : 0,
-        '>=' => a >= b ? 1 : 0,
-        _ => throw ExpressionError('Operador "$op" desconhecido',
-            linha: tok.linha, coluna: tok.coluna),
-      };
+    '+' => a + b,
+    '-' => a - b,
+    '*' => a * b,
+    '/' => b == 0 ? 0 : a / b,
+    '%' => b == 0 ? 0 : a % b,
+    '<' => a < b ? 1 : 0,
+    '>' => a > b ? 1 : 0,
+    '<=' => a <= b ? 1 : 0,
+    '>=' => a >= b ? 1 : 0,
+    _ => throw ExpressionError(
+      'Operador "$op" desconhecido',
+      linha: tok.linha,
+      coluna: tok.coluna,
+    ),
+  };
 
   static bool _iguais(Object a, Object b) {
     if (a is String || b is String) return _texto(a) == _texto(b);
@@ -1008,8 +1062,11 @@ class ExpressionEvaluator {
       if (p != null) return p;
     }
     if (!padrao.isNaN) return padrao;
-    throw ExpressionError('Esperava um numero aqui',
-        linha: tok?.linha ?? 1, coluna: tok?.coluna ?? 1);
+    throw ExpressionError(
+      'Esperava um numero aqui',
+      linha: tok?.linha ?? 1,
+      coluna: tok?.coluna ?? 1,
+    );
   }
 }
 

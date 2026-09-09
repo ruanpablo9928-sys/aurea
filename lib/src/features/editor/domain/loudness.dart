@@ -26,8 +26,12 @@ Float32List kWeight(Float32List samples, int rate) {
   if (samples.isEmpty || rate <= 0) return samples;
   // Os numeros sao os da norma: prateleira alta de 4 dB em 1682 Hz e
   // passa-alta em 38 Hz.
-  final prateleira = highShelf(rate, 1681.974450955533, 3.999843853973347,
-      q: 0.7071752369554196);
+  final prateleira = highShelf(
+    rate,
+    1681.974450955533,
+    3.999843853973347,
+    q: 0.7071752369554196,
+  );
   final corte = highPass(rate, 38.13547087602444, q: 0.5003270373238773);
   return corte.apply(prateleira.apply(samples));
 }
@@ -80,8 +84,8 @@ double? integratedLufs(Float32List samples, int rate) {
   for (final l in acimaDoAbsoluto) {
     soma += energia(l);
   }
-  final medio = -0.691 + 10 * (math.log(soma / acimaDoAbsoluto.length) /
-      math.ln10);
+  final medio =
+      -0.691 + 10 * (math.log(soma / acimaDoAbsoluto.length) / math.ln10);
 
   // PORTAO RELATIVO: 10 LU abaixo da media preliminar. E o que impede
   // que o silencio entre as frases puxe a locucao inteira para baixo.

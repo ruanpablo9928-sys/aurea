@@ -89,11 +89,14 @@ AnimatedOffset _ao(Offset base, [List<(double, Offset, Easing)>? kfs]) =>
 
 /// Glow. O original inteiro e desenhado com ele: nada tem borda dura.
 EffectInstance _glow({double raio = 60, double intensidade = 0.9}) =>
-    EffectInstance(type: EffectType.lightGlow, params: {
-      'raio': _ad(raio),
-      'intensity': _ad(intensidade * 100),
-      'threshold': _ad(28),
-    });
+    EffectInstance(
+      type: EffectType.lightGlow,
+      params: {
+        'raio': _ad(raio),
+        'intensity': _ad(intensidade * 100),
+        'threshold': _ad(28),
+      },
+    );
 
 ShapeLayer _retangulo({
   required String id,
@@ -111,27 +114,26 @@ ShapeLayer _retangulo({
   AnimatedDouble? sx,
   AnimatedDouble? sy,
   List<EffectInstance>? efeitos,
-}) =>
-    ShapeLayer(
-      id: id,
-      name: nome,
-      startTime: inicio,
-      duration: duracao,
-      position: posicao ?? _ao(centro),
-      opacity: opacidade,
-      scaleX: sx,
-      scaleY: sy,
-      effects: efeitos,
-      contents: [
-        ShapeParametric(
-          kind: ParamShapeKind.rect,
-          sizeX: _ad(w),
-          sizeY: _ad(h),
-          roundness: _ad(raio),
-        ),
-        if (gradiente != null) gradiente else ShapeFill(color: cor ?? _branco),
-      ],
-    );
+}) => ShapeLayer(
+  id: id,
+  name: nome,
+  startTime: inicio,
+  duration: duracao,
+  position: posicao ?? _ao(centro),
+  opacity: opacidade,
+  scaleX: sx,
+  scaleY: sy,
+  effects: efeitos,
+  contents: [
+    ShapeParametric(
+      kind: ParamShapeKind.rect,
+      sizeX: _ad(w),
+      sizeY: _ad(h),
+      roundness: _ad(raio),
+    ),
+    if (gradiente != null) gradiente else ShapeFill(color: cor ?? _branco),
+  ],
+);
 
 /// Uma forma qualquer por caminho: telhado, chama, palpebra, lamina.
 ShapeLayer _caminho({
@@ -149,22 +151,21 @@ ShapeLayer _caminho({
   AnimatedDouble? sx,
   AnimatedDouble? sy,
   List<EffectInstance>? efeitos,
-}) =>
-    ShapeLayer(
-      id: id,
-      name: nome,
-      startTime: inicio,
-      duration: duracao,
-      position: posicao ?? _ao(centro),
-      opacity: opacidade,
-      scaleX: sx,
-      scaleY: sy,
-      effects: efeitos,
-      contents: [
-        ShapeSvgPath(pathData: d, size: tamanho),
-        if (gradiente != null) gradiente else ShapeFill(color: cor ?? _branco),
-      ],
-    );
+}) => ShapeLayer(
+  id: id,
+  name: nome,
+  startTime: inicio,
+  duration: duracao,
+  position: posicao ?? _ao(centro),
+  opacity: opacidade,
+  scaleX: sx,
+  scaleY: sy,
+  effects: efeitos,
+  contents: [
+    ShapeSvgPath(pathData: d, size: tamanho),
+    if (gradiente != null) gradiente else ShapeFill(color: cor ?? _branco),
+  ],
+);
 
 // ===================================================== CENA 1 — A CASA
 
@@ -200,31 +201,28 @@ const _faisca = <(int, double, double, double)>[
 const double _faiscaNatural = 405;
 
 ShapeLayer _faiscaLayer() => ShapeLayer(
-      id: 'p_faisca',
-      name: 'Faisca',
-      startTime: _q(3),
-      duration: _q(41),
-      position: AnimatedOffset(
-        Offset(_faisca.first.$2, _faisca.first.$3),
-        [
-          for (final (q, x, y, _) in _faisca)
-            Keyframe(time: _q(q - 3), value: Offset(x, y), ease: _suave),
-        ],
-      ),
-      scaleX: AnimatedDouble(1, [
-        for (final (q, _, _, w) in _faisca)
-          Keyframe(time: _q(q - 3), value: w / _faiscaNatural, ease: _suave),
-      ]),
-      scaleY: AnimatedDouble(1, [
-        for (final (q, _, _, w) in _faisca)
-          Keyframe(time: _q(q - 3), value: w / _faiscaNatural, ease: _suave),
-      ]),
-      effects: [_glow(raio: 90, intensidade: 1.2)],
-      contents: [
-        ShapePath(primitive: ShapePrimitive.sparkle),
-        ShapeFill(color: _branco),
-      ],
-    );
+  id: 'p_faisca',
+  name: 'Faisca',
+  startTime: _q(3),
+  duration: _q(41),
+  position: AnimatedOffset(Offset(_faisca.first.$2, _faisca.first.$3), [
+    for (final (q, x, y, _) in _faisca)
+      Keyframe(time: _q(q - 3), value: Offset(x, y), ease: _suave),
+  ]),
+  scaleX: AnimatedDouble(1, [
+    for (final (q, _, _, w) in _faisca)
+      Keyframe(time: _q(q - 3), value: w / _faiscaNatural, ease: _suave),
+  ]),
+  scaleY: AnimatedDouble(1, [
+    for (final (q, _, _, w) in _faisca)
+      Keyframe(time: _q(q - 3), value: w / _faiscaNatural, ease: _suave),
+  ]),
+  effects: [_glow(raio: 90, intensidade: 1.2)],
+  contents: [
+    ShapePath(primitive: ShapePrimitive.sparkle),
+    ShapeFill(color: _branco),
+  ],
+);
 
 /// As pecas da casa, nas posicoes medidas no quadro 40 do original.
 ///
@@ -345,42 +343,41 @@ List<Layer> _fundoDaCasa({
   required String sufixo,
   required Duration inicio,
   required Duration duracao,
-}) =>
-    [
-      _retangulo(
-        id: 'p_chao$sufixo',
-        nome: 'Horizonte',
-        centro: Offset(360, (_linhaDoChao + _altura) / 2),
-        w: 760,
-        h: _altura - _linhaDoChao,
-        // A FAIXA DO HORIZONTE: seis paradas medidas na coluna de
-        // pixels. Com duas cores o meio vira uma mistura suja que nao
-        // existe no original — foi por isso que o gradiente de N
-        // paradas entrou no motor.
-        gradiente: ShapeGradientFill(
-          colorA: _chaoTopo,
-          extras: const [_chaoMeio, _chaoVerde, _chaoMenta, _chaoCiano],
-          colorB: _chaoClaro,
-          angleDeg: 90,
-        ),
-        inicio: inicio,
-        duracao: duracao,
-      ),
-      _retangulo(
-        id: 'p_ceu$sufixo',
-        nome: 'Ceu',
-        centro: const Offset(360, 639),
-        w: 760,
-        h: 1320,
-        gradiente: ShapeGradientFill(
-          colorA: _ceuTopo,
-          colorB: _ceuBaixo,
-          angleDeg: 90,
-        ),
-        inicio: inicio,
-        duracao: duracao,
-      ),
-    ];
+}) => [
+  _retangulo(
+    id: 'p_chao$sufixo',
+    nome: 'Horizonte',
+    centro: Offset(360, (_linhaDoChao + _altura) / 2),
+    w: 760,
+    h: _altura - _linhaDoChao,
+    // A FAIXA DO HORIZONTE: seis paradas medidas na coluna de
+    // pixels. Com duas cores o meio vira uma mistura suja que nao
+    // existe no original — foi por isso que o gradiente de N
+    // paradas entrou no motor.
+    gradiente: ShapeGradientFill(
+      colorA: _chaoTopo,
+      extras: const [_chaoMeio, _chaoVerde, _chaoMenta, _chaoCiano],
+      colorB: _chaoClaro,
+      angleDeg: 90,
+    ),
+    inicio: inicio,
+    duracao: duracao,
+  ),
+  _retangulo(
+    id: 'p_ceu$sufixo',
+    nome: 'Ceu',
+    centro: const Offset(360, 639),
+    w: 760,
+    h: 1320,
+    gradiente: ShapeGradientFill(
+      colorA: _ceuTopo,
+      colorB: _ceuBaixo,
+      angleDeg: 90,
+    ),
+    inicio: inicio,
+    duracao: duracao,
+  ),
+];
 
 List<Layer> _cenaDaCasa() {
   final ate = _q(44);
@@ -419,9 +416,9 @@ List<Layer> _cenaDaVirada() {
   final d = fim - inicio;
 
   AnimatedDouble emChamas() => AnimatedDouble(1, [
-        for (final (q, v) in _piscada)
-          Keyframe(time: _q(q) - inicio, value: v, ease: _degrau),
-      ]);
+    for (final (q, v) in _piscada)
+      Keyframe(time: _q(q) - inicio, value: v, ease: _degrau),
+  ]);
 
   return [
     // OS DOIS FLASHES: o da virada e o que abre o olho.
@@ -507,10 +504,10 @@ List<Layer> _cenaDoOlho() {
   final d = fim - inicio;
 
   AnimatedDouble abrir(double de, double ate) => AnimatedDouble(de, [
-        Keyframe(time: Duration.zero, value: de, ease: _suave),
-        Keyframe(time: _q(88) - inicio, value: de, ease: _suave),
-        Keyframe(time: _q(136) - inicio, value: ate, ease: _suave),
-      ]);
+    Keyframe(time: Duration.zero, value: de, ease: _suave),
+    Keyframe(time: _q(88) - inicio, value: de, ease: _suave),
+    Keyframe(time: _q(136) - inicio, value: ate, ease: _suave),
+  ]);
 
   final lagrimaInicio = _q(96);
   return [
@@ -620,17 +617,14 @@ List<Layer> _cenaDaEspada() {
   final d = fim - inicio;
 
   /// A descida da espada, com o solavanco de quando ela crava.
-  AnimatedOffset descida(Offset base) => AnimatedOffset(
-        base.translate(0, -430),
-        [
-          Keyframe(
-              time: Duration.zero, value: base.translate(0, -430), ease: _suave),
-          Keyframe(time: _q(172) - inicio, value: base, ease: _suave),
-          Keyframe(
-              time: _q(190) - inicio, value: base.translate(0, 26), ease: _mola),
-          Keyframe(time: _q(200) - inicio, value: base, ease: _mola),
-        ],
-      );
+  AnimatedOffset descida(
+    Offset base,
+  ) => AnimatedOffset(base.translate(0, -430), [
+    Keyframe(time: Duration.zero, value: base.translate(0, -430), ease: _suave),
+    Keyframe(time: _q(172) - inicio, value: base, ease: _suave),
+    Keyframe(time: _q(190) - inicio, value: base.translate(0, 26), ease: _mola),
+    Keyframe(time: _q(200) - inicio, value: base, ease: _mola),
+  ]);
 
   final maosInicio = _q(188);
   return [
@@ -716,7 +710,8 @@ List<Layer> _cenaDaEspada() {
       position: _ao(const Offset(360, 1058)),
       contents: [
         ShapeSvgPath(
-          pathData: 'M10 40 L60 6 L74 30 L120 0 M120 0 L150 34 L196 12 '
+          pathData:
+              'M10 40 L60 6 L74 30 L120 0 M120 0 L150 34 L196 12 '
               'M60 6 L44 44 M150 34 L138 60',
           size: 300,
         ),
@@ -792,13 +787,10 @@ List<Layer> _cenaDasCoroas() {
       // Sem arestas: a referencia e sombreada lisa, e a malha aparecendo
       // entrega que aquilo e um poliedro de 48 lados.
       edges: false,
-      position: AnimatedOffset(
-        Offset(pontos.first.$2, pontos.first.$3),
-        [
-          for (final (q, x, y, _) in pontos)
-            Keyframe(time: _q(q) - t0, value: Offset(x, y), ease: _suave),
-        ],
-      ),
+      position: AnimatedOffset(Offset(pontos.first.$2, pontos.first.$3), [
+        for (final (q, x, y, _) in pontos)
+          Keyframe(time: _q(q) - t0, value: Offset(x, y), ease: _suave),
+      ]),
       scaleX: AnimatedDouble(0.25, [
         Keyframe(time: Duration.zero, value: 0.25, ease: _mola),
         Keyframe(time: _s(0.5), value: 1, ease: _mola),

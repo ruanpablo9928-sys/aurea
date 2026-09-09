@@ -160,8 +160,7 @@ Future<void> showAppleCascadeSheet(
                           max: 200,
                           unitsPerPixel: 0.5,
                           height: 40,
-                          onChanged: (v) =>
-                              setSheetState(() => intervalMs = v),
+                          onChanged: (v) => setSheetState(() => intervalMs = v),
                         ),
                       ),
                       SizedBox(

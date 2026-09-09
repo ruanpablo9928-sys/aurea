@@ -55,8 +55,7 @@ class _RastreioState extends State<_Rastreio> {
   int? _blobEscolhido;
   bool _comEscala = false;
 
-  EditorController get _c =>
-      widget.ref.read(editorControllerProvider.notifier);
+  EditorController get _c => widget.ref.read(editorControllerProvider.notifier);
 
   /// O efeito de rastreio de regioes desta camada — criado na hora se
   /// ainda nao existir.
@@ -252,8 +251,7 @@ class _RastreioState extends State<_Rastreio> {
                   // angulo de visao resolvido vale para o quadro do
                   // video. Proporcoes diferentes = 3D certo na
                   // horizontal e desencontrado na vertical.
-                  if ((solucao.largura / solucao.altura -
-                              projeto.aspectRatio)
+                  if ((solucao.largura / solucao.altura - projeto.aspectRatio)
                           .abs() >
                       0.03) ...[
                     const SizedBox(height: 8),
@@ -518,9 +516,7 @@ class _ListaDeBlobs extends StatelessWidget {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: id == escolhido
-                        ? AmColors.accentDim
-                        : AmColors.chip,
+                    color: id == escolhido ? AmColors.accentDim : AmColors.chip,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -528,9 +524,7 @@ class _ListaDeBlobs extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: id == escolhido
-                          ? AmColors.accent
-                          : AmColors.text,
+                      color: id == escolhido ? AmColors.accent : AmColors.text,
                     ),
                   ),
                 ),
@@ -570,11 +564,7 @@ class _LinhaDeCamada extends StatelessWidget {
               style: const TextStyle(fontSize: 13, color: AmColors.text),
             ),
           ),
-          const Icon(
-            CupertinoIcons.link,
-            size: 15,
-            color: AmColors.accent,
-          ),
+          const Icon(CupertinoIcons.link, size: 15, color: AmColors.accent),
         ],
       ),
     ),

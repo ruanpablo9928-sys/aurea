@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../application/registro_de_travadas.dart';
+
 import '../../domain/camera3d.dart';
 import '../../application/panorama_cache.dart';
 import '../../application/texture_cache.dart';
@@ -358,6 +360,7 @@ class Scene3DPainter extends CustomPainter {
         return;
       }
     }
+    RegistroDeTravadas.marcarCena(trianglesEstimados(scene));
 
     if (helpersOnly) {
       if (showHelpers && scene.showFloorGrid) {

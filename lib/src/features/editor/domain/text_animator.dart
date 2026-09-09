@@ -81,11 +81,16 @@ sealed class TextSelector {
 }
 
 /// Bezier cubica 1D (remapeia cobertura por easeHigh/easeLow).
-double _cubicBezier1D(double c, double p1x, double p1y, double p2x, double p2y) {
+double _cubicBezier1D(
+  double c,
+  double p1x,
+  double p1y,
+  double p2x,
+  double p2y,
+) {
   if (c <= 0) return 0;
   if (c >= 1) return 1;
-  return Cubic(p1x.clamp(0.0, 1.0), p1y, p2x.clamp(0.0, 1.0), p2y)
-      .transform(c);
+  return Cubic(p1x.clamp(0.0, 1.0), p1y, p2x.clamp(0.0, 1.0), p2y).transform(c);
 }
 
 /// Permutacao Fisher-Yates deterministica de (seed, n).
@@ -127,13 +132,13 @@ class RangeSelector extends TextSelector {
     this.randomSeed = 1,
     this.order = SelectorOrder.identity,
     this.holdBeyond = false,
-  })  : start = start ?? AnimatedDouble(0),
-        end = end ?? AnimatedDouble(1),
-        offset = offset ?? AnimatedDouble(0),
-        amount = amount ?? AnimatedDouble(100),
-        smoothness = smoothness ?? AnimatedDouble(100),
-        easeHigh = easeHigh ?? AnimatedDouble(0),
-        easeLow = easeLow ?? AnimatedDouble(0);
+  }) : start = start ?? AnimatedDouble(0),
+       end = end ?? AnimatedDouble(1),
+       offset = offset ?? AnimatedDouble(0),
+       amount = amount ?? AnimatedDouble(100),
+       smoothness = smoothness ?? AnimatedDouble(100),
+       easeHigh = easeHigh ?? AnimatedDouble(0),
+       easeLow = easeLow ?? AnimatedDouble(0);
 
   final SelectorUnits units;
 
@@ -169,8 +174,7 @@ class RangeSelector extends TextSelector {
   @override
   double coverageAt(int i, int n, Duration t, {double selectorValue = 0}) {
     if (n <= 0) return 0;
-    final effectiveOrder =
-        randomizeOrder ? SelectorOrder.random : order;
+    final effectiveOrder = randomizeOrder ? SelectorOrder.random : order;
     final index = orderMapIndex(effectiveOrder, i, n, randomSeed);
     final p = (index + 0.5) / n;
 
@@ -200,8 +204,9 @@ class RangeSelector extends TextSelector {
         SelectorShape.rampUp => tt,
         SelectorShape.rampDown => 1 - tt,
         SelectorShape.triangle => 1 - (2 * tt - 1).abs(),
-        SelectorShape.round =>
-          math.sqrt(math.max(0, 1 - math.pow(2 * tt - 1, 2))),
+        SelectorShape.round => math.sqrt(
+          math.max(0, 1 - math.pow(2 * tt - 1, 2)),
+        ),
         SelectorShape.smooth => 0.5 - 0.5 * math.cos(2 * math.pi * tt),
       };
     }
@@ -308,12 +313,12 @@ class WigglySelector extends TextSelector {
     AnimatedDouble? spatialPhase,
     this.lockDimensions = false,
     this.randomSeed = 1,
-  })  : maxAmount = maxAmount ?? AnimatedDouble(100),
-        minAmount = minAmount ?? AnimatedDouble(-100),
-        wigglesPerSecond = wigglesPerSecond ?? AnimatedDouble(2),
-        correlation = correlation ?? AnimatedDouble(50),
-        temporalPhase = temporalPhase ?? AnimatedDouble(0),
-        spatialPhase = spatialPhase ?? AnimatedDouble(0);
+  }) : maxAmount = maxAmount ?? AnimatedDouble(100),
+       minAmount = minAmount ?? AnimatedDouble(-100),
+       wigglesPerSecond = wigglesPerSecond ?? AnimatedDouble(2),
+       correlation = correlation ?? AnimatedDouble(50),
+       temporalPhase = temporalPhase ?? AnimatedDouble(0),
+       spatialPhase = spatialPhase ?? AnimatedDouble(0);
 
   final AnimatedDouble maxAmount;
   final AnimatedDouble minAmount;
@@ -519,9 +524,7 @@ class TextUnits {
       ends.add(offset);
     }
 
-    final isWs = [
-      for (final c in clusters) c.trim().isEmpty,
-    ];
+    final isWs = [for (final c in clusters) c.trim().isEmpty];
 
     final charIdx = List<int>.filled(clusters.length, -1);
     final charNoSpaceIdx = List<int>.filled(clusters.length, -1);
@@ -586,12 +589,14 @@ class TextUnits {
   /// (indice, total) da unidade [i] na base pedida; indice -1 = a unidade
   /// nao conta nessa base (ex.: espaco em charactersNoSpaces) -> c = 0.
   (int, int) indexFor(int i, SelectorBasedOn basedOn) => switch (basedOn) {
-        SelectorBasedOn.characters => (charIndex[i], charCount),
-        SelectorBasedOn.charactersNoSpaces =>
-          (charNoSpaceIndex[i], charNoSpaceCount),
-        SelectorBasedOn.words => (wordIndex[i], wordCount),
-        SelectorBasedOn.lines => (lineIndex[i], lineCount),
-      };
+    SelectorBasedOn.characters => (charIndex[i], charCount),
+    SelectorBasedOn.charactersNoSpaces => (
+      charNoSpaceIndex[i],
+      charNoSpaceCount,
+    ),
+    SelectorBasedOn.words => (wordIndex[i], wordCount),
+    SelectorBasedOn.lines => (lineIndex[i], lineCount),
+  };
 
   /// Cobertura combinada dos seletores para a unidade [i], respeitando a
   /// base de CADA seletor.
@@ -601,15 +606,11 @@ class TextUnits {
     Duration t, {
     bool allowOvershoot = false,
   }) {
-    return combinedCoverageWith(
-      selectors,
-      (s, acumulado) {
-        final (idx, count) = indexFor(i, s.basedOn);
-        if (idx < 0 || count <= 0) return 0;
-        return s.coverageAt(idx, count, t, selectorValue: acumulado);
-      },
-      allowOvershoot: allowOvershoot,
-    );
+    return combinedCoverageWith(selectors, (s, acumulado) {
+      final (idx, count) = indexFor(i, s.basedOn);
+      if (idx < 0 || count <= 0) return 0;
+      return s.coverageAt(idx, count, t, selectorValue: acumulado);
+    }, allowOvershoot: allowOvershoot);
   }
 }
 
@@ -633,7 +634,6 @@ enum TextAnimProp {
   hue, // graus; aditivo
   saturation, // %; multiplicativa
   brightness, // %; multiplicativa
-
   // 3D POR UNIDADE: cada letra, palavra ou frase gira no espaco e se
   // afasta/aproxima da camera. E o "texto 3D" de motion — a palavra
   // que vira como uma porta, a frase que vem de longe.
@@ -643,31 +643,28 @@ enum TextAnimProp {
 }
 
 String textAnimPropLabel(TextAnimProp p) => switch (p) {
-      TextAnimProp.positionX => 'Posicao X',
-      TextAnimProp.positionY => 'Posicao Y',
-      TextAnimProp.scale => 'Escala',
-      TextAnimProp.rotation => 'Rotacao',
-      TextAnimProp.opacity => 'Opacidade',
-      TextAnimProp.tracking => 'Espacamento',
-      TextAnimProp.scaleX => 'Escala X',
-      TextAnimProp.scaleY => 'Escala Y',
-      TextAnimProp.blur => 'Desfoque',
-      TextAnimProp.skew => 'Inclinacao',
-      TextAnimProp.hue => 'Matiz',
-      TextAnimProp.saturation => 'Saturacao',
-      TextAnimProp.brightness => 'Brilho',
-      TextAnimProp.rotationX => 'Rotacao X (3D)',
-      TextAnimProp.rotationY => 'Rotacao Y (3D)',
-      TextAnimProp.positionZ => 'Posicao Z (3D)',
-    };
+  TextAnimProp.positionX => 'Posicao X',
+  TextAnimProp.positionY => 'Posicao Y',
+  TextAnimProp.scale => 'Escala',
+  TextAnimProp.rotation => 'Rotacao',
+  TextAnimProp.opacity => 'Opacidade',
+  TextAnimProp.tracking => 'Espacamento',
+  TextAnimProp.scaleX => 'Escala X',
+  TextAnimProp.scaleY => 'Escala Y',
+  TextAnimProp.blur => 'Desfoque',
+  TextAnimProp.skew => 'Inclinacao',
+  TextAnimProp.hue => 'Matiz',
+  TextAnimProp.saturation => 'Saturacao',
+  TextAnimProp.brightness => 'Brilho',
+  TextAnimProp.rotationX => 'Rotacao X (3D)',
+  TextAnimProp.rotationY => 'Rotacao Y (3D)',
+  TextAnimProp.positionZ => 'Posicao Z (3D)',
+};
 
 class AnimatorProperty {
-  AnimatorProperty({
-    String? id,
-    required this.type,
-    AnimatedDouble? value,
-  })  : id = id ?? const Uuid().v4(),
-        value = value ?? AnimatedDouble(_neutralOf(type));
+  AnimatorProperty({String? id, required this.type, AnimatedDouble? value})
+    : id = id ?? const Uuid().v4(),
+      value = value ?? AnimatedDouble(_neutralOf(type));
 
   final String id;
   final TextAnimProp type;
@@ -677,15 +674,14 @@ class AnimatorProperty {
       AnimatorProperty(id: id, type: type, value: value ?? this.value);
 
   static double _neutralOf(TextAnimProp type) => switch (type) {
-        TextAnimProp.scale ||
-        TextAnimProp.opacity ||
-        TextAnimProp.scaleX ||
-        TextAnimProp.scaleY ||
-        TextAnimProp.saturation ||
-        TextAnimProp.brightness =>
-          100,
-        _ => 0,
-      };
+    TextAnimProp.scale ||
+    TextAnimProp.opacity ||
+    TextAnimProp.scaleX ||
+    TextAnimProp.scaleY ||
+    TextAnimProp.saturation ||
+    TextAnimProp.brightness => 100,
+    _ => 0,
+  };
 
   double get neutral => _neutralOf(type);
 
@@ -693,15 +689,14 @@ class AnimatorProperty {
   /// e aditivo. Em ambos os casos cobertura zero devolve a base intacta
   /// — e o que garante a invariante de neutralidade.
   static bool isMultiplicative(TextAnimProp type) => switch (type) {
-        TextAnimProp.scale ||
-        TextAnimProp.opacity ||
-        TextAnimProp.scaleX ||
-        TextAnimProp.scaleY ||
-        TextAnimProp.saturation ||
-        TextAnimProp.brightness =>
-          true,
-        _ => false,
-      };
+    TextAnimProp.scale ||
+    TextAnimProp.opacity ||
+    TextAnimProp.scaleX ||
+    TextAnimProp.scaleY ||
+    TextAnimProp.saturation ||
+    TextAnimProp.brightness => true,
+    _ => false,
+  };
 
   /// Combina o valor base da unidade com este animador sob cobertura [c].
   double apply(double base, Duration t, double c) {
@@ -720,9 +715,9 @@ class TextAnimator {
     List<TextSelector>? selectors,
     List<AnimatorProperty>? properties,
     this.allowOvershoot = false,
-  })  : id = id ?? const Uuid().v4(),
-        selectors = List.unmodifiable(selectors ?? [RangeSelector()]),
-        properties = List.unmodifiable(properties ?? const []);
+  }) : id = id ?? const Uuid().v4(),
+       selectors = List.unmodifiable(selectors ?? [RangeSelector()]),
+       properties = List.unmodifiable(properties ?? const []);
 
   final String id;
   final String name;
@@ -758,32 +753,32 @@ class TextAnimator {
 enum TextAnimOrder { forward, reverse, center, edges, random }
 
 String textAnimOrderLabel(TextAnimOrder o) => switch (o) {
-      TextAnimOrder.forward => 'Do inicio',
-      TextAnimOrder.reverse => 'Do fim',
-      TextAnimOrder.center => 'Do centro',
-      TextAnimOrder.edges => 'Das bordas',
-      TextAnimOrder.random => 'Aleatoria',
-    };
+  TextAnimOrder.forward => 'Do inicio',
+  TextAnimOrder.reverse => 'Do fim',
+  TextAnimOrder.center => 'Do centro',
+  TextAnimOrder.edges => 'Das bordas',
+  TextAnimOrder.random => 'Aleatoria',
+};
 
 SelectorOrder selectorOrderFor(TextAnimOrder o) => switch (o) {
-      TextAnimOrder.forward => SelectorOrder.identity,
-      TextAnimOrder.reverse => SelectorOrder.inverse,
-      TextAnimOrder.center => SelectorOrder.center,
-      TextAnimOrder.edges => SelectorOrder.edges,
-      TextAnimOrder.random => SelectorOrder.random,
-    };
+  TextAnimOrder.forward => SelectorOrder.identity,
+  TextAnimOrder.reverse => SelectorOrder.inverse,
+  TextAnimOrder.center => SelectorOrder.center,
+  TextAnimOrder.edges => SelectorOrder.edges,
+  TextAnimOrder.random => SelectorOrder.random,
+};
 
 /// A curva de cada unidade.
 enum TextAnimEase { linear, suave, acelerar, desacelerar, mola, quicar }
 
 String textAnimEaseLabel(TextAnimEase e) => switch (e) {
-      TextAnimEase.linear => 'Linear',
-      TextAnimEase.suave => 'Suave',
-      TextAnimEase.acelerar => 'Acelerar',
-      TextAnimEase.desacelerar => 'Desacelerar',
-      TextAnimEase.mola => 'Mola',
-      TextAnimEase.quicar => 'Quicar',
-    };
+  TextAnimEase.linear => 'Linear',
+  TextAnimEase.suave => 'Suave',
+  TextAnimEase.acelerar => 'Acelerar',
+  TextAnimEase.desacelerar => 'Desacelerar',
+  TextAnimEase.mola => 'Mola',
+  TextAnimEase.quicar => 'Quicar',
+};
 
 /// MOLA — a mesma conta da extensao MultiTools:
 ///
@@ -801,9 +796,7 @@ double springEase(
   if (u <= 0) return 0;
   final t = u;
   return 1 -
-      amplitude *
-          math.cos(frequency * t * 2 * math.pi) *
-          math.exp(-decay * t);
+      amplitude * math.cos(frequency * t * 2 * math.pi) * math.exp(-decay * t);
 }
 
 /// Quique de bola: cai e bate, sem passar do alvo.
@@ -831,8 +824,12 @@ double applyEase(
     TextAnimEase.suave => Curves.easeInOut.transform(x),
     TextAnimEase.acelerar => Curves.easeIn.transform(x),
     TextAnimEase.desacelerar => Curves.easeOut.transform(x),
-    TextAnimEase.mola => springEase(x,
-        amplitude: amplitude, frequency: frequency, decay: decay),
+    TextAnimEase.mola => springEase(
+      x,
+      amplitude: amplitude,
+      frequency: frequency,
+      decay: decay,
+    ),
     TextAnimEase.quicar => bounceEase(x),
   };
 }
@@ -907,8 +904,13 @@ class StaggerSelector extends TextSelector {
       return _loopValue(phase < 0 ? phase + 1 : phase, idx);
     }
 
-    final e = applyEase(ease, raw.clamp(0.0, 1.0),
-        amplitude: amplitude, frequency: frequency, decay: decay);
+    final e = applyEase(
+      ease,
+      raw.clamp(0.0, 1.0),
+      amplitude: amplitude,
+      frequency: frequency,
+      decay: decay,
+    );
     return startCovered ? 1 - e : e;
   }
 
@@ -952,22 +954,21 @@ class StaggerSelector extends TextSelector {
     bool? loop,
     LoopShape? loopShape,
     SelectorBasedOn? basedOn,
-  }) =>
-      StaggerSelector(
-        id: id,
-        mode: mode,
-        basedOn: basedOn ?? this.basedOn,
-        start: start ?? this.start,
-        duration: duration ?? this.duration,
-        stagger: stagger ?? this.stagger,
-        order: order ?? this.order,
-        seed: seed ?? this.seed,
-        ease: ease ?? this.ease,
-        amplitude: amplitude ?? this.amplitude,
-        frequency: frequency ?? this.frequency,
-        decay: decay ?? this.decay,
-        startCovered: startCovered ?? this.startCovered,
-        loop: loop ?? this.loop,
-        loopShape: loopShape ?? this.loopShape,
-      );
+  }) => StaggerSelector(
+    id: id,
+    mode: mode,
+    basedOn: basedOn ?? this.basedOn,
+    start: start ?? this.start,
+    duration: duration ?? this.duration,
+    stagger: stagger ?? this.stagger,
+    order: order ?? this.order,
+    seed: seed ?? this.seed,
+    ease: ease ?? this.ease,
+    amplitude: amplitude ?? this.amplitude,
+    frequency: frequency ?? this.frequency,
+    decay: decay ?? this.decay,
+    startCovered: startCovered ?? this.startCovered,
+    loop: loop ?? this.loop,
+    loopShape: loopShape ?? this.loopShape,
+  );
 }

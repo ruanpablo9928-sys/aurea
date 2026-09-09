@@ -465,9 +465,9 @@ class ExportEngine {
     var idx = firstInputIndex;
 
     for (final l in sources) {
-      final path = AudioRenderService.instance.ready(l) ?? (l is AudioLayer
-          ? l.sourcePath
-          : (l as VideoLayer).sourcePath);
+      final path =
+          AudioRenderService.instance.ready(l) ??
+          (l is AudioLayer ? l.sourcePath : (l as VideoLayer).sourcePath);
       final volume = l is AudioLayer ? l.volume : (l as VideoLayer).volume;
       var offset = l is VideoLayer
           ? l.sourceOffset
@@ -741,7 +741,7 @@ class ExportEngine {
     // amostra, e um limitador sempre ligado quebraria isso.
     final mix = _precisaLimitador(sources)
         ? '${entrada}alimiter=limit=$kTetoDoBarramento'
-            ':attack=5:release=50:level=disabled[aout]'
+              ':attack=5:release=50:level=disabled[aout]'
         : '${entrada}anull[aout]';
 
     return (

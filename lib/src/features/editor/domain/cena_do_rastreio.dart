@@ -61,9 +61,7 @@ Camera3D cameraDoRastreio(
   for (final p in s.poses) {
     final pos = p.posicao;
     for (final x in s.nuvem.values) {
-      profundidades.add(
-        norma([x[0] - pos[0], x[1] - pos[1], x[2] - pos[2]]),
-      );
+      profundidades.add(norma([x[0] - pos[0], x[1] - pos[1], x[2] - pos[2]]));
     }
     if (profundidades.length > 400) break;
   }
@@ -137,9 +135,7 @@ SceneNode nuvemDoRastreio(
     baseColor: Color(0xFF6FE3B0),
     kind: MaterialKind.unlit,
   ),
-  instances: [
-    for (final v in s.nuvem.values) Vec3(v[0], v[1], v[2]),
-  ],
+  instances: [for (final v in s.nuvem.values) Vec3(v[0], v[1], v[2])],
 );
 
 /// UM NULO NO PONTO ESCOLHIDO — o "criar nulo e camera" do After
@@ -269,9 +265,7 @@ SceneNode noNoPlano(
       // O texto e o solido nao recebem luz: eles sao GRAFISMO em cima do
       // video, e uma placa que escurece quando a luz da cena vira
       // parece um erro, nao um efeito.
-      kind: tipo == ObjetoNoPlano.forma
-          ? MaterialKind.pbr
-          : MaterialKind.unlit,
+      kind: tipo == ObjetoNoPlano.forma ? MaterialKind.pbr : MaterialKind.unlit,
       roughness: .5,
     ),
   );

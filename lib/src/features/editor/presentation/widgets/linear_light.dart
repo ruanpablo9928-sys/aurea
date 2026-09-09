@@ -36,8 +36,10 @@ class LinearLight {
 
   /// Chave de diagnostico: `--dart-define=AUREA_LINEAR=false` desliga o
   /// espaco linear inteiro, para comparar no aparelho.
-  static const bool _ligado =
-      bool.fromEnvironment('AUREA_LINEAR', defaultValue: true);
+  static const bool _ligado = bool.fromEnvironment(
+    'AUREA_LINEAR',
+    defaultValue: true,
+  );
 
   /// Se da para trabalhar em linear neste aparelho.
   static bool get ready =>
@@ -86,12 +88,10 @@ class LinearLight {
     required double sigmaY,
     required ui.Size size,
     ui.TileMode tileMode = ui.TileMode.decal,
-  }) =>
-      wrap(
-        ui.ImageFilter.blur(
-            sigmaX: sigmaX, sigmaY: sigmaY, tileMode: tileMode),
-        size,
-      );
+  }) => wrap(
+    ui.ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY, tileMode: tileMode),
+    size,
+  );
 
   /// DESFOQUE EM LINEAR, JA EMBRULHADO NO WIDGET — e com MARGEM.
   ///
@@ -110,7 +110,11 @@ class LinearLight {
     ui.TileMode tileMode = ui.TileMode.decal,
   }) {
     final filtro = blur(
-        sigmaX: sigmaX, sigmaY: sigmaY, size: size, tileMode: tileMode);
+      sigmaX: sigmaX,
+      sigmaY: sigmaY,
+      size: size,
+      tileMode: tileMode,
+    );
     if (!ready) return ImageFiltered(imageFilter: filtro, child: child);
     final margem = (3 * math.max(sigmaX, sigmaY) + 2).toDouble();
     return ImageFiltered(

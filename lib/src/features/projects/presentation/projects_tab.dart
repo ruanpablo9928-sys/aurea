@@ -543,8 +543,8 @@ class ProjectsTab extends ConsumerWidget {
               texto: mostrarTodos
                   ? 'Mostrar menos'
                   : 'Mostrar todos os ${projects.length} projetos',
-              onTap: () =>
-                  ref.read(_mostrarTodosProvider.notifier).state = !mostrarTodos,
+              onTap: () => ref.read(_mostrarTodosProvider.notifier).state =
+                  !mostrarTodos,
             ),
           // MODELOS: motions inteiros montados camada por camada — abrir
           // um e ver como cada coisa foi feita. Estudio: usam texto,

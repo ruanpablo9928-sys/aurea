@@ -47,24 +47,31 @@ class TrackingService {
 
     final session = await FFmpegKit.executeWithArguments([
       '-y',
-      '-ss', (start.inMilliseconds / 1000.0).toStringAsFixed(3),
-      '-t', segundos.toStringAsFixed(3),
-      '-i', path,
-      '-vf', 'fps=$fps,scale=$larguraAnalise:-2,format=gray',
-      '-frames:v', '$maxFrames',
-      '-start_number', '0',
+      '-ss',
+      (start.inMilliseconds / 1000.0).toStringAsFixed(3),
+      '-t',
+      segundos.toStringAsFixed(3),
+      '-i',
+      path,
+      '-vf',
+      'fps=$fps,scale=$larguraAnalise:-2,format=gray',
+      '-frames:v',
+      '$maxFrames',
+      '-start_number',
+      '0',
       '${dir.path}/%05d.png',
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {
       return const [];
     }
 
-    final arquivos = dir
-        .listSync()
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.png'))
-        .toList()
-      ..sort((a, b) => a.path.compareTo(b.path));
+    final arquivos =
+        dir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.png'))
+            .toList()
+          ..sort((a, b) => a.path.compareTo(b.path));
 
     final out = <GrayFrame>[];
     for (var i = 0; i < arquivos.length; i++) {
@@ -112,12 +119,18 @@ class TrackingService {
     try {
       final session = await FFmpegKit.executeWithArguments([
         '-y',
-        '-ss', (start.inMilliseconds / 1000.0).toStringAsFixed(3),
-        '-t', segundos.toStringAsFixed(3),
-        '-i', path,
-        '-vf', 'fps=$taxa,scale=$largura:-2',
-        '-frames:v', '$quantos',
-        '-start_number', '0',
+        '-ss',
+        (start.inMilliseconds / 1000.0).toStringAsFixed(3),
+        '-t',
+        segundos.toStringAsFixed(3),
+        '-i',
+        path,
+        '-vf',
+        'fps=$taxa,scale=$largura:-2',
+        '-frames:v',
+        '$quantos',
+        '-start_number',
+        '0',
         '${dir.path}/%05d.jpg',
       ]);
       if (!ReturnCode.isSuccess(await session.getReturnCode())) {
@@ -147,8 +160,7 @@ class TrackingService {
       final codec = await ui.instantiateImageCodec(await f.readAsBytes());
       final frame = await codec.getNextFrame();
       final img = frame.image;
-      final bytes =
-          await img.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final bytes = await img.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (bytes == null) return null;
       final w = img.width, h = img.height;
       final px = Uint8List(w * h);

@@ -131,7 +131,11 @@ class _NewProjectSheetState extends ConsumerState<_NewProjectSheet> {
               ],
             ),
             const SizedBox(height: 16),
-            _Moldura(ratio: aspect.ratio, label: aspect.label, hint: aspect.hint),
+            _Moldura(
+              ratio: aspect.ratio,
+              label: aspect.label,
+              hint: aspect.hint,
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -209,7 +213,11 @@ class _NewProjectSheetState extends ConsumerState<_NewProjectSheet> {
 /// de formato anima a moldura de uma forma para a outra, para a pessoa
 /// ver o que mudou em vez de ler.
 class _Moldura extends StatelessWidget {
-  const _Moldura({required this.ratio, required this.label, required this.hint});
+  const _Moldura({
+    required this.ratio,
+    required this.label,
+    required this.hint,
+  });
 
   final double ratio;
   final String label;

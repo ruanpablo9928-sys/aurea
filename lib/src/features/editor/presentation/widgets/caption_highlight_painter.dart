@@ -48,10 +48,12 @@ class CaptionHighlightPainter extends CustomPainter {
     // 3. DESENHAR, escalando cada palavra no lugar dela.
     var y = _yInicial(linhas, size);
     for (final linha in linhas) {
-      final larguraDaLinha = linha.fold<double>(
-        0,
-        (a, m) => a + m.paragrafo.maxIntrinsicWidth + _espaco,
-      ) - _espaco;
+      final larguraDaLinha =
+          linha.fold<double>(
+            0,
+            (a, m) => a + m.paragrafo.maxIntrinsicWidth + _espaco,
+          ) -
+          _espaco;
       var x = _xInicial(larguraDaLinha, size);
       var alturaDaLinha = 0.0;
 
@@ -132,21 +134,26 @@ class CaptionHighlightPainter extends CustomPainter {
         ? frase.palavras[indice].text.toUpperCase()
         : frase.palavras[indice].text.toLowerCase();
     final destaque = estilo.fonteDestaque;
-    final construtor = ui.ParagraphBuilder(ui.ParagraphStyle(
-      textAlign: TextAlign.left,
-      fontSize: tamanho,
-      fontWeight: FontWeight.w800,
-      fontFamily: destaque,
-      height: estilo.entrelinha,
-    ))
-      ..pushStyle(ui.TextStyle(
-        color: cor,
-        fontSize: tamanho,
-        fontWeight: FontWeight.w800,
-        fontFamily: destaque,
-        letterSpacing: estilo.tracking,
-      ))
-      ..addText(texto);
+    final construtor =
+        ui.ParagraphBuilder(
+            ui.ParagraphStyle(
+              textAlign: TextAlign.left,
+              fontSize: tamanho,
+              fontWeight: FontWeight.w800,
+              fontFamily: destaque,
+              height: estilo.entrelinha,
+            ),
+          )
+          ..pushStyle(
+            ui.TextStyle(
+              color: cor,
+              fontSize: tamanho,
+              fontWeight: FontWeight.w800,
+              fontFamily: destaque,
+              letterSpacing: estilo.tracking,
+            ),
+          )
+          ..addText(texto);
     final p = construtor.build()
       ..layout(const ui.ParagraphConstraints(width: double.infinity));
     return p;
@@ -168,7 +175,9 @@ class CaptionHighlightPainter extends CustomPainter {
       case HighlightLayout.empilhada:
         // Uma palavra por linha, entrelinha apertada: e o arranjo em que
         // as linhas quase se tocam.
-        return [for (final m in medidos) [m]];
+        return [
+          for (final m in medidos) [m],
+        ];
       case HighlightLayout.atravessada:
       case HighlightLayout.costura:
         // Uma fileira so, quebrando quando estoura a largura.
@@ -196,7 +205,8 @@ class CaptionHighlightPainter extends CustomPainter {
   ) {
     final alturaTotal = linhas.fold<double>(
       0,
-      (a, l) => a +
+      (a, l) =>
+          a +
           l.fold<double>(0, (b, m) => math.max(b, m.paragrafo.height)) *
               estilo.entrelinha,
     );
@@ -207,11 +217,10 @@ class CaptionHighlightPainter extends CustomPainter {
     };
   }
 
-  double _xInicial(double larguraDaLinha, Size size) =>
-      switch (estilo.layout) {
-        HighlightLayout.empilhada => size.width * 0.08,
-        _ => (size.width - larguraDaLinha) / 2,
-      };
+  double _xInicial(double larguraDaLinha, Size size) => switch (estilo.layout) {
+    HighlightLayout.empilhada => size.width * 0.08,
+    _ => (size.width - larguraDaLinha) / 2,
+  };
 
   @override
   bool shouldRepaint(covariant CaptionHighlightPainter old) =>

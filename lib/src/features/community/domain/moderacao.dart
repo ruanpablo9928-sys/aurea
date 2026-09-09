@@ -52,26 +52,65 @@ class ResultadoDaModeracao {
 /// depois de normalizar: sem acento, sem repeticao de letra e com os
 /// numeros que imitam letra ja trocados.
 const _raizesBloqueadas = <String>[
-  'viado', 'bicha', 'traveco', 'macaco preto', 'crioulo', 'preto imundo',
-  'retardado', 'mongoloide', 'aleijado de merda',
-  'puta que pariu voce', 'vai se foder', 'vai tomar no cu', 'filho da puta',
-  'arrombado', 'corno manso', 'vagabunda', 'piranha do caralho',
-  'matar voce', 'te matar', 'estupr', 'pedofil', 'nazis', 'hitler tinha razao',
+  'viado',
+  'bicha',
+  'traveco',
+  'macaco preto',
+  'crioulo',
+  'preto imundo',
+  'retardado',
+  'mongoloide',
+  'aleijado de merda',
+  'puta que pariu voce',
+  'vai se foder',
+  'vai tomar no cu',
+  'filho da puta',
+  'arrombado',
+  'corno manso',
+  'vagabunda',
+  'piranha do caralho',
+  'matar voce',
+  'te matar',
+  'estupr',
+  'pedofil',
+  'nazis',
+  'hitler tinha razao',
 ];
 
 /// Trocas que desfazem o disfarce mais comum (l3tr4 por numero).
 const _disfarces = {
-  '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a',
-  r'$': 's', '!': 'i',
+  '0': 'o',
+  '1': 'i',
+  '3': 'e',
+  '4': 'a',
+  '5': 's',
+  '7': 't',
+  '@': 'a',
+  r'$': 's',
+  '!': 'i',
 };
 
 const _acentos = {
-  'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a',
-  'é': 'e', 'ê': 'e', 'è': 'e',
-  'í': 'i', 'ì': 'i', 'î': 'i',
-  'ó': 'o', 'ô': 'o', 'õ': 'o', 'ò': 'o',
-  'ú': 'u', 'ü': 'u', 'ù': 'u',
-  'ç': 'c', 'ñ': 'n',
+  'á': 'a',
+  'à': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'ä': 'a',
+  'é': 'e',
+  'ê': 'e',
+  'è': 'e',
+  'í': 'i',
+  'ì': 'i',
+  'î': 'i',
+  'ó': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ò': 'o',
+  'ú': 'u',
+  'ü': 'u',
+  'ù': 'u',
+  'ç': 'c',
+  'ñ': 'n',
 };
 
 /// Deixa o texto na forma em que a comparacao e justa.
@@ -90,9 +129,7 @@ String normalizarParaFiltro(String bruto) {
   for (final c in bruto.toLowerCase().split('')) {
     final semAcento = _acentos[c] ?? c;
     final semDisfarce = _disfarces[semAcento] ?? semAcento;
-    b.write(
-      RegExp(r'[a-z0-9 ]').hasMatch(semDisfarce) ? semDisfarce : ' ',
-    );
+    b.write(RegExp(r'[a-z0-9 ]').hasMatch(semDisfarce) ? semDisfarce : ' ');
   }
   return b
       .toString()
@@ -169,7 +206,10 @@ ResultadoDaModeracao moderarTexto(String texto) {
 
   final letras = limpo.replaceAll(RegExp(r'[^A-Za-zÀ-ÿ]'), '');
   if (letras.length >= 12) {
-    final maiusculas = letras.split('').where((c) => c == c.toUpperCase()).length;
+    final maiusculas = letras
+        .split('')
+        .where((c) => c == c.toUpperCase())
+        .length;
     if (maiusculas / letras.length > 0.7) {
       return const ResultadoDaModeracao(
         Veredito.ajustar,

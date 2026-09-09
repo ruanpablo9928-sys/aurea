@@ -90,7 +90,9 @@ Float32List forcaDeCanto(GrayFrame f, {int janela = 3}) {
       }
       // Menor autovalor de [[sxx, sxy], [sxy, syy]].
       final meio = (sxx + syy) / 2;
-      final raiz = math.sqrt(math.max(0, meio * meio - (sxx * syy - sxy * sxy)));
+      final raiz = math.sqrt(
+        math.max(0, meio * meio - (sxx * syy - sxy * sxy)),
+      );
       saida[y * w + x] = meio - raiz;
     }
   }
@@ -292,5 +294,8 @@ List<PontoSeguido> seguirPontos(
   // Um ponto visto em tres quadros nao diz nada sobre a camera e ainda
   // atrapalha: entra na conta com peso igual ao de quem foi seguido o
   // clipe inteiro.
-  return [for (final p in saida) if (p.duracao >= duracaoMinima) p];
+  return [
+    for (final p in saida)
+      if (p.duracao >= duracaoMinima) p,
+  ];
 }

@@ -46,7 +46,7 @@ class VignettePainter extends CustomPainter {
     // vinheta cobre o quadro inteiro mesmo com o centro deslocado.
     final ex = math.max(c.dx, size.width - c.dx);
     final ey = math.max(c.dy, size.height - c.dy);
-    final r = math.max(1.0, radius) ;
+    final r = math.max(1.0, radius);
 
     // Passos do degrade: a queda e calculada, o Canvas so interpola
     // entre paradas proximas (32 e imperceptivel e barato).
@@ -75,10 +75,13 @@ class VignettePainter extends CustomPainter {
         paint.color = cores[i];
         canvas.drawDRRect(
           RRect.fromRectAndRadius(
-              Rect.fromLTRB(0, 0, size.width, size.height), Radius.zero),
+            Rect.fromLTRB(0, 0, size.width, size.height),
+            Radius.zero,
+          ),
           RRect.fromRectAndRadius(
-              Rect.fromCenter(center: c, width: w * 2, height: h * 2),
-              Radius.zero),
+            Rect.fromCenter(center: c, width: w * 2, height: h * 2),
+            Radius.zero,
+          ),
           paint,
         );
       }

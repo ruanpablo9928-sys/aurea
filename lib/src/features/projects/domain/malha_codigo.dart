@@ -69,34 +69,42 @@ class MalhaCodigo {
       _por.values.fold(0, (s, p) => s + p.indices.length ~/ 3);
 
   ModelAsset3D asset(String nome) => ModelAsset3D({
-        'version': 1,
-        'name': nome,
-        'nodes': [
-          {'name': nome},
-        ],
-        'primitives': [
-          for (final e in _por.entries)
-            {
-              'node': 0,
-              'positions': e.value.positions,
-              'normals': e.value.normals,
-              if (e.value.uvs.isNotEmpty) 'uv': e.value.uvs,
-              'indices': e.value.indices,
-              'material': e.key,
-            },
-        ],
-        'materials': materiais,
-        'skins': const [],
-        'clips': const [],
-      });
+    'version': 1,
+    'name': nome,
+    'nodes': [
+      {'name': nome},
+    ],
+    'primitives': [
+      for (final e in _por.entries)
+        {
+          'node': 0,
+          'positions': e.value.positions,
+          'normals': e.value.normals,
+          if (e.value.uvs.isNotEmpty) 'uv': e.value.uvs,
+          'indices': e.value.indices,
+          'material': e.key,
+        },
+    ],
+    'materials': materiais,
+    'skins': const [],
+    'clips': const [],
+  });
 
   /// A caixa envolvente, para o no ficar onde a malha foi desenhada.
   ({Vec3 centro, double meio}) caixa() {
     var lo = const Vec3(1e9, 1e9, 1e9), hi = const Vec3(-1e9, -1e9, -1e9);
     for (final p in _por.values) {
       for (final v in p.positions) {
-        lo = Vec3(math.min(lo.x, v[0]), math.min(lo.y, v[1]), math.min(lo.z, v[2]));
-        hi = Vec3(math.max(hi.x, v[0]), math.max(hi.y, v[1]), math.max(hi.z, v[2]));
+        lo = Vec3(
+          math.min(lo.x, v[0]),
+          math.min(lo.y, v[1]),
+          math.min(lo.z, v[2]),
+        );
+        hi = Vec3(
+          math.max(hi.x, v[0]),
+          math.max(hi.y, v[1]),
+          math.max(hi.z, v[2]),
+        );
       }
     }
     final d = hi - lo;
@@ -190,4 +198,3 @@ Map<String, dynamic> materialCodigo(
     'image': ?imagem,
   };
 }
-

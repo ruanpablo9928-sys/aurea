@@ -305,7 +305,10 @@ Future<void> showSpeedSheet(
                                 playback.time.value,
                               );
                               final valor =
-                                  videoSourceTimeAt(video, local).inMicroseconds /
+                                  videoSourceTimeAt(
+                                    video,
+                                    local,
+                                  ).inMicroseconds /
                                   1000000.0;
                               controller.setClipTimeRemapKeyframe(
                                 layerId,

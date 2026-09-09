@@ -88,10 +88,8 @@ SvgImportado lerSvg(String fonte, {double alvo = 420}) {
   }
   final lado = math.max(uniao.width, uniao.height);
   final k = lado <= 0 ? 1.0 : alvo / lado;
-  Offset ajusta(Offset o) => Offset(
-    (o.dx - uniao.center.dx) * k,
-    (o.dy - uniao.center.dy) * k,
-  );
+  Offset ajusta(Offset o) =>
+      Offset((o.dx - uniao.center.dx) * k, (o.dy - uniao.center.dy) * k);
   final ajustadas = [
     for (final f in formas)
       SvgForma(
@@ -129,17 +127,11 @@ List<List<ShapeItem>> itensDoSvg(SvgImportado svg) => [
       ShapeBezier(path: AnimatedPath(f.path)),
       if (f.fill != null) ShapeFill(color: f.fill!),
       if (f.stroke != null && f.strokeWidth > 0)
-        ShapeStroke(
-          color: f.stroke!,
-          width: AnimatedDouble(f.strokeWidth),
-        ),
+        ShapeStroke(color: f.stroke!, width: AnimatedDouble(f.strokeWidth)),
       // Desenho sem pintura nenhuma no arquivo: entra com um traco fino,
       // senao ele existe e nao aparece.
       if (f.fill == null && (f.stroke == null || f.strokeWidth <= 0))
-        ShapeStroke(
-          color: const Color(0xFFFFFFFF),
-          width: AnimatedDouble(4),
-        ),
+        ShapeStroke(color: const Color(0xFFFFFFFF), width: AnimatedDouble(4)),
     ],
 ];
 
@@ -172,7 +164,9 @@ class _Estado {
     final t = _transform(e.attr(['transform']));
     final estilo = _estilo(e);
     return _Estado(
-      matriz: t == null ? matriz : (matriz == null ? t : _multiplica(matriz!, t)),
+      matriz: t == null
+          ? matriz
+          : (matriz == null ? t : _multiplica(matriz!, t)),
       fill: estilo.containsKey('fill')
           ? _cor(estilo['fill'])
           : (e.attr(['fill']) != null ? _cor(e.attr(['fill'])) : fill),
@@ -339,8 +333,10 @@ Rect _caixa(BezierPath p) {
 /// Aplica a transformacao do SVG (`transform=`) nos nos.
 BezierPath _aplica(BezierPath p, Float64List? m) {
   if (m == null) return p;
-  Offset ponto(Offset o) =>
-      Offset(m[0] * o.dx + m[4] * o.dy + m[12], m[1] * o.dx + m[5] * o.dy + m[13]);
+  Offset ponto(Offset o) => Offset(
+    m[0] * o.dx + m[4] * o.dy + m[12],
+    m[1] * o.dx + m[5] * o.dy + m[13],
+  );
   Offset vetor(Offset o) =>
       Offset(m[0] * o.dx + m[4] * o.dy, m[1] * o.dx + m[5] * o.dy);
   return BezierPath(
@@ -360,13 +356,12 @@ BezierPath _aplica(BezierPath p, Float64List? m) {
 List<Offset> _pontos(String? s) {
   if (s == null) return const [];
   final n = <double>[];
-  for (final m in RegExp(r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
-      .allMatches(s)) {
+  for (final m in RegExp(
+    r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?',
+  ).allMatches(s)) {
     n.add(double.parse(m.group(0)!));
   }
-  return [
-    for (var i = 0; i + 1 < n.length; i += 2) Offset(n[i], n[i + 1]),
-  ];
+  return [for (var i = 0; i + 1 < n.length; i += 2) Offset(n[i], n[i + 1])];
 }
 
 Map<String, String> _estilo(XmlNode e) {
@@ -390,8 +385,9 @@ Float64List? _transform(String? t) {
   for (final m in RegExp(r'(\w+)\s*\(([^)]*)\)').allMatches(t)) {
     final nome = m.group(1)!.toLowerCase();
     final v = [
-      for (final x in RegExp(r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
-          .allMatches(m.group(2)!))
+      for (final x in RegExp(
+        r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?',
+      ).allMatches(m.group(2)!))
         double.parse(x.group(0)!),
     ];
     double at(int i, [double p = 0]) => i < v.length ? v[i] : p;
@@ -529,9 +525,8 @@ const _nomeadas = <String, Color>{
 
 double? _numero(String? s) {
   if (s == null) return null;
-  final m = RegExp(
-    r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?',
-  ).firstMatch(s.trim());
+  final m = RegExp(r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?')
+      .firstMatch(s.trim());
   return m == null ? null : double.tryParse(m.group(0)!);
 }
 
@@ -539,4 +534,3 @@ String? _texto(String? s) {
   final t = s?.trim();
   return t == null || t.isEmpty ? null : t;
 }
-

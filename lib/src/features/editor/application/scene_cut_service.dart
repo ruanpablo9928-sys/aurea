@@ -29,32 +29,43 @@ class SceneCutService {
     required Duration duration,
     double threshold = 0.35,
   }) {
-    final k = '$path|${start.inMilliseconds}|${duration.inMilliseconds}|'
+    final k =
+        '$path|${start.inMilliseconds}|${duration.inMilliseconds}|'
         '${threshold.toStringAsFixed(2)}';
     final pronto = _cache[k];
     if (pronto != null) return Future.value(pronto);
-    return _emAndamento[k] ??=
-        _run(path, start, duration, threshold).then((v) {
-      _cache[k] = v;
-      return v;
-    }).whenComplete(() => _emAndamento.remove(k));
+    return _emAndamento[k] ??= _run(path, start, duration, threshold)
+        .then((v) {
+          _cache[k] = v;
+          return v;
+        })
+        .whenComplete(() => _emAndamento.remove(k));
   }
 
   Future<List<Duration>> _run(
-      String path, Duration start, Duration duration, double threshold) async {
+    String path,
+    Duration start,
+    Duration duration,
+    double threshold,
+  ) async {
     String seg(Duration d) => (d.inMicroseconds / 1e6).toStringAsFixed(3);
     final session = await FFmpegKit.executeWithArguments([
       '-hide_banner',
       '-nostats',
-      '-ss', seg(start),
-      '-t', seg(duration),
-      '-i', path,
+      '-ss',
+      seg(start),
+      '-t',
+      seg(duration),
+      '-i',
+      path,
       '-an',
       '-sn',
       '-vf',
       "scale=160:-2,select='gt(scene,${threshold.toStringAsFixed(3)})',showinfo",
-      '-vsync', 'vfr',
-      '-f', 'null',
+      '-vsync',
+      'vfr',
+      '-f',
+      'null',
       '-',
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {

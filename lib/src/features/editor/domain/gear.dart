@@ -18,11 +18,11 @@ import 'video_project.dart';
 enum PreviewGear { m1, m2, m3, m4 }
 
 String gearLabel(PreviewGear g) => switch (g) {
-      PreviewGear.m1 => 'M1 · player',
-      PreviewGear.m2 => 'M2 · player+grafismos',
-      PreviewGear.m3 => 'M3 · GL direto',
-      PreviewGear.m4 => 'M4 · compositor',
-    };
+  PreviewGear.m1 => 'M1 · player',
+  PreviewGear.m2 => 'M2 · player+grafismos',
+  PreviewGear.m3 => 'M3 · GL direto',
+  PreviewGear.m4 => 'M4 · compositor',
+};
 
 class GearDecision {
   const GearDecision(this.gear, this.reason);
@@ -43,12 +43,13 @@ bool _isGraphic(Layer l) =>
 
 /// Camadas que PINTAM pixels (nulos e audio ficam de fora da conta).
 List<Layer> _paintable(List<Layer> layers) => [
-      for (final l in layers)
-        if (l is! NullLayer && l is! AudioLayer) l,
-    ];
+  for (final l in layers)
+    if (l is! NullLayer && l is! AudioLayer) l,
+];
 
 bool _identityOpacity(Layer l) =>
-    !l.opacity.isAnimated && (l.opacity.valueAt(Duration.zero) - 1).abs() < 1e-6;
+    !l.opacity.isAnimated &&
+    (l.opacity.valueAt(Duration.zero) - 1).abs() < 1e-6;
 
 bool _simpleTransform(Layer l) =>
     !l.rotation.isAnimated &&
@@ -83,7 +84,8 @@ String? _m4Trigger(Layer l) {
   if (l.blendMode != BlendMode.srcOver) {
     return 'blend em "${l.name}"';
   }
-  final uses3D = (l.rotationX.isAnimated ||
+  final uses3D =
+      (l.rotationX.isAnimated ||
           l.rotationX.valueAt(Duration.zero).abs() > 1e-6) ||
       (l.rotationY.isAnimated ||
           l.rotationY.valueAt(Duration.zero).abs() > 1e-6) ||
@@ -107,7 +109,9 @@ GearDecision classifyGear(VideoProject project) {
   for (final l in project.layers) {
     if (l is NullLayer && l.grid != null && l.grid!.assets.isNotEmpty) {
       return GearDecision(
-          PreviewGear.m4, 'forcada por: modulo grade em "${l.name}"');
+        PreviewGear.m4,
+        'forcada por: modulo grade em "${l.name}"',
+      );
     }
   }
   for (final l in paint) {
@@ -118,7 +122,9 @@ GearDecision classifyGear(VideoProject project) {
   }
   if (paint.length > 4) {
     return GearDecision(
-        PreviewGear.m4, 'forcada por: ${paint.length} camadas (>4)');
+      PreviewGear.m4,
+      'forcada por: ${paint.length} camadas (>4)',
+    );
   }
 
   final videos = paint.whereType<VideoLayer>().toList();
@@ -129,8 +135,10 @@ GearDecision classifyGear(VideoProject project) {
       (paint.single is VideoLayer || paint.single is ImageLayer) &&
       _identityOpacity(paint.single) &&
       _simpleTransform(paint.single)) {
-    return GearDecision(PreviewGear.m1,
-        paint.single is VideoLayer ? '1 video, nada mais' : '1 imagem, nada mais');
+    return GearDecision(
+      PreviewGear.m1,
+      paint.single is VideoLayer ? '1 video, nada mais' : '1 imagem, nada mais',
+    );
   }
 
   // M2: 1 video na BASE + so grafismos em Normal acima, nenhum lendo o
@@ -140,20 +148,21 @@ GearDecision classifyGear(VideoProject project) {
       _identityOpacity(videos.single) &&
       _simpleTransform(videos.single) &&
       graphics.length == paint.length - 1) {
-    final texts = graphics.whereType<TextLayer>().length +
+    final texts =
+        graphics.whereType<TextLayer>().length +
         graphics.whereType<CaptionLayer>().length;
-    return GearDecision(PreviewGear.m2,
-        '1 video + ${graphics.length} grafismo(s)${texts > 0 ? ' ($texts texto)' : ''}');
+    return GearDecision(
+      PreviewGear.m2,
+      '1 video + ${graphics.length} grafismo(s)${texts > 0 ? ' ($texts texto)' : ''}',
+    );
   }
 
   // M3: video com transform/opacidade nao trivial, ou 2-4 camadas simples.
   if (videos.length == 1 && paint.length == 1) {
-    return const GearDecision(
-        PreviewGear.m3, 'video com transform/opacidade');
+    return const GearDecision(PreviewGear.m3, 'video com transform/opacidade');
   }
   if (paint.length <= 4) {
-    return GearDecision(
-        PreviewGear.m3, '${paint.length} camadas simples');
+    return GearDecision(PreviewGear.m3, '${paint.length} camadas simples');
   }
   return const GearDecision(PreviewGear.m4, 'forcada por: cena complexa');
 }

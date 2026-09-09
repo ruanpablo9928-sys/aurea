@@ -11,11 +11,11 @@ import 'dart:ui';
 enum TextPathKind { none, circle, arc, layer }
 
 String textPathKindLabel(TextPathKind k) => switch (k) {
-      TextPathKind.none => 'Reto',
-      TextPathKind.circle => 'Circulo',
-      TextPathKind.arc => 'Arco',
-      TextPathKind.layer => 'Camada de forma',
-    };
+  TextPathKind.none => 'Reto',
+  TextPathKind.circle => 'Circulo',
+  TextPathKind.arc => 'Arco',
+  TextPathKind.layer => 'Camada de forma',
+};
 
 /// Onde a letra fica em relacao a linha do caminho.
 enum TextPathAlign { above, on, below }
@@ -73,20 +73,18 @@ class TextPathSpec {
     TextPathAlign? align,
     bool? perpendicular,
     bool? reverse,
-  }) =>
-      TextPathSpec(
-        kind: kind ?? this.kind,
-        radius: radius ?? this.radius,
-        sweepDeg: sweepDeg ?? this.sweepDeg,
-        startDeg: startDeg ?? this.startDeg,
-        shapeLayerId:
-            clearShape ? null : (shapeLayerId ?? this.shapeLayerId),
-        offset: offset ?? this.offset,
-        spacing: spacing ?? this.spacing,
-        align: align ?? this.align,
-        perpendicular: perpendicular ?? this.perpendicular,
-        reverse: reverse ?? this.reverse,
-      );
+  }) => TextPathSpec(
+    kind: kind ?? this.kind,
+    radius: radius ?? this.radius,
+    sweepDeg: sweepDeg ?? this.sweepDeg,
+    startDeg: startDeg ?? this.startDeg,
+    shapeLayerId: clearShape ? null : (shapeLayerId ?? this.shapeLayerId),
+    offset: offset ?? this.offset,
+    spacing: spacing ?? this.spacing,
+    align: align ?? this.align,
+    perpendicular: perpendicular ?? this.perpendicular,
+    reverse: reverse ?? this.reverse,
+  );
 }
 
 /// Constroi o caminho do circulo ou do arco, centrado na origem.
@@ -97,19 +95,17 @@ Path buildTextPath(TextPathSpec spec) {
   final r = math.max(1.0, spec.radius);
   switch (spec.kind) {
     case TextPathKind.circle:
-      return Path()
-        ..addArc(
-          Rect.fromCircle(center: Offset.zero, radius: r),
-          spec.startDeg * math.pi / 180,
-          2 * math.pi,
-        );
+      return Path()..addArc(
+        Rect.fromCircle(center: Offset.zero, radius: r),
+        spec.startDeg * math.pi / 180,
+        2 * math.pi,
+      );
     case TextPathKind.arc:
-      return Path()
-        ..addArc(
-          Rect.fromCircle(center: Offset.zero, radius: r),
-          spec.startDeg * math.pi / 180,
-          spec.sweepDeg * math.pi / 180,
-        );
+      return Path()..addArc(
+        Rect.fromCircle(center: Offset.zero, radius: r),
+        spec.startDeg * math.pi / 180,
+        spec.sweepDeg * math.pi / 180,
+      );
     case TextPathKind.none:
     case TextPathKind.layer:
       return Path();

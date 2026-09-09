@@ -68,8 +68,7 @@ BezierPath moveVertex(BezierPath path, int index, Offset to) {
   if (index < 0 || index >= path.vertices.length) return path;
   final v = path.vertices[index];
   final out = [...path.vertices];
-  out[index] =
-      PathVertex(p: to, inT: v.inT, outT: v.outT, corner: v.corner);
+  out[index] = PathVertex(p: to, inT: v.inT, outT: v.outT, corner: v.corner);
   return BezierPath(vertices: out, closed: path.closed);
 }
 
@@ -78,12 +77,7 @@ BezierPath moveVertex(BezierPath path, int index, Offset to) {
 /// Num no de CURVA as duas alcas ficam opostas: puxar uma empurra a
 /// outra, mantendo o comprimento dela. E o que impede o "bico" aparecer
 /// no meio de uma curva lisa. Num no de CANTO cada alca anda sozinha.
-BezierPath moveHandle(
-  BezierPath path,
-  int index,
-  Handle which,
-  Offset to,
-) {
+BezierPath moveHandle(BezierPath path, int index, Handle which, Offset to) {
   if (index < 0 || index >= path.vertices.length) return path;
   final v = path.vertices[index];
   final rel = to - v.p;
@@ -99,8 +93,7 @@ BezierPath moveHandle(
   }
 
   final out = [...path.vertices];
-  out[index] =
-      PathVertex(p: v.p, inT: inT, outT: outT, corner: v.corner);
+  out[index] = PathVertex(p: v.p, inT: inT, outT: outT, corner: v.corner);
   return BezierPath(vertices: out, closed: path.closed);
 }
 
@@ -147,13 +140,16 @@ BezierPath insertVertex(BezierPath path, int segment, double t) {
   final b = path.vertices[j];
 
   final out = [...path.vertices];
-  out[segment] =
-      PathVertex(p: a.p, inT: a.inT, outT: m01 - p0, corner: a.corner);
+  out[segment] = PathVertex(
+    p: a.p,
+    inT: a.inT,
+    outT: m01 - p0,
+    corner: a.corner,
+  );
   out[j] = PathVertex(p: b.p, inT: m23 - p3, outT: b.outT, corner: b.corner);
   out.insert(
     segment + 1,
-    PathVertex(
-        p: meio, inT: m012 - meio, outT: m123 - meio, corner: false),
+    PathVertex(p: meio, inT: m012 - meio, outT: m123 - meio, corner: false),
   );
   return BezierPath(vertices: out, closed: path.closed);
 }
@@ -171,7 +167,11 @@ BezierPath toggleCorner(BezierPath path, int index) {
 
   if (!v.corner) {
     out[index] = PathVertex(
-        p: v.p, inT: Offset.zero, outT: Offset.zero, corner: true);
+      p: v.p,
+      inT: Offset.zero,
+      outT: Offset.zero,
+      corner: true,
+    );
     return BezierPath(vertices: out, closed: path.closed);
   }
 
@@ -180,8 +180,7 @@ BezierPath toggleCorner(BezierPath path, int index) {
   final depois = path.vertices[(index + 1) % n].p;
   final corda = depois - antes;
   final t = corda / 6;
-  out[index] =
-      PathVertex(p: v.p, inT: -t, outT: t, corner: false);
+  out[index] = PathVertex(p: v.p, inT: -t, outT: t, corner: false);
   return BezierPath(vertices: out, closed: path.closed);
 }
 
@@ -233,7 +232,11 @@ PathHit? nearestOnPath(BezierPath path, Offset alvo, {int samples = 24}) {
   }
 
   return PathHit(
-      segment: melhorSeg, t: melhorT, point: melhorP, distance: melhorD);
+    segment: melhorSeg,
+    t: melhorT,
+    point: melhorP,
+    distance: melhorD,
+  );
 }
 
 /// Qual no esta debaixo do dedo, dentro de [raio]. Devolve null se

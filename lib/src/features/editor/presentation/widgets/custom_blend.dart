@@ -52,17 +52,18 @@ class CustomBlendBox extends MultiChildRenderObjectWidget {
   static bool get ready => _program != null;
 
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      RenderCustomBlend(
-        mode: mode,
-        seed: seed,
-        pixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
-        program: _program,
-      );
+  RenderObject createRenderObject(BuildContext context) => RenderCustomBlend(
+    mode: mode,
+    seed: seed,
+    pixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
+    program: _program,
+  );
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderCustomBlend renderObject) {
+    BuildContext context,
+    covariant RenderCustomBlend renderObject,
+  ) {
     renderObject
       ..mode = mode
       ..seed = seed
@@ -84,10 +85,10 @@ class RenderCustomBlend extends RenderBox
     required double seed,
     required double pixelRatio,
     required ui.FragmentProgram? program,
-  })  : _mode = mode,
-        _seed = seed,
-        _pixelRatio = pixelRatio,
-        _program = program;
+  }) : _mode = mode,
+       _seed = seed,
+       _pixelRatio = pixelRatio,
+       _program = program;
 
   AureaBlend _mode;
   set mode(AureaBlend v) {
@@ -128,9 +129,9 @@ class RenderCustomBlend extends RenderBox
   void performLayout() {
     // Os dois andares ocupam a composicao inteira: e o que garante que
     // as duas imagens tenham pixel a pixel a mesma origem.
-    final vao = BoxConstraints.tight(constraints.biggest.isFinite
-        ? constraints.biggest
-        : const Size(1, 1));
+    final vao = BoxConstraints.tight(
+      constraints.biggest.isFinite ? constraints.biggest : const Size(1, 1),
+    );
     var child = firstChild;
     while (child != null) {
       child.layout(vao);
@@ -154,8 +155,10 @@ class RenderCustomBlend extends RenderBox
     // proprio SnapshotWidget do Flutter faz exatamente isto aqui.
     // ignore: invalid_use_of_protected_member
     ctx.stopRecordingIfNeeded();
-    final img = camada.toImageSync(Offset.zero & tamanho,
-        pixelRatio: _pixelRatio);
+    final img = camada.toImageSync(
+      Offset.zero & tamanho,
+      pixelRatio: _pixelRatio,
+    );
     camada.dispose();
     return img;
   }

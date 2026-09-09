@@ -332,8 +332,7 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
                         temSel
                             ? 'Deslize para puxar a alca do ponto ${sel + 1}.'
                             : 'Selecione um ponto antes de puxar a alca.',
-                      PointsMode.add =>
-                        'Deslize aqui para posicionar o proximo ponto, depois toque aqui para crava-lo.',
+                      PointsMode.add => 'Deslize aqui para posicionar o proximo ponto, depois toque aqui para crava-lo.',
                     },
                     style: const TextStyle(
                       fontSize: 12.5,

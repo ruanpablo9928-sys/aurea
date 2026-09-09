@@ -60,8 +60,7 @@ const florTomadas = [0.0, 3.4, 6.8];
 /// que basta para uma camera em trilho — o tremor vira degrau.
 const florHz = 12;
 
-Duration _t(num seconds) =>
-    Duration(microseconds: (seconds * 1000000).round());
+Duration _t(num seconds) => Duration(microseconds: (seconds * 1000000).round());
 AnimatedDouble _ad(double v) => AnimatedDouble(v);
 AnimatedDouble _keys(List<(num, num)> values, {Easing ease = Easing.linear}) =>
     AnimatedDouble(values.first.$2.toDouble(), [
@@ -214,10 +213,10 @@ class _Petala {
 
   Vec3 _normal(double u, double v) {
     const e = .012;
-    final du = ponto((u + e).clamp(0.0, 1.0), v) -
-        ponto((u - e).clamp(0.0, 1.0), v);
-    final dv = ponto(u, (v + e).clamp(-1.0, 1.0)) -
-        ponto(u, (v - e).clamp(-1.0, 1.0));
+    final du =
+        ponto((u + e).clamp(0.0, 1.0), v) - ponto((u - e).clamp(0.0, 1.0), v);
+    final dv =
+        ponto(u, (v + e).clamp(-1.0, 1.0)) - ponto(u, (v - e).clamp(-1.0, 1.0));
     final n = du.cross(dv).normalized;
     // A petala e de dois lados; a normal aponta para fora da flor.
     return n.dot(_rad) < 0 && n.y < 0 ? n * -1 : n;
@@ -488,17 +487,14 @@ void _emitirCentro(MalhaCodigo m) {
 /// a ponta, e e essa curva que diz que ha peso ali em cima.
 void _emitirCaule(MalhaCodigo m) {
   const segmentos = 12, lados = 8;
-  Vec3 eixo(double s) => Vec3(
-    -1.6 * s * s + .3 * math.sin(s * 2.2),
-    s * 39.2,
-    1.1 * s * s * s,
-  );
+  Vec3 eixo(double s) =>
+      Vec3(-1.6 * s * s + .3 * math.sin(s * 2.2), s * 39.2, 1.1 * s * s * s);
   final aneis = <List<int>>[];
   for (var i = 0; i <= segmentos; i++) {
     final s = i / segmentos;
     final p = eixo(s);
-    final adiante = (eixo(math.min(1, s + .02)) - eixo(math.max(0, s - .02)))
-        .normalized;
+    final adiante =
+        (eixo(math.min(1, s + .02)) - eixo(math.max(0, s - .02))).normalized;
     // Base de secao perpendicular ao eixo.
     final lado = Vec3(0, 0, 1).cross(adiante).normalized;
     final outro = adiante.cross(lado).normalized;
@@ -658,12 +654,7 @@ SceneNode _planta() {
 /// triangulos gigantes ilumina em bloco, e o degrade da janela some.
 SceneNode _mesa() {
   final m = MalhaCodigo([
-    materialCodigo(
-      'Mesa',
-      0xff2a1d14,
-      rugosidade: .78,
-      imagem: _texturaMesa(),
-    ),
+    materialCodigo('Mesa', 0xff2a1d14, rugosidade: .78, imagem: _texturaMesa()),
   ]);
   const lado = 520.0, n = 10;
   final grade = <List<int>>[];
@@ -748,11 +739,7 @@ List<Camera3D> _cameras() => [
     'flor_cam_1',
     '01 · A luz chega / 50 mm',
     (t) =>
-        _entre(
-          const Vec3(-64, 56, 108),
-          const Vec3(-49, 50, 84),
-          t / 3.4,
-        ) +
+        _entre(const Vec3(-64, 56, 108), const Vec3(-49, 50, 84), t / 3.4) +
         _mao(t, 3, 1.5),
     (t) => const Vec3(-1, 41, 0) + _mao(t + .35, 17, .8),
     50,

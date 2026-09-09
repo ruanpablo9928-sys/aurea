@@ -83,8 +83,7 @@ DuckEnvelope buildDuckEnvelope(
   if (env.isEmpty) return DuckEnvelope.neutro;
 
   final us = 1000000 / audioPeaksPerSecond;
-  Duration tempo(int i) =>
-      offset + Duration(microseconds: (i * us).round());
+  Duration tempo(int i) => offset + Duration(microseconds: (i * us).round());
 
   final mantidos = _simplificar(env, tolerance);
   final pontos = <({Duration t, double g})>[
@@ -178,10 +177,10 @@ double layerAudioGainAt(
 
 /// A ficha de audio da camada, se ela tiver som.
 AudioSpec? audioSpecOf(Layer layer) => switch (layer) {
-      AudioLayer a => a.audio,
-      VideoLayer v => v.audio,
-      _ => null,
-    };
+  AudioLayer a => a.audio,
+  VideoLayer v => v.audio,
+  _ => null,
+};
 
 // ------------------------------------------------------------ limitador
 
@@ -244,7 +243,6 @@ Float32List sumPeaks(List<(Float32List peaks, double gain)> trilhas) {
   return out;
 }
 
-
 /// A CURVA DO ENVELOPE COMO EXPRESSAO DO FILTRO `volume` DO FFMPEG.
 ///
 /// E a transcricao de [DuckEnvelope.gainAt] para a linguagem do filtro —
@@ -261,9 +259,7 @@ String? ffmpegVolumeExpr(DuckEnvelope env) {
   String n(double v) => v.toStringAsFixed(4);
   double seg(Duration d) => d.inMicroseconds / 1000000.0;
 
-  final partes = <String>[
-    'lt(t,${n(seg(p.first.t))})*${n(p.first.g)}',
-  ];
+  final partes = <String>['lt(t,${n(seg(p.first.t))})*${n(p.first.g)}'];
   for (var i = 0; i < p.length - 1; i++) {
     final t0 = seg(p[i].t);
     final t1 = seg(p[i + 1].t);

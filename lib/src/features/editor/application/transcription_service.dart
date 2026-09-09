@@ -101,10 +101,7 @@ class TranscricaoBruta {
       segmentos: lista(m['segmentos']),
       // Uma palavra sem duracao (a Groq as vezes da inicio = fim) ainda
       // precisa aparecer: 80 ms e o minimo que se ve.
-      palavras: lista(
-        m['palavras'],
-        minimo: const Duration(milliseconds: 80),
-      ),
+      palavras: lista(m['palavras'], minimo: const Duration(milliseconds: 80)),
     );
   }
 }
@@ -140,7 +137,9 @@ class TranscriptionService {
     this._temInternet,
     this._extrairAudio,
     this._transcreverNoAparelho,
-  }) : _http = http ?? (HttpClient()..connectionTimeout = const Duration(seconds: 15)),
+  }) : _http =
+           http ??
+           (HttpClient()..connectionTimeout = const Duration(seconds: 15)),
        _modoAtual = modoAtual ?? (() => ModoDeTranscricao.auto),
        _codigoDaConta = codigoDaConta ?? (() => null);
 
@@ -219,9 +218,8 @@ class TranscriptionService {
     final custom = _temInternet;
     if (custom != null) return custom();
     try {
-      final r = await InternetAddress.lookup(
-        Uri.parse(endereco).host,
-      ).timeout(const Duration(seconds: 4));
+      final r = await InternetAddress.lookup(Uri.parse(endereco).host)
+          .timeout(const Duration(seconds: 4));
       return r.isNotEmpty && r.first.rawAddress.isNotEmpty;
     } catch (_) {
       return false;
@@ -384,13 +382,19 @@ class TranscriptionService {
     // FFmpeg, e argumento de FFmpeg escreve arquivo.
     final session = await FFmpegKit.executeWithArguments([
       '-y',
-      '-i', mediaPath,
+      '-i',
+      mediaPath,
       '-vn',
-      '-ac', '1',
-      '-ar', '16000',
-      '-c:a', 'aac',
-      '-b:a', '32k',
-      '-movflags', '+faststart',
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '32k',
+      '-movflags',
+      '+faststart',
       saida,
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {
@@ -448,11 +452,15 @@ class TranscriptionService {
     final wav = '${tmp.path}/whisper_input.wav';
     final session = await FFmpegKit.executeWithArguments([
       '-y',
-      '-i', mediaPath,
+      '-i',
+      mediaPath,
       '-vn',
-      '-ac', '1',
-      '-ar', '16000',
-      '-c:a', 'pcm_s16le',
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-c:a',
+      'pcm_s16le',
       wav,
     ]);
     if (!ReturnCode.isSuccess(await session.getReturnCode())) {
@@ -532,15 +540,18 @@ class TranscriptionService {
     onStatus?.call('Baixando modelo de voz (0%)...');
     final client = HttpClient();
     try {
-      final request = await client.getUrl(Uri.parse(
-        'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'
-        'ggml-${model.modelName}.bin',
-      ));
+      final request = await client.getUrl(
+        Uri.parse(
+          'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/'
+          'ggml-${model.modelName}.bin',
+        ),
+      );
       final response = await request.close();
       if (response.statusCode != 200) {
         throw Exception(
-            'Falha ao baixar o modelo (HTTP ${response.statusCode}). '
-            'Verifique a conexao.');
+          'Falha ao baixar o modelo (HTTP ${response.statusCode}). '
+          'Verifique a conexao.',
+        );
       }
       final total = response.contentLength;
       var received = 0;
@@ -566,7 +577,8 @@ class TranscriptionService {
       }
       if (!_hasGgmlMagic(part)) {
         throw Exception(
-            'O arquivo baixado nao e um modelo de voz valido. Tente de novo.');
+          'O arquivo baixado nao e um modelo de voz valido. Tente de novo.',
+        );
       }
       part.renameSync(path);
     } catch (e) {

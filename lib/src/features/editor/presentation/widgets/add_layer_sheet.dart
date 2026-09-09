@@ -613,7 +613,9 @@ Future<void> showCaptionCreationSheet(
                         chip(
                           rotulo: captionModeLabel(m),
                           selected: mode == m,
-                          onTap: busy ? null : () => setSheetState(() => mode = m),
+                          onTap: busy
+                              ? null
+                              : () => setSheetState(() => mode = m),
                         ),
                     ],
                   ),
@@ -766,8 +768,7 @@ Future<void> showCaptionCreationSheet(
                     maxLines: 6,
                     minLines: 3,
                     enabled: !busy,
-                    placeholder:
-                        '1\n00:00:00,000 --> 00:00:02,000\nSua primeira fala...',
+                    placeholder: '1\n00:00:00,000 --> 00:00:02,000\nSua primeira fala...',
                     style: const TextStyle(fontSize: 13, color: AmColors.text),
                     placeholderStyle: const TextStyle(
                       fontSize: 13,

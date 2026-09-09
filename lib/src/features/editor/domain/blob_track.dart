@@ -45,12 +45,12 @@ class Blob {
   Offset get center => rect.center;
 
   Blob copyWith({Rect? rect, int? area, int? age, int? missing}) => Blob(
-        id: id,
-        rect: rect ?? this.rect,
-        area: area ?? this.area,
-        age: age ?? this.age,
-        missing: missing ?? this.missing,
-      );
+    id: id,
+    rect: rect ?? this.rect,
+    area: area ?? this.area,
+    age: age ?? this.age,
+    missing: missing ?? this.missing,
+  );
 }
 
 /// Como achar as regioes.
@@ -107,12 +107,18 @@ List<Blob> labelRegions(
 
     if (area < minArea) continue;
     if (maxArea > 0 && area > maxArea) continue;
-    achados.add(Blob(
-      id: -1,
-      rect: Rect.fromLTRB(minX.toDouble(), minY.toDouble(),
-          (maxX + 1).toDouble(), (maxY + 1).toDouble()),
-      area: area,
-    ));
+    achados.add(
+      Blob(
+        id: -1,
+        rect: Rect.fromLTRB(
+          minX.toDouble(),
+          minY.toDouble(),
+          (maxX + 1).toDouble(),
+          (maxY + 1).toDouble(),
+        ),
+        area: area,
+      ),
+    );
   }
 
   // Os MAIORES primeiro: com limite de blobs, o que sobra tem de ser o
@@ -170,8 +176,10 @@ Uint8List detectionMask(
   final out = Uint8List(n);
   // A sensibilidade abaixa o corte: sensibilidade alta pega movimento
   // sutil, e tambem mais ruido.
-  final corte =
-      (threshold * (1 - sensitivity.clamp(0.0, 100.0) / 200)).clamp(1.0, 255.0);
+  final corte = (threshold * (1 - sensitivity.clamp(0.0, 100.0) / 200)).clamp(
+    1.0,
+    255.0,
+  );
 
   switch (by) {
     case BlobDetectBy.motion:
@@ -222,7 +230,7 @@ Uint8List detectionMask(
 /// caseiro.
 class BlobMatcher {
   BlobMatcher({this.persistence = 8, this.smoothing = 0.4, int firstId = 1})
-      : _proximoId = firstId;
+    : _proximoId = firstId;
 
   final int persistence;
   final double smoothing;
@@ -248,7 +256,9 @@ class BlobMatcher {
         final d = (antigos[i].center - novo.center).distance;
         // Longe demais nao e o mesmo objeto: e outro.
         final limite = math.max(
-            40.0, math.max(antigos[i].rect.longestSide, novo.rect.longestSide));
+          40.0,
+          math.max(antigos[i].rect.longestSide, novo.rect.longestSide),
+        );
         if (d < melhorD && d <= limite) {
           melhorD = d;
           melhor = i;
@@ -256,8 +266,9 @@ class BlobMatcher {
       }
 
       if (melhor < 0) {
-        saida.add(Blob(
-            id: _proximoId++, rect: novo.rect, area: novo.area, age: 1));
+        saida.add(
+          Blob(id: _proximoId++, rect: novo.rect, area: novo.area, age: 1),
+        );
         continue;
       }
 
@@ -270,12 +281,9 @@ class BlobMatcher {
         velho.rect.right + (novo.rect.right - velho.rect.right) * (1 - s),
         velho.rect.bottom + (novo.rect.bottom - velho.rect.bottom) * (1 - s),
       );
-      saida.add(Blob(
-        id: velho.id,
-        rect: r,
-        area: novo.area,
-        age: velho.age + 1,
-      ));
+      saida.add(
+        Blob(id: velho.id, rect: r, area: novo.area, age: velho.age + 1),
+      );
     }
 
     // PERSISTENCIA: quem nao foi casado neste quadro nao some na hora.
@@ -370,24 +378,24 @@ class BlobTrackData {
   }
 
   Map<String, dynamic> toJson() => {
-        'fps': fps,
-        'w': width,
-        'h': height,
-        'f': [
-          for (final quadro in frames)
+    'fps': fps,
+    'w': width,
+    'h': height,
+    'f': [
+      for (final quadro in frames)
+        [
+          for (final b in quadro)
             [
-              for (final b in quadro)
-                [
-                  b.id,
-                  b.rect.left.round(),
-                  b.rect.top.round(),
-                  b.rect.width.round(),
-                  b.rect.height.round(),
-                  b.area,
-                ]
-            ]
+              b.id,
+              b.rect.left.round(),
+              b.rect.top.round(),
+              b.rect.width.round(),
+              b.rect.height.round(),
+              b.area,
+            ],
         ],
-      };
+    ],
+  };
 
   static BlobTrackData? decode(String source) {
     try {
@@ -409,8 +417,8 @@ class BlobTrackData {
                     (b[4] as num).toDouble(),
                   ),
                   area: (b[5] as num).toInt(),
-                )
-            ]
+                ),
+            ],
         ],
       );
     } catch (_) {
@@ -436,8 +444,7 @@ BlobTrackData analyzeBlobs(
   if (frames.isEmpty) {
     return const BlobTrackData(fps: 1, width: 0, height: 0, frames: []);
   }
-  final matcher =
-      BlobMatcher(persistence: persistence, smoothing: smoothing);
+  final matcher = BlobMatcher(persistence: persistence, smoothing: smoothing);
   final saida = <List<Blob>>[];
 
   for (var i = 0; i < frames.length; i++) {
@@ -449,8 +456,14 @@ BlobTrackData analyzeBlobs(
       sensitivity: sensitivity,
     );
     final crus = mergeNearby(
-      labelRegions(mask, frames[i].width, frames[i].height,
-          minArea: minArea, maxArea: maxArea, maxBlobs: maxBlobs),
+      labelRegions(
+        mask,
+        frames[i].width,
+        frames[i].height,
+        minArea: minArea,
+        maxArea: maxArea,
+        maxBlobs: maxBlobs,
+      ),
       mergeDistance,
     );
     saida.add(matcher.update(crus));

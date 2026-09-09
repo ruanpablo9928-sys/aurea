@@ -44,8 +44,8 @@ class PeakLevel {
   double get bucketSeconds =>
       sampleRate <= 0 ? 0 : samplesPerBucket / sampleRate;
 
-  Duration get duration => Duration(
-      microseconds: (length * bucketSeconds * 1000000).round());
+  Duration get duration =>
+      Duration(microseconds: (length * bucketSeconds * 1000000).round());
 
   /// O indice do balde no instante [t].
   int bucketAt(Duration t) {
@@ -157,13 +157,15 @@ PeakPyramid buildPeakPyramid(Int16List samples, int sampleRate) {
       mx[i] = hi;
       rm[i] = math.sqrt(soma / fator);
     }
-    niveis.add(PeakLevel(
-      samplesPerBucket: peakBucketSizes[k],
-      sampleRate: sampleRate,
-      min: mn,
-      max: mx,
-      rms: rm,
-    ));
+    niveis.add(
+      PeakLevel(
+        samplesPerBucket: peakBucketSizes[k],
+        sampleRate: sampleRate,
+        min: mn,
+        max: mx,
+        rms: rm,
+      ),
+    );
   }
 
   return PeakPyramid(niveis, sampleRate);

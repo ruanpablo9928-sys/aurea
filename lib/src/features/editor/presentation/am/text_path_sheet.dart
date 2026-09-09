@@ -10,7 +10,10 @@ import 'am_widgets.dart';
 /// TEXTO EM CAMINHO: selo circular, arco, ou acompanhando uma forma
 /// desenhada no proprio projeto.
 Future<void> showTextPathSheet(
-    BuildContext context, WidgetRef ref, String layerId) async {
+  BuildContext context,
+  WidgetRef ref,
+  String layerId,
+) async {
   await showParamSheet(
     context,
     title: 'Texto em caminho',
@@ -28,40 +31,48 @@ Future<void> showTextPathSheet(
           setSheetState(() {});
         }
 
-        final formas =
-            project.layers.whereType<ShapeLayer>().toList();
+        final formas = project.layers.whereType<ShapeLayer>().toList();
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(18, 14, 18,
-                16 + MediaQuery.of(sheetContext).viewInsets.bottom),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              14,
+              18,
+              16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Texto em caminho',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text)),
+                const Text(
+                  'Texto em caminho',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AmColors.text,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 const Text(
                   'Selo circular, arco, ou seguindo uma forma que voce '
                   'desenhou — com os operadores e tudo.',
                   style: TextStyle(
-                      fontSize: 11, height: 1.35, color: AmColors.muted),
+                    fontSize: 11,
+                    height: 1.35,
+                    color: AmColors.muted,
+                  ),
                 ),
                 const SizedBox(height: 12),
 
                 _Chips(
                   label: 'Caminho',
                   options: [
-                    for (final k in TextPathKind.values)
-                      textPathKindLabel(k)
+                    for (final k in TextPathKind.values) textPathKindLabel(k),
                   ],
                   index: spec.kind.index,
-                  onChanged: (i) => edit((s) =>
-                      s.copyWith(kind: TextPathKind.values[i])),
+                  onChanged: (i) =>
+                      edit((s) => s.copyWith(kind: TextPathKind.values[i])),
                 ),
 
                 if (spec.kind == TextPathKind.layer) ...[
@@ -69,8 +80,7 @@ Future<void> showTextPathSheet(
                   if (formas.isEmpty)
                     const Text(
                       'Nao ha camada de forma no projeto para seguir.',
-                      style: TextStyle(
-                          fontSize: 11, color: AmColors.muted),
+                      style: TextStyle(fontSize: 11, color: AmColors.muted),
                     )
                   else
                     Wrap(
@@ -79,23 +89,28 @@ Future<void> showTextPathSheet(
                       children: [
                         for (final f in formas)
                           GestureDetector(
-                            onTap: () => edit(
-                                (s) => s.copyWith(shapeLayerId: f.id)),
+                            onTap: () =>
+                                edit((s) => s.copyWith(shapeLayerId: f.id)),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: spec.shapeLayerId == f.id
                                     ? AmColors.accentDim
                                     : AmColors.chip,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Text(f.name,
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: spec.shapeLayerId == f.id
-                                          ? AmColors.accent
-                                          : AmColors.muted)),
+                              child: Text(
+                                f.name,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: spec.shapeLayerId == f.id
+                                      ? AmColors.accent
+                                      : AmColors.muted,
+                                ),
+                              ),
                             ),
                           ),
                       ],
@@ -117,8 +132,7 @@ Future<void> showTextPathSheet(
                     min: -180,
                     max: 180,
                     suffix: '°',
-                    onChanged: (v) =>
-                        edit((s) => s.copyWith(startDeg: v)),
+                    onChanged: (v) => edit((s) => s.copyWith(startDeg: v)),
                   ),
                 ],
                 if (spec.kind == TextPathKind.arc)
@@ -128,8 +142,7 @@ Future<void> showTextPathSheet(
                     min: 10,
                     max: 360,
                     suffix: '°',
-                    onChanged: (v) =>
-                        edit((s) => s.copyWith(sweepDeg: v)),
+                    onChanged: (v) => edit((s) => s.copyWith(sweepDeg: v)),
                   ),
 
                 if (spec.active) ...[
@@ -151,14 +164,13 @@ Future<void> showTextPathSheet(
                     label: 'Alinhar',
                     options: const ['Acima', 'Sobre', 'Abaixo'],
                     index: spec.align.index,
-                    onChanged: (i) => edit((s) =>
-                        s.copyWith(align: TextPathAlign.values[i])),
+                    onChanged: (i) =>
+                        edit((s) => s.copyWith(align: TextPathAlign.values[i])),
                   ),
                   _Toggle(
                     label: 'Girar com a curva',
                     value: spec.perpendicular,
-                    onChanged: (v) =>
-                        edit((s) => s.copyWith(perpendicular: v)),
+                    onChanged: (v) => edit((s) => s.copyWith(perpendicular: v)),
                   ),
                   _Toggle(
                     label: 'Inverter o sentido',
@@ -170,7 +182,10 @@ Future<void> showTextPathSheet(
                     'Animar "Deslizar" faz o texto correr pelo caminho — '
                     'e assim que um selo gira.',
                     style: TextStyle(
-                        fontSize: 11, height: 1.35, color: AmColors.muted),
+                      fontSize: 11,
+                      height: 1.35,
+                      color: AmColors.muted,
+                    ),
                   ),
                 ],
               ],
@@ -201,35 +216,37 @@ class _Ruler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 84,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, color: AmColors.muted)),
-            ),
-            Expanded(
-              child: AmTickRuler(
-                value: value,
-                min: min,
-                max: max,
-                unitsPerPixel: (max - min) / 400,
-                height: 40,
-                onChanged: onChanged,
-              ),
-            ),
-            SizedBox(
-              width: 56,
-              child: Text('${value.round()}$suffix',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      fontSize: 12, color: AmColors.text)),
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 84,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AmColors.muted),
+          ),
         ),
-      );
+        Expanded(
+          child: AmTickRuler(
+            value: value,
+            min: min,
+            max: max,
+            unitsPerPixel: (max - min) / 400,
+            height: 40,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 56,
+          child: Text(
+            '${value.round()}$suffix',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 12, color: AmColors.text),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Chips extends StatelessWidget {
@@ -247,46 +264,49 @@ class _Chips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-                width: 84,
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 12, color: AmColors.muted))),
-            Expanded(
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (var i = 0; i < options.length; i++)
-                    GestureDetector(
-                      onTap: () => onChanged(i),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: i == index
-                              ? AmColors.accentDim
-                              : AmColors.chip,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(options[i],
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: i == index
-                                    ? AmColors.accent
-                                    : AmColors.muted)),
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 84,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AmColors.muted),
+          ),
+        ),
+        Expanded(
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (var i = 0; i < options.length; i++)
+                GestureDetector(
+                  onTap: () => onChanged(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: i == index ? AmColors.accentDim : AmColors.chip,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      options[i],
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: i == index ? AmColors.accent : AmColors.muted,
                       ),
                     ),
-                ],
-              ),
-            ),
-          ],
+                  ),
+                ),
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _Toggle extends StatelessWidget {
@@ -302,20 +322,21 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                      fontSize: 13, color: AmColors.text)),
-            ),
-            CupertinoSwitch(
-              value: value,
-              activeTrackColor: AmColors.accent,
-              onChanged: onChanged,
-            ),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: AmColors.text),
+          ),
         ),
-      );
+        CupertinoSwitch(
+          value: value,
+          activeTrackColor: AmColors.accent,
+          onChanged: onChanged,
+        ),
+      ],
+    ),
+  );
 }

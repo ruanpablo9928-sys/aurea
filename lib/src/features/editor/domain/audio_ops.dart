@@ -31,8 +31,8 @@ List<(Duration, Duration)> detectSilence(
   Duration padding = const Duration(milliseconds: 120),
 }) {
   if (peaks.isEmpty) return const [];
-  final minLen =
-      (minSilence.inMilliseconds * audioPeaksPerSecond / 1000).round();
+  final minLen = (minSilence.inMilliseconds * audioPeaksPerSecond / 1000)
+      .round();
   final pad = (padding.inMilliseconds * audioPeaksPerSecond / 1000).round();
 
   final out = <(Duration, Duration)>[];
@@ -65,8 +65,12 @@ List<(Duration, Duration)> detectSpeech(
   Duration padding = const Duration(milliseconds: 120),
 }) {
   if (peaks.isEmpty) return const [];
-  final silencios = detectSilence(peaks,
-      threshold: threshold, minSilence: minSilence, padding: padding);
+  final silencios = detectSilence(
+    peaks,
+    threshold: threshold,
+    minSilence: minSilence,
+    padding: padding,
+  );
   final total = _atIndex(peaks.length);
 
   final out = <(Duration, Duration)>[];
@@ -182,10 +186,14 @@ Float32List duckEnvelope(
   if (n == 0) return out;
 
   final piso = (1 - amount).clamp(0.0, 1.0);
-  final aPassos =
-      math.max(1, (attack.inMilliseconds * audioPeaksPerSecond / 1000).round());
+  final aPassos = math.max(
+    1,
+    (attack.inMilliseconds * audioPeaksPerSecond / 1000).round(),
+  );
   final rPassos = math.max(
-      1, (release.inMilliseconds * audioPeaksPerSecond / 1000).round());
+    1,
+    (release.inMilliseconds * audioPeaksPerSecond / 1000).round(),
+  );
 
   var g = 1.0;
   for (var i = 0; i < n; i++) {

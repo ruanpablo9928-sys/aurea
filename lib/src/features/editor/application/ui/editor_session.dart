@@ -203,7 +203,6 @@ class EditorSessionNotifier extends AutoDisposeNotifier<EditorSession> {
       : state.copyWith(outPoint: t);
 
   void clearInOut() => state = state.copyWith(clearInOut: true);
-
 }
 
 /// AUTO-DISPOSE: sem ninguem escutando (o editor fechou), a sessao some
