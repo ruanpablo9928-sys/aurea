@@ -1446,6 +1446,30 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.withCamera(fn(layer.camera)));
   }
 
+  /// PERSPECTIVA OU ORTOGRAFICA.
+  ///
+  /// O campo existe, o motor honra e o arquivo guarda — e o unico
+  /// caminho ate hoje era um `copyWith` cru de fora, o que quer dizer
+  /// que nao havia caminho nenhum. Ortografica e o que responde "esta
+  /// atras ou e so menor?", que a perspectiva por definicao esconde.
+  void setCameraOrthographic(String id, bool ortho) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    _replace(layer.withCamera(layer.camera.copyWith(orthographic: ortho)));
+  }
+
+  /// A DISTANCIA FOCAL da camera em uso, em milimetros.
+  void setCameraFocalLength(String id, double mm) {
+    final layer = _layer(id);
+    if (layer is! Scene3DLayer) return;
+    final v = mm.clamp(4.0, 400.0);
+    _replace(
+      layer.withCamera(
+        layer.camera.copyWith(focalLength: AnimatedDouble(v)),
+      ),
+    );
+  }
+
   void updateSceneCameraById(String id, Camera3D camera) {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;

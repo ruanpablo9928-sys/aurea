@@ -11,7 +11,9 @@ import '../../domain/shape.dart';
 import 'editor_de_curva.dart';
 import 'escolha_de_cor.dart';
 import 'linha_de_parametro.dart';
+import 'painel_da_cena.dart';
 import 'painel_de_mascaras.dart';
+import 'painel_de_rastreio.dart';
 import 'painel_de_mistura.dart';
 import 'painel_de_som.dart';
 import 'painel_de_velocidade.dart';
@@ -92,6 +94,8 @@ class ControlesDaCategoria extends ConsumerWidget {
     'forma' => _Forma(camada: camada, tempo: tempo),
     'som' => PainelDeSom(camada: camada),
     'velocidade' => PainelDeVelocidade(camada: camada),
+    'cena' => PainelDaCena(camada: camada, playback: playback),
+    'rastreio' => PainelDeRastreio(camada: camada),
     'efeitos' => _Efeitos(camada: camada, tempo: tempo),
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),

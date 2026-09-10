@@ -159,6 +159,27 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Velocidade',
       icone: Icons.speed_rounded,
     ),
+  // A CENA 3D VOLTOU A TER PORTA.
+  //
+  // O estudio 3D foi apagado por inteiro com a UI antiga e nunca
+  // voltou: a auditoria contou 48 comandos 3D com zero chamadores. Este
+  // cartao devolve o que nao depende de gesto no palco — de que angulo
+  // se olha, com que camera e como enquadrar.
+  if (camada is Scene3DLayer)
+    const CategoriaDaCamada(
+      id: 'cena',
+      rotulo: 'Cena e camera',
+      icone: Icons.videocam_rounded,
+    ),
+  // RASTREAR SO FAZ SENTIDO EM VIDEO: o solver le quadros de um
+  // arquivo. `rastrearCamera3D` recusa o resto, e o cartao segue o
+  // comando.
+  if (camada is VideoLayer)
+    const CategoriaDaCamada(
+      id: 'rastreio',
+      rotulo: 'Rastrear a camera',
+      icone: Icons.travel_explore_rounded,
+    ),
   if (camada is ImageLayer || camada is VideoLayer || camada is AudioLayer)
     const CategoriaDaCamada(
       id: 'midia',
@@ -478,6 +499,8 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'forma' => 'Forma',
   'som' => 'Som',
   'velocidade' => 'Velocidade',
+  'cena' => 'Cena e camera',
+  'rastreio' => 'Rastrear a camera',
   'efeitos' => 'Efeitos',
   'midia' => 'Informacoes da midia',
   'camada' => 'Camada',

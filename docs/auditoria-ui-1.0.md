@@ -162,6 +162,33 @@ da tela morreu, e a formula duplicada de `PlatformEncoder` tambem.
   milissegundos seria generosa demais com o zoom fechado e inutil com
   ele aberto.
 
+**Cena 3D e rastreio (lote 11).** A Frente 4 respondia que a UI nova
+nao chega em nenhuma tela do estudio 3D **porque elas nao existem mais**
+— e contava 48 comandos 3D com zero chamadores. Dois cartoes devolvem a
+parte que nao depende de gesto no palco:
+
+- **"Cena e camera"** (`Scene3DLayer`): as sete vistas fixas
+  (`setScene3DView` — o palco lia `view` e ela ficava presa em "Camera"
+  para sempre), perspectiva/ortografica (`setCameraOrthographic`, novo:
+  o unico caminho ate hoje era um `copyWith` cru de fora, ou seja,
+  caminho nenhum), a lente em mm com o angulo de visao ao lado
+  (`setCameraFocalLength`, novo), a lista de cameras com criar
+  (`addScene3DCamera`), cortar (`setCameraShot`), duplicar
+  (`duplicateSceneCamera`) e apagar (`removeScene3DCamera`), os cinco
+  rigs (`applyRigToScene` — geram keyframes REAIS, editaveis depois) e
+  enquadrar tudo (`frameSceneAll`).
+- **"Rastrear a camera"** (`VideoLayer`): modo do solve e tipo de
+  tomada com as explicacoes que o motor ja escrevia e ninguem via,
+  progresso por etapa, e a ficha do resultado — erro em pixels
+  traduzido em palavras ("gruda" abaixo de 1 px, "escorrega" acima de
+  3), quadros, pontos, tomada detectada e a lente resolvida. Dali sai a
+  cena 3D (`criarCenaDoRastreio`), com ou sem a nuvem de pontos.
+
+Continua fora, e dito: mover, girar e escalar o NO, o gizmo, a selecao
+de no e os pontos desenhados sobre a previa. Os quatro dependem de um
+`GestureDetector` no palco, que ainda nao existe — prometer no painel
+seria prometer o palco.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo
