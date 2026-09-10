@@ -42,6 +42,13 @@ Sete alvos dividindo a largura, nesta ordem: desfazer, refazer, ir ao
 início, play/pause, ir ao fim, duplicar, enquadrar. Ícones finos,
 brancos, o de play do mesmo tamanho dos outros.
 
+**Sete, e o número importa.** Com um número par de alvos dividindo a
+largura, o play deixa de cair no centro exato da tela — e ele é o
+controle que a mão procura sem olhar. Por isso o botão que troca entre a
+pilha e o modo detalhado, que a referência não tem porque lá só existe a
+pilha, foi para o cabeçalho: ele ocupa o lugar da engrenagem, último
+antes do botão colorido.
+
 **O Aurea usa 48 px, e não 32.** Quarenta e oito é o piso de alvo
 tocável, e há um teste que cobra isso. Dezesseis pixels a mais numa tela
 de setecentos é barato; um toque errado no controle que a mão mais
@@ -86,7 +93,27 @@ seria desenhar uma promessa falsa.
   (ou uma nota musical, no áudio). O Aurea usa um quadradinho da cor do
   tipo: a maior parte das camadas daqui (texto, forma, cena 3D) não tem
   quadro para miniaturar, e gerar miniatura de vídeo custa caro no
-  aparelho.
+  aparelho;
+- **os keyframes são losangos claros dentro do clipe**, e não riscos;
+- **na ponta direita de cada trilha há uma alça de três riscos**, presa
+  na borda da tela e não no fim do clipe. É por ela que a camada muda de
+  lugar na pilha;
+- **a cor do texto do clipe muda com a cor do clipe**: escuro sobre
+  laranja e ciano claros, branco sobre azul e roxo. Não é tabela por
+  tipo — é luminância, senão uma cor nova nasce ilegível.
+
+## O `+` redondo
+
+O único controle da referência que não está numa barra: um círculo
+grande, colorido, flutuando sobre o canto inferior direito da linha do
+tempo. É o canto que o polegar alcança sem a mão sair de posição, e
+acrescentar mais uma camada é a ação mais repetida de quem monta uma
+composição.
+
+No Aurea ele **se recolhe no projeto vazio**: ali quem convida é a faixa
+de ferramentas inteira, com texto. Um símbolo sozinho não diz o que
+fazer para quem acabou de abrir um projeto em branco, e dois convites ao
+mesmo tempo só criam dúvida.
 
 ## O que muda tudo: o cabeçote não anda
 
@@ -119,7 +146,8 @@ a composição caber; a partir daí o belisco na régua muda, e o botão
 | cromo (cabeçalho, transporte, linha do tempo) | `#18181E` |
 | pílula da camada             | `#242436` |
 | cápsula do tempo             | `#242430` |
-| barra de rolagem / marcas    | `#606068` |
+| marcas da régua              | `#606068` |
+| barra do topo da régua       | verde (lá); o teal da Aurea, aqui |
 | cabeçote                     | branco    |
 
 O verde do botão de exportar da referência **não** foi copiado. O Aurea

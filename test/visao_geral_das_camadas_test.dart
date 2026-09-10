@@ -48,7 +48,16 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
       child: MaterialApp(
         home: Scaffold(
           body: Column(
-            children: [const Spacer(), LinhaDoTempo(playback: playback)],
+            children: [
+              // O ALTERNADOR DE VISTA vive no cabecalho da tela, e nao
+              // dentro da linha do tempo — o transporte tem exatamente os
+              // sete alvos da referencia. O teste monta o MESMO widget
+              // que o cabecalho monta, para nao cobrar um botao que a
+              // tela nao tem.
+              const AlternadorDeVista(),
+              const Spacer(),
+              LinhaDoTempo(playback: playback),
+            ],
           ),
         ),
       ),
@@ -226,6 +235,104 @@ void main() {
             .metaOf(camadas.firstWhere((l) => l.name == 'Camada 1').id)
             .hidden,
         isFalse,
+      );
+    });
+  });
+
+  group('mudar a camada de lugar', () {
+    // A ALCA DA DIREITA e a unica coisa desta vista que muda o projeto
+    // alem do olho — e ela veio da referencia, que tem os mesmos tres
+    // riscos na ponta de cada trilha.
+    Future<List<String>> nomes(ProviderContainer c) async =>
+        c.read(editorControllerProvider).layers.map((l) => l.name).toList();
+
+    testWidgets('arrastar a alca para baixo desce a camada na pilha', (
+      tester,
+    ) async {
+      final m = await _montar(tester, camadas: 4);
+      await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
+      await tester.pump();
+      final antes = await nomes(m.c);
+
+      final alca = find.bySemanticsLabel('Mudar ${antes.first} de lugar');
+      expect(alca, findsOneWidget);
+      final gesto = await tester.startGesture(tester.getCenter(alca));
+      // O primeiro passo e gasto no reconhecimento do arrasto.
+      await gesto.moveBy(const Offset(0, 20));
+      await tester.pump();
+      await gesto.moveBy(
+        const Offset(0, VisaoGeralDasCamadas.alturaDaTrilha),
+      );
+      await tester.pump();
+      await gesto.up();
+      await tester.pump();
+
+      final depois = await nomes(m.c);
+      expect(
+        depois[1],
+        antes.first,
+        reason: 'a camada tinha de ter descido um degrau',
+      );
+      expect(
+        depois.toSet(),
+        antes.toSet(),
+        reason: 'reordenar nao cria nem apaga camada',
+      );
+    });
+
+    testWidgets('o arrasto inteiro custa UM desfazer', (tester) async {
+      final m = await _montar(tester, camadas: 5);
+      await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
+      await tester.pump();
+      final antes = await nomes(m.c);
+
+      final alca = find.bySemanticsLabel('Mudar ${antes.first} de lugar');
+      final gesto = await tester.startGesture(tester.getCenter(alca));
+      await gesto.moveBy(const Offset(0, 20));
+      await tester.pump();
+      // Tres degraus de uma vez.
+      await gesto.moveBy(
+        const Offset(0, VisaoGeralDasCamadas.alturaDaTrilha * 3),
+      );
+      await tester.pump();
+      await gesto.up();
+      await tester.pump();
+
+      expect(await nomes(m.c), isNot(antes));
+      m.c.read(editorControllerProvider.notifier).undo();
+      await tester.pump();
+      expect(
+        await nomes(m.c),
+        antes,
+        reason:
+            'um arrasto e uma acao: tres degraus nao podem custar tres '
+            'toques para voltar',
+      );
+    });
+
+    testWidgets('soltar sem sair do lugar nao mexe no projeto', (
+      tester,
+    ) async {
+      final m = await _montar(tester, camadas: 3);
+      await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
+      await tester.pump();
+      final antes = await nomes(m.c);
+      final podiaDesfazer = m.c
+          .read(editorControllerProvider.notifier)
+          .canUndo;
+
+      final alca = find.bySemanticsLabel('Mudar ${antes.first} de lugar');
+      final gesto = await tester.startGesture(tester.getCenter(alca));
+      await gesto.moveBy(const Offset(0, 6));
+      await tester.pump();
+      await gesto.up();
+      await tester.pump();
+
+      expect(await nomes(m.c), antes);
+      expect(
+        m.c.read(editorControllerProvider.notifier).canUndo,
+        podiaDesfazer,
+        reason: 'um arrasto que nao andou nao pode virar lance de desfazer',
       );
     });
   });

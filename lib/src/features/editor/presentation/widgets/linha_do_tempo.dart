@@ -6,6 +6,7 @@ import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import 'mapa_do_tempo.dart';
+import 'painel_da_camada.dart';
 import 'visao_geral_das_camadas.dart';
 
 /// A COR DIZ O TIPO DA CAMADA.
@@ -21,6 +22,29 @@ Color corDaCamada(Layer camada) => switch (camada) {
   ShapeLayer() => AmColors.tealBright,
   _ => AmColors.teal,
 };
+
+/// A FONTE DO APP, para quem pinta texto no canvas.
+///
+/// `TextPainter` nao herda nada: sem isto ele cai na fonte padrao da
+/// plataforma enquanto o resto da tela usa a do tema. Enquanto as duas
+/// coincidem ninguem nota — no dia em que a Aurea adotar uma fonte
+/// propria, nome de camada e relogio seriam os unicos textos fora dela.
+TextStyle familiaDoApp(BuildContext context) {
+  final base = DefaultTextStyle.of(context).style;
+  return TextStyle(
+    fontFamily: base.fontFamily,
+    fontFamilyFallback: base.fontFamilyFallback,
+  );
+}
+
+/// A COR DO QUE VAI EM CIMA DE UM CLIPE.
+///
+/// Preto fixo funcionava enquanto todas as barras eram claras. Quem
+/// decide e a luminancia da propria cor, e nao uma tabela por tipo: uma
+/// cor nova nao pode nascer ilegivel.
+Color sobreACorDaCamada(Color cor) => cor.computeLuminance() > .45
+    ? const Color(0xFF0B0E12)
+    : const Color(0xFFFFFFFF);
 
 /// A LINHA DO TEMPO.
 ///
@@ -127,7 +151,6 @@ class LinhaDoTempo extends ConsumerWidget {
                       playback: playback,
                       duracao: project.duration,
                       camadaSelecionada: selecionada,
-                      modo: modo,
                       aoEnquadrar: () =>
                           ref.read(zoomDaLinhaDoTempoProvider.notifier).state =
                               MapaDoTempo.zoomQueCabe(
@@ -173,6 +196,18 @@ class LinhaDoTempo extends ConsumerWidget {
                       color: AmColors.cabecote,
                     ),
                   ),
+                ),
+                // O `+` REDONDO, flutuando no canto de baixo a direita.
+                //
+                // E o unico controle da referencia que nao esta numa
+                // barra, e o lugar dele nao e capricho: e o canto que o
+                // polegar alcanca sem a mao sair de posicao, e a acao
+                // mais repetida de quem monta uma composicao e
+                // acrescentar mais uma camada.
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: _BotaoRedondoDeAdicao(playback: playback),
                 ),
               ],
             );
@@ -251,25 +286,28 @@ class LinhaDoTempo extends ConsumerWidget {
   }
 }
 
-/// A BARRA DE TRANSPORTE.
+/// A BARRA DE TRANSPORTE: SETE ALVOS, com o play no meio EXATO.
 ///
-/// Oito alvos dividindo a largura, na ordem da referencia: desfazer,
-/// refazer, inicio, PLAY, fim, duplicar, enquadrar — mais o botao de
-/// trocar de vista, que a referencia nao tem porque la so existe a
-/// pilha. O play e o maior, no meio, porque e o gesto que a mao repete.
+/// Sete, e nao oito, porque sete e o que a referencia tem — e o numero
+/// nao e decoracao: com um numero PAR de alvos dividindo a largura, o
+/// play deixa de cair no centro da tela, e ele e o controle que a mao
+/// procura sem olhar.
+///
+/// Na ordem da referencia: desfazer, refazer, inicio, PLAY, fim,
+/// duplicar, enquadrar. O botao de trocar de vista, que a referencia nao
+/// tem porque la so existe a pilha, foi para o cabecalho — ocupa la o
+/// lugar da engrenagem.
 class _Transporte extends ConsumerWidget {
   const _Transporte({
     required this.playback,
     required this.duracao,
     required this.camadaSelecionada,
-    required this.modo,
     required this.aoEnquadrar,
   });
 
   final PlaybackController playback;
   final Duration duracao;
   final String? camadaSelecionada;
-  final ModoDaLinhaDoTempo modo;
   final VoidCallback aoEnquadrar;
 
   @override
@@ -279,24 +317,6 @@ class _Transporte extends ConsumerWidget {
       height: LinhaDoTempo.alturaDoTransporte,
       child: Row(
         children: [
-          // O CAMINHO DE VOLTA ESTA SEMPRE AQUI. Trocar de vista e a
-          // primeira pergunta — vem antes de qualquer acao sobre o
-          // tempo —, e o mesmo botao leva e traz.
-          _Botao(
-            icone: modo == ModoDaLinhaDoTempo.geral
-                ? Icons.view_stream_rounded
-                : Icons.layers_rounded,
-            destacado: modo == ModoDaLinhaDoTempo.geral,
-            aoTocar: () =>
-                ref
-                    .read(modoDaLinhaDoTempoProvider.notifier)
-                    .state = modo == ModoDaLinhaDoTempo.geral
-                ? ModoDaLinhaDoTempo.detalhado
-                : ModoDaLinhaDoTempo.geral,
-            rotulo: modo == ModoDaLinhaDoTempo.geral
-                ? 'Ver uma camada'
-                : 'Ver todas as camadas',
-          ),
           _Botao(
             icone: Icons.undo_rounded,
             ativo: controller.canUndo,
@@ -367,7 +387,6 @@ class _Botao extends StatelessWidget {
     required this.rotulo,
     this.ativo = true,
     this.tamanho = 21,
-    this.destacado = false,
   });
 
   final IconData icone;
@@ -375,9 +394,6 @@ class _Botao extends StatelessWidget {
   final String rotulo;
   final bool ativo;
   final double tamanho;
-
-  /// Aceso: o controle diz que a vista dele e a que esta no ar.
-  final bool destacado;
 
   @override
   Widget build(BuildContext context) => Expanded(
@@ -398,11 +414,9 @@ class _Botao extends StatelessWidget {
           child: Icon(
             icone,
             size: tamanho,
-            color: !ativo
-                ? AmColors.muted.withValues(alpha: .4)
-                : destacado
-                ? AmColors.accent
-                : AmColors.text,
+            color: ativo
+                ? AmColors.text
+                : AmColors.muted.withValues(alpha: .4),
           ),
         ),
       ),
@@ -487,6 +501,7 @@ class _ReguaState extends State<_Regua> {
             mapa: widget.mapa(t),
             duracao: widget.duracao,
             fps: widget.fps,
+            familia: familiaDoApp(context),
           ),
           size: Size.infinite,
         ),
@@ -505,11 +520,13 @@ class _PintorDaRegua extends CustomPainter {
     required this.mapa,
     required this.duracao,
     required this.fps,
+    required this.familia,
   });
 
   final MapaDoTempo mapa;
   final Duration duracao;
   final int fps;
+  final TextStyle familia;
 
   /// A barra de rolagem no topo, as marcas embaixo dela, e a capsula
   /// sobreposta ao pe das marcas. Medidas da referencia.
@@ -559,13 +576,16 @@ class _PintorDaRegua extends CustomPainter {
     final meio = passo / 2;
     var n = (inicio / meio).floor();
     final ultimo = (fim / meio).ceil();
-    final segundosDaDuracao = duracao.inMicroseconds / 1000000;
     while (n <= ultimo) {
       final s = n * meio;
       n++;
-      // FORA DA COMPOSICAO NAO HA ESCALA. Antes do zero e depois do fim
-      // nao existe tempo para medir, e marcar la sugeriria que existe.
-      if (s < 0 || s > segundosDaDuracao) continue;
+      // AS MARCAS COBREM A LARGURA INTEIRA, inclusive antes do zero.
+      //
+      // Cortar a regua no comeco da composicao foi tentado e esta
+      // errado: no instante zero — que e onde todo projeto abre — a
+      // metade esquerda ficava lisa, e uma regua pela metade parece
+      // defeito. A referencia desenha a grade toda; quem diz onde a
+      // composicao comeca e a barra do topo.
       final x =
           mapa.ancora +
           (s - mapa.tempo.inMicroseconds / 1000000) * mapa.pxPorSegundo;
@@ -583,11 +603,13 @@ class _PintorDaRegua extends CustomPainter {
     }
   }
 
-  /// A BARRA DE ROLAGEM: que pedaco da composicao esta a vista.
+  /// A BARRA DO TOPO: que pedaco da composicao esta a vista.
   ///
-  /// Com o cabecote preso no meio e escala livre, nada mais na tela diz
-  /// "voce esta perto do fim" nem "isto aqui e um terco do projeto". A
-  /// barra e a unica pista de proporcao.
+  /// Com o cabecote preso no meio, a regua coberta de marcas iguais e a
+  /// escala livre, nada mais na tela diz "voce esta perto do fim" nem
+  /// "isto aqui e um terco do projeto". Esta barra e a unica pista de
+  /// proporcao — e por isso ela e a unica coisa colorida da regua, como
+  /// na referencia.
   void _pintarBarra(Canvas canvas, Size size) {
     final total = duracao.inMicroseconds;
     if (total <= 0) return;
@@ -613,7 +635,7 @@ class _PintorDaRegua extends CustomPainter {
         ),
         const Radius.circular(2),
       ),
-      Paint()..color = AmColors.muted.withValues(alpha: .55),
+      Paint()..color = AmColors.accent,
     );
   }
 
@@ -624,11 +646,11 @@ class _PintorDaRegua extends CustomPainter {
     final texto = TextPainter(
       text: TextSpan(
         text: relogioDeQuadros(mapa.tempo, fps),
-        style: const TextStyle(
+        style: familia.copyWith(
           fontSize: 12,
           fontWeight: FontWeight.w700,
           color: AmColors.text,
-          fontFeatures: [FontFeature.tabularFigures()],
+          fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -658,6 +680,7 @@ class _PintorDaRegua extends CustomPainter {
 
   @override
   bool shouldRepaint(_PintorDaRegua o) =>
+      o.familia != familia ||
       o.mapa.tempo != mapa.tempo ||
       o.mapa.pxPorSegundo != mapa.pxPorSegundo ||
       o.mapa.largura != mapa.largura ||
@@ -877,6 +900,7 @@ class _FaixaState extends State<_Faixa> {
                       mapa: widget.mapa(t),
                       camada: widget.camada,
                       escondida: widget.escondida,
+                      familia: familiaDoApp(context),
                     ),
                   ),
                 ),
@@ -917,17 +941,25 @@ class _FaixaState extends State<_Faixa> {
                       ),
                     ),
                   ),
-                if (widget.temAnterior)
-                  _Seta(
-                    esquerda: true,
-                    aoTocar: () => widget.aoTrocar(-1),
-                    topo: _Faixa.topoDaTrilhaEm(altura),
-                  ),
-                if (widget.temProxima)
-                  _Seta(
-                    esquerda: false,
-                    aoTocar: () => widget.aoTrocar(1),
-                    topo: _Faixa.topoDaTrilhaEm(altura),
+                // AS SETAS MORAM COLADAS NA PILULA, e nao na ponta da
+                // faixa.
+                //
+                // Na ponta direita elas brigavam com o `+` redondo — e
+                // perdiam, porque ele fica por cima. Coladas na pilula
+                // faz mais sentido de qualquer forma: elas dizem QUAL
+                // camada esta na tela, e a pilula e a identidade dela.
+                if (widget.camada != null &&
+                    (widget.temAnterior || widget.temProxima))
+                  Positioned(
+                    left: LinhaDoTempo.larguraDaPilula,
+                    top: _Faixa.topoDaTrilhaEm(altura),
+                    height: _Faixa.alturaDaTrilha,
+                    width: 26,
+                    child: _SetasDeCamada(
+                      temAnterior: widget.temAnterior,
+                      temProxima: widget.temProxima,
+                      aoTrocar: widget.aoTrocar,
+                    ),
                   ),
               ],
             ),
@@ -938,44 +970,79 @@ class _FaixaState extends State<_Faixa> {
   );
 }
 
-/// A SETA que troca de camada, na ponta da trilha. E o unico caminho
-/// para mudar de camada aqui — a trilha e uma so.
-class _Seta extends StatelessWidget {
-  const _Seta({
-    required this.esquerda,
-    required this.aoTocar,
-    required this.topo,
+/// AS SETAS que trocam de camada, encostadas na pilula.
+///
+/// Sao o unico caminho para mudar de camada no modo detalhado — a
+/// trilha e uma so. Apontam para CIMA e para BAIXO porque e assim que a
+/// pilha esta arrumada: a camada anterior e a de cima.
+class _SetasDeCamada extends StatelessWidget {
+  const _SetasDeCamada({
+    required this.temAnterior,
+    required this.temProxima,
+    required this.aoTrocar,
   });
 
-  final bool esquerda;
-  final VoidCallback aoTocar;
-  final double topo;
+  final bool temAnterior;
+  final bool temProxima;
+  final void Function(int passo) aoTrocar;
 
   @override
-  Widget build(BuildContext context) => Positioned(
-    left: esquerda ? 0 : null,
-    right: esquerda ? null : 0,
-    top: topo,
-    height: _Faixa.alturaDaTrilha,
-    child: Semantics(
+  Widget build(BuildContext context) => Column(
+    children: [
+      Expanded(
+        child: _Meia(
+          rotulo: 'Camada anterior',
+          icone: Icons.keyboard_arrow_up_rounded,
+          ativa: temAnterior,
+          aoTocar: () => aoTrocar(-1),
+        ),
+      ),
+      Expanded(
+        child: _Meia(
+          rotulo: 'Proxima camada',
+          icone: Icons.keyboard_arrow_down_rounded,
+          ativa: temProxima,
+          aoTocar: () => aoTrocar(1),
+        ),
+      ),
+    ],
+  );
+}
+
+class _Meia extends StatelessWidget {
+  const _Meia({
+    required this.rotulo,
+    required this.icone,
+    required this.ativa,
+    required this.aoTocar,
+  });
+
+  final String rotulo;
+  final IconData icone;
+  final bool ativa;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    // NA PONTA DA PILHA A SETA SOME. Um controle aceso que nao leva a
+    // lugar nenhum ensina errado.
+    if (!ativa) return const SizedBox.expand();
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
       button: true,
-      label: esquerda ? 'Camada anterior' : 'Proxima camada',
+      label: rotulo,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: aoTocar,
         child: Container(
-          width: 28,
           alignment: Alignment.center,
           color: AmColors.panel.withValues(alpha: .92),
-          child: Icon(
-            esquerda ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-            size: 20,
-            color: AmColors.text,
-          ),
+          child: Icon(icone, size: 18, color: AmColors.text),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// A PILULA: o olho e a cor da camada, flutuando sobre a trilha.
@@ -1046,11 +1113,13 @@ class _PintorDaFaixa extends CustomPainter {
     required this.mapa,
     required this.camada,
     required this.escondida,
+    required this.familia,
   });
 
   final MapaDoTempo mapa;
   final Layer? camada;
   final bool escondida;
+  final TextStyle familia;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1078,12 +1147,12 @@ class _PintorDaFaixa extends CustomPainter {
     final nome = TextPainter(
       text: TextSpan(
         text: l.name,
-        style: TextStyle(
+        style: familia.copyWith(
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: escondida
-              ? AmColors.text.withValues(alpha: .5)
-              : const Color(0xFF0B0E12),
+              ? sobreACorDaCamada(cor).withValues(alpha: .5)
+              : sobreACorDaCamada(cor),
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -1136,6 +1205,7 @@ class _PintorDaFaixa extends CustomPainter {
 
   @override
   bool shouldRepaint(_PintorDaFaixa o) =>
+      o.familia != familia ||
       o.mapa.tempo != mapa.tempo ||
       o.mapa.pxPorSegundo != mapa.pxPorSegundo ||
       o.mapa.largura != mapa.largura ||
@@ -1160,4 +1230,55 @@ class _SemSelecao extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// O `+` REDONDO que flutua sobre a linha do tempo.
+///
+/// Ele e o mesmo `+` da faixa de ferramentas: chama `abrirAdicaoDeConteudo`,
+/// com o mesmo instante de insercao e o mesmo menu. Dois botoes, um
+/// fluxo — se cada um abrisse o seu, um dia eles discordariam sobre onde
+/// a camada nova entra.
+class _BotaoRedondoDeAdicao extends ConsumerWidget {
+  const _BotaoRedondoDeAdicao({required this.playback});
+
+  final PlaybackController playback;
+
+  static const diametro = 46.0;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(painelDaCamadaLigadoProvider)) {
+      return const SizedBox.shrink();
+    }
+    // NO PROJETO VAZIO ELE SE RECOLHE. Quem convida ali e a faixa
+    // inteira, com texto — um simbolo sozinho nao diz o que fazer para
+    // quem acabou de abrir um projeto em branco. Com camadas na tela, o
+    // simbolo basta, e e ele que fica.
+    if (ref.watch(editorControllerProvider).layers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
+      button: true,
+      label: 'Adicionar conteudo',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => abrirAdicaoDeConteudo(ref, playback),
+        child: Container(
+          width: diametro,
+          height: diametro,
+          decoration: const BoxDecoration(
+            color: AmColors.action,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.add_rounded,
+            size: 26,
+            color: AmColors.onAction,
+          ),
+        ),
+      ),
+    );
+  }
 }

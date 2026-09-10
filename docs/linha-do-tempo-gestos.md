@@ -69,6 +69,8 @@ de um instante seria pior que não mover.
 | Arraste na régua ou nas trilhas | desliza o conteúdo, e com ele o tempo |
 | Belisco na régua | aproxima e afasta a escala |
 | Arraste vertical nas trilhas | rola a lista de camadas |
+| Arraste na alça da direita | muda a camada de lugar na pilha |
+| Toque no `+` redondo | abre o menu de adicionar |
 
 **Não há toque duplo**, e isso é decisão, não esquecimento. Um
 `onDoubleTap` obriga o Flutter a segurar todo toque simples por uns
@@ -114,8 +116,24 @@ pararam de funcionar.
 Uma trilha vazia sem explicação parece defeito. Dizer o que falta — e
 onde resolver — custa duas linhas.
 
+## A alça de ordem
+
+Três riscos na ponta direita de cada trilha, presos na borda da tela —
+como na referência. Arrastá-los para cima ou para baixo muda a camada de
+lugar na pilha.
+
+**A pilha só se reorganiza quando o dedo solta.** Durante o arrasto o
+retorno é uma linha de destino desenhada, e nada mais. Mexer a cada
+degrau daria retorno imediato, mas cada degrau viraria um lance de
+desfazer: arrastar cinco linhas custaria cinco toques para voltar.
+
+Ela só escuta arrasto **vertical**. O horizontal atravessa para quem está
+atrás e continua navegando no tempo, como em qualquer outro ponto da
+pilha.
+
 ## O que este pacote não faz
 
-Reordenar camadas, mover camada no tempo, aparar pontas, dividir,
-efeitos, e migração de dados. O geral lê o projeto e escreve **apenas**
-seleção e visibilidade, que são comandos que já existiam.
+Mover camada no tempo, aparar pontas, dividir, efeitos, e migração de
+dados. Fora a ordem e a visibilidade, o geral **lê** o projeto — e as
+duas coisas que ele escreve são comandos que já existiam
+(`reorderLayer`, `toggleHidden`).

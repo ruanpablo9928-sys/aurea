@@ -59,6 +59,7 @@ Future<ProviderContainer> _montar(
         home: Scaffold(
           body: Column(
             children: [
+              const AlternadorDeVista(),
               const Spacer(),
               LinhaDoTempo(playback: playback),
             ],

@@ -60,6 +60,10 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
             children: [
               Column(
                 children: [
+                  // O ALTERNADOR DE VISTA vive no cabecalho da tela: o
+                  // transporte tem exatamente os sete alvos da
+                  // referencia, e um oitavo tiraria o play do centro.
+                  const AlternadorDeVista(),
                   const Spacer(),
                   LinhaDoTempo(playback: playback),
                   const SizedBox(height: PainelDaCamada.alturaMaxima),
@@ -466,14 +470,13 @@ void main() {
   });
 
   group('regressao: a linha do tempo continua inteira', () {
-    testWidgets('os oito botoes seguem la, com o painel aberto', (
+    testWidgets('os sete botoes seguem la, com o painel aberto', (
       tester,
     ) async {
       await _montar(tester);
       await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
       await tester.pump();
       for (final rotulo in [
-        'Ver todas as camadas',
         'Desfazer',
         'Refazer',
         'Inicio',

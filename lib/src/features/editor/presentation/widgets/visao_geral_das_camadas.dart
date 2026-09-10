@@ -18,27 +18,72 @@ import 'mapa_do_tempo.dart';
 ///   - DETALHADO: "o que esta acontecendo NESTA camada?" Uma trilha
 ///     alta, com os keyframes grandes o bastante para o dedo pegar.
 ///
-/// O geral e uma VISTA, e nao um editor: nele nao se arrasta keyframe,
-/// nao se apara, nao se reordena. Quem quiser mexer volta ao detalhado,
-/// e o caminho de volta esta sempre a um toque.
+/// O detalhado e nosso; a referencia so tem a pilha. Por isso o botao
+/// que troca de vista mora no cabecalho, e nao no transporte: o
+/// transporte tem exatamente os sete alvos da referencia.
 enum ModoDaLinhaDoTempo { detalhado, geral }
 
 /// O modo vigente. Vive so na sessao — guardar em disco seria migracao
 /// de dados, e migracao esta fora deste pacote.
 ///
-/// ABRE NO GERAL. A primeira pergunta de quem entra num projeto e "o que
+/// ABRE NA PILHA. A primeira pergunta de quem entra num projeto e "o que
 /// tem aqui?", e quem responde e a pilha. O detalhado e o passo
 /// seguinte: escolher uma camada e mexer nela.
 final modoDaLinhaDoTempoProvider = StateProvider<ModoDaLinhaDoTempo>(
   (ref) => ModoDaLinhaDoTempo.geral,
 );
 
+/// O BOTAO QUE TROCA DE VISTA.
+///
+/// Mora no cabecalho, no lugar que a referencia da a engrenagem: ultimo
+/// antes do botao colorido. Ele saiu do transporte porque la era o
+/// oitavo alvo — e com um numero par de alvos dividindo a largura, o
+/// play deixava de cair no centro exato da tela.
+///
+/// E um widget proprio, e nao um pedaco do cabecalho, porque o modo e
+/// desta camada de codigo: quem mostra as camadas e quem sabe dizer que
+/// vistas existem.
+class AlternadorDeVista extends ConsumerWidget {
+  const AlternadorDeVista({super.key, this.altura = 52});
+
+  final double altura;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final modo = ref.watch(modoDaLinhaDoTempoProvider);
+    final naPilha = modo == ModoDaLinhaDoTempo.geral;
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
+      button: true,
+      label: naPilha ? 'Ver uma camada' : 'Ver todas as camadas',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () =>
+            ref.read(modoDaLinhaDoTempoProvider.notifier).state = naPilha
+            ? ModoDaLinhaDoTempo.detalhado
+            : ModoDaLinhaDoTempo.geral,
+        child: SizedBox(
+          width: 44,
+          height: altura,
+          child: Icon(
+            naPilha ? Icons.view_stream_rounded : Icons.layers_rounded,
+            size: 20,
+            color: naPilha ? AmColors.accent : AmColors.text,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A VISTA DE TODAS AS CAMADAS.
 ///
 /// Reaproveita tudo que o modo detalhado ja usa: o mesmo projeto, o
-/// mesmo relogio, a mesma selecao, os mesmos comandos — e agora o mesmo
+/// mesmo relogio, a mesma selecao, os mesmos comandos — e o mesmo
 /// [MapaDoTempo], entao o cabecote da regua cai exatamente sobre o
-/// keyframe da trilha. Nada aqui e estado proprio.
+/// keyframe da trilha. Nada aqui e estado proprio, tirando o arrasto em
+/// curso da alca de reordenar.
 ///
 /// CONTRATO DE GESTOS (o mesmo escrito em
 /// `docs/linha-do-tempo-gestos.md`):
@@ -48,10 +93,11 @@ final modoDaLinhaDoTempoProvider = StateProvider<ModoDaLinhaDoTempo>(
 ///   - toque na pilula (olho) ........ esconde ou mostra aquela camada
 ///   - arrasto horizontal ............ navega no tempo
 ///   - arrasto vertical .............. rola a lista de camadas
+///   - arrasto na alca da direita .... muda a camada de lugar na pilha
 ///
-/// O que NAO ha, de proposito: aparar ponta, reordenar, mexer em
-/// keyframe. Nenhum gesto daqui muda o projeto sem passar pela selecao —
-/// com uma excecao anunciada, o olho, que e reversivel no mesmo toque.
+/// O que NAO ha, de proposito: aparar ponta, mover clipe no tempo,
+/// dividir, mexer em keyframe. Isso e do detalhado, ou de entregas que
+/// ainda nao vieram.
 class VisaoGeralDasCamadas extends ConsumerStatefulWidget {
   const VisaoGeralDasCamadas({
     super.key,
@@ -76,6 +122,9 @@ class VisaoGeralDasCamadas extends ConsumerStatefulWidget {
   static const alturaDaTrilha = 30.0;
   static const alturaDoClipe = 26.0;
 
+  /// A COLUNA DAS ALCAS, presa na direita.
+  static const larguraDaAlca = 26.0;
+
   /// Quantas trilhas cabem antes de a lista comecar a rolar. E o piso do
   /// calculo: com mais espaco, a tela manda uma altura maior e mais
   /// trilhas aparecem sem rolar.
@@ -95,6 +144,31 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
   Duration _tempoAoComecar = Duration.zero;
   double _xAoComecar = 0;
 
+  /// A camada que a alca esta segurando, e quanto o dedo ja subiu ou
+  /// desceu. Nulo quando ninguem esta reordenando.
+  String? _segurando;
+  double _dy = 0;
+
+  /// QUANTOS DEGRAUS O DEDO JA PEDIU.
+  int get _degraus => (_dy / VisaoGeralDasCamadas.alturaDaTrilha).round();
+
+  void _soltarAlca(String id) {
+    final passos = _degraus;
+    setState(() {
+      _segurando = null;
+      _dy = 0;
+    });
+    if (passos == 0) return;
+    // UMA MUTACAO SO, no fim.
+    //
+    // Chamar `reorderLayer` a cada degrau daria retorno imediato, mas
+    // cada degrau viraria um lance de desfazer: arrastar cinco linhas
+    // custaria cinco toques para voltar. O retorno durante o arrasto e
+    // a linha de destino, desenhada; o projeto so muda quando o dedo
+    // solta.
+    ref.read(editorControllerProvider.notifier).reorderLayer(id, passos);
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
@@ -109,8 +183,8 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
       // meio; quem anda e o conteudo, no mesmo sentido do dedo.
       //
       // O arrasto VERTICAL nao passa por aqui: ele desce para a lista,
-      // que rola. Quem separa os dois e a propria arena de gestos, pela
-      // direcao do primeiro movimento.
+      // que rola, ou para a alca, que reordena. Quem separa e a arena
+      // de gestos, pela direcao do primeiro movimento.
       onHorizontalDragStart: (d) {
         widget.playback.pause();
         _tempoAoComecar = widget.playback.time.value;
@@ -146,6 +220,9 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                         for (final l in camadas)
                           if (project.metaOf(l.id).hidden) l.id,
                       },
+                      segurando: _segurando,
+                      degraus: _segurando == null ? 0 : _degraus,
+                      familia: familiaDoApp(context),
                     ),
                     size: Size.infinite,
                   ),
@@ -213,12 +290,106 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                     ),
                 ],
               ),
+              // AS ALCAS, presas na direita. Elas ficam por ULTIMO para
+              // ganhar do alvo de selecao que esta embaixo.
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: VisaoGeralDasCamadas.larguraDaAlca,
+                child: Column(
+                  children: [
+                    for (final l in camadas)
+                      _AlcaDeOrdem(
+                        nome: l.name,
+                        segurando: _segurando == l.id,
+                        aoPegar: () => setState(() {
+                          _segurando = l.id;
+                          _dy = 0;
+                        }),
+                        aoMover: (dy) => setState(() => _dy += dy),
+                        aoSoltar: () => _soltarAlca(l.id),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// A ALCA DE ORDEM, na ponta direita de cada trilha.
+///
+/// Tres riscos, do tamanho exato da referencia. Ela so escuta arrasto
+/// VERTICAL: o horizontal atravessa para quem esta atras e continua
+/// navegando no tempo, como em qualquer outro ponto da pilha.
+class _AlcaDeOrdem extends StatelessWidget {
+  const _AlcaDeOrdem({
+    required this.nome,
+    required this.segurando,
+    required this.aoPegar,
+    required this.aoMover,
+    required this.aoSoltar,
+  });
+
+  final String nome;
+  final bool segurando;
+  final VoidCallback aoPegar;
+  final void Function(double dy) aoMover;
+  final VoidCallback aoSoltar;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: VisaoGeralDasCamadas.alturaDaTrilha,
+    child: Semantics(
+      container: true,
+      excludeSemantics: true,
+      label: 'Mudar $nome de lugar',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragStart: (_) => aoPegar(),
+        onVerticalDragUpdate: (d) => aoMover(d.delta.dy),
+        onVerticalDragEnd: (_) => aoSoltar(),
+        onVerticalDragCancel: aoSoltar,
+        child: Center(
+          child: SizedBox(
+            width: 14,
+            height: 12,
+            child: CustomPaint(painter: _PintorDaAlca(aceso: segurando)),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PintorDaAlca extends CustomPainter {
+  const _PintorDaAlca({required this.aceso});
+
+  final bool aceso;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final tinta = Paint()
+      ..color = aceso
+          ? AmColors.text
+          : AmColors.muted.withValues(alpha: .45);
+    for (var i = 0; i < 3; i++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, i * 5.0, size.width, 1.6),
+          const Radius.circular(1),
+        ),
+        tinta,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PintorDaAlca o) => o.aceso != aceso;
 }
 
 /// TODAS AS TRILHAS NUM PINTOR SO.
@@ -228,12 +399,23 @@ class _PintorDasTrilhas extends CustomPainter {
     required this.mapa,
     required this.selecionada,
     required this.escondidas,
+    required this.segurando,
+    required this.degraus,
+    required this.familia,
   });
 
   final List<Layer> camadas;
   final MapaDoTempo mapa;
   final String? selecionada;
   final Set<String> escondidas;
+
+  /// A camada presa pela alca, e quantos degraus ela vai andar se o dedo
+  /// soltar agora.
+  final String? segurando;
+  final int degraus;
+
+  /// A fonte do app — `TextPainter` nao herda nada sozinho.
+  final TextStyle familia;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -260,8 +442,8 @@ class _PintorDasTrilhas extends CustomPainter {
 
       canvas.save();
       canvas.clipRRect(rr);
-      _pintarMarcas(canvas, l, barra, escondida);
-      _pintarNome(canvas, l, barra, escondida);
+      _pintarNome(canvas, l, barra, cor, escondida);
+      _pintarKeyframes(canvas, l, barra, cor);
       canvas.restore();
 
       if (l.id == selecionada) {
@@ -274,29 +456,61 @@ class _PintorDasTrilhas extends CustomPainter {
         );
       }
     }
+    _pintarDestinoDaOrdem(canvas, size);
   }
 
-  /// OS RISCOS VEM ANTES DO NOME, e com espacamento minimo.
+  /// A LINHA DE DESTINO do arrasto de ordem.
   ///
-  /// Visto no aparelho: uma cena 3D com dezenas de keyframes virava uma
-  /// barra listrada, ilegivel, com o nome da camada coberto. Risco
-  /// colado em risco nao informa nada — a partir de certa densidade, o
-  /// que ele diz e "ha muita animacao aqui", e para isso bastam alguns.
-  void _pintarMarcas(Canvas canvas, Layer l, Rect barra, bool escondida) {
-    final risco = Paint()
-      ..color = Colors.white.withValues(alpha: escondida ? .4 : .8);
+  /// E o unico retorno que o arrasto da enquanto o dedo esta na tela; a
+  /// pilha so se reorganiza quando ele solta, para um degrau nao virar
+  /// um lance de desfazer.
+  void _pintarDestinoDaOrdem(Canvas canvas, Size size) {
+    final id = segurando;
+    if (id == null || degraus == 0) return;
+    final de = camadas.indexWhere((l) => l.id == id);
+    if (de < 0) return;
+    final para = (de + degraus).clamp(0, camadas.length - 1);
+    if (para == de) return;
+    // A linha marca a BORDA para onde a camada vai: a de cima quando
+    // sobe, a de baixo quando desce.
+    final y =
+        (degraus < 0 ? para : para + 1) * VisaoGeralDasCamadas.alturaDaTrilha;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, y - 1.5, size.width, 3),
+        const Radius.circular(2),
+      ),
+      Paint()..color = AmColors.action,
+    );
+  }
+
+  /// OS KEYFRAMES SAO LOSANGOS DENTRO DO CLIPE, como na referencia.
+  ///
+  /// Eram riscos, e risco colado em risco vira barra listrada: visto no
+  /// aparelho, uma cena 3D com dezenas de marcas ficava ilegivel e o
+  /// nome da camada sumia debaixo delas. O espacamento minimo continua —
+  /// a partir de certa densidade o que a marca diz e "ha muita animacao
+  /// aqui", e para isso bastam algumas.
+  void _pintarKeyframes(Canvas canvas, Layer l, Rect barra, Color cor) {
+    final tinta = Paint()..color = sobreACorDaCamada(cor);
     var ultimoX = double.negativeInfinity;
+    final raio = (barra.height / 2 - 6).clamp(3.0, 5.0);
     for (final t in l.keyframeTimes) {
       final quando = l.startTime + t;
       if (quando < l.startTime || quando > l.endTime) continue;
       final px = mapa.xDe(quando);
       if (px < barra.left - 2 || px > barra.right + 2) continue;
-      // Menos de quatro pixels do anterior: nao cabe, e nao acrescenta.
-      if (px - ultimoX < 4) continue;
+      if (px - ultimoX < raio * 2 + 2) continue;
       ultimoX = px;
-      canvas.drawRect(
-        Rect.fromLTWH(px - .8, barra.top + 3, 1.6, barra.height - 6),
-        risco,
+      final cy = barra.center.dy;
+      canvas.drawPath(
+        Path()
+          ..moveTo(px, cy - raio)
+          ..lineTo(px + raio, cy)
+          ..lineTo(px, cy + raio)
+          ..lineTo(px - raio, cy)
+          ..close(),
+        tinta,
       );
     }
   }
@@ -304,33 +518,43 @@ class _PintorDasTrilhas extends CustomPainter {
   /// O NOME MORA DENTRO DO CLIPE, e some por baixo da pilula quando o
   /// clipe desliza para fora pela esquerda. E o que a referencia faz, e
   /// e honesto: o rotulo pertence a barra, e nao a tela.
-  void _pintarNome(Canvas canvas, Layer l, Rect barra, bool escondida) {
+  void _pintarNome(
+    Canvas canvas,
+    Layer l,
+    Rect barra,
+    Color cor,
+    bool escondida,
+  ) {
     if (barra.width < 22) return;
     final nome = TextPainter(
       text: TextSpan(
         text: l.name,
-        style: TextStyle(
+        style: familia.copyWith(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           height: 1.2,
-          color: escondida
-              ? AmColors.text.withValues(alpha: .45)
-              : const Color(0xFF0B0E12),
+          color: escondida ? sobreACorDaCamada(cor).withValues(alpha: .45) : sobreACorDaCamada(cor),
         ),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: (barra.width - 12).clamp(0.0, double.infinity));
-    nome.paint(canvas, Offset(barra.left + 6, barra.center.dy - nome.height / 2));
+    nome.paint(
+      canvas,
+      Offset(barra.left + 6, barra.center.dy - nome.height / 2),
+    );
   }
 
   @override
   bool shouldRepaint(_PintorDasTrilhas o) =>
+      o.familia != familia ||
       o.mapa.tempo != mapa.tempo ||
       o.mapa.pxPorSegundo != mapa.pxPorSegundo ||
       o.mapa.largura != mapa.largura ||
       o.selecionada != selecionada ||
+      o.segurando != segurando ||
+      o.degraus != degraus ||
       !identical(o.camadas, camadas) ||
       o.escondidas.length != escondidas.length;
 }

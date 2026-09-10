@@ -319,6 +319,9 @@ class _Cabecalho extends StatelessWidget {
             ),
           ),
         ),
+        // O ALTERNADOR DE VISTA ocupa o lugar que a referencia da a
+        // engrenagem: ultimo antes do botao colorido.
+        const AlternadorDeVista(altura: altura),
         Semantics(
           container: true,
           excludeSemantics: true,

@@ -506,7 +506,14 @@ class _FaixaRecolhida extends ConsumerWidget {
         // suportado — nada mais. Amarrar isso a haver camada escolhida
         // e o que fecha a porta de entrada do editor. (Duplicar, sim,
         // depende de selecao: por isso ele vive no transporte.)
-        _BotaoAdicionar(aoTocar: () => _abrirAdicao(ref, playback)),
+        // O `+` SAIU DAQUI, e virou o botao redondo que flutua sobre a
+        // linha do tempo — como na referencia. Dois `+` na mesma tela,
+        // um redondo e um quadrado, abrindo o mesmo menu, era so
+        // duvida: a pessoa tinha de descobrir que sao a mesma coisa.
+        //
+        // O convite de PROJETO VAZIO continua sendo esta faixa, com
+        // texto e largura inteira, e nesse caso o redondo se recolhe.
+        // Um convite de cada vez.
       ],
     );
   }
@@ -519,44 +526,20 @@ class _FaixaRecolhida extends ConsumerWidget {
   ///
   /// Pausar antes evita o caso em que o cabecote passa por cima da
   /// camada nova enquanto ela esta sendo criada.
-  static void _abrirAdicao(WidgetRef ref, PlaybackController playback) {
-    playback.pause();
-    ref.read(instanteDeInsercaoProvider.notifier).state = playback.time.value;
-    ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.adicionar;
-  }
+  static void _abrirAdicao(WidgetRef ref, PlaybackController playback) =>
+      abrirAdicaoDeConteudo(ref, playback);
 }
 
-/// O `+` COMPACTO, que aparece quando ja ha conteudo.
+/// O MESMO FLUXO DE ADICAO, para quem chama de fora da faixa.
 ///
-/// No projeto vazio quem convida e a faixa inteira, com texto; aqui, com
-/// camadas na tela, basta o simbolo. Os dois chamam o MESMO fluxo — nao
-/// ha duas implementacoes de adicionar.
-class _BotaoAdicionar extends StatelessWidget {
-  const _BotaoAdicionar({required this.aoTocar});
-
-  final VoidCallback aoTocar;
-
-  static const largura = 56.0;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    excludeSemantics: true,
-    button: true,
-    label: 'Adicionar conteudo',
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: aoTocar,
-      child: const SizedBox(
-        width: largura,
-        height: PainelDaCamada.alturaRecolhido,
-        // NA COR DE ACAO, e nao no cinza dos controles desligados. Um
-        // botao que parece morto nao e tocado, e este e o unico caminho
-        // para comecar a editar.
-        child: Icon(Icons.add_rounded, size: 24, color: AmColors.action),
-      ),
-    ),
-  );
+/// O `+` existe em dois lugares — o redondo que flutua sobre a linha do
+/// tempo e o da faixa de ferramentas —, e os dois PRECISAM abrir a mesma
+/// coisa, com o mesmo instante de insercao. Duas implementacoes de
+/// adicionar seria duas maneiras de errar o instante.
+void abrirAdicaoDeConteudo(WidgetRef ref, PlaybackController playback) {
+  playback.pause();
+  ref.read(instanteDeInsercaoProvider.notifier).state = playback.time.value;
+  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.adicionar;
 }
 
 class _Aberto extends ConsumerWidget {
