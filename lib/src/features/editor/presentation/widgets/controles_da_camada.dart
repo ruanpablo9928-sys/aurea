@@ -10,6 +10,7 @@ import '../../domain/layer.dart';
 import '../../domain/shape.dart';
 import 'editor_de_curva.dart';
 import 'escolha_de_cor.dart';
+import 'escolha_de_fonte.dart';
 import 'linha_de_parametro.dart';
 import 'painel_da_cena.dart';
 import 'painel_de_cor.dart';
@@ -429,6 +430,10 @@ class _TextoState extends ConsumerState<_Texto> {
   Widget build(BuildContext context) {
     final l = widget.camada as TextLayer;
     final c = ref.read(editorControllerProvider.notifier);
+    // A LISTA DE FONTES TOMA A CATEGORIA INTEIRA enquanto esta aberta,
+    // como o catalogo de efeitos: uma folha por cima taparia a previa,
+    // que e onde se ve se a fonte serve para o texto.
+    if (ref.watch(escolhaDeFonteProvider)) return ListaDeFontes(camada: l);
     // O CAMPO SO E REESCRITO QUANDO O TEXTO MUDOU POR FORA (desfazer,
     // troca de camada). Reescrever a cada quadro jogaria o cursor para o
     // fim no meio da digitacao.
@@ -462,6 +467,9 @@ class _TextoState extends ConsumerState<_Texto> {
             onChanged: (t) => c.editTextLayer(l.id, text: t),
           ),
         ),
+        // A FONTE VEM LOGO ABAIXO DO TEXTO: ela e identidade, e nao
+        // ajuste fino. Tamanho e negrito vem depois.
+        LinhaDaFonte(camada: l),
         LinhaDeParametro(
           rotulo: 'Tamanho',
           valor: l.fontSize,

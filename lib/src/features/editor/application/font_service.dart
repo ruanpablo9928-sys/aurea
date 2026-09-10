@@ -88,8 +88,15 @@ class FontService {
   /// Devolve o nome da familia (que e o nome do arquivo sem extensao —
   /// e o que a pessoa reconhece na lista) ou null se nao deu.
   Future<String?> import(String caminhoOrigem) async {
-    await loadAll();
     try {
+      // O `loadAll` FICA DENTRO DO TRY.
+      //
+      // Ele estava de fora, e por isso uma falha ao abrir a pasta do
+      // app — sem espaco, permissao negada, indice corrompido —
+      // ESCAPAVA de `import` em vez de virar "nao deu". Quem chama
+      // espera nulo, nao excecao: com o importador ligado a um botao,
+      // essa excecao subiria ate a tela.
+      await loadAll();
       final origem = File(caminhoOrigem);
       if (!origem.existsSync()) return null;
 
@@ -104,6 +111,16 @@ class FontService {
         nomeArquivo.length - ext.length - 1,
       );
       if (familia.isEmpty) return null;
+
+      // O NOME NAO PROVA NADA. Ate aqui a unica conferencia era a
+      // extensao: um arquivo de texto renomeado para `.ttf` entrava na
+      // lista como fonte, aparecia escolhida e nao mudava um glifo —
+      // uma fonte instalada que nao desenha e pior que uma que faltou,
+      // porque a primeira nao da sinal nenhum.
+      //
+      // A assinatura sfnt sao os quatro primeiros bytes, e so ha quatro
+      // possibilidades.
+      if (!_pareceFonte(await origem.openRead(0, 4).first)) return null;
 
       final dir = await _pasta();
       final destino = File('${dir.path}/$nomeArquivo');
@@ -155,6 +172,28 @@ class FontService {
       // Falhar em apagar o arquivo nao pode travar a lista.
     }
     revision.value++;
+  }
+
+  /// Os quatro primeiros bytes sao de um arquivo sfnt?
+  ///
+  ///   0x00010000  TrueType
+  ///   'OTTO'      OpenType com contornos CFF
+  ///   'true'      TrueType do Mac antigo
+  ///   'ttcf'      colecao (varias fontes num arquivo so)
+  static bool _pareceFonte(List<int> b) {
+    if (b.length < 4) return false;
+    const assinaturas = [
+      [0x00, 0x01, 0x00, 0x00],
+      [0x4F, 0x54, 0x54, 0x4F],
+      [0x74, 0x72, 0x75, 0x65],
+      [0x74, 0x74, 0x63, 0x66],
+    ];
+    for (final a in assinaturas) {
+      if (b[0] == a[0] && b[1] == a[1] && b[2] == a[2] && b[3] == a[3]) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _salvarIndice(Directory dir) async {
