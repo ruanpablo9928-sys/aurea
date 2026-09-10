@@ -7,6 +7,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/camera_cuts.dart';
 import '../../domain/layer.dart';
+import '../estudio/estudio_da_cena.dart';
 import 'linha_de_parametro.dart';
 
 /// O recado da ultima acao da cena.
@@ -49,6 +50,22 @@ class PainelDaCena extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // A PORTA DO ESTUDIO, e ela e a primeira coisa do cartao.
+        //
+        // Este painel de 300 px alcanca oito comandos. Objeto, material,
+        // luz, hierarquia, gizmo e animacao pedem um ESPACO — julgar
+        // profundidade e enquadramento numa faixa de rodape nao e
+        // possivel. Ver `docs/estudio-da-cena.md`.
+        _Acao(
+          icone: Icons.open_in_full_rounded,
+          rotulo: 'Abrir o estudio',
+          detalhe: 'Objetos, luzes, materiais e animacao, em tela cheia',
+          aoTocar: () => abrirEstudioDaCena(
+            context,
+            layerId: cena.id,
+            playback: playback,
+          ),
+        ),
         const _Titulo('De onde se olha'),
         // AS VISTAS FIXAS SAO O QUE TORNA O Z COMPREENSIVEL. Sem elas,
         // "esta atras ou e so menor?" nao tem resposta — a perspectiva
