@@ -480,7 +480,7 @@ void main() {
         'Reproduzir',
         'Fim',
         'Duplicar camada',
-        'Exportar',
+        'Enquadrar',
       ]) {
         expect(
           find.bySemanticsLabel(rotulo),
@@ -521,7 +521,7 @@ void main() {
       final id = m.c.read(selectedLayerProvider)!;
       final tempo = m.p.time.value;
 
-      await tester.tap(find.bySemanticsLabel('Esconder camada'));
+      await tester.tap(find.bySemanticsLabel('Esconder Camada 1'));
       await tester.pump();
 
       expect(m.c.read(editorControllerProvider).metaOf(id).hidden, isTrue);
@@ -696,7 +696,7 @@ void main() {
 
     testWidgets('os alvos do transporte tem 48 px de altura', (tester) async {
       await _montar(tester);
-      for (final rotulo in ['Desfazer', 'Reproduzir', 'Exportar']) {
+      for (final rotulo in ['Desfazer', 'Reproduzir', 'Enquadrar']) {
         final caixa = tester.getSize(find.bySemanticsLabel(rotulo));
         expect(
           caixa.height,

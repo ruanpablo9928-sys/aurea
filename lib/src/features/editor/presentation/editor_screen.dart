@@ -130,11 +130,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             var tempo = pedidaPelaTimeline;
             var preview = disponivel - tempo;
 
-            // Numa composicao em pe, ela pediria a tela toda: ai o teto
-            // segura, e a linha do tempo fica com o resto.
-            final tetoDoPreview = disponivel * .5;
-            if (preview > tetoDoPreview) {
-              preview = tetoDoPreview;
+            // O PREVIEW NAO PASSA DO QUE A COMPOSICAO PRECISA.
+            //
+            // Antes havia um teto de 50% da altura, e ele estava
+            // errado nos dois sentidos:
+            //
+            //   - num projeto EM PE ele cortava o preview em 369 px
+            //     quando havia 468 livres, e os 97 px cortados iam
+            //     morrer embaixo das trilhas, onde nao ha o que
+            //     desenhar;
+            //   - num projeto DEITADO ele deixava passar mais altura do
+            //     que a composicao ocupa, e sobrava tarja preta.
+            //
+            // A conta certa nao e uma fracao: e quanto a composicao
+            // ocupa nesta largura. Acima disso o preview so cresceria
+            // vazio.
+            final pedidaPelaComposicao = (limites.maxWidth - 24) / proporcao;
+            if (preview > pedidaPelaComposicao) {
+              preview = pedidaPelaComposicao;
               tempo = disponivel - preview;
             }
             if (preview < 140) {
@@ -150,7 +163,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               children: [
                 Column(
                   children: [
-                    _Cabecalho(nome: project.name),
+                    _Cabecalho(
+                      nome: project.name,
+                      aoExportar: () {
+                        _playback.pause();
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ExportVideoScreen(),
+                          ),
+                        );
+                      },
+                    ),
                     SizedBox(
                       height: preview,
                       child: Padding(
@@ -198,18 +221,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     ),
                     // TRANSPORTE, REGUA E TRILHAS SAO UM BLOCO SO. Eles
                     // encostam de proposito: sao a mesma ferramenta.
-                    LinhaDoTempo(
-                      playback: _playback,
-                      altura: tempo,
-                      aoExportar: () {
-                        _playback.pause();
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ExportVideoScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                    LinhaDoTempo(playback: _playback, altura: tempo),
                     // O ESPACO DO PAINEL, ja descontado do preview acima.
                     SizedBox(height: painel),
                   ],
@@ -255,15 +267,19 @@ double alturaDoPainel(WidgetRef ref) {
   return PainelDaCamada.alturaAberta(itens);
 }
 
-/// A FAIXA DE CIMA: sair, e saber em que projeto se esta.
+/// A FAIXA DE CIMA: sair, saber em que projeto se esta, e EXPORTAR.
 ///
-/// Compacta de proposito, e sem comandos de edicao. O transporte ja tem
-/// os dele; mover controles entre as duas barras so confundiria quem ja
-/// aprendeu onde eles ficam.
+/// O botao de exportar mudou de lugar. Ele morava no transporte, entre
+/// controles de tempo, e nao e um controle de tempo: e a saida do
+/// trabalho. Na referencia ele e a unica coisa colorida do cabecalho, na
+/// ponta oposta ao voltar — o comeco e o fim do caminho, um em cada
+/// lado. Aqui ele usa o lima da Aurea, e nao o verde de la: a estrutura
+/// se copia, a identidade nao.
 class _Cabecalho extends StatelessWidget {
-  const _Cabecalho({required this.nome});
+  const _Cabecalho({required this.nome, required this.aoExportar});
 
   final String nome;
+  final VoidCallback aoExportar;
 
   static const altura = 52.0;
 
@@ -284,8 +300,8 @@ class _Cabecalho extends StatelessWidget {
               width: 48,
               height: altura,
               child: Icon(
-                Icons.arrow_back_rounded,
-                size: 21,
+                Icons.arrow_back_ios_new_rounded,
+                size: 19,
                 color: AmColors.text,
               ),
             ),
@@ -297,13 +313,36 @@ class _Cabecalho extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
               color: AmColors.text,
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        Semantics(
+          container: true,
+          excludeSemantics: true,
+          button: true,
+          label: 'Exportar',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: aoExportar,
+            child: Container(
+              width: 38,
+              height: 34,
+              margin: const EdgeInsets.only(left: 8, right: 10),
+              decoration: BoxDecoration(
+                color: AmColors.action,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.ios_share_rounded,
+                size: 19,
+                color: AmColors.onAction,
+              ),
+            ),
+          ),
+        ),
       ],
     ),
   );

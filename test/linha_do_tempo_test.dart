@@ -10,11 +10,19 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/mapa_do_tempo.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+/// A ESCALA DOS TESTES, em pixels por segundo.
+///
+/// Com a superficie padrao de 800 px, o cabecote fica em 400 e uma
+/// camada de 5 s ocupa de 400 a 700 — tudo a vista, e cada instante cai
+/// num pixel que da para calcular de cabeca.
+const _escala = 60.0;
 
 class _Vsync extends TickerProvider {
   @override
@@ -35,6 +43,9 @@ Future<ProviderContainer> _montar(
   // A LINHA DO TEMPO ABRE NA PILHA; este arquivo cobra o DETALHADO.
   container.read(modoDaLinhaDoTempoProvider.notifier).state =
       ModoDaLinhaDoTempo.detalhado;
+  // ESCALA FIXA: sem isto o zoom sai da duracao do projeto, e a conta
+  // do dedo mudaria toda vez que uma camada esticasse a composicao.
+  container.read(zoomDaLinhaDoTempoProvider.notifier).state = _escala;
   final playback = PlaybackController(
     vsync: _Vsync(),
     durationOf: () => container.read(editorControllerProvider).duration,
@@ -144,12 +155,15 @@ void main() {
     await tester.pump();
 
     expect(container.read(editorControllerProvider).metaOf(id).hidden, isFalse);
-    await tester.tap(find.bySemanticsLabel('Esconder camada'));
+    // A PILULA E A MESMA NOS DOIS MODOS, e o rotulo dela diz DE QUAL
+    // camada se trata: na pilha ha varias na tela ao mesmo tempo, e
+    // "Esconder camada" nao diria qual.
+    await tester.tap(find.bySemanticsLabel('Esconder Camada 1'));
     await tester.pump();
     expect(container.read(editorControllerProvider).metaOf(id).hidden, isTrue);
 
     // O rotulo acompanha o estado — quem nao enxerga o icone depende dele.
-    expect(find.bySemanticsLabel('Mostrar camada'), findsOneWidget);
+    expect(find.bySemanticsLabel('Mostrar Camada 1'), findsOneWidget);
   });
 
   testWidgets('tocar na faixa move o cabecote no tempo', (tester) async {
@@ -179,19 +193,26 @@ void main() {
       ),
     );
 
+    container.read(zoomDaLinhaDoTempoProvider.notifier).state = _escala;
+    await tester.pump();
+
     expect(playback.time.value, Duration.zero);
     final faixa = tester.getRect(find.byType(LinhaDoTempo));
-    // Um toque perto do fim da faixa tem de levar o cabecote para perto
-    // do fim da composicao. A REGUA fica logo abaixo do transporte, e e
-    // ela que navega no tempo — mirar no rodape da faixa cai no vazio
-    // sob a trilha.
-    await tester.tapAt(Offset(faixa.right - 12, faixa.top + 70));
+    // O CABECOTE FICA NO MEIO E NAO ANDA: tocar cem pixels a direita
+    // dele nao leva "para perto do fim", leva para cem pixels adiante —
+    // que nesta escala e um segundo e meio.
+    //
+    // A regua fica logo abaixo do transporte, e e ela que navega no
+    // tempo; mirar no rodape da faixa cai na trilha.
+    final ancora = faixa.left + faixa.width * MapaDoTempo.fracaoDoCabecote;
+    await tester.tapAt(
+      Offset(ancora + 90, faixa.top + LinhaDoTempo.alturaDoTransporte + 20),
+    );
     await tester.pump();
-    final duracao = container.read(editorControllerProvider).duration;
     expect(
       playback.time.value.inMilliseconds,
-      greaterThan((duracao.inMilliseconds * 0.5).round()),
-      reason: 'tocar perto do fim tem de levar o cabecote para perto do fim',
+      closeTo(90 / _escala * 1000, 40),
+      reason: 'tocar na regua leva o cabecote ao instante daquele pixel',
     );
   });
 
@@ -218,6 +239,7 @@ void main() {
     // sao riscos, e riscos nao se pegam.
     container.read(modoDaLinhaDoTempoProvider.notifier).state =
         ModoDaLinhaDoTempo.detalhado;
+    container.read(zoomDaLinhaDoTempoProvider.notifier).state = _escala;
     container.read(autoKeyframeProvider.notifier).state = true;
     for (final m in ms) {
       c.editOpacity(id, Duration(milliseconds: m), m / 10000);
@@ -249,21 +271,24 @@ void main() {
   }
 
   /// Onde, na tela, esta o keyframe do instante local [ms].
+  ///
+  /// A conta e a mesma do [MapaDoTempo]: o cabecote esta parado no meio
+  /// da largura, e cada segundo de distancia dele vale [_escala] pixels.
   Offset pontoDoKeyframe(ProviderContainer c, Rect faixa, int ms) {
-    final duracao = c.read(editorControllerProvider).duration;
     final camada = c.read(editorControllerProvider).layers.single;
     final quando = camada.startTime + Duration(milliseconds: ms);
-    final util = faixa.width - LinhaDoTempo.larguraDaCabeca;
-    final x =
-        faixa.left +
-        LinhaDoTempo.larguraDaCabeca +
-        util * (quando.inMicroseconds / duracao.inMicroseconds);
-    // A trilha e centrada no espaco que sobra depois da regua, e a
-    // altura dela acompanha a da faixa. O centro vertical da area util
-    // e uma mira estavel para qualquer altura.
-    final alturaDaFaixa = faixa.height - 48;
-    final centro = 48 + 46 + (alturaDaFaixa - 46) / 2;
-    return Offset(x, faixa.top + centro);
+    final mapa = MapaDoTempo(
+      largura: faixa.width,
+      pxPorSegundo: _escala,
+      // O relogio dos testes comeca no zero, e nenhum deles toca no
+      // cabecote antes de mirar.
+      tempo: Duration.zero,
+    );
+    // A trilha e centrada no que sobra depois do transporte e da regua.
+    final topoDaFaixa =
+        faixa.top + LinhaDoTempo.alturaDoTransporte + LinhaDoTempo.alturaDaRegua;
+    final sobra = faixa.bottom - topoDaFaixa;
+    return Offset(faixa.left + mapa.xDe(quando), topoDaFaixa + sobra / 2);
   }
 
   testWidgets('tocar num keyframe leva o cabecote exatamente ate ele', (

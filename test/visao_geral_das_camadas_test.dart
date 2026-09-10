@@ -110,7 +110,10 @@ void main() {
       );
       expect(
         altura,
-        LinhaDoTempo.alturaDoModo(ModoDaLinhaDoTempo.geral, 4),
+        LinhaDoTempo.alturaDoModo(
+          ModoDaLinhaDoTempo.geral,
+          VisaoGeralDasCamadas.trilhasVisiveis,
+        ),
         reason: 'acima do teto a altura e a mesma, e o resto rola',
       );
     });
@@ -282,7 +285,10 @@ void main() {
         'Reproduzir',
         'Fim',
         'Duplicar camada',
-        'Exportar',
+        // EXPORTAR SAIU DO TRANSPORTE e virou o botao do cabecalho: ele
+        // nao e um controle de tempo, e a saida do trabalho. No lugar
+        // dele entrou "Enquadrar", que e de tempo.
+        'Enquadrar',
       ]) {
         expect(
           find.bySemanticsLabel(rotulo),

@@ -18,6 +18,22 @@ do transporte.
 O modo vive **só na sessão**. Sair do editor volta ao detalhado, que é
 onde se edita. Guardar a escolha em disco seria migração de dados.
 
+## O cabeçote não anda
+
+Desde a medição do Alight Motion real (`docs/linha-do-tempo-alight.md`),
+os dois modos compartilham o mesmo `MapaDoTempo`, e nele:
+
+- a **escala é constante** — um segundo ocupa sempre o mesmo tanto de
+  tela, seja qual for a duração do projeto;
+- o **cabeçote fica preso no meio da largura** e não se move;
+- **quem anda é o conteúdo**, deslizando por baixo dele.
+
+Por isso arrastar para o lado é navegar no tempo, e o mesmo arrasto
+funciona na régua e nas trilhas. Beliscar aproxima e afasta, mas **só na
+régua**: nas trilhas o belisco brigaria com a rolagem vertical da lista
+de camadas, e quem perderia seria a rolagem. O botão **Enquadrar**, no
+transporte, devolve a escala que faz a composição inteira caber.
+
 ## Contrato de gestos
 
 ### Modo detalhado
@@ -27,10 +43,15 @@ onde se edita. Guardar a escolha em disco seria migração de dados.
 | Toque num losango | leva o cabeçote **em cima** daquele keyframe |
 | Arraste a partir de um losango | move a marca no tempo, presa à camada |
 | Toque longo num losango | apaga a marca |
-| Toque fora de um losango | leva o cabeçote |
-| Arraste fora de um losango | leva o cabeçote |
-| Toque nas setas `‹ ›` | troca a camada selecionada |
-| Toque no olho | esconde ou mostra a camada |
+| Toque fora de um losango | leva o cabeçote ao instante daquele pixel |
+| Arraste fora de um losango | desliza o conteúdo, e com ele o tempo |
+| Toque nas setas | troca a camada selecionada |
+| Toque na pílula (olho) | esconde ou mostra a camada |
+
+**Durante o arrasto de um keyframe o cabeçote fica parado**, e só alcança
+a marca quando o dedo solta. Com o cabeçote preso no meio, segui-la a
+cada passo significaria rolar o conteúdo — e a marca fugiria do dedo,
+saltando para o centro a cada quadro.
 
 Um losango só responde ao arrasto e ao toque longo quando **tudo** que há
 naquele instante é transformação. Marca de efeito, máscara ou módulo não
@@ -43,9 +64,11 @@ de um instante seria pior que não mover.
 | --- | --- |
 | Toque numa trilha | seleciona aquela camada |
 | Toque na trilha **já selecionada** | abre no modo detalhado |
-| Toque no olho da linha | esconde ou mostra aquela camada |
-| Toque na régua | leva o cabeçote |
-| Arraste na régua | leva o cabeçote |
+| Toque na pílula (olho) | esconde ou mostra aquela camada |
+| Toque na régua | leva o cabeçote ao instante daquele pixel |
+| Arraste na régua ou nas trilhas | desliza o conteúdo, e com ele o tempo |
+| Belisco na régua | aproxima e afasta a escala |
+| Arraste vertical nas trilhas | rola a lista de camadas |
 
 **Não há toque duplo**, e isso é decisão, não esquecimento. Um
 `onDoubleTap` obriga o Flutter a segurar todo toque simples por uns
@@ -54,10 +77,13 @@ mais comum desta vista. Trocar trezentos milissegundos de atraso em cada
 seleção por um atalho é um mau negócio. O primeiro toque escolhe, o
 segundo entra: mesma economia de gesto, sem atraso nenhum.
 
-A régua é a **única** parte que mexe no cabeçote — no toque e no arrasto.
-Nas trilhas, o toque seleciona. Se as duas coisas dividissem a mesma área, uma roubaria
-a outra — e a que perderia seria a seleção, que é o motivo de a vista
-existir.
+**Toque e arrasto não brigam.** Nas trilhas, o toque seleciona e o
+arrasto horizontal navega: a arena de gestos separa os dois pela direção
+do primeiro movimento, e o dedo parado nunca vira arrasto. O toque na
+régua continua levando o cabeçote — lá não há o que selecionar.
+
+**A pílula ganha do toque de seleção**, porque ela é desenhada por cima:
+esconder uma camada não pode, de quebra, selecioná-la.
 
 ## Como o pouso do dedo é lido
 
