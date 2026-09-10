@@ -7,6 +7,7 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/adicionar_conteudo.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/painel_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
@@ -69,13 +70,21 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
                   const SizedBox(height: PainelDaCamada.alturaMaxima),
                 ],
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: FaixaDoPainel(playback: playback),
-              ),
               PainelSobreposto(playback: playback),
+              // O PAINEL DO MEIO MONTADO COMO A TELA MONTA: com o
+              // instante OBSERVADO e o mesmo fecho. Passar uma copia do
+              // instante testaria um arranjo que nao existe.
+              Consumer(
+                builder: (context, ref, _) => PainelCentralDeAdicao(
+                  instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
+                  aoAdicionar: (_, _) {
+                    fecharAdicao(ref);
+                    ref.read(barraDeAdicaoAbertaProvider.notifier).state =
+                        false;
+                    abrirFerramentasDaCamada(ref);
+                  },
+                ),
+              ),
             ],
           ),
         ),
@@ -85,54 +94,44 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
   return (c: container, p: playback);
 }
 
+/// ABRE AS FERRAMENTAS PELO GESTO DE VERDADE.
+///
+/// A faixa "Ferramentas da camada" do rodape foi removida — ela
+/// reservava 52 px de altura o tempo todo. Quem abre hoje e um toque na
+/// camada JA selecionada, na pilha; e por isso este ajudante troca de
+/// vista antes de tocar.
+Future<void> abrirFerramentas(
+  WidgetTester tester,
+  ProviderContainer c,
+) async {
+  c.read(modoDaLinhaDoTempoProvider.notifier).state = ModoDaLinhaDoTempo.geral;
+  await tester.pump();
+  final id = c.read(selectedLayerProvider);
+  final camada = c
+      .read(editorControllerProvider)
+      .layers
+      .firstWhere((l) => l.id == id);
+  await tester.tap(find.bySemanticsLabel(camada.name));
+  await tester.pump();
+}
+
 void main() {
-  group('a faixa recolhida', () {
-    testWidgets('o painel nasce recolhido', (tester) async {
+  group('o rodape ficou com a linha do tempo', () {
+    testWidgets('nao ha faixa "Ferramentas da camada" nenhuma', (
+      tester,
+    ) async {
       final m = await _montar(tester);
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.recolhido);
-      expect(find.bySemanticsLabel('Ferramentas da camada'), findsOneWidget);
-    });
-
-    testWidgets('COM camadas e SEM selecao, pede para selecionar', (
-      tester,
-    ) async {
-      final m = await _montar(tester, selecionar: false);
       expect(
-        find.byKey(const ValueKey('painel-sem-selecao')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('painel-projeto-vazio')),
+        find.bySemanticsLabel('Ferramentas da camada'),
         findsNothing,
         reason:
-            'ter camadas e nao ter nenhuma escolhida sao coisas '
-            'diferentes: aqui existe o que selecionar',
-      );
-      await tester.tap(
-        find.bySemanticsLabel('Selecione uma camada para editar'),
-      );
-      await tester.pump();
-      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.recolhido);
-    });
-
-    testWidgets('PROJETO VAZIO oferece criar, e nao selecionar', (
-      tester,
-    ) async {
-      await _montar(tester, textos: 0);
-      expect(
-        find.byKey(const ValueKey('painel-projeto-vazio')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('painel-sem-selecao')),
-        findsNothing,
-        reason:
-            'pedir para selecionar quando nao ha o que selecionar deixa '
-            'a pessoa sem proxima acao',
+            'a faixa reservava 52 px de altura o tempo todo para oferecer '
+            'um caminho que o toque na propria camada ja oferece',
       );
     });
 
-    testWidgets('o + tem lugar reservado, mesmo sem selecao', (tester) async {
+    testWidgets('o + redondo esta la, com ou sem selecao', (tester) async {
       await _montar(tester, selecionar: false);
       expect(
         find.bySemanticsLabel('Adicionar conteudo'),
@@ -142,13 +141,44 @@ void main() {
             'mudaria debaixo da mao de quem esta usando',
       );
     });
+
+    testWidgets('o + continua no projeto vazio: e por onde se comeca', (
+      tester,
+    ) async {
+      await _montar(tester, textos: 0);
+      expect(find.bySemanticsLabel('Adicionar conteudo'), findsOneWidget);
+    });
+  });
+
+  group('abrir as ferramentas', () {
+    testWidgets('o primeiro toque escolhe, o segundo abre', (tester) async {
+      final m = await _montar(tester, textos: 2);
+      m.c.read(modoDaLinhaDoTempoProvider.notifier).state =
+          ModoDaLinhaDoTempo.geral;
+      m.c.read(selectedLayerProvider.notifier).state = null;
+      await tester.pump();
+
+      final camadas = m.c.read(editorControllerProvider).layers;
+      final alvo = camadas.first;
+      await tester.tap(find.bySemanticsLabel(alvo.name));
+      await tester.pump();
+      expect(m.c.read(selectedLayerProvider), alvo.id);
+      expect(
+        m.c.read(estadoDoPainelProvider),
+        EstadoDoPainel.recolhido,
+        reason: 'escolher uma camada nao abre painel nenhum',
+      );
+
+      await tester.tap(find.bySemanticsLabel(alvo.name));
+      await tester.pump();
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
+    });
   });
 
   group('navegacao', () {
     testWidgets('abrir mostra as categorias da camada', (tester) async {
       final m = await _montar(tester);
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
       expect(find.byKey(const ValueKey('cartao-opacidade')), findsOneWidget);
       expect(find.byKey(const ValueKey('cartao-transformar')), findsOneWidget);
@@ -156,8 +186,7 @@ void main() {
 
     testWidgets('entrar numa categoria e voltar', (tester) async {
       final m = await _montar(tester);
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
 
       await tester.tap(find.byKey(const ValueKey('cartao-opacidade')));
       await tester.pump();
@@ -178,8 +207,7 @@ void main() {
       await tester.pump();
       final tempo = m.p.time.value;
 
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       await tester.tap(find.bySemanticsLabel('Recolher painel'));
       await tester.pump();
 
@@ -192,24 +220,19 @@ void main() {
       expect(m.p.time.value, tempo);
     });
 
-    testWidgets('o painel aberto ocupa mais altura que a faixa', (
+    testWidgets('o painel aberto SOBREPOE, e nao empurra a linha do tempo', (
       tester,
     ) async {
-      await _montar(tester);
-      // FECHADO ELE E SO A FAIXA; ABERTO, SOBREPOE.
+      final m = await _montar(tester);
+      final antes = tester.getRect(find.byType(LinhaDoTempo));
+      await abrirFerramentas(tester, m.c);
       expect(find.byType(PainelSobreposto), findsOneWidget);
       expect(
-        tester.getSize(find.byType(FaixaDoPainel)).height,
-        FaixaDoPainel.altura,
-      );
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
-      expect(
-        tester.getSize(find.byType(FaixaDoPainel)).height,
-        FaixaDoPainel.altura,
+        tester.getRect(find.byType(LinhaDoTempo)),
+        antes,
         reason:
-            'abrir o painel nao pode mexer na faixa: ele sobe POR CIMA, '
-            'e nao empurrando a tela',
+            'abrir o painel nao pode mexer na linha do tempo: ele sobe '
+            'POR CIMA, e nao empurrando a tela',
       );
     });
   });
@@ -228,8 +251,7 @@ void main() {
 
       m.c.read(selectedLayerProvider.notifier).state = texto.id;
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       expect(find.byKey(const ValueKey('cartao-texto')), findsOneWidget);
       expect(
         find.byKey(const ValueKey('cartao-forma')),
@@ -300,8 +322,7 @@ void main() {
 
     testWidgets('cartao desabilitado NAO abre', (tester) async {
       final m = await _montar(tester);
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       await tester.tap(find.byKey(const ValueKey('cartao-efeitos')));
       await tester.pump();
       expect(
@@ -318,8 +339,7 @@ void main() {
       final antes = m.c.read(editorControllerProvider);
       final podiaDesfazer = m.c.read(editorControllerProvider.notifier).canUndo;
 
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       await tester.tap(find.byKey(const ValueKey('cartao-opacidade')));
       await tester.pump();
       await tester.tap(find.bySemanticsLabel('Voltar'));
@@ -351,8 +371,7 @@ void main() {
           .layers
           .firstWhere((l) => l.id == id);
 
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       await tester.tap(find.byKey(const ValueKey('cartao-opacidade')));
       await tester.pump();
 
@@ -384,8 +403,7 @@ void main() {
           .firstWhere((l) => l.id == id)
           .keyframeTimes;
 
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       await tester.tap(find.byKey(const ValueKey('cartao-opacidade')));
       await tester.pump();
       m.p.seek(const Duration(milliseconds: 800));
@@ -409,8 +427,7 @@ void main() {
   group('selecao e recuperacao', () {
     testWidgets('trocar de camada atualiza o painel', (tester) async {
       final m = await _montar(tester, textos: 2);
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
 
       final camadas = m.c.read(editorControllerProvider).layers;
       final outra = camadas.last;
@@ -430,8 +447,7 @@ void main() {
     ) async {
       final m = await _montar(tester, textos: 2);
       final id = m.c.read(selectedLayerProvider)!;
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      await abrirFerramentas(tester, m.c);
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
 
       m.c.read(editorControllerProvider.notifier).removeLayer(id);
@@ -450,21 +466,20 @@ void main() {
   group('o interruptor de validacao', () {
     testWidgets('desligado, volta a interface anterior', (tester) async {
       final m = await _montar(tester);
-      expect(find.byType(FaixaDoPainel), findsOneWidget);
-      expect(find.bySemanticsLabel('Ferramentas da camada'), findsOneWidget);
+      expect(find.bySemanticsLabel('Adicionar conteudo'), findsOneWidget);
 
       m.c.read(painelDaCamadaLigadoProvider.notifier).state = false;
       await tester.pump();
 
       expect(
-        find.bySemanticsLabel('Ferramentas da camada'),
+        find.bySemanticsLabel('Adicionar conteudo'),
         findsNothing,
         reason: 'desligar tem de devolver a interface anterior por inteiro',
       );
       expect(
-        tester.getSize(find.byType(FaixaDoPainel)).height,
-        0,
-        reason: 'e sem deixar altura sobrando',
+        find.byType(PainelSobreposto),
+        findsOneWidget,
+        reason: 'o widget continua montado, mas sem desenhar nada',
       );
     });
   });
@@ -473,9 +488,8 @@ void main() {
     testWidgets('os sete botoes seguem la, com o painel aberto', (
       tester,
     ) async {
-      await _montar(tester);
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
+      final m = await _montar(tester);
+      await abrirFerramentas(tester, m.c);
       for (final rotulo in [
         'Desfazer',
         'Refazer',
@@ -502,12 +516,16 @@ void main() {
       await tester.pump();
       final tempo = m.p.time.value;
 
-      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
-      await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
+      // Abrir as ferramentas ja deixa a vista na pilha; a troca que este
+      // teste cobra e a de VOLTA para o detalhado.
+      await abrirFerramentas(tester, m.c);
+      await tester.tap(find.bySemanticsLabel('Ver uma camada'));
       await tester.pump();
 
-      expect(m.c.read(modoDaLinhaDoTempoProvider), ModoDaLinhaDoTempo.geral);
+      expect(
+        m.c.read(modoDaLinhaDoTempoProvider),
+        ModoDaLinhaDoTempo.detalhado,
+      );
       expect(
         m.c.read(estadoDoPainelProvider),
         EstadoDoPainel.categorias,
@@ -538,43 +556,81 @@ void main() {
   });
 
   group('adicionar conteudo', () {
-    testWidgets('o + abre o menu SEM camada selecionada', (tester) async {
+    // O FLUXO TEM DOIS NIVEIS: o `+` abre a barra de familias, e a
+    // familia abre o painel do meio com o que ela tem dentro.
+    Future<void> abrirFamilia(WidgetTester tester, String familia) async {
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Adicionar $familia'));
+      await tester.pump();
+    }
+
+    testWidgets('o + abre a barra de familias, com ou sem selecao', (
+      tester,
+    ) async {
       final m = await _montar(tester, selecionar: false);
       await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
       await tester.pump();
       expect(
-        m.c.read(estadoDoPainelProvider),
-        EstadoDoPainel.adicionar,
+        m.c.read(barraDeAdicaoAbertaProvider),
+        isTrue,
         reason:
             'adicionar depende de projeto editavel e tipo suportado — '
             'nao de haver camada escolhida',
       );
-      expect(find.byKey(const ValueKey('adicionar-texto')), findsOneWidget);
+      expect(find.bySemanticsLabel('Adicionar 3D'), findsOneWidget);
+      expect(find.bySemanticsLabel('Adicionar Texto'), findsOneWidget);
     });
 
-    testWidgets('o projeto vazio abre o MESMO menu', (tester) async {
+    testWidgets('a familia abre o painel do meio com o que ela tem', (
+      tester,
+    ) async {
       final m = await _montar(tester, textos: 0);
-      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
-      await tester.pump();
-      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.adicionar);
-      expect(
-        find.byKey(const ValueKey('adicionar-texto')),
-        findsOneWidget,
-        reason:
-            'a acao grande do estado vazio e o + compacto sao o mesmo '
-            'fluxo, e nao duas implementacoes',
-      );
+      await abrirFamilia(tester, '3D');
+      expect(m.c.read(categoriaDeAdicaoProvider), '3d');
+      for (final rotulo in [
+        'Cena 3D',
+        'Nulo 3D',
+        'Objetos 3D',
+        'Particulas',
+      ]) {
+        expect(
+          find.bySemanticsLabel(rotulo),
+          findsOneWidget,
+          reason: 'a familia 3D perdeu "$rotulo"',
+        );
+      }
     });
 
-    testWidgets('adicionar cria a camada, seleciona e mostra as ferramentas', (
+    testWidgets('um item com filhos abre MAIS UM nivel, e da para voltar', (
+      tester,
+    ) async {
+      final m = await _montar(tester, textos: 0);
+      await abrirFamilia(tester, '3D');
+      await tester.tap(find.bySemanticsLabel('Objetos 3D'));
+      await tester.pump();
+      expect(m.c.read(subItemDeAdicaoProvider), 'objetos3d');
+      expect(find.bySemanticsLabel('Cubo'), findsOneWidget);
+      expect(
+        m.c.read(editorControllerProvider).layers,
+        isEmpty,
+        reason: 'abrir um nivel nao cria camada nenhuma',
+      );
+
+      await tester.tap(find.bySemanticsLabel('Voltar'));
+      await tester.pump();
+      expect(m.c.read(subItemDeAdicaoProvider), isNull);
+      expect(find.bySemanticsLabel('Cena 3D'), findsOneWidget);
+    });
+
+    testWidgets('escolher cria a camada, seleciona e fecha o fluxo', (
       tester,
     ) async {
       final m = await _montar(tester, textos: 0);
       expect(m.c.read(editorControllerProvider).layers, isEmpty);
 
-      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
+      await abrirFamilia(tester, 'Texto');
+      await tester.tap(find.bySemanticsLabel('Texto').last);
       await tester.pump();
 
       final camadas = m.c.read(editorControllerProvider).layers;
@@ -585,17 +641,37 @@ void main() {
         reason: 'a camada nova entra selecionada',
       );
       expect(
-        m.c.read(estadoDoPainelProvider),
-        EstadoDoPainel.categorias,
-        reason: 'depois de criar, as ferramentas do que foi criado',
+        m.c.read(categoriaDeAdicaoProvider),
+        isNull,
+        reason: 'criado o que se foi criar, o painel do meio sai da frente',
       );
+    });
+
+    testWidgets('tocar fora fecha sem criar nada', (tester) async {
+      final m = await _montar(tester, textos: 0);
+      await abrirFamilia(tester, 'Formas');
+      // O FUNDO INTEIRO FECHA. Mirar no centro cairia no proprio painel,
+      // que e o que o fundo esta atras de.
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pump();
+      expect(m.c.read(categoriaDeAdicaoProvider), isNull);
+      expect(m.c.read(editorControllerProvider).layers, isEmpty);
+    });
+
+    testWidgets('o + vira x, e o mesmo alvo dispensa a barra', (tester) async {
+      final m = await _montar(tester, textos: 0);
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      expect(m.c.read(barraDeAdicaoAbertaProvider), isTrue);
+      await tester.tap(find.bySemanticsLabel('Fechar o menu'));
+      await tester.pump();
+      expect(m.c.read(barraDeAdicaoAbertaProvider), isFalse);
     });
 
     testWidgets('adicionar e desfazer devolve ao estado vazio', (tester) async {
       final m = await _montar(tester, textos: 0);
-      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('adicionar-forma')));
+      await abrirFamilia(tester, 'Formas');
+      await tester.tap(find.bySemanticsLabel('Retangulo'));
       await tester.pump();
       expect(m.c.read(editorControllerProvider).layers.length, 1);
 
@@ -609,11 +685,6 @@ void main() {
         reason: 'uma adicao, um desfazer',
       );
       expect(tester.takeException(), isNull);
-      expect(
-        find.byKey(const ValueKey('painel-projeto-vazio')),
-        findsOneWidget,
-        reason: 'desfazer a unica camada devolve o estado vazio',
-      );
     });
 
     testWidgets('o instante de insercao e o de ABRIR o menu', (tester) async {
@@ -621,12 +692,11 @@ void main() {
       m.p.seek(const Duration(milliseconds: 1200));
       await tester.pump();
 
-      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
-      await tester.pump();
+      await abrirFamilia(tester, 'Texto');
       // O relogio anda ENTRE abrir e escolher; o que vale e o de abrir.
       m.p.seek(const Duration(milliseconds: 2600));
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
+      await tester.tap(find.bySemanticsLabel('Texto').last);
       await tester.pump();
 
       expect(
@@ -649,8 +719,11 @@ void main() {
       }
       await tester.pump();
 
+      m.c.read(modoDaLinhaDoTempoProvider.notifier).state =
+          ModoDaLinhaDoTempo.geral;
+      await tester.pump();
       expect(
-        find.byKey(const ValueKey('painel-projeto-vazio')),
+        find.byKey(const ValueKey('visao-geral-vazia')),
         findsNothing,
         reason:
             'o preview fica preto com tudo escondido, mas as camadas '
@@ -663,8 +736,14 @@ void main() {
       m.c.read(selectedLayerProvider.notifier).state = null;
       await tester.pump();
 
-      expect(find.byKey(const ValueKey('painel-projeto-vazio')), findsNothing);
-      expect(find.byKey(const ValueKey('painel-sem-selecao')), findsOneWidget);
+      // OS TRES ESTADOS SAO DA LINHA DO TEMPO AGORA, e nao mais de uma
+      // faixa no rodape: "projeto vazio", "nada escolhido" e "camada
+      // escolhida" continuam separados, so que onde se trabalha.
+      expect(
+        find.byKey(const ValueKey('detalhado-sem-selecao')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('timeline-aviso')), findsNothing);
     });
   });
 
@@ -694,6 +773,19 @@ void main() {
         reason:
             'a timeline tem um CHAO: quem cede espaco e o preview, e '
             'nunca ela',
+      );
+    });
+
+    testWidgets('a linha do tempo vai ate o pe da tela', (tester) async {
+      await _montar(tester);
+      final tela = tester.getRect(find.byType(Scaffold));
+      final tempo = tester.getRect(find.byType(LinhaDoTempo));
+      expect(
+        tempo.bottom,
+        closeTo(tela.bottom - PainelDaCamada.alturaMaxima, 1),
+        reason:
+            'neste teste o espaco do painel e reservado a mao; na tela de '
+            'verdade nao ha rodape nenhum abaixo da linha do tempo',
       );
     });
 

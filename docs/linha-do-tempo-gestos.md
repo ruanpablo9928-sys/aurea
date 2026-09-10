@@ -63,7 +63,7 @@ de um instante seria pior que não mover.
 | Gesto | O que faz |
 | --- | --- |
 | Toque numa trilha | seleciona aquela camada |
-| Toque na trilha **já selecionada** | abre no modo detalhado |
+| Toque na trilha **já selecionada** | abre as ferramentas daquela camada |
 | Toque na pílula (olho) | esconde ou mostra aquela camada |
 | Toque na régua | leva o cabeçote ao instante daquele pixel |
 | Arraste na régua ou nas trilhas | desliza o conteúdo, e com ele o tempo |
@@ -71,6 +71,11 @@ de um instante seria pior que não mover.
 | Arraste vertical nas trilhas | rola a lista de camadas |
 | Arraste na alça da direita | muda a camada de lugar na pilha |
 | Toque no `+` redondo | abre o menu de adicionar |
+
+O segundo toque abria o modo detalhado até a faixa "Ferramentas da
+camada" ser removida do rodapé. O modo já tem botão próprio no cabeçalho;
+quem ficou sem caminho foi as ferramentas, e por isso são elas que herdam
+o gesto.
 
 **Não há toque duplo**, e isso é decisão, não esquecimento. Um
 `onDoubleTap` obriga o Flutter a segurar todo toque simples por uns

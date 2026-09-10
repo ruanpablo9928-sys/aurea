@@ -5,6 +5,7 @@ import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import 'adicionar_conteudo.dart';
 import 'mapa_do_tempo.dart';
 import 'painel_da_camada.dart';
 import 'visao_geral_das_camadas.dart';
@@ -123,10 +124,17 @@ class LinhaDoTempo extends ConsumerWidget {
     final modo = ref.watch(modoDaLinhaDoTempoProvider);
     final camadas = project.layers;
     final atual = camadas.where((l) => l.id == selecionada).firstOrNull;
-    final pedida = alturaDoModo(modo, camadas.length);
-    final a = altura;
+    // QUEM MANDA NA ALTURA E A TELA.
+    //
+    // Aqui era `max(altura, pedida)`, e isso estourava o Column da tela
+    // por 84 px assim que o projeto passava de quatro camadas: a tela
+    // dividia o espaco por uma conta e a linha do tempo devolvia outra.
+    // Duas contas para a mesma altura sempre acabam discordando. A tela
+    // ja garante o chao; se o que ela mandar for menos que as trilhas
+    // ocupam, a pilha rola.
+    final a = altura ?? alturaDoModo(modo, camadas.length);
     return SizedBox(
-      height: a == null || a < pedida ? pedida : a,
+      height: a,
       child: ColoredBox(
         color: AmColors.panel,
         child: LayoutBuilder(
@@ -209,6 +217,20 @@ class LinhaDoTempo extends ConsumerWidget {
                   bottom: 12,
                   child: _BotaoRedondoDeAdicao(playback: playback),
                 ),
+                // A BARRA DE FAMILIAS abre EM CIMA do `+`, e nao no
+                // rodape da tela: ela pertence ao botao que a chamou, e
+                // o dedo que acabou de tocar nele ja esta ali.
+                if (ref.watch(barraDeAdicaoAbertaProvider))
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12 + _BotaoRedondoDeAdicao.diametro + 10,
+                    child: BarraDeCategoriasDeAdicao(
+                      aoEscolher: (id) =>
+                          ref.read(categoriaDeAdicaoProvider.notifier).state =
+                              id,
+                    ),
+                  ),
               ],
             );
           },
@@ -1234,10 +1256,8 @@ class _SemSelecao extends StatelessWidget {
 
 /// O `+` REDONDO que flutua sobre a linha do tempo.
 ///
-/// Ele e o mesmo `+` da faixa de ferramentas: chama `abrirAdicaoDeConteudo`,
-/// com o mesmo instante de insercao e o mesmo menu. Dois botoes, um
-/// fluxo — se cada um abrisse o seu, um dia eles discordariam sobre onde
-/// a camada nova entra.
+/// Aberto, ele vira um `x`: o mesmo alvo que chamou a barra a dispensa,
+/// e o dedo nao precisa procurar outro lugar para desistir.
 class _BotaoRedondoDeAdicao extends ConsumerWidget {
   const _BotaoRedondoDeAdicao({required this.playback});
 
@@ -1250,21 +1270,23 @@ class _BotaoRedondoDeAdicao extends ConsumerWidget {
     if (!ref.watch(painelDaCamadaLigadoProvider)) {
       return const SizedBox.shrink();
     }
-    // NO PROJETO VAZIO ELE SE RECOLHE. Quem convida ali e a faixa
-    // inteira, com texto — um simbolo sozinho nao diz o que fazer para
-    // quem acabou de abrir um projeto em branco. Com camadas na tela, o
-    // simbolo basta, e e ele que fica.
-    if (ref.watch(editorControllerProvider).layers.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    final aberta = ref.watch(barraDeAdicaoAbertaProvider);
+    // NO PROJETO VAZIO ELE FICA — e o unico caminho para comecar.
     return Semantics(
       container: true,
       excludeSemantics: true,
       button: true,
-      label: 'Adicionar conteudo',
+      label: aberta ? 'Fechar o menu' : 'Adicionar conteudo',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => abrirAdicaoDeConteudo(ref, playback),
+        onTap: () {
+          if (aberta) {
+            fecharAdicao(ref);
+            ref.read(barraDeAdicaoAbertaProvider.notifier).state = false;
+            return;
+          }
+          abrirAdicaoDeConteudo(ref, playback);
+        },
         child: Container(
           width: diametro,
           height: diametro,
@@ -1272,8 +1294,8 @@ class _BotaoRedondoDeAdicao extends ConsumerWidget {
             color: AmColors.action,
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.add_rounded,
+          child: Icon(
+            aberta ? Icons.close_rounded : Icons.add_rounded,
             size: 26,
             color: AmColors.onAction,
           ),

@@ -79,84 +79,63 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, limites) {
-            // A DIVISAO VERTICAL, e a razao de cada conta.
+            // A DIVISAO VERTICAL: A COMPOSICAO PEDE, A LINHA DO
+            // TEMPO FICA COM TODO O RESTO.
             //
-            // A composicao PEDE a altura que a proporcao dela exige na
-            // largura disponivel — e nao uma fatia fixa da tela. Foi essa
-            // a origem do vazio: reservar 40% da altura para um 16:9 que
-            // so precisa de 206 px deixa quase trezentos pixels mortos
-            // entre o cabecalho e a barra de transporte.
+            // A conta responde as DUAS resolucoes ao mesmo tempo, que e
+            // o que faz esta tela servir em qualquer aparelho:
             //
-            // O QUE SOBRA VAI PARA A LINHA DO TEMPO. Ela e area de
-            // trabalho, e nao rodape: num projeto deitado ela fica
-            // grande; num vertical, o preview e que ocupa a tela e ela
-            // recua ate o chao dela, nunca abaixo.
-            // A DIVISAO VERTICAL: CADA UM PEDE O QUE PRECISA, e o
-            // que sobra vai para o preview.
+            //   - a do APARELHO entra como `limites`, a area que sobrou
+            //     depois da barra de status e da de navegacao;
+            //   - a do PROJETO entra como `proporcao`, que decide quanta
+            //     ALTURA a composicao precisa para caber na largura
+            //     disponivel.
             //
-            // Duas contas erradas ja foram tentadas aqui, e as duas
-            // deixaram buraco na tela:
+            // Um 9:16 num celular alto pede quase tudo e a linha do
+            // tempo fica no chao dela; um 16:9 no mesmo celular pede um
+            // terco, e os outros dois tercos viram area de trabalho.
+            //
+            // Tres contas erradas ja passaram por aqui, e cada uma
+            // deixou um buraco:
             //
             //   - fatia FIXA para o preview: um 16:9 numa largura de 366
             //     px so precisa de 206, e reservar 40% da altura deixava
             //     quase trezentos pixels mortos sob a composicao;
-            //   - dar TODO o resto para a linha do tempo: com quatro
-            //     trilhas ela pedia 190 e recebia 600, e o vazio so
-            //     mudava de lugar.
+            //   - teto de 50%: num projeto em pe ele cortava o preview
+            //     em 369 px havendo 468 livres, e os 99 cortados iam
+            //     morrer embaixo das trilhas;
+            //   - dar o excedente ao preview: ele so cresce com tarja
+            //     preta em volta da composicao.
             //
-            // Entao os dois pedem: a composicao pede a altura que a
-            // proporcao dela exige, a linha do tempo pede o que as
-            // trilhas ocupam. O excedente e do preview, ate um teto —
-            // ele e quem sabe crescer sem inventar conteudo.
+            // Entao: a composicao pede o que precisa, a linha do tempo
+            // pede o chao dela, e o excedente e sempre da linha do
+            // tempo — que sabe usa-lo, porque mais espaco e mais camada
+            // a vista sem rolar.
             final util = limites.maxHeight;
             final proporcao = project.outputWidth / project.outputHeight;
+            final disponivel = util - _Cabecalho.altura;
 
-            final painel = alturaDoPainel(ref);
-            final disponivel = util - _Cabecalho.altura - painel;
+            final pedidaPelaComposicao = (limites.maxWidth - 24) / proporcao;
+            var preview = pedidaPelaComposicao;
+            var tempo = disponivel - preview;
 
+            // O QUE A LINHA DO TEMPO PEDE vem antes do conforto do
+            // preview. O pedido depende do modo e de quantas camadas ha:
+            // sem transporte, regua e as trilhas que existem, ela deixa
+            // de ser ferramenta e vira enfeite.
             final pedidaPelaTimeline = LinhaDoTempo.alturaDoModo(
               ref.watch(modoDaLinhaDoTempoProvider),
               project.layers.length,
             );
-
-            // A LINHA DO TEMPO PEDE O QUE AS TRILHAS OCUPAM. O que
-            // sobra e do preview.
-            //
-            // Ja tentei o contrario — esticar as trilhas para preencher
-            // — e foi pior: com poucas camadas elas viravam blocos
-            // enormes, e o tamanho de uma trilha passava a depender de
-            // quantas existem. Trilha tem altura fixa; o espaco livre
-            // embaixo dela e onde as proximas camadas entram.
-            var tempo = pedidaPelaTimeline;
-            var preview = disponivel - tempo;
-
-            // O PREVIEW NAO PASSA DO QUE A COMPOSICAO PRECISA.
-            //
-            // Antes havia um teto de 50% da altura, e ele estava
-            // errado nos dois sentidos:
-            //
-            //   - num projeto EM PE ele cortava o preview em 369 px
-            //     quando havia 468 livres, e os 97 px cortados iam
-            //     morrer embaixo das trilhas, onde nao ha o que
-            //     desenhar;
-            //   - num projeto DEITADO ele deixava passar mais altura do
-            //     que a composicao ocupa, e sobrava tarja preta.
-            //
-            // A conta certa nao e uma fracao: e quanto a composicao
-            // ocupa nesta largura. Acima disso o preview so cresceria
-            // vazio.
-            final pedidaPelaComposicao = (limites.maxWidth - 24) / proporcao;
-            if (preview > pedidaPelaComposicao) {
-              preview = pedidaPelaComposicao;
-              tempo = disponivel - preview;
+            if (tempo < pedidaPelaTimeline) {
+              tempo = pedidaPelaTimeline;
+              preview = disponivel - tempo;
             }
+            // E o chao do preview vem antes de tudo: sem ele nao da para
+            // ver o que se esta editando.
             if (preview < 140) {
               preview = 140;
               tempo = disponivel - preview;
-            }
-            if (tempo < LinhaDoTempo.alturaMinima) {
-              tempo = LinhaDoTempo.alturaMinima;
-              preview = disponivel - tempo;
             }
 
             return Stack(
@@ -222,20 +201,30 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     // TRANSPORTE, REGUA E TRILHAS SAO UM BLOCO SO. Eles
                     // encostam de proposito: sao a mesma ferramenta.
                     LinhaDoTempo(playback: _playback, altura: tempo),
-                    // O ESPACO DO PAINEL, ja descontado do preview acima.
-                    SizedBox(height: painel),
                   ],
                 ),
-                // A FAIXA no rodape, e o painel POR CIMA dela quando
-                // aberto. A linha do tempo fica sempre inteira e visivel
-                // — nada do painel passa por cima dela.
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: FaixaDoPainel(playback: _playback),
-                ),
+                // AS FERRAMENTAS DA CAMADA, sobrepostas ao rodape.
+                //
+                // A faixa fixa "Ferramentas da camada" foi REMOVIDA: ela
+                // reservava 52 px de altura o tempo inteiro para
+                // oferecer um caminho que o toque na propria camada ja
+                // oferece. Esses 52 px sao da linha do tempo agora.
                 PainelSobreposto(playback: _playback),
+                // O PAINEL DO MEIO, com a tela desfocada atras. Fica por
+                // cima de tudo porque enquanto ele esta aberto nao ha o
+                // que fazer atras dele.
+                PainelCentralDeAdicao(
+                  instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
+                  aoAdicionar: (_, _) {
+                    fecharAdicao(ref);
+                    ref.read(barraDeAdicaoAbertaProvider.notifier).state =
+                        false;
+                    // A camada nova ja nasce selecionada — o motor faz
+                    // isso. Abrir as ferramentas dela na sequencia e o
+                    // passo que a pessoa ia dar de qualquer jeito.
+                    abrirFerramentasDaCamada(ref);
+                  },
+                ),
               ],
             );
           },
@@ -243,28 +232,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       ),
     );
   }
-}
-
-/// A ALTURA QUE O PAINEL OCUPA AGORA, para a tela descontar do preview.
-///
-/// Fica fora da tela de proposito: o teste monta as mesmas pecas e
-/// precisa da mesma conta, senao testa um arranjo que nao existe.
-double alturaDoPainel(WidgetRef ref) {
-  if (!ref.watch(painelDaCamadaLigadoProvider)) return 0;
-  final estado = ref.watch(estadoDoPainelProvider);
-  if (estado == EstadoDoPainel.recolhido) return FaixaDoPainel.altura;
-
-  final project = ref.watch(editorControllerProvider);
-  final id = ref.watch(selectedLayerProvider);
-  final camada = project.layers.where((l) => l.id == id).firstOrNull;
-  if (camada == null && estado != EstadoDoPainel.adicionar) {
-    return FaixaDoPainel.altura;
-  }
-  if (estado == EstadoDoPainel.categoria) return PainelDaCamada.alturaMaxima;
-  final itens = estado == EstadoDoPainel.adicionar
-      ? tiposDeConteudo.length
-      : categoriasDaCamada(camada!).length;
-  return PainelDaCamada.alturaAberta(itens);
 }
 
 /// A FAIXA DE CIMA: sair, saber em que projeto se esta, e EXPORTAR.

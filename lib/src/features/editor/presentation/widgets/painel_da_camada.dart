@@ -5,7 +5,6 @@ import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
-import 'adicionar_conteudo.dart';
 
 /// AS FERRAMENTAS DA CAMADA SELECIONADA.
 ///
@@ -19,7 +18,12 @@ import 'adicionar_conteudo.dart';
 /// `EditorController` que a atende. O levantamento que sustenta
 /// [categoriasDaCamada] esta em `docs/painel-da-camada.md`.
 enum EstadoDoPainel {
-  /// A faixa fina: "Ferramentas da camada" e o `+`.
+  /// Fechado. NAO ha faixa nenhuma no rodape.
+  ///
+  /// A faixa "Ferramentas da camada" existiu e foi removida: ela comia
+  /// 52 px de altura o tempo todo para oferecer um caminho que o toque
+  /// na propria camada ja oferece. Quem abre as ferramentas hoje e um
+  /// toque na camada JA selecionada, na pilha.
   recolhido,
 
   /// A grade de categorias da camada selecionada.
@@ -27,11 +31,6 @@ enum EstadoDoPainel {
 
   /// Uma categoria aberta, ocupando o painel.
   categoria,
-
-  /// O menu de adicao. E um ESTADO do mesmo painel, e nao outro painel
-  /// por cima: assim nao sobra uma camada invisivel recebendo gesto
-  /// atras da outra.
-  adicionar,
 }
 
 /// O que o painel esta mostrando. Os estados sao MUTUAMENTE EXCLUSIVOS:
@@ -189,10 +188,6 @@ String tipoDaCamadaEmPalavras(Layer camada) => switch (camada) {
 
 /// Medidas do painel, usadas pela tela para dividir o espaco.
 abstract final class PainelDaCamada {
-  /// A faixa recolhida. Alta o bastante para o dedo, baixa o bastante
-  /// para nao roubar a linha do tempo.
-  static const alturaRecolhido = 52.0;
-
   /// O TETO do painel aberto. Ele SOBREPOE, entao esta altura sai da
   /// tela e nao do espaco dos outros.
   static const alturaMaxima = 260.0;
@@ -209,40 +204,6 @@ abstract final class PainelDaCamada {
     final pedida =
         _alturaDoCabecalho + linhas * (_alturaDoCartao + 8) + _folgaDaGrade;
     return pedida < alturaMaxima ? pedida : alturaMaxima;
-  }
-}
-
-/// A FAIXA FIXA, sempre no rodape.
-///
-/// Fechada, o painel e SO isto: uma barra de 52 px com o titulo e o `+`.
-/// Ela nao cresce, nao empurra e nao tira altura da linha do tempo — que
-/// e a area de trabalho e precisa do espaco.
-class FaixaDoPainel extends ConsumerWidget {
-  const FaixaDoPainel({super.key, required this.playback});
-
-  final PlaybackController playback;
-
-  static const altura = PainelDaCamada.alturaRecolhido;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(painelDaCamadaLigadoProvider)) {
-      return const SizedBox.shrink();
-    }
-    final project = ref.watch(editorControllerProvider);
-    final id = ref.watch(selectedLayerProvider);
-    final camada = project.layers.where((l) => l.id == id).firstOrNull;
-    return SizedBox(
-      height: altura,
-      child: ColoredBox(
-        color: AmColors.panelHigh,
-        child: _FaixaRecolhida(
-          camada: camada,
-          projetoVazio: project.layers.isEmpty,
-          playback: playback,
-        ),
-      ),
-    );
   }
 }
 
@@ -270,8 +231,8 @@ class PainelSobreposto extends ConsumerWidget {
 
     // A SELECAO E POR IDENTIDADE. Se a camada sumiu (exclusao,
     // desfazer), o painel se recolhe em vez de segurar uma referencia
-    // morta. Adicionar escapa disto: ele nao depende de camada.
-    if (camada == null && estado != EstadoDoPainel.adicionar) {
+    // morta.
+    if (camada == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!ref.context.mounted) return;
         ref.read(estadoDoPainelProvider.notifier).state =
@@ -281,11 +242,7 @@ class PainelSobreposto extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final itens = estado == EstadoDoPainel.adicionar
-        ? tiposDeConteudo.length
-        : camada == null
-        ? 0
-        : categoriasDaCamada(camada).length;
+    final itens = categoriasDaCamada(camada).length;
 
     return Positioned(
       left: 0,
@@ -299,248 +256,43 @@ class PainelSobreposto extends ConsumerWidget {
           color: AmColors.panelHigh,
           border: Border(top: BorderSide(color: AmColors.hairline)),
         ),
-        child: estado == EstadoDoPainel.adicionar
-            ? _Adicionar()
-            : _Aberto(camada: camada!, estado: estado),
+        child: _Aberto(camada: camada, estado: estado),
       ),
     );
   }
 }
 
-/// O MENU DE ADICAO, com o cabecalho de voltar.
-class _Adicionar extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      SizedBox(
-        height: 44,
-        child: Row(
-          children: [
-            Semantics(
-              container: true,
-              excludeSemantics: true,
-              button: true,
-              label: 'Voltar',
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => ref.read(estadoDoPainelProvider.notifier).state =
-                    EstadoDoPainel.recolhido,
-                child: const SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(
-                    Icons.chevron_left_rounded,
-                    size: 22,
-                    color: AmColors.text,
-                  ),
-                ),
-              ),
-            ),
-            const Expanded(
-              child: Text(
-                'Adicionar conteudo',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AmColors.text,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      Expanded(
-        child: MenuDeAdicao(
-          instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
-          aoAdicionar: () {
-            // Depois de criar, as ferramentas da camada nova. O criador
-            // ja a selecionou.
-            ref.read(estadoDoPainelProvider.notifier).state =
-                EstadoDoPainel.categorias;
-          },
-        ),
-      ),
-    ],
-  );
+/// ABRE AS FERRAMENTAS DA CAMADA SELECIONADA.
+///
+/// Chamado pelo toque na camada que JA esta selecionada, na pilha — que
+/// e o caminho que sobrou depois de a faixa do rodape ser removida. E o
+/// mesmo gesto do Alight: tocar na camada mostra o que da para fazer com
+/// ela.
+void abrirFerramentasDaCamada(WidgetRef ref) {
+  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.categorias;
+  ref.read(categoriaAbertaProvider.notifier).state = null;
 }
 
-/// A FAIXA RECOLHIDA: o nome do que ha, e o `+`.
+/// ABRE O FLUXO DE ADICAO: a barra de familias, em cima do `+`.
 ///
-/// Os dois ficam separados de proposito. O `+` cria conteudo; a faixa
-/// abre ferramentas do que ja existe. Encostar um no outro convida ao
-/// toque errado.
-class _FaixaRecolhida extends ConsumerWidget {
-  const _FaixaRecolhida({
-    required this.camada,
-    required this.projetoVazio,
-    required this.playback,
-  });
-
-  final Layer? camada;
-  final bool projetoVazio;
-  final PlaybackController playback;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // PROJETO VAZIO: a acao e CRIAR, e ela ocupa a faixa inteira. Nao
-    // adianta oferecer ferramentas de uma camada que nao existe.
-    if (projetoVazio) {
-      return Row(
-        children: [
-          Expanded(
-            child: Semantics(
-              container: true,
-              excludeSemantics: true,
-              button: true,
-              label: 'Adicionar conteudo',
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _abrirAdicao(ref, playback),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.add_rounded,
-                        size: 20,
-                        color: AmColors.action,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'Seu projeto esta vazio',
-                              key: ValueKey('painel-projeto-vazio'),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AmColors.text,
-                              ),
-                            ),
-                            Text(
-                              'Toque para adicionar conteudo',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AmColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(
-          child: Semantics(
-            container: true,
-            excludeSemantics: true,
-            button: camada != null,
-            label: camada == null
-                ? 'Selecione uma camada para editar'
-                : 'Ferramentas da camada',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: camada == null
-                  ? null
-                  : () => ref.read(estadoDoPainelProvider.notifier).state =
-                        EstadoDoPainel.categorias,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Icon(
-                      camada == null
-                          ? Icons.touch_app_outlined
-                          : Icons.tune_rounded,
-                      size: 18,
-                      color: camada == null ? AmColors.muted : AmColors.text,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        camada == null
-                            ? 'Selecione uma camada para editar'
-                            : 'Ferramentas da camada',
-                        key: camada == null
-                            ? const ValueKey('painel-sem-selecao')
-                            : null,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: camada == null
-                              ? AmColors.muted
-                              : AmColors.text,
-                        ),
-                      ),
-                    ),
-                    if (camada != null)
-                      const Icon(
-                        Icons.keyboard_arrow_up_rounded,
-                        size: 20,
-                        color: AmColors.muted,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        // O `+` TEM LUGAR RESERVADO, E NAO DEPENDE DA SELECAO.
-        //
-        // Adicionar precisa de um projeto editavel e de um tipo
-        // suportado — nada mais. Amarrar isso a haver camada escolhida
-        // e o que fecha a porta de entrada do editor. (Duplicar, sim,
-        // depende de selecao: por isso ele vive no transporte.)
-        // O `+` SAIU DAQUI, e virou o botao redondo que flutua sobre a
-        // linha do tempo — como na referencia. Dois `+` na mesma tela,
-        // um redondo e um quadrado, abrindo o mesmo menu, era so
-        // duvida: a pessoa tinha de descobrir que sao a mesma coisa.
-        //
-        // O convite de PROJETO VAZIO continua sendo esta faixa, com
-        // texto e largura inteira, e nesse caso o redondo se recolhe.
-        // Um convite de cada vez.
-      ],
-    );
-  }
-
-  /// ABRIR O FLUXO DE ADICAO: pausa e REGISTRA O INSTANTE.
-  ///
-  /// O instante e capturado aqui, e nao no toque que escolhe o tipo:
-  /// assim que o relogio anda, os dois deixam de ser a mesma coisa, e o
-  /// lugar que a pessoa escolheu foi o de quando abriu.
-  ///
-  /// Pausar antes evita o caso em que o cabecote passa por cima da
-  /// camada nova enquanto ela esta sendo criada.
-  static void _abrirAdicao(WidgetRef ref, PlaybackController playback) =>
-      abrirAdicaoDeConteudo(ref, playback);
-}
-
-/// O MESMO FLUXO DE ADICAO, para quem chama de fora da faixa.
-///
-/// O `+` existe em dois lugares — o redondo que flutua sobre a linha do
-/// tempo e o da faixa de ferramentas —, e os dois PRECISAM abrir a mesma
-/// coisa, com o mesmo instante de insercao. Duas implementacoes de
-/// adicionar seria duas maneiras de errar o instante.
+/// PAUSA ANTES, e guarda o instante AGORA. O lugar onde o conteudo novo
+/// entra e o que a pessoa escolheu quando abriu o menu — assim que o
+/// relogio anda, esse instante e o do toque deixam de ser a mesma coisa.
+/// Pausar tambem evita o caso em que o cabecote passa por cima da camada
+/// nova enquanto ela esta sendo criada.
 void abrirAdicaoDeConteudo(WidgetRef ref, PlaybackController playback) {
   playback.pause();
   ref.read(instanteDeInsercaoProvider.notifier).state = playback.time.value;
-  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.adicionar;
+  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.recolhido;
+  ref.read(barraDeAdicaoAbertaProvider.notifier).state = true;
 }
+
+/// A BARRA DE FAMILIAS ESTA ABERTA?
+///
+/// Vive aqui, e nao no widget, porque tres pecas em telas diferentes
+/// precisam concordar sobre ela: o `+` (que a abre e fecha), a barra em
+/// si, e o painel do meio (que so aparece por cima dela).
+final barraDeAdicaoAbertaProvider = StateProvider<bool>((ref) => false);
 
 class _Aberto extends ConsumerWidget {
   const _Aberto({required this.camada, required this.estado});

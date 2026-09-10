@@ -7,6 +7,7 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/painel_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -176,7 +177,7 @@ void main() {
       );
     });
 
-    testWidgets('tocar na camada JA selecionada abre o detalhado', (
+    testWidgets('tocar na camada JA selecionada abre as ferramentas', (
       tester,
     ) async {
       final m = await _montar(tester, camadas: 3);
@@ -184,23 +185,35 @@ void main() {
       await tester.pump();
 
       final alvo = find.bySemanticsLabel('Camada 3');
-      // O PRIMEIRO toque so escolhe, e a vista continua a mesma.
+      // O PRIMEIRO toque so escolhe, e nada mais se abre.
       await tester.tap(alvo);
       await tester.pump();
+      expect(
+        m.c.read(estadoDoPainelProvider),
+        EstadoDoPainel.recolhido,
+        reason: 'escolher uma camada nao abre painel nenhum',
+      );
       expect(
         m.c.read(modoDaLinhaDoTempoProvider),
         ModoDaLinhaDoTempo.geral,
         reason: 'escolher nao pode arrastar a pessoa para outra vista',
       );
 
-      // O SEGUNDO entra.
+      // O SEGUNDO abre as ferramentas DAQUELA camada.
+      //
+      // Antes ele levava ao modo detalhado; o modo ganhou botao proprio
+      // no cabecalho, e quem ficou sem caminho foi as ferramentas,
+      // depois de a faixa do rodape ser removida. Entao e ele que herda
+      // o gesto — como no Alight, onde tocar na camada mostra o que da
+      // para fazer com ela.
       await tester.tap(alvo);
       await tester.pump();
 
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
       expect(
         m.c.read(modoDaLinhaDoTempoProvider),
-        ModoDaLinhaDoTempo.detalhado,
-        reason: 'tocar de novo na escolhida e o atalho de "quero mexer"',
+        ModoDaLinhaDoTempo.geral,
+        reason: 'abrir as ferramentas nao troca a vista debaixo do dedo',
       );
       final camadas = m.c.read(editorControllerProvider).layers;
       expect(

@@ -51,11 +51,25 @@ painel invisível continua recebendo gestos atrás do outro.
 
 | Estado | O que mostra |
 | --- | --- |
-| Recolhido | faixa com "Ferramentas da camada" e o `+` |
+| Recolhido | **nada** — o rodapé inteiro é da linha do tempo |
 | Categorias | cabeçalho (nome + tipo) e a grade de cartões |
 | Categoria | cabeçalho (Voltar · categoria · camada) e o conteúdo |
 
-Sem seleção, a faixa diz **"Selecione uma camada"** e não abre.
+### A faixa do rodapé foi removida
+
+Ela existiu: uma barra de 52 px com "Ferramentas da camada" e o `+`,
+sempre visível. O problema é o "sempre": 52 px de altura reservados o
+tempo inteiro, em toda tela e todo projeto, para oferecer um caminho que
+o toque na própria camada já oferece.
+
+**Quem abre as ferramentas hoje é um toque na camada JÁ selecionada**, na
+pilha — o primeiro toque escolhe, o segundo abre. É o mesmo gesto do
+Alight Motion, onde tocar numa camada mostra o que dá para fazer com ela.
+Esses 52 px são da linha do tempo agora.
+
+No modo detalhado não há esse caminho, e é de propósito: lá o toque na
+faixa leva o cabeçote, que é o gesto do modo. Quem quer as ferramentas
+volta para a pilha — o botão está no cabeçalho, a um toque.
 
 ## Duas colunas, e altura pelo conteúdo
 
@@ -89,16 +103,65 @@ O painel acompanha o **id** da camada, não a posição na lista. Se ela
 deixa de existir (exclusão, desfazer), o painel se recolhe sozinho em vez
 de segurar uma referência morta.
 
-## O `+` nesta etapa
+## O `+`: um botão redondo e dois níveis
 
-Ele **existe, ocupa o lugar dele e está desligado**, com explicação. Não
-some para reaparecer na 2C: mudar o layout debaixo da mão de quem está
-validando é pior que um botão inerte.
+O `+` é o **círculo colorido que flutua no canto inferior direito da
+linha do tempo** — o mesmo lugar que o Alight Motion usa, e pelo mesmo
+motivo: é o canto que o polegar alcança sem a mão sair de posição, e
+acrescentar mais uma camada é a ação mais repetida de quem monta uma
+composição.
 
-O lugar é reservado no layout, ao lado da faixa. Ele **não flutua sobre a
-linha do tempo** — sobrepor um keyframe, o olho, uma barra de camada ou a
-cápsula de tempo tornaria esses alvos intocáveis justamente na região
-mais disputada da tela.
+Ele custa sobrepor uma faixa de trilha, e o custo foi aceito depois de
+medido: a região que ele tapa é o fim do último trilho, não a régua nem o
+cabeçote. Aberto, ele vira um `x` — o mesmo alvo que chamou o menu o
+dispensa.
+
+### Nível 1: a barra de famílias
+
+Abre **em cima do `+`**, presa a ele. Só ícones, com um rótulo minúsculo
+embaixo: quem já sabe lê o ícone, quem não sabe lê a palavra, e nenhum
+dos dois paga o preço do outro. Ela rola na horizontal — são sete
+famílias hoje e vão ser mais, e uma barra que aperta os ícones até
+ninguém acertar o dedo é pior que uma que rola.
+
+| Família | O que tem dentro |
+| --- | --- |
+| 3D | Cena 3D · Nulo 3D · Objetos 3D · Partículas |
+| Texto | Texto |
+| Formas | Retângulo · Elipse · Polígono · Estrela · Setor · Anel |
+| Imagens | Da galeria |
+| Vídeos | Da galeria |
+| Áudio | Arquivo · De um vídeo |
+| Ferramentas | Camada de ajuste |
+
+### Nível 2: o painel do meio
+
+A família abre um painel **no centro da tela, com o resto desfocado**.
+Escolher o que criar é uma decisão, e enquanto ela está aberta não há o
+que fazer atrás. O desfoque diz isso sem apagar o contexto — dá para ver
+qual projeto está embaixo.
+
+O desfoque custa **um passe de GPU**, e por isso a reprodução para antes
+de ele aparecer: desfocar sessenta quadros por segundo de composição
+seria pagar caro por um fundo que ninguém está olhando.
+
+Um item pode ter **filhos** em vez de criar: é o caso de "Objetos 3D",
+que são dezessete primitivas. Ele abre mais um nível dentro do mesmo
+painel, com um Voltar no cabeçalho. Dois níveis e o teto — um terceiro
+precisa de decisão, não de acidente.
+
+### Tudo aqui é comando que existe
+
+Cada item chama um método do `EditorController` que já está lá:
+`addScene3DLayer`, `addNullLayer`, `addElement3DLayer`,
+`addParticlesLayer`, `addTextLayer`, `addShapeLayer`,
+`importImageFromGallery`, `importVideoFromGallery`, `importAudioFile`,
+`addAdjustmentLayer`. Nada de item aceso que abre o nada — o que ainda
+não tiver caminho aparece apagado e diz por quê.
+
+O **instante de inserção** é o capturado quando o menu ABRE, e não quando
+o toque no item acontece. Assim que o relógio anda os dois deixam de ser
+a mesma coisa, e o lugar que a pessoa escolheu foi o de quando abriu.
 
 ## O interruptor de validação
 
