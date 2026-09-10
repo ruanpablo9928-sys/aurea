@@ -6846,6 +6846,33 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.copyLayer(volume: volume.clamp(0, 1)));
   }
 
+  /// O VOLUME DE QUALQUER CAMADA QUE TENHA SOM.
+  ///
+  /// `editVideoVolume` recusa o que nao for video, e por isso a camada
+  /// de AUDIO — que tem o campo `volume`, que o mixer le e que a
+  /// exportacao respeita — nao tinha como mexer no proprio volume. O
+  /// cartao de som seguia o comando, entao a camada de audio tambem nao
+  /// ganhava cartao: um recurso ausente por causa de um `is!`.
+  void editVolume(String id, double volume) {
+    final layer = _layer(id);
+    final v = volume.clamp(0.0, 1.0);
+    switch (layer) {
+      case VideoLayer l:
+        _replace(l.copyLayer(volume: v));
+      case AudioLayer l:
+        _replace(l.copyLayer(volume: v));
+      default:
+        return;
+    }
+  }
+
+  /// O volume desta camada, ou nulo quando ela nao tem som.
+  double? volumeOf(String id) => switch (_layer(id)) {
+    VideoLayer l => l.volume,
+    AudioLayer l => l.volume,
+    _ => null,
+  };
+
   Future<Duration> _probeDuration(String path) async {
     final probe = VideoPlayerController.file(
       File(path),

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
+import '../../application/media_preview_service.dart';
 import '../../application/playback_controller.dart';
+import '../../domain/peak_pyramid.dart';
 import '../../domain/layer.dart';
 import 'linha_do_tempo.dart';
 import 'mapa_do_tempo.dart';
@@ -244,6 +246,52 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    MediaPreviewService.instance.revision.addListener(_ondaPronta);
+  }
+
+  @override
+  void dispose() {
+    MediaPreviewService.instance.revision.removeListener(_ondaPronta);
+    super.dispose();
+  }
+
+  /// A analise de um arquivo terminou: redesenhar.
+  void _ondaPronta() {
+    if (mounted) setState(() {});
+  }
+
+  /// AS ONDAS DAS CAMADAS QUE TEM SOM.
+  ///
+  /// A piramide ja existia inteira — seis niveis de detalhe, cache em
+  /// disco, escolha de nivel por pixel (`peak_pyramid.dart`) — e nunca
+  /// foi desenhada em lugar nenhum. Uma faixa de audio na linha do
+  /// tempo era um retangulo liso: dava para ver ONDE o som esta, nunca
+  /// O QUE ele e, que e o que faz alguem cortar no lugar certo.
+  Map<String, PeakPyramid> _ondas(List<Layer> camadas) {
+    final servico = MediaPreviewService.instance;
+    final saida = <String, PeakPyramid>{};
+    for (final l in camadas) {
+      final caminho = switch (l) {
+        AudioLayer a => a.sourcePath,
+        VideoLayer v => v.sourcePath,
+        _ => null,
+      };
+      if (caminho == null) continue;
+      final p = servico.pyramidOf(caminho);
+      if (p == null) {
+        // PEDIR E BARATO E A RESPOSTA E GUARDADA: o servico devolve na
+        // hora o que ja calculou e ignora o pedido repetido.
+        servico.ensureWaveform(caminho);
+        continue;
+      }
+      if (!p.isEmpty) saida[l.id] = p;
+    }
+    return saida;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
@@ -251,6 +299,7 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
     if (camadas.isEmpty) return const SemCamadasNaLinhaDoTempo();
 
     final altura = camadas.length * VisaoGeralDasCamadas.alturaDaTrilha;
+    final ondas = _ondas(camadas);
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       // ARRASTAR NA PILHA NAVEGA NO TEMPO. O cabecote esta parado no
@@ -325,6 +374,7 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                       segurando: _segurando,
                       degraus: _segurando == null ? 0 : _degraus,
                       familia: familiaDoApp(context),
+                      ondas: ondas,
                     ),
                     size: Size.infinite,
                   ),
@@ -508,6 +558,7 @@ class _PintorDasTrilhas extends CustomPainter {
     required this.segurando,
     required this.degraus,
     required this.familia,
+    required this.ondas,
   });
 
   final List<Layer> camadas;
@@ -525,6 +576,9 @@ class _PintorDasTrilhas extends CustomPainter {
 
   /// A fonte do app — `TextPainter` nao herda nada sozinho.
   final TextStyle familia;
+
+  /// A forma de onda por camada, quando ja analisada.
+  final Map<String, PeakPyramid> ondas;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -551,6 +605,8 @@ class _PintorDasTrilhas extends CustomPainter {
 
       canvas.save();
       canvas.clipRRect(rr);
+      final onda = ondas[l.id];
+      if (onda != null) _pintarOnda(canvas, l, barra, onda, escondida);
       _pintarNome(canvas, l, barra, cor, escondida);
       _pintarKeyframes(canvas, l, barra, cor);
       canvas.restore();
@@ -568,6 +624,68 @@ class _PintorDasTrilhas extends CustomPainter {
       }
     }
     _pintarDestinoDaOrdem(canvas, size);
+  }
+
+  /// A FORMA DE ONDA dentro do clipe.
+  ///
+  /// Duas camadas de desenho, e as duas sao necessarias:
+  ///
+  ///   - o CONTORNO (min..max) mostra o transiente, a batida seca que
+  ///     uma media achataria;
+  ///   - o CORPO (RMS) mostra o quao ALTO esta, que e o que o ouvido
+  ///     percebe.
+  ///
+  /// So o contorno da uma mancha cheia; so o RMS, uma forma sem ataque.
+  ///
+  /// O tempo do desenho e o do ARQUIVO, e nao o do clipe: aparar o
+  /// comeco tem de revelar outro pedaco da onda, e nao esticar a mesma.
+  /// E por isso que `sourceOffset` e `speed` entram na conta.
+  void _pintarOnda(
+    Canvas canvas,
+    Layer l,
+    Rect barra,
+    PeakPyramid onda,
+    bool escondida,
+  ) {
+    final recuo = switch (l) {
+      AudioLayer a => a.sourceOffset,
+      VideoLayer v => v.sourceOffset,
+      _ => Duration.zero,
+    };
+    final ritmo = switch (l) {
+      AudioLayer a => a.speed,
+      VideoLayer v => v.speed,
+      _ => 1.0,
+    };
+    final segundosPorPixel = 1 / mapa.pxPorSegundo * (ritmo <= 0 ? 1 : ritmo);
+    final nivel = onda.levelFor(segundosPorPixel);
+    if (nivel.length == 0) return;
+
+    final meio = barra.center.dy;
+    final metade = barra.height / 2 - 2;
+    final contorno = Paint()
+      ..color = const Color(0xFF0B0E12).withValues(alpha: escondida ? .2 : .38);
+    final corpo = Paint()
+      ..color = const Color(0xFF0B0E12).withValues(alpha: escondida ? .3 : .62);
+
+    final de = barra.left < 0 ? 0.0 : barra.left;
+    final ate = barra.right;
+    for (var x = de; x < ate; x += 1) {
+      final noClipe = mapa.tempoEm(x) - l.startTime;
+      if (noClipe < Duration.zero) continue;
+      final noArquivo =
+          recuo + Duration(microseconds: (noClipe.inMicroseconds * ritmo).round());
+      final i = nivel.bucketAt(noArquivo);
+      if (i < 0 || i >= nivel.length) continue;
+      final alto = nivel.max[i].abs();
+      final baixo = nivel.min[i].abs();
+      final pico = (alto > baixo ? alto : baixo).clamp(0.0, 1.0) * metade;
+      final rms = nivel.rms[i].clamp(0.0, 1.0) * metade;
+      canvas.drawRect(Rect.fromLTRB(x, meio - pico, x + 1, meio + pico), contorno);
+      if (rms > .5) {
+        canvas.drawRect(Rect.fromLTRB(x, meio - rms, x + 1, meio + rms), corpo);
+      }
+    }
   }
 
   /// O CADEADO no canto do clipe travado.
@@ -718,7 +836,8 @@ class _PintorDasTrilhas extends CustomPainter {
       o.degraus != degraus ||
       !identical(o.camadas, camadas) ||
       o.escondidas.length != escondidas.length ||
-      o.travadas.length != travadas.length;
+      o.travadas.length != travadas.length ||
+      o.ondas.length != ondas.length;
 }
 
 /// ESTADO VAZIO: projeto sem camada nenhuma.

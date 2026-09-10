@@ -189,6 +189,7 @@ class LinhaDoTempo extends ConsumerWidget {
                       fps: project.fps,
                       mapa: mapa,
                       marcadores: project.markers,
+                      batidas: project.beats,
                       aoAlternarMarcador: () => ref
                           .read(editorControllerProvider.notifier)
                           .toggleMarker(playback.time.value),
@@ -490,6 +491,7 @@ class _Regua extends StatefulWidget {
     required this.mapa,
     required this.aoAmpliar,
     required this.marcadores,
+    required this.batidas,
     required this.aoAlternarMarcador,
   });
 
@@ -506,6 +508,15 @@ class _Regua extends StatefulWidget {
   /// mostrou nenhum: o app guardava uma decisao que ninguem conseguia
   /// ver.
   final List<Marker> marcadores;
+
+  /// O PULSO DA MUSICA, quando alguem mandou procurar.
+  ///
+  /// O detector existia inteiro — banda, envelope, estimativa de BPM,
+  /// grade por compasso — e o resultado ia para `state.beats`, que
+  /// NINGUEM desenhava. Achar as batidas era uma acao sem resposta na
+  /// tela: os cortes saiam no ritmo e nao havia como conferir a grade
+  /// antes de cortar.
+  final List<Duration> batidas;
 
   /// Toque longo na regua crava ou tira um marcador no cabecote.
   final VoidCallback aoAlternarMarcador;
@@ -572,6 +583,7 @@ class _ReguaState extends State<_Regua> {
             fps: widget.fps,
             familia: familiaDoApp(context),
             marcadores: widget.marcadores,
+            batidas: widget.batidas,
           ),
           size: Size.infinite,
         ),
@@ -592,6 +604,7 @@ class _PintorDaRegua extends CustomPainter {
     required this.fps,
     required this.familia,
     required this.marcadores,
+    required this.batidas,
   });
 
   final MapaDoTempo mapa;
@@ -599,6 +612,7 @@ class _PintorDaRegua extends CustomPainter {
   final int fps;
   final TextStyle familia;
   final List<Marker> marcadores;
+  final List<Duration> batidas;
 
   /// A barra de rolagem no topo, as marcas embaixo dela, e a capsula
   /// sobreposta ao pe das marcas. Medidas da referencia.
@@ -622,8 +636,29 @@ class _PintorDaRegua extends CustomPainter {
     if (size.width <= 0) return;
     _pintarMarcas(canvas, size);
     _pintarBarra(canvas, size);
+    _pintarBatidas(canvas, size);
     _pintarMarcadores(canvas, size);
     _pintarCapsula(canvas, size);
+  }
+
+  /// AS BATIDAS: risquinhos no pe da regua.
+  ///
+  /// Baixos e finos de proposito. Sao muitos — uma musica de tres
+  /// minutos a 120 BPM tem 360 — e desenha-los com o peso de um
+  /// marcador viraria uma cerca que esconde a propria regua. O que se
+  /// quer deles e o RITMO visto de longe, para conferir se a grade
+  /// bateu com a musica antes de mandar cortar.
+  void _pintarBatidas(Canvas canvas, Size size) {
+    if (batidas.isEmpty) return;
+    final tinta = Paint()..color = AmColors.accent.withValues(alpha: .5);
+    for (final t in batidas) {
+      final x = mapa.xDe(t);
+      if (x < 0 || x > size.width) continue;
+      canvas.drawRect(
+        Rect.fromLTWH(x - .5, size.height - 7, 1, 7),
+        tinta,
+      );
+    }
   }
 
   /// OS MARCADORES: um triangulinho pendurado no alto da regua.
@@ -782,6 +817,7 @@ class _PintorDaRegua extends CustomPainter {
   bool shouldRepaint(_PintorDaRegua o) =>
       o.familia != familia ||
       o.marcadores.length != marcadores.length ||
+      o.batidas.length != batidas.length ||
       o.mapa.tempo != mapa.tempo ||
       o.mapa.pxPorSegundo != mapa.pxPorSegundo ||
       o.mapa.largura != mapa.largura ||

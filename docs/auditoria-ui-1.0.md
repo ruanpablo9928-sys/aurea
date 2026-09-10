@@ -40,6 +40,29 @@ voltar vira "Sair do grupo", e o botao de voltar do sistema faz o mesmo
 (`PopScope`). Sem isso, entrar num grupo seria uma armadilha — as
 edicoes feitas la dentro so voltam para o grupo em `exitGroup`.
 
+**Som (lote 5).** O cartao "Volume" virou "Som" e passou a existir
+tambem na camada de AUDIO, que ficava de fora por um `is!`:
+`editVideoVolume` recusa o que nao for video, e o cartao segue o
+comando — o campo `volume` sempre esteve la, o mixer sempre leu e a
+exportacao sempre respeitou. Agora ha `editVolume`.
+
+Dentro dele: volume, entrada e saida (`updateAudioSpec`, limitadas a
+metade do clipe), mudo, emparelhar o volume (`normalizeAudio`) e a
+familia de batida (`detectBeatsInto`, `clearBeats`, `cutAtMarkers`,
+`distributeAtMarkers`).
+
+Duas coisas ganharam DESENHO, e nao so comando:
+
+- **a forma de onda no clipe.** A piramide de picos existia inteira —
+  seis niveis de detalhe, cache em disco, escolha de nivel por pixel —
+  e nunca foi desenhada. Uma faixa de audio era um retangulo liso: dava
+  para ver ONDE o som esta, nunca O QUE ele e. O desenho usa o tempo do
+  ARQUIVO (com `sourceOffset` e `speed`), entao aparar revela outro
+  pedaco da onda em vez de esticar a mesma.
+- **as batidas na regua.** `state.beats` nao era desenhado em lugar
+  nenhum: achar as batidas era uma acao sem resposta na tela, e nao
+  havia como conferir a grade antes de mandar cortar.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo

@@ -132,10 +132,16 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Forma',
       icone: Icons.category_rounded,
     ),
-  if (camada is VideoLayer)
+  // O SOM E DE QUEM TEM SOM — video E audio.
+  //
+  // A camada de audio ficava de fora porque `editVideoVolume` recusa o
+  // que nao for video, e o cartao segue o comando. O campo `volume`
+  // sempre esteve la, o mixer sempre leu e a exportacao sempre
+  // respeitou: faltava o comando, que agora existe (`editVolume`).
+  if (camada is VideoLayer || camada is AudioLayer)
     const CategoriaDaCamada(
-      id: 'volume',
-      rotulo: 'Volume',
+      id: 'som',
+      rotulo: 'Som',
       icone: Icons.volume_up_rounded,
     ),
   if (camada is ImageLayer || camada is VideoLayer || camada is AudioLayer)
@@ -413,7 +419,7 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'opacidade' => 'Opacidade',
   'texto' => 'Texto',
   'forma' => 'Forma',
-  'volume' => 'Volume',
+  'som' => 'Som',
   'efeitos' => 'Efeitos',
   'midia' => 'Informacoes da midia',
   'camada' => 'Camada',

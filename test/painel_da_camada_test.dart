@@ -271,18 +271,34 @@ void main() {
       expect(find.byKey(const ValueKey('cartao-texto')), findsNothing);
     });
 
-    testWidgets('camada de audio NAO anuncia volume', (tester) async {
-      // `editVideoVolume` recusa o que nao for VideoLayer. O campo existe
-      // na camada de audio, o COMANDO nao — e o cartao segue o comando.
+    testWidgets('o cartao de som e de quem tem som', (tester) async {
+      // Este teste ja disse o contrario, e por um motivo que era
+      // verdade: `editVideoVolume` recusava o que nao fosse video, e o
+      // cartao segue o comando — entao a camada de AUDIO nao ganhava
+      // cartao de volume. O campo `volume` sempre esteve nela, o mixer
+      // sempre leu e a exportacao sempre respeitou; o que faltava era o
+      // comando, que agora existe (`editVolume`).
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final c = container.read(editorControllerProvider.notifier);
       c.addTextLayer(Duration.zero, text: 'Um');
-      final camada = container.read(editorControllerProvider).layers.single;
+      final texto = container.read(editorControllerProvider).layers.single;
       expect(
-        categoriasDaCamada(camada).map((x) => x.id),
-        isNot(contains('volume')),
+        categoriasDaCamada(texto).map((x) => x.id),
+        isNot(contains('som')),
       );
+
+      final id = c.addAudioLayer(
+        Duration.zero,
+        'som.m4a',
+        'Som',
+        const Duration(seconds: 4),
+      );
+      final audio = container
+          .read(editorControllerProvider)
+          .layers
+          .firstWhere((l) => l.id == id);
+      expect(categoriasDaCamada(audio).map((x) => x.id), contains('som'));
     });
 
     testWidgets('toda camada tem transformar e opacidade', (tester) async {

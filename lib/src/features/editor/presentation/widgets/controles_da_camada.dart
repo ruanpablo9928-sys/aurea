@@ -12,6 +12,7 @@ import 'editor_de_curva.dart';
 import 'linha_de_parametro.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_mistura.dart';
+import 'painel_de_som.dart';
 import 'painel_da_camada.dart';
 import 'painel_de_transformacao.dart';
 import 'rails_do_painel.dart';
@@ -87,7 +88,7 @@ class ControlesDaCategoria extends ConsumerWidget {
     'opacidade' => _Opacidade(camada: camada, tempo: tempo),
     'texto' => _Texto(camada: camada),
     'forma' => _Forma(camada: camada, tempo: tempo),
-    'volume' => _Volume(camada: camada),
+    'som' => PainelDeSom(camada: camada),
     'efeitos' => _Efeitos(camada: camada, tempo: tempo),
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),
@@ -510,30 +511,6 @@ class _Forma extends ConsumerWidget {
               aoDigitar: (v) => c.editShapeParam(l.id, chave, tempo, v),
             ),
       ],
-    );
-  }
-}
-
-class _Volume extends ConsumerWidget {
-  const _Volume({required this.camada});
-
-  final Layer camada;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l = camada as VideoLayer;
-    final c = ref.read(editorControllerProvider.notifier);
-    return LinhaDeParametro(
-      rotulo: 'Volume',
-      valor: l.volume * 100,
-      casas: 0,
-      sufixo: '%',
-      porPixel: .6,
-      escolhida: true,
-      aoComecar: c.beginGesture,
-      aoMudar: (v) => c.editVideoVolume(l.id, v / 100),
-      aoTerminar: c.endGesture,
-      aoDigitar: (v) => c.editVideoVolume(l.id, v / 100),
     );
   }
 }
