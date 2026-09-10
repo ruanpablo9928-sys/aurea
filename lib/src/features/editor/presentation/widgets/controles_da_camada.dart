@@ -14,6 +14,7 @@ import 'escolha_de_fonte.dart';
 import 'linha_de_parametro.dart';
 import 'painel_da_cena.dart';
 import 'painel_de_animacao_de_texto.dart';
+import 'painel_de_borda.dart';
 import 'painel_de_cor.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_rastreio.dart';
@@ -75,7 +76,17 @@ class ControlesDaCategoria extends ConsumerWidget {
         valueListenable: playback.time,
         builder: (context, tempo, _) => ProvedorDoRelogio(
           playback: playback,
-          child: categoriaId == 'transformar'
+          // BORDA E SOMBRA monta os proprios rails: e a segunda familia
+          // com coluna a direita, e o alvo do rail esquerdo muda
+          // conforme o submodo escolhido.
+          child: categoriaId == 'borda'
+              ? PainelDeBorda(
+                  camada: camada,
+                  tempo: tempo,
+                  aoVoltar: aoVoltar,
+                  alvoDoRail: (m) => _alvoDaBorda(ref, m, tempo),
+                )
+              : categoriaId == 'transformar'
               // A TRANSFORMACAO MONTA OS PROPRIOS RAILS: e a unica com
               // rail direito, e a unica em que o alvo do rail esquerdo
               // muda conforme o modo escolhido.
@@ -96,6 +107,7 @@ class ControlesDaCategoria extends ConsumerWidget {
               : _ComRail(
                   aoVoltar: aoVoltar,
                   alvo: _alvoDaCategoria(ref, tempo),
+                  rolagemPropria: categoriaId == 'opacidade',
                   child: _conteudo(tempo),
                 ),
         ),
@@ -103,7 +115,7 @@ class ControlesDaCategoria extends ConsumerWidget {
   }
 
   Widget _conteudo(Duration tempo) => switch (categoriaId) {
-    'opacidade' => _Opacidade(camada: camada, tempo: tempo),
+    'opacidade' => PainelDeMistura(camada: camada, tempo: tempo),
     'texto' => _Texto(camada: camada),
     'animacao' => PainelDeAnimacaoDeTexto(camada: camada),
     'forma' => _Forma(camada: camada, tempo: tempo),
@@ -117,9 +129,28 @@ class ControlesDaCategoria extends ConsumerWidget {
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),
     'mascara' => PainelDeMascaras(camada: camada, tempo: tempo),
     'cor' => PainelDeCor(camada: camada, tempo: tempo),
-    'mistura' => PainelDeMistura(camada: camada),
     _ => const _AindaNao(),
   };
+
+  /// O QUE O RAIL MIRA dentro de "Borda e sombra".
+  ///
+  /// O traco de uma FORMA anima de verdade (espessura, opacidade e o
+  /// desenho do traco sao `AnimatedDouble` do `ShapeStroke`); os estilos
+  /// de camada guardam trilha mas nao tem comando de keyframe proprio,
+  /// entao ali o rail fica so com o voltar, dizendo que nao ha o que
+  /// marcar — em vez de oferecer um losango que nao grava nada.
+  AlvoDoRail _alvoDaBorda(WidgetRef ref, SubmodoDaBorda modo, Duration tempo) {
+    if (modo != SubmodoDaBorda.traco) return const AlvoDoRail();
+    final real = camadaReal(ref, camada);
+    if (real is! ShapeLayer) return const AlvoDoRail();
+    final chave = ref.watch(parametroDaBordaProvider);
+    if (chave == null) return const AlvoDoRail();
+    final item = chave == 'start' || chave == 'end'
+        ? real.contents.whereType<TrimOperator>().firstOrNull?.id
+        : real.contents.whereType<ShapeStroke>().firstOrNull?.id;
+    if (item == null) return const AlvoDoRail();
+    return alvoDoItemDaForma(ref, real, item, chave, tempo);
+  }
 
   /// O QUE O RAIL MIRA em cada categoria.
   ///
@@ -187,11 +218,21 @@ class _ComRail extends StatelessWidget {
     required this.aoVoltar,
     required this.alvo,
     required this.child,
+    this.rolagemPropria = false,
   });
 
   final VoidCallback aoVoltar;
   final AlvoDoRail alvo;
   final Widget child;
+
+  /// O PAINEL CUIDA DA PROPRIA ROLAGEM.
+  ///
+  /// A maioria e uma pilha curta de controles e rola inteira. Alguns tem
+  /// um bloco FIXO no topo e uma lista que rola por baixo dele — a
+  /// "Homogeneizacao e opacidade" e o caso: perder a opacidade de vista
+  /// ao descer a lista de mistura custaria uma rolagem de volta a cada
+  /// ajuste. Esses recebem altura limitada em vez de altura infinita.
+  final bool rolagemPropria;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -199,10 +240,15 @@ class _ComRail extends StatelessWidget {
     children: [
       RailEsquerdo(aoVoltar: aoVoltar, alvo: alvo),
       Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(4, 6, 12, 12),
-          child: child,
-        ),
+        child: rolagemPropria
+            ? Padding(
+                padding: const EdgeInsets.fromLTRB(4, 6, 12, 6),
+                child: child,
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(4, 6, 12, 12),
+                child: child,
+              ),
       ),
     ],
   );
@@ -382,36 +428,6 @@ AlvoDoRail alvoDoParametroDaForma(
     // editor daria uma curva sem onde escrever.
     aoAbrirCurva: null,
   );
-}
-
-class _Opacidade extends ConsumerWidget {
-  const _Opacidade({required this.camada, required this.tempo});
-
-  final Layer camada;
-  final Duration tempo;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.read(editorControllerProvider.notifier);
-    final local = camada.localTime(tempo);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LinhaDeParametro(
-          rotulo: 'Opacidade',
-          valor: camada.opacity.valueAt(local) * 100,
-          casas: 0,
-          sufixo: '%',
-          porPixel: .4,
-          escolhida: true,
-          aoComecar: c.beginGesture,
-          aoMudar: (v) => c.editOpacity(camada.id, tempo, v / 100),
-          aoTerminar: c.endGesture,
-          aoDigitar: (v) => c.editOpacity(camada.id, tempo, v / 100),
-        ),
-      ],
-    );
-  }
 }
 
 // O INTERRUPTOR DO KEYFRAME AUTOMATICO SAIU DAQUI.
@@ -1295,8 +1311,8 @@ class _Lente extends ConsumerWidget {
     if (atual is! CameraLayer) return const SizedBox.shrink();
     final c = ref.read(editorControllerProvider.notifier);
     final f = atual.zoom.valueAt(atual.localTime(tempo));
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(4, 6, 10, 10),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         LinhaDeParametro(
           rotulo: 'Lente',

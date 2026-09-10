@@ -313,49 +313,27 @@ void main() {
       expect(ids, containsAll(['transformar', 'opacidade']));
     });
 
-    testWidgets('o que ainda nao existe aparece DESABILITADO, com motivo', (
-      tester,
-    ) async {
+    testWidgets('um cartao desabilitado sempre diz POR QUE', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container
           .read(editorControllerProvider.notifier)
           .addTextLayer(Duration.zero, text: 'Um');
       final camada = container.read(editorControllerProvider).layers.single;
-      final futuras = categoriasDaCamada(
-        camada,
-      ).where((x) => !x.disponivel);
+      final futuras = categoriasDaCamada(camada).where((x) => !x.disponivel);
 
-      expect(
-        futuras.map((x) => x.id),
-        contains('borda'),
-        reason:
-            'a estrutura do painel fica completa: da para ver o editor '
-            'inteiro de uma vez',
-      );
-      // A LISTA DE PROMESSAS SO ENCOLHE. Efeitos saiu quando a ficha
-      // passou a ser gerada da tabela; cor saiu quando o seletor
-      // chegou. Deixar um cartao apagado depois de o recurso existir e
-      // tao ruim quanto acender um que abre o nada.
-      expect(
-        futuras.map((x) => x.id),
-        isNot(contains('efeitos')),
-        reason: 'efeitos deixou de ser promessa: a ficha e gerada da tabela',
-      );
-      expect(
-        futuras.map((x) => x.id),
-        isNot(contains('cor')),
-        reason: 'cor deixou de ser promessa: o seletor existe e pinta',
-      );
-      for (final f in futuras) {
+      // "Borda e sombra" era o unico desabilitado, e deixou de ser: o
+      // motor tinha traco, sombras e brilho, e agora tem porta. A regra
+      // que este teste protege continua valendo para o proximo.
+      for (final x in futuras) {
         expect(
-          f.porQueNao,
+          x.porQueNao,
           isNotNull,
-          reason:
-              'um cartao apagado sem explicacao vira suspeita de '
-              'defeito: "${f.rotulo}" nao diz por que',
+          reason: 'um controle apagado sem explicacao vira suspeita de '
+              'defeito: "${x.rotulo}" nao diz por que',
         );
       }
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('cartao desabilitado NAO abre', (tester) async {

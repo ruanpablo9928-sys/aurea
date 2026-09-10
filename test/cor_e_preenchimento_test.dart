@@ -199,103 +199,11 @@ void main() {
       expect(depois.toARGB32(), EscolhaDeCor.prontas[2].toARGB32());
     });
 
-    testWidgets('o contorno nasce, muda de cor e sai', (tester) async {
-      final m = await _montar(tester, forma: ShapePresets.paramRect());
-      expect(
-        (_camada(m.c, m.id) as ShapeLayer).contents.whereType<ShapeStroke>(),
-        isEmpty,
-      );
-
-      await _tocar(tester, 'Adicionar contorno');
-      expect(
-        (_camada(m.c, m.id) as ShapeLayer).contents.whereType<ShapeStroke>(),
-        hasLength(1),
-      );
-      expect(find.bySemanticsLabel('Espessura do contorno'), findsOneWidget);
-
-      await _tocar(tester, 'Remover o contorno');
-      expect(
-        (_camada(m.c, m.id) as ShapeLayer).contents.whereType<ShapeStroke>(),
-        isEmpty,
-      );
-    });
-
-    testWidgets('a espessura do contorno anima, e o rail mira nela', (
-      tester,
-    ) async {
-      final m = await _montar(tester, forma: ShapePresets.paramRect());
-      await _tocar(tester, 'Adicionar contorno');
-
-      await _tocar(tester, 'Espessura do contorno');
-      expect(m.c.read(parametroDaCorProvider), 'width');
-
-      m.p.seek(const Duration(milliseconds: 300));
-      await tester.pump();
-      await _tocar(tester, 'Marcar keyframe aqui');
-
-      final traco = (_camada(m.c, m.id) as ShapeLayer)
-          .contents
-          .whereType<ShapeStroke>()
-          .first;
-      expect(
-        traco.width.isAnimated,
-        isTrue,
-        reason: 'a espessura do contorno tem trilha, e ela precisa do losango',
-      );
-    });
-
-    testWidgets('gradiente usa o proprio caminho, e nao a cor primaria', (
-      tester,
-    ) async {
-      // `setShapePrimaryColor` so enxerga preenchimento chapado e
-      // contorno: numa forma so com gradiente ele reescreveria a lista
-      // identica — zero pixel.
-      final m = await _montar(
-        tester,
-        forma: [
-          ShapeParametric(
-            kind: ParamShapeKind.rect,
-            sizeX: AnimatedDouble(320),
-            sizeY: AnimatedDouble(320),
-          ),
-          ShapeGradientFill(),
-        ],
-      );
-      expect(find.bySemanticsLabel('Cor inicial'), findsOneWidget);
-      expect(find.bySemanticsLabel('Cor final'), findsOneWidget);
-      // O seletor de preenchimento chapado nao existe aqui: quem
-      // acende sao os do gradiente. (O titulo da secao chama-se
-      // "Pintura" justamente para nao colidir com o rotulo do seletor.)
-      expect(
-        find.bySemanticsLabel('Valor de Preenchimento Vermelho'),
-        findsNothing,
-      );
-
-      await _tocar(tester, _amostra('Cor inicial', 5));
-      final g = (_camada(m.c, m.id) as ShapeLayer)
-          .contents
-          .whereType<ShapeGradientFill>()
-          .first;
-      expect(g.colorA.toARGB32(), EscolhaDeCor.prontas[5].toARGB32());
-    });
-
-    testWidgets('mais de uma pintura, o painel diz qual esta editando', (
-      tester,
-    ) async {
-      await _montar(
-        tester,
-        forma: [
-          ShapeParametric(
-            kind: ParamShapeKind.rect,
-            sizeX: AnimatedDouble(320),
-            sizeY: AnimatedDouble(320),
-          ),
-          ShapeFill(),
-          ShapeGradientFill(),
-        ],
-      );
-      expect(find.textContaining('primeira pintura'), findsOneWidget);
-    });
+    // OS TESTES DO CONTORNO MUDARAM DE ARQUIVO.
+    //
+    // A especificacao e explicita (pagina 13): o painel de Cor e
+    // preenchimento contem os controles de COR, e o traco pertence a
+    // familia Borda e sombra. Eles vivem em `borda_e_sombra_test.dart`.
   });
 
   group('particulas', () {

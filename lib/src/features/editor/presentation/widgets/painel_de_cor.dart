@@ -25,12 +25,30 @@ AlvoDoRail alvoDaCorDaForma(
   WidgetRef ref,
   Layer camadaNaTela,
   Duration tempo,
+) => alvoDoItemDaForma(
+  ref,
+  camadaNaTela,
+  ref.watch(itemDaCorProvider),
+  ref.watch(parametroDaCorProvider),
+  tempo,
+);
+
+/// O ALVO DO RAIL PARA UM NUMERO DE UM ITEM DA FORMA.
+///
+/// Serve a Cor e preenchimento e tambem a Borda e sombra: as duas
+/// familias mexem em trilhas de `ShapeItem`, e o losango e a curva
+/// resolvem-se do mesmo jeito. Recebe item e chave prontos em vez de
+/// ler providers, porque quem sabe o que esta em foco e o painel.
+AlvoDoRail alvoDoItemDaForma(
+  WidgetRef ref,
+  Layer camadaNaTela,
+  String? itemId,
+  String? chave,
+  Duration tempo,
 ) {
   // O rail diz o que ESTA GRAVADO, e nao o que a previa mostra.
   final camada = camadaReal(ref, camadaNaTela);
   if (camada is! ShapeLayer) return const AlvoDoRail();
-  final itemId = ref.watch(itemDaCorProvider);
-  final chave = ref.watch(parametroDaCorProvider);
   if (itemId == null || chave == null) return const AlvoDoRail();
   final item = camada.contents.where((i) => i.id == itemId).firstOrNull;
   if (item == null) return const AlvoDoRail();
@@ -60,9 +78,13 @@ AlvoDoRail alvoDaCorDaForma(
     aoAbrirCurva: !temTrecho
         ? null
         : () => ref.read(curvaEmEdicaoProvider.notifier).state = CurvaEmEdicao(
-            titulo: chave == 'width'
-                ? 'Espessura do contorno'
-                : 'Opacidade do contorno',
+            titulo: switch (chave) {
+              'width' => 'Espessura do contorno',
+              'opacity' => 'Opacidade do contorno',
+              'start' => 'Inicio do traco',
+              'end' => 'Fim do traco',
+              _ => 'Curva de gradacao',
+            },
             atual: trilha.easeAt(inicio),
             aoAplicar: (e) => c.setShapeItemTrackSegmentEase(
               camada.id,
@@ -185,40 +207,9 @@ class PainelDeCor extends ConsumerWidget {
   /// PRIMEIRA pintura e diz isso quando ha mais de uma — a mesma regra
   /// que a ficha de forma ja usa com a primeira geometria.
   List<Widget> _daForma(WidgetRef ref, EditorController c, ShapeLayer l) {
-    final local = l.localTime(tempo);
     final pinturas = l.contents
         .where((i) => i is ShapeFill || i is ShapeGradientFill)
         .toList();
-    final tracos = l.contents.whereType<ShapeStroke>().toList();
-    final traco = tracos.firstOrNull;
-    final escolhido = ref.watch(parametroDaCorProvider);
-
-    LinhaDeParametro trilha(
-      String chave,
-      String rotulo,
-      double valor, {
-      String sufixo = '',
-      double porPixel = 1,
-      double escala = 1,
-    }) => LinhaDeParametro(
-      rotulo: rotulo,
-      nome: '$rotulo do contorno',
-      valor: valor * escala,
-      casas: 0,
-      sufixo: sufixo,
-      porPixel: porPixel,
-      escolhida: escolhido == chave,
-      aoEscolher: () {
-        ref.read(itemDaCorProvider.notifier).state = traco!.id;
-        ref.read(parametroDaCorProvider.notifier).state = chave;
-      },
-      aoComecar: c.beginGesture,
-      aoMudar: (v) =>
-          c.editShapeItemTrack(l.id, traco!.id, chave, tempo, v / escala),
-      aoTerminar: c.endGesture,
-      aoDigitar: (v) =>
-          c.editShapeItemTrack(l.id, traco!.id, chave, tempo, v / escala),
-    );
 
     return [
       if (pinturas.length > 1)
@@ -316,51 +307,13 @@ class PainelDeCor extends ConsumerWidget {
           ),
         ],
       },
-      const _Titulo('Contorno'),
-      if (traco == null)
-        _Acao(
-          icone: Icons.border_color_rounded,
-          rotulo: 'Adicionar contorno',
-          aoTocar: () => c.ensureShapeStroke(l.id),
-        )
-      else ...[
-        if (tracos.length > 1)
-          const _Aviso(
-            'Esta camada tem mais de um contorno; a cor e a remocao '
-            'valem para todos.',
-          ),
-        EscolhaDeCor(
-          rotulo: 'Contorno',
-          cor: traco.color,
-          aoComecar: c.beginGesture,
-          aoTerminar: c.endGesture,
-          aoMudar: (cor) =>
-              c.updateShapeStroke(l.id, (s) => s.copyWith(color: cor)),
-        ),
-        trilha(
-          'width',
-          'Espessura',
-          traco.width.valueAt(local),
-          porPixel: 100 / 300,
-        ),
-        trilha(
-          'opacity',
-          'Opacidade',
-          traco.opacity.valueAt(local),
-          sufixo: '%',
-          porPixel: .4,
-          escala: 100,
-        ),
-        _Acao(
-          icone: Icons.delete_outline_rounded,
-          rotulo: 'Remover o contorno',
-          perigo: true,
-          aoTocar: () {
-            ref.read(parametroDaCorProvider.notifier).state = null;
-            c.removeShapeStroke(l.id);
-          },
-        ),
-      ],
+      // O CONTORNO SAIU DAQUI.
+      //
+      // A especificacao e explicita (pagina 13): "o painel de Cor e
+      // preenchimento contem os controles de COR — nao os do traco.
+      // Borda/contorno pertence a familia Borda e sombra, no subpainel
+      // Traco". E la que ele mora agora, com ponta, junta e o desenho do
+      // traco que este painel nunca teve.
     ];
   }
 }
@@ -399,56 +352,6 @@ class PainelDaComposicao extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _Acao extends StatelessWidget {
-  const _Acao({
-    required this.icone,
-    required this.rotulo,
-    required this.aoTocar,
-    this.perigo = false,
-  });
-
-  final IconData icone;
-  final String rotulo;
-  final VoidCallback aoTocar;
-  final bool perigo;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    excludeSemantics: true,
-    button: true,
-    label: rotulo,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: aoTocar,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            const SizedBox(width: 4),
-            Icon(
-              icone,
-              size: 19,
-              color: perigo ? AmColors.pink : AmColors.text,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                rotulo,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: perigo ? AmColors.pink : AmColors.text,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class _Interruptor extends StatelessWidget {

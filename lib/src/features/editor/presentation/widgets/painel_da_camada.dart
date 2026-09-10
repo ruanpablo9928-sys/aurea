@@ -160,9 +160,15 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
     rotulo: 'Mover e transformar',
     icone: Icons.open_with_rounded,
   ),
+  // UMA FAMILIA, E NAO DUAS (V 00:53).
+  //
+  // "Opacidade" e "Mistura e recorte" eram tiles separados. No AM as
+  // duas coisas moram no mesmo painel — a opacidade fixa no topo e as
+  // categorias de blend num accordion por baixo — porque respondem a
+  // mesma pergunta: como esta camada se junta com o que esta atras.
   const CategoriaDaCamada(
     id: 'opacidade',
-    rotulo: 'Opacidade',
+    rotulo: 'Homogeneizacao e opacidade',
     icone: Icons.opacity_rounded,
   ),
   if (camada is TextLayer)
@@ -254,12 +260,14 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Cor e preenchimento',
       icone: Icons.palette_rounded,
     ),
+  // BORDA E SOMBRA existia APAGADA, com "Chega numa proxima entrega"
+  // escrito nela — e nao era falta de motor: `LayerStyles` ja tinha
+  // traco, duas sombras, brilho e duas sobreposicoes, e o palco ja
+  // desenhava tudo. Faltava a porta.
   const CategoriaDaCamada(
     id: 'borda',
     rotulo: 'Borda e sombra',
     icone: Icons.blur_on_rounded,
-    disponivel: false,
-    porQueNao: 'Chega numa proxima entrega',
   ),
   const CategoriaDaCamada(
     id: 'efeitos',
@@ -280,12 +288,8 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
   // MISTURA E RECORTE dividem cartao porque sao a mesma pergunta feita
   // por dois lados — o que acontece no encontro desta camada com a
   // vizinha — e porque nenhuma das duas, sozinha, enche um painel.
-  if (camada is! AudioLayer)
-    const CategoriaDaCamada(
-      id: 'mistura',
-      rotulo: 'Mistura e recorte',
-      icone: Icons.gradient_rounded,
-    ),
+  // MISTURA E RECORTE deixou de ser tile proprio: virou o accordion
+  // dentro de "Homogeneizacao e opacidade", como no AM.
   ],
 ];
 
@@ -600,7 +604,7 @@ class _Aberto extends ConsumerWidget {
 /// gastar uma linha dentro do painel, que e onde falta espaco.
 String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'transformar' => 'Movimentacao e transformacao',
-  'opacidade' => 'Opacidade',
+  'opacidade' => 'Homogeneizacao e opacidade',
   'texto' => 'Texto',
   'animacao' => 'Animacao do texto',
   'forma' => 'Forma',
@@ -614,7 +618,6 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'camada' => 'Camada',
   'cor' => 'Cor e preenchimento',
   'mascara' => 'Mascara',
-  'mistura' => 'Mistura e recorte',
   _ => 'Ferramentas',
 };
 

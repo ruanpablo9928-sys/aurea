@@ -10,6 +10,7 @@
 // do grupo nao pode depender de lembrar um gesto — quem entra tem de
 // conseguir sair pelo mesmo lugar por onde sai de tudo.
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/painel_de_mistura.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/domain/blend_extra.dart';
 import 'package:aurea/src/features/editor/domain/keyframe.dart';
@@ -82,15 +83,30 @@ Future<_Bancada> _montar(
   return (c: container, p: playback, id: camada.id);
 }
 
+/// ABRE UMA CATEGORIA DO ACCORDION de mistura.
+///
+/// O painel virou "Homogeneizacao e opacidade": a opacidade fica fixa no
+/// topo e as categorias de blend sao linhas que expandem no lugar. Um
+/// chip so existe na tela com a categoria dele aberta.
+Future<void> _abrirCategoria(
+  WidgetTester tester,
+  ProviderContainer c,
+  String nome,
+) async {
+  c.read(categoriaDeMisturaProvider.notifier).state = nome;
+  await tester.pump();
+}
+
 Layer _camada(ProviderContainer c, String id) =>
     c.read(editorControllerProvider).layers.firstWhere((l) => l.id == id);
 
 void main() {
   group('modo de mistura', () {
     testWidgets('um modo nativo entra', (tester) async {
-      final m = await _montar(tester, 'mistura');
+      final m = await _montar(tester, 'opacidade');
       expect(_camada(m.c, m.id).blendMode, BlendMode.srcOver);
 
+      await _abrirCategoria(tester, m.c, 'Escurecer');
       await tester.tap(find.bySemanticsLabel('Modo Multiplicar'));
       await tester.pump();
       expect(_camada(m.c, m.id).blendMode, BlendMode.multiply);
@@ -98,28 +114,45 @@ void main() {
     });
 
     testWidgets('um modo proprio entra, e desliga o nativo', (tester) async {
-      final m = await _montar(tester, 'mistura');
+      final m = await _montar(tester, 'opacidade');
+      await _abrirCategoria(tester, m.c, 'Escurecer');
       await tester.tap(find.bySemanticsLabel('Modo Multiplicar'));
       await tester.pump();
 
       // OS PROPRIOS SAO METADE DA LISTA e nao existem no Flutter: eles
       // passam pelo compositor de dois andares. Um so pode mandar.
+      await _abrirCategoria(tester, m.c, 'Contraste');
       await tester.tap(find.bySemanticsLabel('Modo Vivid Light'));
       await tester.pump();
       expect(_camada(m.c, m.id).customBlend, AureaBlend.vividLight);
       expect(_camada(m.c, m.id).blendMode, BlendMode.srcOver);
 
+      await _abrirCategoria(tester, m.c, 'Normal');
       await tester.tap(find.bySemanticsLabel('Modo Normal'));
       await tester.pump();
       expect(_camada(m.c, m.id).customBlend, isNull);
     });
 
     testWidgets('todos os 27 modos tem um chip', (tester) async {
-      await _montar(tester, 'mistura');
+      final m = await _montar(tester, 'opacidade');
+      // O ACCORDION MOSTRA UMA CATEGORIA POR VEZ: a conta e feita
+      // abrindo as sete, que e o caminho que a pessoa tem.
+      final vistos = <String>{};
+      for (final (familia, modos) in familiasDeMistura) {
+        await _abrirCategoria(tester, m.c, familia);
+        for (final modo in modos) {
+          if (find
+              .bySemanticsLabel('Modo ${modo.nome}')
+              .evaluate()
+              .isNotEmpty) {
+            vistos.add(modo.nome);
+          }
+        }
+      }
       for (final b in AureaBlend.values) {
         expect(
-          find.bySemanticsLabel('Modo ${aureaBlendLabel(b)}'),
-          findsOneWidget,
+          vistos,
+          contains(aureaBlendLabel(b)),
           reason: '${aureaBlendLabel(b)} existe no motor e nao na tela',
         );
       }
@@ -132,14 +165,55 @@ void main() {
         'Diferenca',
         'Luminosidade',
       ]) {
-        expect(find.bySemanticsLabel('Modo $nome'), findsOneWidget);
+        expect(vistos, contains(nome));
       }
+    });
+
+    testWidgets('as sete categorias do AM, na ordem, com Mascara no fim', (
+      tester,
+    ) async {
+      await _montar(tester, 'opacidade');
+      var x = -1.0;
+      for (final nome in const [
+        'Normal',
+        'Escurecer',
+        'Clarear',
+        'Contraste',
+        'Diferenca',
+        'Cor',
+        'Mascara',
+      ]) {
+        final alvo = find.bySemanticsLabel('Categoria $nome');
+        expect(alvo, findsOneWidget, reason: 'falta a categoria $nome');
+        final y = tester.getCenter(alvo).dy;
+        expect(y, greaterThan(x), reason: '$nome saiu de ordem');
+        x = y;
+      }
+    });
+
+    testWidgets('a opacidade fica FIXA acima da lista', (tester) async {
+      await _montar(tester, 'opacidade');
+      expect(find.bySemanticsLabel('Valor de Opacidade'), findsOneWidget);
+      final antes = tester.getRect(find.bySemanticsLabel('Valor de Opacidade'));
+
+      await tester.drag(
+        find.bySemanticsLabel('Categoria Cor'),
+        const Offset(0, -80),
+      );
+      await tester.pump();
+
+      expect(
+        tester.getRect(find.bySemanticsLabel('Valor de Opacidade')),
+        antes,
+        reason: 'so a lista rola; a opacidade e o controle mais usado',
+      );
     });
   });
 
   group('recorte pela camada de cima', () {
     testWidgets('sem camada acima, so "Nenhum" responde', (tester) async {
-      final m = await _montar(tester, 'mistura');
+      final m = await _montar(tester, 'opacidade');
+      await _abrirCategoria(tester, m.c, 'Mascara');
       await tester.ensureVisible(find.bySemanticsLabel('Recorte Alfa'));
       await tester.pump();
       final chip = tester.getSemantics(find.bySemanticsLabel('Recorte Alfa'));
@@ -159,7 +233,8 @@ void main() {
     ) async {
       // A segunda camada adicionada fica NO TOPO da pilha, entao a de
       // indice 1 e a de baixo — a que pode ser recortada.
-      final m = await _montar(tester, 'mistura', quantas: 2, indice: 1);
+      final m = await _montar(tester, 'opacidade', quantas: 2, indice: 1);
+      await _abrirCategoria(tester, m.c, 'Mascara');
       final acima = m.c.read(editorControllerProvider).layers.first;
       expect(find.textContaining(acima.name), findsOneWidget);
 
