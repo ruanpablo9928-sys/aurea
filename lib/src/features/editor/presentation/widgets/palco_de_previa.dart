@@ -4178,6 +4178,13 @@ class _LayerContent extends StatelessWidget {
       // disse "so no editor", mas o desenho nao perguntava se estava
       // exportando: o gizmo saia no video entregue. Um nulo nao tem
       // pixel nenhum para dar; exportando, ele nao desenha nada.
+      // A CAMERA nao tem pixel nenhum para dar: ela MOVE a cena
+      // (`effectiveTransform`), nao aparece nela. No editor um gizmo
+      // discreto diz onde ela esta; exportando, nada.
+      CameraLayer _ when exporting => const SizedBox.shrink(),
+      CameraLayer _ => const IgnorePointer(
+        child: CustomPaint(size: Size(160, 160), painter: NullGizmoPainter()),
+      ),
       NullLayer _ when exporting => const SizedBox.shrink(),
       NullLayer _ => const IgnorePointer(
         child: CustomPaint(size: Size(220, 220), painter: NullGizmoPainter()),

@@ -11,9 +11,11 @@ import '../../projects/application/projects_controller.dart';
 import 'contexto_do_editor.dart';
 import 'widgets/cabecalho_da_camada.dart';
 import 'widgets/linha_do_tempo.dart';
-import 'widgets/adicionar_conteudo.dart';
 import 'widgets/painel_da_camada.dart';
+import 'widgets/caneta_vetorial.dart';
+import 'widgets/freehand_overlay.dart';
 import 'widgets/palco_de_previa.dart';
+import 'widgets/seletor_de_insercao.dart';
 import 'widgets/visao_geral_das_camadas.dart';
 
 /// A TELA DE EDICAO, no osso.
@@ -323,10 +325,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                     // continua caindo no mesmo objeto
                                     // depois de o preview mudar de
                                     // tamanho.
-                                    child: CompositionView(
-                                      time: _playback.time,
-                                      videos: _videos,
-                                      selectedId: selecionada,
+                                    // AS CAMADAS DE DESENHO VIVEM AQUI,
+                                    // ao LADO da composicao e nunca
+                                    // dentro dela: elas precisam das
+                                    // coordenadas do projeto para o
+                                    // ponto cair onde o dedo tocou, e
+                                    // nao podem entrar na arvore que a
+                                    // exportacao desenha.
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        CompositionView(
+                                          time: _playback.time,
+                                          videos: _videos,
+                                          selectedId: selecionada,
+                                        ),
+                                        FreehandOverlay(playback: _playback),
+                                        CanetaVetorialOverlay(
+                                          playback: _playback,
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -358,15 +376,16 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 // O `...` DO CABECALHO DA CAMADA, por cima de tudo:
                 // enquanto ele esta aberto nao ha o que fazer atras dele.
                 MenuDaCamada(playback: _playback),
-                PainelCentralDeAdicao(
+                // O SELETOR DE INSERCAO, ancorado no rodape.
+                SeletorDeInsercao(
                   instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
-                  aoAdicionar: (_, _) {
-                    fecharAdicao(ref);
-                    ref.read(barraDeAdicaoAbertaProvider.notifier).state =
-                        false;
+                  playback: _playback,
+                  aoInserir: () {
+                    fecharSeletor(ref);
                     // A camada nova ja nasce selecionada — o motor faz
-                    // isso. Abrir as ferramentas dela na sequencia e o
-                    // passo que a pessoa ia dar de qualquer jeito.
+                    // isso. Abrir o contexto dela na sequencia e o passo
+                    // que a pessoa ia dar de qualquer jeito, e e o que a
+                    // referencia faz (pagina 9).
                     abrirFerramentasDaCamada(ref);
                   },
                 ),

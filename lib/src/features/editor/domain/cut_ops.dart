@@ -219,6 +219,7 @@ VideoLayer? videoAfter(List<Layer> layers, String outgoingId) {
 bool isTransitionLayer(Layer layer) =>
     layer is! AudioLayer &&
     layer is! NullLayer &&
+    layer is! CameraLayer &&
     layer is! GroupLayer &&
     layer is! AdjustmentLayer;
 

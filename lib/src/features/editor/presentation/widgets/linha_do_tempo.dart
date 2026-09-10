@@ -6,7 +6,7 @@ import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import '../../domain/video_project.dart';
-import 'adicionar_conteudo.dart';
+import 'seletor_de_insercao.dart';
 import '../contexto_do_editor.dart';
 import 'mapa_do_tempo.dart';
 import 'painel_da_camada.dart';
@@ -24,6 +24,7 @@ Color corDaCamada(Layer camada) => switch (camada) {
   TextLayer() => AmColors.selection,
   Scene3DLayer() => AmColors.accent,
   ShapeLayer() => AmColors.tealBright,
+  CameraLayer() => AmColors.pink,
   _ => AmColors.teal,
 };
 
@@ -233,20 +234,13 @@ class LinhaDoTempo extends ConsumerWidget {
                   bottom: 12,
                   child: _BotaoRedondoDeAdicao(playback: playback),
                 ),
-                // A BARRA DE FAMILIAS abre EM CIMA do `+`, e nao no
-                // rodape da tela: ela pertence ao botao que a chamou, e
-                // o dedo que acabou de tocar nele ja esta ali.
-                if (ref.watch(barraDeAdicaoAbertaProvider))
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 12 + _BotaoRedondoDeAdicao.diametro + 10,
-                    child: BarraDeCategoriasDeAdicao(
-                      aoEscolher: (id) =>
-                          ref.read(categoriaDeAdicaoProvider.notifier).state =
-                              id,
-                    ),
-                  ),
+                // A BARRA FLUTUANTE DE FAMILIAS SAIU DAQUI.
+                //
+                // Eram DOIS artefatos para uma decisao so: esta barra
+                // sobre o `+` e, por cima dela, um modal centrado com a
+                // tela desfocada. O AM tem UMA moldura ancorada no
+                // rodape (V 00:02) — e ela agora e o `SeletorDeInsercao`,
+                // montado pela tela.
               ],
             );
           },
@@ -1481,8 +1475,7 @@ class _BotaoRedondoDeAdicao extends ConsumerWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           if (aberta) {
-            fecharAdicao(ref);
-            ref.read(barraDeAdicaoAbertaProvider.notifier).state = false;
+            fecharSeletor(ref);
             return;
           }
           abrirAdicaoDeConteudo(ref, playback);

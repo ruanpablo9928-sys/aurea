@@ -7,7 +7,7 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
-import 'package:aurea/src/features/editor/presentation/widgets/adicionar_conteudo.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/seletor_de_insercao.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/painel_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
@@ -26,7 +26,16 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
   int textos = 1,
   bool comVideo = false,
   bool selecionar = true,
+  bool telaDeCelular = false,
 }) async {
+  // O SELETOR DE INSERCAO OCUPA 300 px DE ALTURA. Na tela padrao de
+  // teste (800 x 600) o corpo dele cai fora do alcance do dedo; os
+  // testes que mexem NELE pedem a tela de um celular de verdade.
+  if (telaDeCelular) {
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+  }
   final container = ProviderContainer();
   addTearDown(container.dispose);
   final c = container.read(editorControllerProvider.notifier);
@@ -71,16 +80,15 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
                 ],
               ),
               PainelSobreposto(playback: playback),
-              // O PAINEL DO MEIO MONTADO COMO A TELA MONTA: com o
+              // O SELETOR DE INSERCAO MONTADO COMO A TELA MONTA: com o
               // instante OBSERVADO e o mesmo fecho. Passar uma copia do
               // instante testaria um arranjo que nao existe.
               Consumer(
-                builder: (context, ref, _) => PainelCentralDeAdicao(
+                builder: (context, ref, _) => SeletorDeInsercao(
                   instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
-                  aoAdicionar: (_, _) {
-                    fecharAdicao(ref);
-                    ref.read(barraDeAdicaoAbertaProvider.notifier).state =
-                        false;
+                  playback: playback,
+                  aoInserir: () {
+                    fecharSeletor(ref);
                     abrirFerramentasDaCamada(ref);
                   },
                 ),
@@ -605,18 +613,17 @@ void main() {
   });
 
   group('adicionar conteudo', () {
-    // O FLUXO TEM DOIS NIVEIS: o `+` abre a barra de familias, e a
-    // familia abre o painel do meio com o que ela tem dentro.
-    Future<void> abrirFamilia(WidgetTester tester, String familia) async {
+    // O FLUXO TEM UM NIVEL SO: o mais abre a moldura do seletor, com as
+    // cinco abas ja na tela. A barra de familias e o modal centrado
+    // sairam (PROMPT 03 da especificacao AM ONLY).
+    Future<void> abrirAba(WidgetTester tester, String aba) async {
       await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Adicionar $familia'));
+      await tester.tap(find.bySemanticsLabel('Inserir $aba'));
       await tester.pump();
     }
 
-    testWidgets('o + abre a barra de familias, com ou sem selecao', (
-      tester,
-    ) async {
+    testWidgets('o mais abre o seletor, com ou sem selecao', (tester) async {
       final m = await _montar(tester, selecionar: false);
       await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
       await tester.pump();
@@ -627,49 +634,49 @@ void main() {
             'adicionar depende de projeto editavel e tipo suportado — '
             'nao de haver camada escolhida',
       );
-      expect(find.bySemanticsLabel('Adicionar 3D'), findsOneWidget);
-      expect(find.bySemanticsLabel('Adicionar Texto'), findsOneWidget);
+      expect(find.bySemanticsLabel('Inserir Forma'), findsOneWidget);
+      expect(find.bySemanticsLabel('Texto'), findsOneWidget);
     });
 
-    testWidgets('a familia abre o painel do meio com o que ela tem', (
+    testWidgets('a aba de objetos traz os quatro da referencia', (
       tester,
     ) async {
-      final m = await _montar(tester, textos: 0);
-      await abrirFamilia(tester, '3D');
-      expect(m.c.read(categoriaDeAdicaoProvider), '3d');
+      final m = await _montar(tester, textos: 0, telaDeCelular: true);
+      await abrirAba(tester, 'Objeto / Elemento');
+      expect(m.c.read(abaDeInsercaoProvider), AbaDeInsercao.objeto);
       for (final rotulo in [
-        'Cena 3D',
-        'Nulo 3D',
-        'Objetos 3D',
-        'Particulas',
+        'Camera',
+        'Grupo Vazio',
+        'Nulo',
+        'Elemento / Projeto',
       ]) {
         expect(
           find.bySemanticsLabel(rotulo),
           findsOneWidget,
-          reason: 'a familia 3D perdeu "$rotulo"',
+          reason: 'a grade de objetos perdeu "$rotulo"',
         );
       }
     });
 
-    testWidgets('um item com filhos abre MAIS UM nivel, e da para voltar', (
+    testWidgets('os elementos da Aurea abrem MAIS UM nivel, e da para voltar', (
       tester,
     ) async {
-      final m = await _montar(tester, textos: 0);
-      await abrirFamilia(tester, '3D');
-      await tester.tap(find.bySemanticsLabel('Objetos 3D'));
+      final m = await _montar(tester, textos: 0, telaDeCelular: true);
+      await abrirAba(tester, 'Objeto / Elemento');
+      await tester.tap(find.bySemanticsLabel('Elemento / Projeto'));
       await tester.pump();
-      expect(m.c.read(subItemDeAdicaoProvider), 'objetos3d');
-      expect(find.bySemanticsLabel('Cubo'), findsOneWidget);
+      expect(m.c.read(subListaDeInsercaoProvider), 'elemento');
+      expect(find.bySemanticsLabel('Cena 3D'), findsOneWidget);
       expect(
         m.c.read(editorControllerProvider).layers,
         isEmpty,
         reason: 'abrir um nivel nao cria camada nenhuma',
       );
 
-      await tester.tap(find.bySemanticsLabel('Voltar'));
+      await tester.tap(find.bySemanticsLabel('Voltar aos objetos'));
       await tester.pump();
-      expect(m.c.read(subItemDeAdicaoProvider), isNull);
-      expect(find.bySemanticsLabel('Cena 3D'), findsOneWidget);
+      expect(m.c.read(subListaDeInsercaoProvider), isNull);
+      expect(find.bySemanticsLabel('Camera'), findsOneWidget);
     });
 
     testWidgets('escolher cria a camada, seleciona e fecha o fluxo', (
@@ -678,9 +685,10 @@ void main() {
       final m = await _montar(tester, textos: 0);
       expect(m.c.read(editorControllerProvider).layers, isEmpty);
 
-      await abrirFamilia(tester, 'Texto');
-      await tester.tap(find.bySemanticsLabel('Texto').last);
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
       await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Texto'));
+      await tester.pump(const Duration(seconds: 1));
 
       final camadas = m.c.read(editorControllerProvider).layers;
       expect(camadas.length, 1);
@@ -690,24 +698,24 @@ void main() {
         reason: 'a camada nova entra selecionada',
       );
       expect(
-        m.c.read(categoriaDeAdicaoProvider),
-        isNull,
-        reason: 'criado o que se foi criar, o painel do meio sai da frente',
+        m.c.read(barraDeAdicaoAbertaProvider),
+        isFalse,
+        reason: 'criado o que se foi criar, o seletor sai da frente',
       );
     });
 
-    testWidgets('tocar fora fecha sem criar nada', (tester) async {
+    testWidgets('o X fecha sem criar nada', (tester) async {
       final m = await _montar(tester, textos: 0);
-      await abrirFamilia(tester, 'Formas');
-      // O FUNDO INTEIRO FECHA. Mirar no centro cairia no proprio painel,
-      // que e o que o fundo esta atras de.
-      await tester.tapAt(const Offset(20, 20));
+      await abrirAba(tester, 'Forma');
+      await tester.tap(find.bySemanticsLabel('Fechar o seletor'));
       await tester.pump();
-      expect(m.c.read(categoriaDeAdicaoProvider), isNull);
+      expect(m.c.read(barraDeAdicaoAbertaProvider), isFalse);
       expect(m.c.read(editorControllerProvider).layers, isEmpty);
     });
 
-    testWidgets('o + vira x, e o mesmo alvo dispensa a barra', (tester) async {
+    testWidgets('o mais vira x, e o mesmo alvo dispensa o seletor', (
+      tester,
+    ) async {
       final m = await _montar(tester, textos: 0);
       await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
       await tester.pump();
@@ -718,10 +726,11 @@ void main() {
     });
 
     testWidgets('adicionar e desfazer devolve ao estado vazio', (tester) async {
-      final m = await _montar(tester, textos: 0);
-      await abrirFamilia(tester, 'Formas');
-      await tester.tap(find.bySemanticsLabel('Retangulo'));
+      final m = await _montar(tester, textos: 0, telaDeCelular: true);
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
       await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Circulo'));
+      await tester.pump(const Duration(seconds: 1));
       expect(m.c.read(editorControllerProvider).layers.length, 1);
 
       m.c.read(editorControllerProvider.notifier).undo();
@@ -741,12 +750,13 @@ void main() {
       m.p.seek(const Duration(milliseconds: 1200));
       await tester.pump();
 
-      await abrirFamilia(tester, 'Texto');
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
       // O relogio anda ENTRE abrir e escolher; o que vale e o de abrir.
       m.p.seek(const Duration(milliseconds: 2600));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Texto').last);
-      await tester.pump();
+      await tester.tap(find.bySemanticsLabel('Texto'));
+      await tester.pump(const Duration(seconds: 1));
 
       expect(
         m.c.read(editorControllerProvider).layers.single.startTime,

@@ -44,7 +44,7 @@ bool _isGraphic(Layer l) =>
 /// Camadas que PINTAM pixels (nulos e audio ficam de fora da conta).
 List<Layer> _paintable(List<Layer> layers) => [
   for (final l in layers)
-    if (l is! NullLayer && l is! AudioLayer) l,
+    if (l is! NullLayer && l is! AudioLayer && l is! CameraLayer) l,
 ];
 
 bool _identityOpacity(Layer l) =>

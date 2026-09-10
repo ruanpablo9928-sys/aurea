@@ -398,12 +398,30 @@ class LayerTransform {
 /// cadeia de parenting recursivamente (objeto -> nulo 1 -> nulo 2 -> ...),
 /// com guarda de ciclo. Cada elo aplica o DELTA do pai desde o instante do
 /// vinculo, com o offset girado em 3D (X/Y/Z) e escalado.
+/// A CAMERA ATIVA no instante [t]: a de cima da pilha cujo intervalo
+/// contem o cabecote.
+///
+/// A regra e a mesma do After Effects e do AM — varias cameras podem
+/// existir na linha do tempo, e quem manda e a primeira que esta no ar.
+/// Sem camera no ar, `effectiveTransform` nao muda um pixel.
+CameraLayer? cameraAtivaEm(VideoProject project, Duration t) {
+  for (final l in project.layers) {
+    if (l is CameraLayer && t >= l.startTime && t < l.endTime) return l;
+  }
+  return null;
+}
+
 LayerTransform effectiveTransform(
   VideoProject project,
   Layer layer,
   Duration t, [
   Set<String>? visited,
 ]) {
+  // SO A CHAMADA DE FORA APLICA A CAMERA. As chamadas recursivas
+  // resolvem o PAI em coordenadas de mundo: parentesco acontece no
+  // mundo, e a camera olha o resultado. Aplicar nas duas pontas
+  // transformaria a cena duas vezes.
+  final raiz = visited == null;
   final local = layer.localTime(t);
   var pos = layer.position.valueAt(local);
   var rot = layer.rotation.valueAt(local);
@@ -452,6 +470,57 @@ LayerTransform effectiveTransform(
       }
     }
   }
+  // A CAMERA DA COMPOSICAO, aplicada ao contrario.
+  //
+  // So em camada com o 3D ligado: camada 2D nao ve camera, no AM como no
+  // After Effects. E nunca na propria camera, que nao se olha.
+  final cam = raiz && layer.is3D && layer is! CameraLayer
+      ? cameraAtivaEm(project, t)
+      : null;
+  if (cam != null) {
+    final cl = cam.localTime(t);
+    final cp = cam.position.valueAt(cl);
+    final cz = cam.positionZ.valueAt(cl);
+    final centro = Offset(project.outputWidth / 2, project.outputHeight / 2);
+    var vx = pos.dx - cp.dx;
+    var vy = pos.dy - cp.dy;
+    var vz = z - cz;
+
+    // O INVERSO DE Rz*Ry*Rx e Rx(-a)*Ry(-b)*Rz(-c): angulos trocados de
+    // sinal E ordem invertida. Fazer so o primeiro daria uma cena que
+    // gira certo num eixo e errado nos outros dois.
+    final crz = -cam.rotation.valueAt(cl) * math.pi / 180;
+    final cry = -cam.rotationY.valueAt(cl) * math.pi / 180;
+    final crx = -cam.rotationX.valueAt(cl) * math.pi / 180;
+    final cosz = math.cos(crz), sinz = math.sin(crz);
+    final x0 = vx * cosz - vy * sinz;
+    final y0 = vx * sinz + vy * cosz;
+    vx = x0;
+    vy = y0;
+    final cosy = math.cos(cry), siny = math.sin(cry);
+    final x1 = vx * cosy + vz * siny;
+    final z1 = -vx * siny + vz * cosy;
+    vx = x1;
+    vz = z1;
+    final cosx = math.cos(crx), sinx = math.sin(crx);
+    final y2 = vy * cosx - vz * sinx;
+    final z2 = vy * sinx + vz * cosx;
+    vy = y2;
+    vz = z2;
+
+    // A LENTE E UM ZOOM DE PINHOLE: aproximar a lente aumenta o que se
+    // ve E afasta do centro na mesma proporcao. 1200 e a lente neutra
+    // porque e a focal com que o motor inteiro ja projetava.
+    final f = cam.zoom.valueAt(cl).clamp(60.0, 12000.0);
+    final k = f / CameraLayer.lenteNeutra;
+    pos = centro + Offset(vx, vy) * k;
+    z = vz;
+    scale *= k;
+    rot -= cam.rotation.valueAt(cl);
+    rotX -= cam.rotationX.valueAt(cl);
+    rotY -= cam.rotationY.valueAt(cl);
+  }
+
   return LayerTransform(
     pos: pos,
     rot: rot,

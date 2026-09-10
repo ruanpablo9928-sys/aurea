@@ -1794,6 +1794,166 @@ class NullLayer extends Layer {
   );
 }
 
+/// A CAMERA DA COMPOSICAO.
+///
+/// O que o AM poe no seletor de insercao (V 00:19,5) e o Aurea nao tinha:
+/// um objeto que MOVE a cena inteira em vez de mover camada por camada.
+/// Ela nao desenha nada. O que ela faz e entrar em `effectiveTransform`
+/// como um elo a mais, aplicado ao contrario, em toda camada com o 3D
+/// ligado — que e a mesma regra do After Effects e do proprio AM: camada
+/// 2D nao ve camera.
+///
+/// A LENTE ([zoom]) e a distancia focal em pixels. O motor inteiro
+/// projeta com 1200 (`persp = 1200 / (1200 + z)`), entao 1200 e a lente
+/// neutra: com a camera parada e a lente em 1200, a composicao fica
+/// exatamente como estava antes de existir camera nenhuma.
+class CameraLayer extends Layer {
+  CameraLayer({
+    super.id,
+    required super.name,
+    required super.startTime,
+    required super.duration,
+    AnimatedDouble? zoom,
+    super.position,
+    super.scaleX,
+    super.scaleY,
+    super.rotation,
+    super.rotationX,
+    super.rotationY,
+    super.opacity,
+    super.skewX,
+    super.skewY,
+    super.pivot,
+    super.blendMode,
+    super.customBlend,
+    super.is3D,
+    super.positionZ,
+    super.effects,
+    super.masks,
+    super.matteMode,
+    super.matteSourceId,
+    super.transitionIn,
+  }) : zoom = zoom ?? AnimatedDouble(lenteNeutra);
+
+  /// A lente que deixa a composicao identica a um projeto sem camera.
+  static const double lenteNeutra = 1200;
+
+  final AnimatedDouble zoom;
+
+  /// A lente entra na barra da camada como qualquer propriedade animada.
+  @override
+  Set<int> get moduleTimesUs => _times(zoom.keyframes);
+
+  CameraLayer withZoom(AnimatedDouble z) => CameraLayer(
+    id: id,
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    zoom: z,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: effects,
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+    transitionIn: transitionIn,
+  );
+
+  @override
+  CameraLayer copyLayer({
+    String? name,
+    Duration? startTime,
+    Duration? duration,
+    AnimatedOffset? position,
+    AnimatedDouble? scaleX,
+    AnimatedDouble? scaleY,
+    AnimatedDouble? rotation,
+    AnimatedDouble? rotationX,
+    AnimatedDouble? rotationY,
+    AnimatedDouble? opacity,
+    AnimatedDouble? skewX,
+    AnimatedDouble? skewY,
+    AnimatedOffset? pivot,
+    BlendMode? blendMode,
+    AureaBlend? customBlend,
+    bool clearCustomBlend = false,
+    bool? is3D,
+    AnimatedDouble? positionZ,
+    List<EffectInstance>? effects,
+    List<LayerMask>? masks,
+    MatteMode? matteMode,
+    String? matteSourceId,
+    bool clearMatteSource = false,
+    ClipTransition? transitionIn,
+    bool clearTransitionIn = false,
+  }) => CameraLayer(
+    id: id,
+    name: name ?? this.name,
+    startTime: startTime ?? this.startTime,
+    duration: duration ?? this.duration,
+    zoom: zoom,
+    position: position ?? this.position,
+    scaleX: scaleX ?? this.scaleX,
+    scaleY: scaleY ?? this.scaleY,
+    rotation: rotation ?? this.rotation,
+    rotationX: rotationX ?? this.rotationX,
+    rotationY: rotationY ?? this.rotationY,
+    opacity: opacity ?? this.opacity,
+    skewX: skewX ?? this.skewX,
+    skewY: skewY ?? this.skewY,
+    pivot: pivot ?? this.pivot,
+    blendMode: blendMode ?? this.blendMode,
+    customBlend: clearCustomBlend ? null : (customBlend ?? this.customBlend),
+    is3D: is3D ?? this.is3D,
+    positionZ: positionZ ?? this.positionZ,
+    effects: effects ?? this.effects,
+    masks: masks ?? this.masks,
+    matteMode: matteMode ?? this.matteMode,
+    matteSourceId: clearMatteSource
+        ? null
+        : (matteSourceId ?? this.matteSourceId),
+    transitionIn: clearTransitionIn ? null : (transitionIn ?? this.transitionIn),
+  );
+
+  @override
+  CameraLayer duplicated() => CameraLayer(
+    name: name,
+    startTime: startTime,
+    duration: duration,
+    zoom: zoom,
+    position: position,
+    scaleX: scaleX,
+    scaleY: scaleY,
+    rotation: rotation,
+    rotationX: rotationX,
+    rotationY: rotationY,
+    opacity: opacity,
+    skewX: skewX,
+    skewY: skewY,
+    pivot: pivot,
+    blendMode: blendMode,
+    customBlend: customBlend,
+    is3D: is3D,
+    positionZ: positionZ,
+    effects: [for (final e in effects) e.duplicated()],
+    masks: masks,
+    matteMode: matteMode,
+    matteSourceId: matteSourceId,
+  );
+}
+
 /// Sistema de particulas 3D (estilo CC Particle World do AE): o emissor e a
 /// propria camada; a simulacao e funcao PURA de (seed, indice, tempo) —
 /// scrub-estavel, nada acumula estado entre frames. Cada particula nasce

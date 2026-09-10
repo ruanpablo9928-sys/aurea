@@ -22,6 +22,7 @@ Size measureLayerBox(
     Element3DLayer l => Size(l.size * 2, l.size * 2),
     ParticlesLayer _ => const Size(420, 420),
     TextLayer l => measureText(l.text, l.fontSize, l.bold),
+    CameraLayer _ => Size.zero,
     NullLayer _ => Size.zero,
     AudioLayer _ => Size.zero,
     AdjustmentLayer _ => const Size(220, 220),

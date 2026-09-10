@@ -1233,6 +1233,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['volume'] = a.volume;
       final aa = _audioSpec(a.audio);
       if (aa != null) base['audio'] = aa;
+    case CameraLayer cam:
+      base['kind'] = 'camera';
+      base['zoom'] = _ad(cam.zoom);
     case NullLayer nl:
       base['kind'] = 'null';
       if (nl.grid != null) base['grid'] = _rig(nl.grid!);
@@ -2216,6 +2219,35 @@ Layer layerFromJson(Map<String, dynamic> m) {
         name: name,
         startTime: start,
         duration: dur,
+        position: pos,
+        scaleX: sx,
+        scaleY: sy,
+        rotation: rot,
+        rotationX: rotX,
+        rotationY: rotY,
+        opacity: op,
+        skewX: skx,
+        skewY: sky,
+        pivot: pivot,
+        blendMode: blend,
+        customBlend: blendX,
+        is3D: is3D,
+        positionZ: z,
+        effects: effects,
+        masks: masks,
+        matteMode: matte,
+        matteSourceId: matteSrc,
+        transitionIn: _asTransition(m['transitionIn']),
+      );
+    case 'camera':
+      return CameraLayer(
+        id: id,
+        name: name,
+        startTime: start,
+        duration: dur,
+        // PROJETO ANTIGO NAO TEM LENTE: cair na neutra deixa a
+        // composicao exatamente como estava.
+        zoom: _asAdOuNumero(m['zoom'], CameraLayer.lenteNeutra),
         position: pos,
         scaleX: sx,
         scaleY: sy,

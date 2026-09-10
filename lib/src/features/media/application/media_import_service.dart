@@ -159,3 +159,32 @@ class _ImportedFile extends XFile {
 final mediaImportServiceProvider = Provider<MediaImportService>(
   (ref) => MediaImportService(),
 );
+
+
+/// O QUE JA FOI IMPORTADO PARA ESTE APARELHO.
+///
+/// A aba Midia do seletor mostra miniaturas, e o unico carretel que a
+/// Aurea pode ler sem pedir permissao ao sistema e o proprio: a pasta
+/// imported_media, para onde `persist` copia tudo que entra. E
+/// conteudo real do app — nada de galeria inventada.
+///
+/// Mais recentes primeiro, com teto: uma grade de dez linhas de
+/// miniaturas dentro de um seletor de 300 px nao seria olhada, e ler a
+/// pasta inteira num aparelho com centenas de arquivos custaria o tempo
+/// de abrir o menu.
+Future<List<File>> midiaRecente({int teto = 20}) async {
+  try {
+    final root = await getApplicationDocumentsDirectory();
+    final pasta = Directory('${root.path}/imported_media');
+    if (!pasta.existsSync()) return const [];
+    final arquivos = pasta.listSync().whereType<File>().toList()
+      ..sort(
+        (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
+      );
+    return arquivos.take(teto).toList();
+  } on Object {
+    // Pasta inacessivel nao e defeito: o seletor mostra o vazio util e
+    // os dois caminhos de importacao continuam la.
+    return const [];
+  }
+}

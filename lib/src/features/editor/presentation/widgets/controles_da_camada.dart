@@ -110,6 +110,7 @@ class ControlesDaCategoria extends ConsumerWidget {
     'som' => PainelDeSom(camada: camada),
     'velocidade' => PainelDeVelocidade(camada: camada),
     'cena' => PainelDaCena(camada: camada, playback: playback),
+    'lente' => _Lente(camada: camada, tempo: tempo),
     'rastreio' => PainelDeRastreio(camada: camada),
     'efeitos' => _Efeitos(camada: camada, tempo: tempo),
     'midia' => _Midia(camada: camada),
@@ -127,6 +128,18 @@ class ControlesDaCategoria extends ConsumerWidget {
   /// voltar — os dois outros botoes apagados, dizendo que nao ha o que
   /// marcar.
   AlvoDoRail _alvoDaCategoria(WidgetRef ref, Duration tempo) {
+    // A LENTE DA CAMERA ANIMA como qualquer numero: losango e curva.
+    if (categoriaId == 'lente') {
+      final real = camadaReal(ref, camada);
+      if (real is! CameraLayer) return const AlvoDoRail();
+      final t = real.localTime(tempo);
+      final c = ref.read(editorControllerProvider.notifier);
+      return AlvoDoRail(
+        temKeyframeAqui: real.zoom.hasKeyframeAt(t),
+        animado: real.zoom.isAnimated,
+        aoAlternarKeyframe: () => c.toggleCameraZoomKeyframe(camada.id, tempo),
+      );
+    }
     if (categoriaId == 'opacidade') {
       return alvoDaPropriedade(
         ref,
@@ -1258,6 +1271,58 @@ class _AcoesDaCamada extends ConsumerWidget {
           rotulo: 'Apagar',
           perigo: true,
           aoTocar: () => c.removeLayer(camada.id),
+        ),
+      ],
+    );
+  }
+}
+
+/// AS OPCOES DE CAMERA: a lente.
+///
+/// 1200 e a lente NEUTRA — a focal com que o motor inteiro ja projetava.
+/// Abaixo dela a cena abre (grande angular, perspectiva forte); acima,
+/// fecha (teleobjetiva, perspectiva achatada). O numero e o mesmo que o
+/// resto do app usa, entao nao ha conversao escondida no meio.
+class _Lente extends ConsumerWidget {
+  const _Lente({required this.camada, required this.tempo});
+
+  final Layer camada;
+  final Duration tempo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final atual = ref.watch(projetoVisivelProvider).layerById(camada.id);
+    if (atual is! CameraLayer) return const SizedBox.shrink();
+    final c = ref.read(editorControllerProvider.notifier);
+    final f = atual.zoom.valueAt(atual.localTime(tempo));
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(4, 6, 10, 10),
+      children: [
+        LinhaDeParametro(
+          rotulo: 'Lente',
+          nome: 'Lente da camera',
+          valor: f,
+          casas: 0,
+          sufixo: ' px',
+          porPixel: 8,
+          aoComecar: c.beginGesture,
+          aoMudar: (v) => c.editCameraZoom(camada.id, tempo, v),
+          aoTerminar: c.endGesture,
+          aoDigitar: (v) => c.editCameraZoom(camada.id, tempo, v),
+        ),
+        _Acao(
+          icone: Icons.center_focus_strong_rounded,
+          rotulo: 'Voltar a lente neutra (1200)',
+          aoTocar: () =>
+              c.editCameraZoom(camada.id, tempo, CameraLayer.lenteNeutra),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(8, 10, 8, 0),
+          child: Text(
+            'A camera move toda camada com o 3D ligado. Camada 2D nao ve '
+            'camera — a mesma regra do editor de referencia.',
+            style: TextStyle(fontSize: 11, height: 1.3, color: AmColors.muted),
+          ),
         ),
       ],
     );

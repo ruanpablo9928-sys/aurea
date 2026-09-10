@@ -120,6 +120,13 @@ List<LottieIssue> validateForLottie(
         );
       case AudioLayer _:
         check(l, 'audio', 'Audio nao faz parte do Lottie.');
+      case CameraLayer _:
+        check(
+          l,
+          'camera',
+          'Camera de composicao nao existe em Lottie — o movimento dela '
+              'precisa ser assado nas camadas antes de exportar.',
+        );
       case ParticlesLayer _:
         check(
           l,

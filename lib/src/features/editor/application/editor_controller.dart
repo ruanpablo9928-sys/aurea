@@ -885,6 +885,7 @@ class EditorController extends Notifier<VideoProject> {
       ShapeLayer _ => 'forma',
       GroupLayer _ => 'grupo',
       NullLayer _ => 'nulo',
+      CameraLayer _ => 'camera',
       AudioLayer _ => 'audio',
       CaptionLayer _ => 'legenda',
       ParticlesLayer _ => 'particulas',
@@ -1558,6 +1559,76 @@ class EditorController extends Notifier<VideoProject> {
     _push(
       AdjustmentLayer(
         name: 'Ajuste $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        position: AnimatedOffset(_center),
+      ),
+    );
+  }
+
+  /// A CAMERA DA COMPOSICAO.
+  ///
+  /// Nasce no centro, com a lente neutra (1200) e o 3D ligado — com ela
+  /// parada, a composicao fica exatamente como estava. Mover, girar ou
+  /// mudar a lente move a cena inteira: toda camada com o 3D ligado
+  /// passa a ser vista por ela (`effectiveTransform`).
+  void addCameraLayer(Duration at) {
+    final n = state.layers.whereType<CameraLayer>().length + 1;
+    _push(
+      CameraLayer(
+        name: 'Camera $n',
+        startTime: at,
+        duration: const Duration(seconds: 5),
+        is3D: true,
+        position: AnimatedOffset(_center),
+      ),
+    );
+  }
+
+  /// A LENTE DA CAMERA, em pixels de distancia focal.
+  ///
+  /// Passa pelo mesmo contrato de todo numero animavel: sem losango, sem
+  /// keyframe novo (`docs/keyframe-explicito.md`).
+  void editCameraZoom(String id, Duration globalTime, double f) {
+    final layer = _layer(id);
+    if (layer is! CameraLayer) return;
+    _replace(
+      layer.withZoom(
+        _editDouble(
+          layer.zoom,
+          layer.localTime(globalTime),
+          f.clamp(60.0, 12000.0),
+        ),
+      ),
+    );
+  }
+
+  /// O losango da lente.
+  void toggleCameraZoomKeyframe(String id, Duration globalTime) {
+    if (_cravarPendencia(id, globalTime)) return;
+    final layer = _layer(id);
+    if (layer is! CameraLayer) return;
+    final t = layer.localTime(globalTime);
+    _replace(
+      layer.withZoom(
+        layer.zoom.hasKeyframeAt(t)
+            ? layer.zoom.withoutKeyframe(t)
+            : layer.zoom.withKeyframe(t, layer.zoom.valueAt(t)),
+      ),
+    );
+  }
+
+  /// GRUPO VAZIO: o conteiner antes do conteudo.
+  ///
+  /// `groupLayers` so sabia embrulhar o que ja existe, e `groupLayers([])`
+  /// saia pela porta dos fundos (`if (picked.isEmpty) return`). No AM o
+  /// Grupo Vazio e um dos quatro objetos do seletor de insercao (V 00:26)
+  /// — cria-se a caixa e depois se arrasta o conteudo para dentro.
+  void addEmptyGroup(Duration at) {
+    final n = state.layers.whereType<GroupLayer>().length + 1;
+    _push(
+      GroupLayer(
+        name: 'Grupo $n',
         startTime: at,
         duration: const Duration(seconds: 5),
         position: AnimatedOffset(_center),

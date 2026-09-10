@@ -128,6 +128,32 @@ class CategoriaDaCamada {
 /// um cartao acesso abrir o nada — entao eles nao respondem ao toque, e
 /// o motivo esta escrito no proprio cartao.
 List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
+  // A CAMERA TEM GRADE PROPRIA (PDF pagina 11): transformacao, opcoes
+  // de camera e efeitos. Opacidade, cor, mascara e mistura nao querem
+  // dizer nada num objeto que nao entrega um pixel — o que ela faz e
+  // MOVER a cena, e nao aparecer nela.
+  if (camada is CameraLayer) ...const [
+    CategoriaDaCamada(
+      id: 'transformar',
+      rotulo: 'Mover e transformar',
+      icone: Icons.open_with_rounded,
+    ),
+    CategoriaDaCamada(
+      id: 'lente',
+      rotulo: 'Opcoes de camera',
+      icone: Icons.camera_rounded,
+    ),
+    CategoriaDaCamada(
+      id: 'camada',
+      rotulo: 'Camada',
+      icone: Icons.layers_rounded,
+    ),
+    CategoriaDaCamada(
+      id: 'efeitos',
+      rotulo: 'Efeitos',
+      icone: Icons.auto_awesome_rounded,
+    ),
+  ] else ...[
   const CategoriaDaCamada(
     id: 'transformar',
     rotulo: 'Mover e transformar',
@@ -259,6 +285,7 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Mistura e recorte',
       icone: Icons.gradient_rounded,
     ),
+  ],
 ];
 
 /// COMO A CAMADA SE CHAMA POR TIPO, para o cabecalho.
@@ -277,6 +304,7 @@ String tipoDaCamadaEmPalavras(Layer camada) => switch (camada) {
   Element3DLayer() => 'Elemento 3D',
   GroupLayer() => 'Grupo',
   NullLayer() => 'Nulo',
+  CameraLayer() => 'Camera',
   ParticlesLayer() => 'Particulas',
   CaptionLayer() => 'Legenda',
   AdjustmentLayer() => 'Ajuste',
@@ -565,6 +593,7 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'som' => 'Som',
   'velocidade' => 'Velocidade',
   'cena' => 'Cena e camera',
+  'lente' => 'Opcoes de camera',
   'rastreio' => 'Rastrear a camera',
   'efeitos' => 'Efeitos',
   'midia' => 'Informacoes da midia',
@@ -583,6 +612,12 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
 /// enquanto mexe no controle. Quem cede e a composicao, que so fica
 /// menor.
 double alturaDaFerramentaAberta(WidgetRef ref) {
+  // O SELETOR DE INSERCAO OCUPA A MESMA FAIXA que o painel, e por isso
+  // conta na mesma conta: sem isto a linha do tempo cresceria ao abrir o
+  // `+` para em seguida ser coberta por ele.
+  if (ref.watch(barraDeAdicaoAbertaProvider)) {
+    return PainelDaCamada.alturaMaxima;
+  }
   if (!ref.watch(painelDaCamadaLigadoProvider)) return 0;
   // A TERCEIRA COPIA DA CADEIA MORAVA AQUI. Agora e a mesma leitura do
   // cabecalho e do painel: um contexto, uma altura.
