@@ -83,9 +83,9 @@ class PainelDaCena extends ConsumerWidget {
           porPixel: .5,
           escolhida: true,
           aoComecar: c.beginGesture,
-          aoMudar: (v) => c.setCameraFocalLength(cena.id, v),
+          aoMudar: (v) => c.setCameraFocalLength(cena.id, playback.time.value, v),
           aoTerminar: c.endGesture,
-          aoDigitar: (v) => c.setCameraFocalLength(cena.id, v),
+          aoDigitar: (v) => c.setCameraFocalLength(cena.id, playback.time.value, v),
         ),
         // O ANGULO E A LENTE SAO A MESMA GRANDEZA, e quem pensa em
         // "grande angular" pensa em graus. Mostrar os dois custa uma

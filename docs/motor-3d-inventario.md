@@ -1,0 +1,4643 @@
+# Inventario do motor 3D
+
+> Levantado em 2026-09-10 por doze agentes em paralelo, um por dimensao,
+> com um conferente adversarial por cima de cada lista. **860 recursos**
+> no motor; **701 sem uma unica porta na tela**.
+>
+> Este arquivo e o CONTRATO do redesenho: nada aqui pode desaparecer.
+> `○` = sem porta na tela quando o levantamento foi feito. `●` = tem porta.
+
+## Resumo por dimensao
+
+| dimensao | recursos | sem porta |
+|---|---:|---:|
+| A cena 3D dentro da composicao 2D | 162 | 137 |
+| Rastreio de camera 3D | 93 | 75 |
+| Animacao e keyframes da cena 3D | 89 | 63 |
+| Cameras | 83 | 63 |
+| Modelos importados | 72 | 70 |
+| Texto 3D, formas 3D e particulas | 68 | 56 |
+| Render, qualidade e orcamento do motor 3D | 63 | 37 |
+| Selecao, vistas e estado de estudio | 57 | 44 |
+| Ambiente, mundo e ceu | 50 | 47 |
+| Materiais e texturas do motor 3D | 46 | 44 |
+| Nos e objetos da cena 3D | 45 | 45 |
+| Luzes e sombras | 32 | 20 |
+
+---
+
+## A cena 3D dentro da composicao 2D (Scene3DLayer / Element3DLayer / camera / grafo de cena / ambiente)
+
+O motor sabe fazer ~125 coisas nesta dimensao. Chegam a tela 12. A camada Cena 3D e criada (adicionar_conteudo.dart:125) e desenhada (palco_de_previa.dart:4037 -> Scene3DGpuView ou Scene3DPainter), mas o UNICO painel que a edita e painel_da_cena.dart (468 linhas, aberto pela categoria 'cena' em painel_da_camada.dart:185) — e ele cobre so vista fixa, perspectiva/ortografica, lente, lista de cameras (cortar/duplicar/apagar/nova), limpar cortes, os cinco rigs e "enquadrar tudo". O proprio comentario do arquivo admite: "a auditoria contou 48 comandos 3D com zero chamadores". O buraco maior nao e falta de comando, e falta de PALCO: nenhum arquivo em presentation passa `selectedNodeId` para Scene3DPainter/Scene3DGpuView, e `resolveTouch`, `orbitCamera`, `dollyCamera` e `panCamera` (camera3d.dart:587-682) nao tem UM chamador fora do dominio — logo nao ha como selecionar, mover, girar ou escalar um objeto da cena, nem navegar a camera com o dedo. Consequencia em cadeia: TODO o grafo de cena (adicionar objeto, nulo, pendurar, agrupar, isolar, duplicar, travar, apagar, instanciar em grade, extrudar forma, importar .glb/modelo, espessura de extrusao) tem comando pronto no editor_controller e ZERO porta. O ambiente inteiro da cena (7 predefinicoes, panorama, sonda de reflexo, neblina, ceu/chao por hemisferio, ACES, grade do chao, MSAA, reflexo planar do piso) e todo o material (metalico, rugosidade, emissao, textura por face, textura vinda de camada, 12 predefinicoes) nao tem NEM comando: so os genericos updateScene3D/updateSceneNode, cujo unico chamador em presentation e a tela de teste de estresse (estresse3d_screen.dart:330), que substitui a cena inteira por uma receita pronta. A profundidade de campo tem 13 parametros no dominio e um unico escritor (focusCameraOnNode, sem porta). Element3DLayer (o solido solto na timeline) chega a tela so por dois caminhos: criar (17 primitivas) e mudar a cor.
+
+- `*` **Criar uma Cena 3D na linha do tempo**
+  - motor: `lib/src/features/editor/domain/layer.dart:2435`
+  - comando: `addScene3DLayer (lib/src/features/editor/application/editor_controller.dart:1558)`
+  - porta: `lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:125`
+  - falta: Nada: o item '3D > Cena 3D' da folha de adicionar ja cria.
+- `*` **Trocar a vista do preview (Camera, Frente, Tras, Esquerda, Direita, Topo, Base)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2544 (campo view) / lib/src/features/editor/domain/camera3d.dart:529 (enum SceneView)`
+  - comando: `setScene3DView (editor_controller.dart:1963)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: Nada para as sete fixas; as duas vistas Livre 1/Livre 2 sao filtradas fora da grade e continuam inalcancaveis.
+- `o` **Ligar/desligar as ajudas da cena (grade do chao, frustum, eixos, caixa do selecionado)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2548 (showHelpers)`
+  - comando: `setScene3DHelpers (editor_controller.dart:1957)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Mostrar ajudas' no cartao Cena e camera. Nasce LIGADO em toda cena nova (layer.dart:2444) e nunca pode ser desligado no preview.
+- `*` **Perspectiva ou ortografica**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:367 (orthographic)`
+  - comando: `setCameraOrthographic (editor_controller.dart:1591)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:76`
+  - falta: Nada.
+- `*` **Distancia focal da lente (mm)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:365 (focalLength, animavel)`
+  - comando: `setCameraFocalLength (editor_controller.dart:1598)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:86`
+  - falta: So o valor base: o comando escreve AnimatedDouble(v) cru, entao nao da para gravar keyframe de lente pela tela (o zoom de lente animado do dolly zoom so sai pelo rig).
+- `o` **Largura do filme (mm) — o outro lado do angulo de visao**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:366 (filmWidth)`
+  - comando: `NENHUM COMANDO (so o generico updateScene3DCamera, editor_controller.dart:1579)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de formato de filme (Super 35, full frame) junto da lente; hoje esta preso em 36 mm.
+- `o` **Escolher o tipo de camera (dois nos com ponto de interesse / um no livre) sem o enquadramento pular**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:345 (kind) e :437 (convertedTo)`
+  - comando: `NENHUM COMANDO (convertedTo nao e chamado por nenhum metodo do controller)`
+  - porta: `NENHUMA`
+  - falta: Dois botoes 'Aponta para um alvo' / 'Camera livre' que chamem convertedTo no tempo do cabecote.
+- `o` **Posicao da camera em X, Y e Z (animavel)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:347-349 (posX/posY/posZ)`
+  - comando: `NENHUM COMANDO direto (so escrito de lado por applyRigToScene:2029, frameSceneAll:2047, frameSceneNode:2184, applySavedView:2322, alignCameraToRender:2338)`
+  - porta: `NENHUMA`
+  - falta: Tres LinhaDeParametro no cartao da cena, e/ou o gesto de orbita/dolly no palco (dollyCamera/orbitCamera ja existem no dominio sem chamador).
+- `o` **Ponto de interesse da camera em X, Y e Z (para onde ela olha)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:352-354 (poiX/poiY/poiZ)`
+  - comando: `NENHUM COMANDO direto (escrito por frameBounds/alignToView atraves de frameSceneAll, applySavedView, alignCameraToRender)`
+  - porta: `NENHUMA`
+  - falta: Tres campos de alvo no cartao da cena, ou um toque no palco que crave o alvo no ponto tocado.
+- `o` **Orientacao da camera em X, Y e Z (caminho curto)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:358-360 (orientX/orientY/orientZ)`
+  - comando: `NENHUM COMANDO direto (so via alignToView e os rigs)`
+  - porta: `NENHUMA`
+  - falta: Tres deslizantes de orientacao para a camera de um no.
+- `o` **Rotacao separada da camera em X, Y e Z (aditiva, aceita varias voltas)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:361-363 (rotX/rotY/rotZ)`
+  - comando: `NENHUM COMANDO direto (so zerado por alignToView; rotY escrito pelo rig Tripe)`
+  - porta: `NENHUMA`
+  - falta: Tres deslizantes de rotacao, separados da orientacao — sao necessidades opostas e hoje nenhum dos dois aparece.
+- `o` **Rolagem da camera (roll) sem virar rotacao de mundo**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:415-427 (renderAt aplica orientZ+rotZ no vetor 'cima')`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um deslizante 'Inclinacao' (roll) no cartao da camera.
+- `o` **Auto-orientar a camera (desligado / ao longo do caminho / para o ponto de interesse)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:369 (autoOrient) e :516 (enum AutoOrient)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres estados no cartao da camera.
+- `o` **A camera olha para um objeto da cena e o segue sozinha (sem keyframe)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:374 (lookAtNodeId) e layer.dart:2515-2523 (cameraAt usa o no)`
+  - comando: `setCameraLookAt (editor_controller.dart:2273)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de objetos da cena no cartao da camera ('Olhar para: ...'), que depende de existir uma lista de objetos — que tambem nao existe.
+- `*` **Acrescentar uma camera extra, com o enquadramento de agora**
+  - motor: `lib/src/features/editor/domain/layer.dart:2480 (extraCameras)`
+  - comando: `addScene3DCamera (editor_controller.dart:1628)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:115`
+  - falta: Nada.
+- `*` **Apagar uma camera extra**
+  - motor: `lib/src/features/editor/domain/layer.dart:2480`
+  - comando: `removeScene3DCamera (editor_controller.dart:1649)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:109`
+  - falta: Nada (a principal, por regra, nao se apaga).
+- `*` **Duplicar uma camera (mesmo enquadramento, id novo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:304 (Camera3D)`
+  - comando: `duplicateSceneCamera (editor_controller.dart:2241)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:108`
+  - falta: Nada.
+- `o` **Renomear uma camera**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:344 (name)`
+  - comando: `renameSceneCamera (editor_controller.dart:2232)`
+  - porta: `NENHUMA`
+  - falta: Toque longo (ou lapis) na linha da camera abrindo um campo de texto; a linha ja existe em painel_da_cena.dart:97.
+- `*` **Cortar para outra camera num instante da linha do tempo**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:16 (CameraShot) / layer.dart:2483 (shots)`
+  - comando: `setCameraShot (editor_controller.dart:1669)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:105`
+  - falta: Nada para o corte seco no cabecote.
+- `o` **Transicao suave entre cameras em vez de corte seco (a anterior derrete na proxima)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:30 (transition) e :113-131 (resolveCamera interpola com easeInOut)`
+  - comando: `setCameraShot com o parametro nomeado transition (editor_controller.dart:1669)`
+  - porta: `NENHUMA`
+  - falta: Um campo de duracao ao lado do botao de cortar; a UI hoje chama setCameraShot sem transition, entao TODO corte sai seco.
+- `o` **Apagar um corte de camera especifico**
+  - motor: `lib/src/features/editor/domain/layer.dart:2483 (shots)`
+  - comando: `removeCameraShot (editor_controller.dart:1692)`
+  - porta: `NENHUMA`
+  - falta: Marcas de corte desenhadas na barra da camada (os tempos ja saem em moduleTimesUs, layer.dart:2632) com um toque para apagar. Hoje so da para limpar TODOS.
+- `*` **Tirar todos os cortes de camera**
+  - motor: `lib/src/features/editor/domain/layer.dart:2483`
+  - comando: `clearCameraShots (editor_controller.dart:1706)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:122`
+  - falta: Nada.
+- `o` **Prender a camera da cena a um NULO DA COMPOSICAO (a ponte entre as duas hierarquias)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2490 (cameraParentLayerId) e :2505 (cameraAt com pai externo); a ponte e montada em palco_de_previa.dart:3927 (cameraDaCena)`
+  - comando: `setSceneCameraCompParent (editor_controller.dart:1824)`
+  - porta: `NENHUMA`
+  - falta: Um seletor 'Camera segue' listando os nulos da composicao, no cartao da cena. Sem ele todo rig de camera feito com nulos 2D fica inalcancavel, embora o render ja o honre.
+- `o` **Prender a camera da cena a um NO INTERNO da cena (nulo 3D)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:704 (cameraParentId) e layer.dart:2525-2540`
+  - comando: `setSceneCameraParent (editor_controller.dart:1810)`
+  - porta: `NENHUMA`
+  - falta: Um seletor 'Camera filha de' na lista de objetos da cena — lista que nao existe.
+- `o` **Rig de orbita em um toque (cria o nulo, parenteia a camera e anima 360 graus com keyframes reais)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:1841 (monta SceneNode nulo com rotY keyframada)`
+  - comando: `addOrbitRig (editor_controller.dart:1841)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Orbita com nulo' no cartao. O painel oferece o rig Orbita de applyCameraRig (que keyframa a POSICAO da camera), nao este, que e o rig por nulo.
+- `*` **Rigs de camera prontos: Orbita, Tripe, Dolly, Camera na mao, Dolly zoom**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:775 (enum CameraRig) e :786 (applyCameraRig)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: So os cinco botoes existem; a intensidade e o alvo do rig sao fixados pelo controller (raio = caixa da cena x2,2) e nao tem controle.
+- `*` **Enquadrar a cena inteira**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:686 (frameBounds) e :743 (sceneBounds)`
+  - comando: `frameSceneAll (editor_controller.dart:2047)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: Nada.
+- `o` **Enquadrar o objeto selecionado**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:686 (frameBounds)`
+  - comando: `frameSceneNode (editor_controller.dart:2184)`
+  - porta: `NENHUMA`
+  - falta: Selecao de objeto no palco (nao existe) + um botao 'Enquadrar selecionado'.
+- `o` **Focar no objeto selecionado (liga a profundidade de campo e tira a distancia do objeto, nao de um numero chutado)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2160 e camera3d.dart:87 (focusDistance)`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160)`
+  - porta: `NENHUMA`
+  - falta: Selecao de objeto no palco + um botao 'Focar aqui'. E o unico escritor de dof.enabled em todo o app.
+- `o` **Salvar o enquadramento atual com nome (vista salva)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:628 (SavedView) e :720 (savedViews)`
+  - comando: `saveSceneView (editor_controller.dart:2297)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Guardar esta vista' + campo de nome; e uma lista das vistas guardadas no cartao.
+- `o` **Apagar uma vista salva**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:720`
+  - comando: `removeSceneView (editor_controller.dart:2309)`
+  - porta: `NENHUMA`
+  - falta: Deslizar para apagar na lista de vistas salvas — lista que nao existe.
+- `o` **Voltar a camera para uma vista salva**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView)`
+  - comando: `applySavedView (editor_controller.dart:2322)`
+  - porta: `NENHUMA`
+  - falta: A lista de vistas salvas, com toque para aplicar.
+- `o` **Alinhar a camera a vista livre navegada (o comando mais usado do 3D)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView)`
+  - comando: `alignCameraToRender (editor_controller.dart:2338)`
+  - porta: `NENHUMA`
+  - falta: Navegacao livre no palco (orbita/dolly/pan por gesto), que nao existe — sem ela nao ha 'vista livre' para alinhar.
+- `o` **Alinhar a camera a vista fixa em que se esta (Topo, Frente...)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:556 (orthoViewCamera) + :719`
+  - comando: `alignCameraToCurrentView (editor_controller.dart:2348)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'A camera assume esta vista', que so aparece quando view != Camera. O painel ja sabe qual vista esta ativa (painel_da_cena.dart:63).
+- `o` **Ligar a profundidade de campo**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:86 (enabled)`
+  - comando: `focusCameraOnNode liga de lado (editor_controller.dart:2168); NENHUM COMANDO so para ligar/desligar`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Profundidade de campo' no cartao da camera.
+- `o` **Distancia de foco**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:87 (focusDistance, animavel)`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160) e frameBounds (grava a distancia do enquadramento)`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de distancia de foco, com keyframe.
+- `o` **Abertura / diafragma (f-stop derivado da lente)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:88 (aperture) e :109 (fStopFor)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de abertura mostrando o f-stop calculado.
+- `o` **Nivel de desfoque (multiplicador artistico 0..200%)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:91 (blurLevel)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de 0 a 200%.
+- `o` **Travar o foco no zoom**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:92 (lockToZoom)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor no bloco de profundidade de campo.
+- `o` **Formato da iris (retangulo rapido, triangulo, quadrado, pentagono... decagono) — a forma do bokeh**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:94 (irisShape) e :20 (enum IrisShape, 9 formatos)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma grade de nove formatos; irisLabel (camera3d.dart:44) ja tem os nomes em portugues prontos.
+- `o` **Rotacao da iris**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:95 (irisRotation)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante em graus.
+- `o` **Arredondamento das laminas da iris (-100 reta/concava a 100 circulo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:98 (irisRoundness)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante bipolar.
+- `o` **Proporcao da iris (bokeh oval, o visual anamorfico)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:101 (irisAspect)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante de proporcao.
+- `o` **Franja de difracao**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:102 (diffractionFringe)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante.
+- `o` **Ganho de realce (e o que faz o ponto de luz virar bola de bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:105 (highlightGain) e :238 (bokehSprites)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..100. Nasce em 0, entao o bokeh NUNCA aparece em nenhum projeto — bokehSprites devolve lista vazia sem ele.
+- `o` **Limiar de realce (abaixo dele nada vira bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:106 (highlightThreshold)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Saturacao do realce (quanto de cor a bola de bokeh preserva)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:107 (highlightSaturation)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..2.
+- `o` **Acrescentar um objeto solido a cena (17 primitivas: cubo, piramide, cone, esfera, cilindro, prisma, diamante, anel, estrela, plano, capsula, tubo, octaedro, rampa, cupula, coroa, coroa fina)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:470 (SceneNode.kind) / element3d.dart:7 (enum) / element3d.dart:629 (rotulos)`
+  - comando: `addSceneNode (editor_controller.dart:1970)`
+  - porta: `NENHUMA`
+  - falta: Um botao '+' no cartao da cena abrindo a mesma grade de solidos que ja existe em adicionar_conteudo.dart:104 — hoje ela so cria Element3DLayer solto, nunca um no DENTRO da cena.
+- `o` **Acrescentar um NULO 3D dentro da cena (o pivo dos rigs)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:502 (isNull)`
+  - comando: `addSceneNull (editor_controller.dart:1759)`
+  - porta: `NENHUMA`
+  - falta: Um item 'Nulo' no '+' da cena. O item 'Nulo 3D' de adicionar_conteudo.dart:128 chama addNullLayer — e um nulo da COMPOSICAO, coisa diferente.
+- `o` **Renomear um objeto da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:469 (name)`
+  - comando: `renameSceneNode (editor_controller.dart:2219)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de objetos da cena com campo de nome.
+- `o` **Esconder / mostrar um objeto da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:480 (visible)`
+  - comando: `setSceneNodeVisible (editor_controller.dart:2222)`
+  - porta: `NENHUMA`
+  - falta: Um olho por linha na lista de objetos.
+- `o` **Travar um objeto da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:503 (locked)`
+  - comando: `setSceneNodeLocked (editor_controller.dart:2002)`
+  - porta: `NENHUMA`
+  - falta: Um cadeado por linha na lista de objetos. Ele ja e respeitado por updateSceneNode, setSceneNodeParent, setExtrudeDepth e removeSceneNode.
+- `o` **Apagar um objeto da cena (soltando os filhos e a camera que dependiam dele)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2014`
+  - comando: `removeSceneNode (editor_controller.dart:2014)`
+  - porta: `NENHUMA`
+  - falta: Deslizar para apagar na lista de objetos.
+- `o` **Duplicar um objeto ao lado do original**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:434 (SceneNode.duplicado)`
+  - comando: `duplicateSceneNode (editor_controller.dart:2206)`
+  - porta: `NENHUMA`
+  - falta: Um item 'Duplicar' no menu do objeto.
+- `o` **Pendurar um objeto em outro (parenting dentro da cena, com recusa de ciclo)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:499 (parentId) e :1174 (resolveNodeTransform)`
+  - comando: `setSceneNodeParent (editor_controller.dart:1775)`
+  - porta: `NENHUMA`
+  - falta: Uma coluna 'Pai' na lista de objetos (como o chicote de parenting da timeline 2D). Sem isto nao ha rigging dentro da cena.
+- `o` **Agrupar objetos escolhidos sob um nulo novo**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2286`
+  - comando: `groupSceneNodes (editor_controller.dart:2286)`
+  - porta: `NENHUMA`
+  - falta: Selecao MULTIPLA de objetos na cena (nem a selecao simples existe) + um botao 'Agrupar'.
+- `o` **Isolar um objeto (esconde todos os outros; tocar de novo devolve)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2134 (guarda a visibilidade anterior em _visibilityBeforeIsolation)`
+  - comando: `isolateSceneNode (editor_controller.dart:2134)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Isolar' no menu do objeto.
+- `o` **Posicao do objeto em X, Y e Z (animavel, com keyframe)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:472-474 (x/y/z) e scene_motion.dart:19 (editMotionValue)`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico, nao ha comando por eixo`
+  - porta: `NENHUMA`
+  - falta: Tres LinhaDeParametro por objeto E o arrasto no palco. sceneLocalDelta (scene3d.dart:1216) ja converte o arrasto de mundo para o espaco do pai e nao tem chamador.
+- `o` **Rotacao do objeto em X, Y e Z (animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:475-477 (rotX/rotY/rotZ)`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico`
+  - porta: `NENHUMA`
+  - falta: Tres deslizantes de giro por objeto, ou alcas de rotacao no palco.
+- `o` **Escala do objeto (animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:478 (scale)`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de escala por objeto, ou pinca no palco.
+- `o` **Tamanho do objeto em px logicos**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:479 (size)`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico`
+  - porta: `NENHUMA`
+  - falta: Um campo 'Tamanho' por objeto.
+- `o` **Cor de etiqueta do objeto (para achar na lista)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:504 (colorTag)`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico`
+  - porta: `NENHUMA`
+  - falta: Um pontinho de cor por linha na lista de objetos.
+- `o` **Duplicar em grade 3D (instancias numa unica chamada de desenho)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:484 (instances) e editor_controller.dart:2101`
+  - comando: `arrayNodeInstances (editor_controller.dart:2101)`
+  - porta: `NENHUMA`
+  - falta: Quatro campos (quantos em X, Y, Z e o espacamento) no cartao do objeto. E o modulo Grade direto em 3D e nao tem um botao.
+- `o` **Subdividir uma primitiva (suavizar a malha, 0 a 4 niveis)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:508 (subdivisions) e :1093 (_subdividedPrimitive)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de 0 a 4 no cartao do objeto.
+- `o` **Nivel de detalhe da malha (automatico / alto / medio / baixo)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:505 (lod) e :338 (enum MeshLod3D); a escolha automatica em :1159 (_automaticLod)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de quatro estados; hoje so o automatico roda, e o campo lod escrito no arquivo nunca e lido por comando nenhum.
+- `o` **Extrudar uma forma 2D do projeto para dentro da cena (logo plano vira volume)**
+  - motor: `lib/src/features/editor/domain/extrude3d.dart:150 (extrudeOutline) e :47 (earClip, corte de orelha)`
+  - comando: `extrudeShapeIntoScene (editor_controller.dart:1717)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Trazer forma para a cena' que liste as ShapeLayer do projeto. E o caminho de logo plano para logo girando e nao tem porta nenhuma.
+- `o` **Mudar a espessura de um objeto extrudado sem pedir a forma de novo**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:495 (extrudeDepth) + :493 (outline guardado)`
+  - comando: `setExtrudeDepth (editor_controller.dart:1935)`
+  - porta: `NENHUMA`
+  - falta: Um deslizante 'Espessura' que aparece so quando o objeto tem contorno guardado.
+- `o` **Trazer um modelo .glb para a cena (com LOD alto/medio/baixo e creditos)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:1867 (usa GlbResult)`
+  - comando: `addGlbNode (editor_controller.dart:1867)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de arquivo no cartao da cena. O comando ate deixa a excecao subir 'para a interface poder dizer o que houve' — interface que nao existe.
+- `o` **Trazer um modelo importado (ModelAsset3D: OBJ/FBX/GLB com materiais, nos e clipes)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:1 e scene3d.dart:512 (modelAsset)`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: Um 'Importar modelo' no cartao da cena, ligado ao importador que ja existe em domain/model_import3d.dart.
+- `o` **Creditos do modelo importado (autor, licenca, endereco)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:509 (credit) e :341 (ModelCredit3D.badge)`
+  - comando: `NENHUM COMANDO (so preenchido na importacao por addGlbNode)`
+  - porta: `NENHUMA`
+  - falta: Mostrar o cracha de creditos na ficha do objeto — o texto ja vem pronto em ModelCredit3D.badge.
+- `o` **Escolher qual clipe de animacao do modelo toca**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:511 (animationClip) e model_asset3d.dart:495 (ModelMotion3D.clip)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor com os nomes dos clipes (modelSource.animationNames ja e guardado em scene3d.dart:385).
+- `o` **Velocidade da animacao do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:496 (speed)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de velocidade no cartao do objeto.
+- `o` **Deslocamento (offset) da animacao do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:496 (offset)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um campo em segundos.
+- `o` **Repetir a animacao do modelo em laco**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:497 (loop)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor.
+- `o` **Pose crua do modelo por keyframe (ModelPoseKey3D)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:498 (keys) e :547 (withPose)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Alcas de osso no palco, ou ao menos uma lista de nos do modelo com giro por no.
+- `o` **Usar os materiais que vieram com o modelo (ou o material do no)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:514 (useModelMaterials)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Usar os materiais do arquivo'.
+- `o` **Cor base do material**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:50 (Material3D.baseColor)`
+  - comando: `NENHUM COMANDO (so via updateSceneNode generico, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um EscolhaDeCor no cartao do objeto da cena — o widget ja existe e serve o Element3DLayer em painel_de_cor.dart:157.
+- `o` **Metalico (0..1) do material**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:51 (metallic)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Rugosidade (0..1) do material**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:52 (roughness)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1. E o parametro que mais muda a aparencia e nao tem porta.
+- `o` **Emissao (o objeto que brilha sozinho)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:53 (emissive)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante.
+- `o` **Opacidade do material (vidro)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:54 (opacity) e :83 (isTransparent decide o passe)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Tipo do material (PBR, sem luz, transparente, recorte)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:55 (kind) e :25 (enum MaterialKind)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de quatro estados.
+- `o` **Reflexo do ambiente por material (0 fosco, 1 espelho)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:61 (reflectivity)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Imagem vestindo o objeto (projecao de caixa)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:65 (imagePath)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de arquivo no cartao do objeto.
+- `o` **Imagem diferente por face (embalagem, tela)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:69 (faceImagePaths)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma lista de faces com um seletor de imagem em cada.
+- `o` **Textura vinda de uma CAMADA da composicao (uma precomp animada vira a tela do celular 3D)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:81 (textureLayerId)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor listando as camadas do projeto. O proprio comentario chama isto de 'o recurso que mais rende num app de motion' e nao ha um botao.
+- `o` **Forca do relevo (normal map)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:71 (normalStrength)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante.
+- `o` **Forca da oclusao**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:72 (occlusionStrength)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante.
+- `o` **Corte de alfa (material de recorte)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:73 (alphaCutoff)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante, visivel so no tipo 'recorte'.
+- `o` **Desenhar os dois lados da face**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:74 (doubleSided)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor. Sem ele, malha com enrolamento invertido some e nao ha como salvar.
+- `o` **Canais empacotados na textura**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:75 (packedChannels)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor no bloco de textura.
+- `o` **Como a textura se repete em X e em Y (grampear, repetir, espelhar)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:76 (textureWrapX, textureWrapY)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Dois seletores de TileMode.
+- `o` **Predefinicoes de material (Metal polido, Metal escovado, Cromo, Plastico, Vidro, Vidro fosco, Ceramica, Borracha, Madeira, Tinta fosca, Emissivo neon, Sem luz)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:129 (enum MaterialPreset3D), :144 (rotulos), :158 (materialFromPreset)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma grade de 12 chips no cartao do objeto — os rotulos em portugues ja estao prontos em materialPresetLabel.
+- `o` **Acrescentar uma luz (direcional, ponto, ambiente, holofote)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:238 (enum Light3DKind) e :240 (Light3D)`
+  - comando: `addSceneLight (editor_controller.dart:2061)`
+  - porta: `NENHUMA`
+  - falta: Um bloco 'Luzes' no cartao da cena com um '+' de quatro tipos.
+- `o` **Apagar uma luz**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:719 (lights)`
+  - comando: `removeSceneLight (editor_controller.dart:2086)`
+  - porta: `NENHUMA`
+  - falta: Lista de luzes com deslizar para apagar.
+- `o` **Cor da luz**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:265 (color)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: EscolhaDeCor por luz.
+- `o` **Intensidade da luz (animavel, aparece na barra da camada)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:266 (intensity) e layer.dart:2637 (entra em moduleTimesUs)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: Deslizante com keyframe por luz.
+- `o` **Direcao da luz**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:267 (direction)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: Um controle de direcao (esfera ou tres campos).
+- `o` **Posicao da luz (ponto e holofote)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:268 (position)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: Tres campos X/Y/Z.
+- `o` **Alcance da luz (usado no culling de luz por objeto)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:272 (range)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: Deslizante em px.
+- `o` **Esta luz lanca sombra**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:273 (castsShadow); o passe de sombra em scene3d_painter.dart:494`
+  - comando: `addSceneLight liga na primeira luz (editor_controller.dart:2067); depois so updateSceneLight generico`
+  - porta: `NENHUMA`
+  - falta: Um interruptor por luz.
+- `o` **Angulo do cone do holofote**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:274 (coneDegrees)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: Deslizante em graus, visivel so no holofote.
+- `o` **Suavidade da borda da luz**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:275 (softness)`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `*` **Iluminacao de tres pontos pronta (principal, preenchimento, contraluz)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:838 (Scene3D.tresPontos)`
+  - comando: `addScene3DLayer usa na criacao (editor_controller.dart:1567); NENHUM COMANDO para reaplicar`
+  - porta: `lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:125 (indireto, so ao criar a cena)`
+  - falta: Um botao 'Voltar a luz de tres pontos' — depois que alguem mexe nas luzes (sem UI, hoje impossivel) nao ha volta.
+- `o` **Ambiente refletido pela cena (Estudio, Ceu, Por do sol, Neon, Noite, Branco, Interior)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:679 (environment) / element3d.dart:36 (enum) e :38 (rotulos)`
+  - comando: `NENHUM COMANDO (so updateScene3D generico, editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Uma grade de sete chips — environmentLabel ja da os nomes em portugues.
+- `o` **Forca global do reflexo do ambiente**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:680 (envReflect)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1 no bloco de ambiente.
+- `o` **Panorama: escolher um dos seis ambientes prontos**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:47 (preset) e :13 (enum PanoramaPreset)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma grade de seis chips; panoramaPresetLabel (panorama3d.dart:15) ja tem os nomes.
+- `o` **Panorama: usar uma imagem de arquivo, da camera ou de uma camada como ambiente**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:48-51 (source, sourcePath, sourceLayerId) e :110 (preparePanorama)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de origem + seletor de arquivo/camada. preparePanorama ja resolve foto de celular incompleta e nao tem quem a chame.
+- `o` **Panorama: girar o ambiente (move reflexo e luz juntos)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:54 (rotationDegrees)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante em graus.
+- `o` **Panorama: intensidade**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:55 (intensity)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..4.
+- `o` **Panorama: desfoque do fundo**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:56 (backgroundBlur)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..30.
+- `o` **Panorama: mostrar o ambiente como fundo da cena**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:57 (showBackground); lido em scene3d_painter.dart:469`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor. Nasce desligado, entao o panorama so ilumina e nunca aparece.
+- `o` **Panorama: realce (highlightBoost)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:58 (highlightBoost)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..2.
+- `o` **Panorama: cobertura em graus, espelhar para 360, suavidade da emenda e tapar zenite/nadir**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:60-64 (coverageDegrees, mirrorTo360, seamSoftness, fillZenithNadir)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Quatro controles no bloco de panorama (ou ao menos o resultado automatico de preparePanorama sendo aplicado na importacao).
+- `o` **Sonda de reflexo: ligar**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:169 (enabled)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Reflexo da propria cena'.
+- `o` **Sonda de reflexo: qualidade (baixa 128 / media 256 / alta 512)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:170 (quality) e :134 (ProbeQuality)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres estados; os rotulos ja existem em ProbeQualityInfo.label.
+- `o` **Sonda de reflexo: quando atualiza (parado / ao mover / continuo)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:171 (updateMode) e :148 (ProbeUpdateMode)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres estados.
+- `o` **Sonda de reflexo: uma por objeto**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:172 (perObject)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor.
+- `o` **Sonda de reflexo: onde ela fica**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:173 (position)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Tres campos X/Y/Z, ou uma alca no palco.
+- `o` **Sonda de reflexo: incluir/excluir objetos do reflexo**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:174-175 (includeNodeIds, excludeNodeIds) e :180 (includes)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Caixas de marcar na lista de objetos.
+- `o` **Reflexo planar do piso**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:686 (planarFloorReflection); desenhado em scene3d_painter.dart:487`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Chao espelhado'.
+- `o` **Rugosidade do reflexo do piso**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:687 (planarFloorRoughness)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1, ligado ao interruptor acima.
+- `o` **Neblina: densidade**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:691 (fogDensity) e :693 (fogAt); lido em scene3d_painter.dart:913`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante. Nasce em 0, entao a perspectiva atmosferica nunca aparece em projeto nenhum.
+- `o` **Neblina: onde comeca**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:691 (fogStart)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um campo de distancia.
+- `o` **Neblina: cor**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:692 (fogColor)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: EscolhaDeCor no bloco de atmosfera.
+- `o` **Luz ambiente da cena (o numero)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:721 (ambient)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Cor que vem do ceu (ambiente por hemisferio)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:731 (skyColor)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: EscolhaDeCor. E o que separa metal de plastico e nao tem porta.
+- `o` **Cor que o chao devolve (ambiente por hemisferio)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:732 (groundColor)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: EscolhaDeCor.
+- `o` **Curva de saida ACES (tonemap)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:736 (tonemap)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor no bloco de imagem da cena.
+- `o` **Cor de fundo da cena 3D**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:738 (background); usada em scene3d_painter.dart:467 e scene3d_gpu_view.dart:156`
+  - comando: `NENHUM COMANDO (setBackgroundColor, editor_controller.dart:384, e o fundo da COMPOSICAO, nao o da cena)`
+  - porta: `NENHUMA`
+  - falta: EscolhaDeCor com opcao 'transparente' — hoje a cena sempre sai com fundo nulo.
+- `o` **Grade do chao**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:739 (showFloorGrid); desenhada em scene3d_painter.dart:399 e :473, so quando showHelpers`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor no bloco de ajudas.
+- `o` **Suavizacao de borda dos triangulos (MSAA)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:743 (msaa); lido em scene3d_painter.dart:887`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor no bloco de qualidade.
+- `*` **Modo rascunho (desliga sombra, DOF e ambiente por imagem so no preview)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:747 (draftMode)`
+  - comando: `NENHUM COMANDO`
+  - porta: `lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4066 (o palco liga sozinho enquanto toca; nao ha comando nem interruptor)`
+  - falta: Um interruptor 'Rascunho' para quem quer navegar rapido com o play parado.
+- `o` **Contar quantos triangulos a cena pede antes de desenhar (e o teto do pintor de CPU)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1113 (trianglesEstimados) e :1135 (facesQueONoDesenha)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um contador de triangulos na ficha da cena, para dar para decidir antes de a cena travar.
+- `*` **A cena inteira gira, desloca e escala como camada 2D da composicao (posicao, giro, escala, inclinacao, pivo)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2652 (Scene3DLayer.copyLayer, herdando de Layer)`
+  - comando: `editPosition (editor_controller.dart:4261), editRotation (:4393), editScaleUniform (:4313), editSkewX/Y (:4416/:4426), editPivot (:4436)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_transformacao.dart:124`
+  - falta: Nada: a cena e tratada como qualquer camada pelo painel de transformacao.
+- `*` **Opacidade da cena dentro da composicao**
+  - motor: `lib/src/features/editor/domain/layer.dart:2688 (opacity herdado)`
+  - comando: `editOpacity (editor_controller.dart:4402)`
+  - porta: `lib/src/features/editor/presentation/widgets/controles_da_camada.dart:395`
+  - falta: Nada.
+- `*` **Modo de mistura da cena com o que esta abaixo**
+  - motor: `lib/src/features/editor/domain/layer.dart:2692 (blendMode/customBlend herdados)`
+  - comando: `setBlendMode (editor_controller.dart:4460), setCustomBlend (:4448)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_mistura.dart:153`
+  - falta: Nada.
+- `*` **Efeitos 2D aplicados por cima da cena renderizada**
+  - motor: `lib/src/features/editor/domain/layer.dart:2696 (effects herdados)`
+  - comando: `addEffect (editor_controller.dart:4800)`
+  - porta: `lib/src/features/editor/presentation/widgets/controles_da_camada.dart:1018`
+  - falta: Nada.
+- `*` **Mascaras recortando a cena**
+  - motor: `lib/src/features/editor/domain/layer.dart:2697 (masks herdadas)`
+  - comando: `addMask (editor_controller.dart:5201)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_mascaras.dart:89`
+  - falta: Nada.
+- `*` **Cortar / mover / aparar a camada de cena na linha do tempo**
+  - motor: `lib/src/features/editor/domain/layer.dart:2652 (copyLayer com startTime/duration)`
+  - comando: `splitLayer (editor_controller.dart:4133), moveLayer (:3978), trimLayerStart (:3985), trimLayerEnd (:4092)`
+  - porta: `lib/src/features/editor/presentation/widgets/controles_da_camada.dart:1229 e visao_geral_das_camadas.dart:365`
+  - falta: Nada — mas a cena cortada nao reajusta os tempos dos cortes de camera (shots), que continuam em tempo local.
+- `*` **Keyframes da cena e das cameras aparecendo como marcas na barra da camada**
+  - motor: `lib/src/features/editor/domain/layer.dart:2599 (moduleTimesUs: nos, cameras, DOF, luzes e cortes)`
+  - comando: `NENHUM COMANDO (e leitura)`
+  - porta: `lib/src/features/editor/presentation/widgets/linha_do_tempo.dart (desenha as marcas de moduleTimesUs)`
+  - falta: Poder TOCAR nessas marcas para mover ou apagar o keyframe da cena; hoje elas so aparecem.
+- `*` **Criar uma cena 3D a partir do rastreio de camera de um video**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart (camadaDoRastreio)`
+  - comando: `criarCenaDoRastreio (editor_controller.dart:2874)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: Nada.
+- `o` **Por um nulo da cena num ponto rastreado (para pendurar coisas nele)**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart (noNoPonto)`
+  - comando: `criarNoDoPonto (editor_controller.dart:2898)`
+  - porta: `NENHUMA`
+  - falta: A nuvem de pontos rastreados desenhada no palco, com toque para escolher o ponto. O painel de rastreio cria a cena mas nao deixa escolher ponto nenhum.
+- `o` **Selecionar um objeto tocando na cena no palco**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:903 (RenderTri.nodeId — 'e o que permite tocar no preview e selecionar o objeto certo')`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um GestureDetector no palco que faca o teste de acerto por triangulo e passe selectedNodeId para Scene3DPainter (scene3d_painter.dart:226) / Scene3DGpuView (scene3d_gpu_view.dart:31). Hoje nenhum arquivo passa esse parametro: a caixa do selecionado nunca e desenhada e nada do grafo de cena e alcancavel.
+- `o` **Decidir se o dedo move a camada ou orbita a camera**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:585 (enum TouchIntent) e :587 (resolveTouch)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O gesto no palco. A funcao existe pronta e nao tem um chamador em todo o lib.
+- `o` **Orbitar a camera com o dedo (pivo fixado no inicio do gesto)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:600 (orbitCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Arrasto de um dedo no palco em modo de navegacao, gravando com editCameraMotion (scene_motion.dart:81), que tambem nao tem chamador.
+- `o` **Aproximar/afastar a camera com pinca (dolly, muda a perspectiva — nao e zoom de lente)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:646 (dollyCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Pinca no palco.
+- `o` **Deslocar a camera e o alvo juntos com dois dedos (pan)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:662 (panCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Arrasto de dois dedos no palco.
+- `o` **Editar um valor da cena sem criar keyframe indevido (a regra do keyframe explicito)**
+  - motor: `lib/src/features/editor/domain/scene_motion.dart:19 (editMotionValue) e :81 (editCameraMotion)`
+  - comando: `NENHUM COMANDO (nenhum metodo do controller chama editMotionValue nem editCameraMotion)`
+  - porta: `NENHUMA`
+  - falta: Qualquer controle de valor da cena precisa passar por aqui; como nenhum existe, a regra esta escrita e sem uso.
+- `*` **Criar um Elemento 3D solto na timeline (as mesmas 17 primitivas, fora da cena)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2196 (Element3DLayer)`
+  - comando: `addElement3DLayer (editor_controller.dart:1536)`
+  - porta: `lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:111`
+  - falta: Nada.
+- `*` **Cor do Elemento 3D solto**
+  - motor: `lib/src/features/editor/domain/layer.dart:2243 (color)`
+  - comando: `updateElement3D (editor_controller.dart:1550) com copyElement3D(color:)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_cor.dart:163`
+  - falta: Nada.
+- `o` **Tamanho do Elemento 3D solto (meia-extensao em px)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2241 (size)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, sem comando nomeado`
+  - porta: `NENHUMA`
+  - falta: Uma LinhaDeParametro 'Tamanho' no cartao do elemento 3D.
+- `o` **Tracar as arestas do Elemento 3D (look tecnico)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2246 (edges)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Arestas'.
+- `o` **Reflexo do ambiente no Elemento 3D (0..1)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2249 (reflect)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Qual ambiente o Elemento 3D reflete (7 predefinicoes)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2250 (environment)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Uma grade de sete chips.
+- `o` **Imagem vestindo o Elemento 3D (projecao de caixa)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2253 (imagePath)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Um seletor de imagem no cartao do elemento.
+- `o` **Modelo importado (OBJ/FBX) vestindo o Elemento 3D solto**
+  - motor: `lib/src/features/editor/domain/layer.dart:2257 (meshPath)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Um seletor de arquivo. Nem no elemento solto nem na cena ha caminho de importacao pela tela.
+- `o` **Material do Elemento 3D (0 solido, 1 brilhante, 2 vidro, 3 metal, 4 fosco)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2261 (material)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Uma grade de cinco chips.
+- `o` **Cores do degrade iridescente do material brilhante**
+  - motor: `lib/src/features/editor/domain/layer.dart:2264 (gradient)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Um editor de paradas de degrade (o painel de cor so escreve a cor lisa).
+- `o` **Brilho especular do Elemento 3D (tamanho do ponto de luz)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2267 (shininess)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `*` **Mundo 3D compartilhado: solidos vizinhos na pilha viram uma cena so, com profundidade compartilhada (um entra dentro do outro, o vidro deixa ver atras)**
+  - motor: `lib/src/features/editor/presentation/widgets/palco_de_previa.dart:394-427 (montagem da fila) e :970 (_mundoElegivel)`
+  - comando: `NENHUM COMANDO (e automatico pela vizinhanca na pilha)`
+  - porta: `lib/src/features/editor/presentation/widgets/palco_de_previa.dart:990 (_buildWorld3D)`
+  - falta: Um sinal na timeline dizendo quais camadas entraram no mesmo mundo, e por que uma ficou de fora (efeito, mascara, blend, estilo, matte ou vinculo a desqualificam em silencio).
+- `*` **Ligar/desligar o 3D de uma camada e sua posicao em Z dentro da composicao (o que faz a cena e o elemento conviverem com o resto)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2694 (is3D/positionZ herdados)`
+  - comando: `toggle3D (editor_controller.dart:6909), editPositionZ (editor_controller.dart:6923)`
+  - porta: `lib/src/features/editor/presentation/widgets/controles_da_camada.dart:1199 e painel_de_transformacao.dart:141`
+  - falta: Nada.
+
+### Correcoes do conferente (5)
+
+- **Transicao suave entre cameras em vez de corte seco (a anterior derrete na proxima)**
+  - afirmado: NENHUMA porta: nenhum arquivo em presentation chama setCameraShot (com o parametro nomeado transition)
+  - verdade: setCameraShot TEM porta: lib/src/features/editor/presentation/widgets/painel_da_cena.dart:105 chama c.setCameraShot(cena.id, local, cam.id) ao tocar numa camera da lista ("Cortar para <nome>"). O que continua sem porta e so o parametro nomeado `transition`, que a chamada nao passa — o corte gravado fica sempre com Duration.zero (editor_controller.dart:1669-1673).
+- **Posicao da camera em X, Y e Z (animavel)**
+  - afirmado: NENHUMA porta / NENHUM COMANDO direto (so escrito de lado por applyRigToScene:2029, frameSceneAll:2047, frameSceneNode:2184, applySavedView:2322, alignCameraToRender:2338)
+  - verdade: DOIS desses escritores de lado tem porta na UI: painel_da_cena.dart:135 chama c.applyRigToScene(cena.id, r) para os cinco rigs, e painel_da_cena.dart:144 chama c.frameSceneAll(cena.id) ("Enquadrar a cena inteira"). applyCameraRig (camera3d.dart:786) grava posX/posY/posZ com keyframes REAIS (orbita: 9 marcas em posX/posZ; dolly: posZ; camera na mao: 17 marcas em posX/posY; dolly zoom: pos nos tres eixos), e frameBounds (camera3d.dart:700) reescreve a base de posX/posY/posZ. Logo a posicao da camera E movida — e animada — pela interface; o que falta e um controle POR EIXO, nao qualquer porta.
+- **Ponto de interesse da camera em X, Y e Z (para onde ela olha)**
+  - afirmado: NENHUMA porta / NENHUM COMANDO direto (escrito por frameBounds/alignToView atraves de frameSceneAll, applySavedView, alignCameraToRender)
+  - verdade: O caminho por frameSceneAll tem porta: painel_da_cena.dart:144 ("Enquadrar a cena inteira") -> frameSceneAll (editor_controller.dart:2047) -> frameBounds (camera3d.dart:705-711), que grava poiX/poiY/poiZ quando a camera e twoNode. E o rig Orbita, na grade de painel_da_cena.dart:135, tambem grava poiX/poiY/poiZ (camera3d.dart:812-814). O ponto de interesse E escrito pela interface hoje.
+- **Rotacao separada da camera em X, Y e Z (aditiva, aceita varias voltas)**
+  - afirmado: NENHUMA porta / NENHUM COMANDO direto (so zerado por alignToView; rotY escrito pelo rig Tripe)
+  - verdade: O rig Tripe TEM porta: a grade de rigs em painel_da_cena.dart:135 aplica qualquer CameraRig, e CameraRig.tripod grava rotY com dois keyframes reais (-12 e +12 graus, camera3d.dart:823-828). Ou seja, a rotacao aditiva da camera e escrita e animada por um botao existente — falta o controle por eixo, nao a porta. (O resto do item procede: alignToView, que zera rotX/rotY/rotZ, esse sim nao tem chamador nenhum.)
+- **Distancia de foco**
+  - afirmado: NENHUMA porta: focusCameraOnNode (2160) e frameBounds (grava a distancia do enquadramento) nao sao chamados por presentation
+  - verdade: frameBounds E alcancado pela UI: painel_da_cena.dart:144 -> frameSceneAll (editor_controller.dart:2047) -> frameBounds, cuja ultima linha faz out.copyWith(dof: out.dof.copyWith(focusDistance: AnimatedDouble(dist))) (camera3d.dart:713-714). Tocar "Enquadrar a cena inteira" JA grava a distancia de foco medida do enquadramento. Correto apenas quanto a focusCameraOnNode, que segue com zero chamadores em todo lib/.
+
+---
+
+## Rastreio de camera 3D
+
+O motor de rastreio 3D esta completo e fechado de ponta a ponta (extrair quadros -> detectar cantos -> seguir pontos -> ler a cena -> essencial+RANSAC -> cheiralidade -> triangular -> ressecao/intersecao -> varredura de focal -> endireitar o mundo -> gravar), mas a UNICA porta na tela e o cartao "Rastrear a camera" (painel_de_rastreio.dart, alcancado por painel_da_camada.dart:196 so em VideoLayer). Esse painel expoe exatamente 4 comandos: escolher o modo, escolher o tipo de tomada, rastrear, e criar a cena (com ou sem nuvem). Tudo o mais e orfao. O buraco maior nao e um recurso solto, e um ANDAR INTEIRO: a nuvem de pontos existe, tem qualidade por ponto, plano ajustado, RANSAC de superficie, "definir o chao", "apagar pontos ruins", "re-solver sem reler o video" e "pousar nulo/solido/forma/texto na superficie" — e NENHUMA dessas linhas tem um pixel na tela. A pessoa consegue rastrear e criar a cena, mas nao consegue escolher onde pousar nada; a promessa do rastreio ("pouse um texto no chao do video") nunca fecha. Tres achados especificos: (1) CameraTrackService.load nunca e chamado por ninguem — a solucao e gravada em disco a cada rastreio e NUNCA relida, entao reabrir o projeto perde o resultado e obriga a esperar dezenas de segundos de novo; (2) editor_controller.criarNoDoPonto existe e nao tem chamador nenhum, e e o unico comando que consumiria a nuvem; (3) o painel reimplementa a qualidade em palavras (painel_de_rastreio.dart:168) e a lente em mm (linha 146) em vez de usar SolucaoCamera3D.qualidade e focalEmMilimetros, e ignora estrelas/pontosBons/qualidadeDoPonto, que sao a ficha de verdade. LeituraDaCena ("Tripe ou giro", "Cena quase plana", "Cena com profundidade") e calculada em todo rastreio e so serve para recusar — nunca aparece na tela. Nota de coerencia: TipoDeTomada.lenteFixa e zoomVariavel sao aceitos pela UI mas NAO mudam a conta em lugar nenhum do solver (so tripe curto-circuita, e o valor e guardado no JSON) — a tela promete um controle que o motor nao honra.
+
+- `*` **Rastrear a camera do video (o solve inteiro)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1300 (resolverCamera3D)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:72`
+  - falta: Nada: e o unico caminho fechado. So existe em VideoLayer, pelo cartao 'Rastrear a camera'.
+- `*` **Modo de analise: Rapido / Equilibrado / Preciso**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:377 (ModoDoSolve)`
+  - comando: `rastrearCamera3D(modo:) — editor_controller.dart:2838`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:104`
+  - falta: Nada.
+- `*` **Tipo de tomada: Detectar sozinho / Lente fixa / Zoom / Tripe**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:332 (TipoDeTomada)`
+  - comando: `rastrearCamera3D(tipoDeTomada:) — editor_controller.dart:2839`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:111`
+  - falta: A porta existe, mas lenteFixa e zoomVariavel nao mudam conta nenhuma no solver (so tripe recusa). Falta o motor honrar as duas, ou a tela parar de oferece-las.
+- `o` **Quadros por segundo lidos do video**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:396 (ModoDoSolve.fps)`
+  - comando: `rastrearCamera3D(fps:) — editor_controller.dart:2840`
+  - porta: `NENHUMA`
+  - falta: O parametro existe no comando e o painel nunca o passa: um deslizante 'quadros por segundo da analise' no modo avancado, ou aceitar que so o modo manda.
+- `o` **Quantos pontos seguir ao mesmo tempo**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:403 (ModoDoSolve.pontos) e camera_track_service.dart:91 (maximoDePontos)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O servico aceita maximoDePontos, o controller nem repassa. Falta um deslizante 'quantidade de pontos' (70..220) no painel avancado.
+- `o` **Teto de quadros lidos do clipe**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:412 (ModoDoSolve.maximoDeQuadros)`
+  - comando: `rastrearCamera3D (fixo pelo modo) — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nada visivel diz que um clipe longo e cortado em 120/240/400 quadros. Falta uma linha na ficha: 'analisou X de Y quadros'.
+- `o` **Rodadas de refinamento (pose e pontos alternados)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:419 (ModoDoSolve.refinos)`
+  - comando: `rastrearCamera3D (fixo pelo modo) — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Um passo 'refinar mais' depois do solve, que so aumenta refinos e chama resolverDeNovo — sem reler o video.
+- `o` **Distancia focal informada a mao (lente conhecida)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1306 (focalPx) e camera_track_service.dart:92`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O servico aceita focalPx e o controller nao repassa. Falta um campo 'lente (mm)' que pule a varredura de 14 candidatas e ancore o solve.
+- `o` **Varredura automatica da distancia focal**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1375-1414`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Roda sempre e sem aviso; sao 14 solves curtos e e a parte mais cara. Falta a etapa aparecer na barra ('Descobrindo a lente...') — hoje isso cai dentro de 'Reconstruindo o movimento'.
+- `o` **Extrair os quadros do trecho em cinza e a 240 px**
+  - motor: `lib/src/features/editor/application/tracking_service.dart:37 (grayFrames)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; o progresso desta fase (tracking_service.dart:80) nao chega ao painel, que so mostra o progresso do CameraTrackService.
+- `o` **Quadros coloridos do trecho, para a pessoa reconhecer a cena**
+  - motor: `lib/src/features/editor/application/tracking_service.dart:95 (quadrosParaMostrar)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Foi escrito para uma tela de escolher onde pousar o objeto que nunca existiu. Falta a tira de miniaturas do clipe com os pontos por cima.
+- `o` **Achar cantos bons (Shi-Tomasi, menor autovalor)**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:64 (forcaDeCanto)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nenhuma previa de 'onde ha textura para agarrar' antes de gastar o rastreio. Falta um botao 'ver os cantos deste quadro'.
+- `o` **Espalhar os pontos pelo quadro (supressao por distancia)**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:112 (detectarCantos, distanciaMinima)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: distanciaMinima chega fixa em 8 (camera_track_service.dart:130). Falta um controle 'espalhamento dos pontos' para filmagens com textura concentrada.
+- `o` **Seguir muitos pontos pela sequencia**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:207 (seguirPontos)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; e a etapa 'Achando e seguindo os pontos' da barra.
+- `o` **Repor pontos que morreram, para o travelling longo nao ficar sem nada**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:284 (reporAbaixoDe)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Automatico e sem knob. Nada na ficha diz quantos pontos nasceram no meio do clipe.
+- `o` **Matar o ponto que perdeu o alvo ou saiu pela borda**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:255-267 (semelhancaMinima 0.72)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Falta um deslizante 'rigor do rastreio' — em filmagem escura 0,72 mata quase tudo e o solve cai em 'poucos pontos' sem explicar por que.
+- `o` **Descartar ponto visto em poucos quadros**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:297 (duracaoMinima)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Chega fixo em 6 (camera_track_service.dart:131). Sem controle e sem aviso de quantos foram descartados.
+- `o` **Refino subpixel do casamento (parabola)**
+  - motor: `lib/src/features/editor/domain/pontos_seguidos.dart:175 (refinarSubpixel)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nada: e detalhe interno que nao pede controle.
+- `o` **Semelhanca entre pedacos de imagem (correlacao normalizada)**
+  - motor: `lib/src/features/editor/domain/tracker2d.dart:52 (ncc)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nada: peca de base.
+- `o` **Busca grosseira e depois fina do molde**
+  - motor: `lib/src/features/editor/domain/tracker2d.dart:90 (matchPatch, patch/busca)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: patch e busca sao fixos (7 e 16 no seguirPontos). Falta 'tamanho da janela de busca' para movimento rapido, que hoje simplesmente perde os pontos.
+- `o` **Ler que tipo de cena e (tripe / quase plana / com profundidade)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1288 (lerCena) e 353 (LeituraDaCena)`
+  - comando: `rastrearCamera3D — chamado em camera_track_service.dart:143`
+  - porta: `NENHUMA`
+  - falta: O resultado so serve para recusar; as tres palavras ('Tripe ou giro', 'Cena quase plana', 'Cena com profundidade') nunca aparecem. Falta uma linha na ficha, e principalmente um AVISO no caso quaseChata, que hoje resolve calado e sai fraco.
+- `o` **Medida de quanto uma transformacao plana explica o movimento**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1259 (residuoPlanoDaCena)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E o numero que decide se da rastreio, e ele nunca e mostrado. Falta um 'teste rapido: esta filmagem da rastreio?' antes de esperar dezenas de segundos.
+- `o` **Residuo de homografia entre dois quadros**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:624 (residuoDeHomografia)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Peca de base do teste acima; nao pede controle proprio.
+- `o` **Homografia de quatro pontos (DLT normalizado)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:574 (homografiaDePares)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `*` **Recusar a filmagem de tripe / giro no lugar**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1334 e 1344; camera_track_service.dart:148`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:77-81`
+  - falta: Nada: a recusa chega inteira na tela em 'Nao deu'. E o unico caminho de erro bem servido.
+- `*` **Recusar por falta de pontos / textura**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1311 (FalhaDoRastreio.poucosPontos)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:77-81`
+  - falta: Nada.
+- `*` **Recusar quando a conta nao fecha**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1367 e 1435 (naoConvergiu)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:82-84`
+  - falta: Nada, alem de a mensagem nao sugerir o que mudar (modo Preciso, outro trecho).
+- `o` **Escolher o par inicial pela qualidade, e nao pelo quadro zero**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:952 (_melhorPar) e 918 (_notaDoPar)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Nada de controle. Nada na ficha diz de quais dois quadros a cena nasceu, que e o que explica um solve ruim num clipe bom.
+- `o` **Matriz essencial de oito pontos**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:451 (essencialDePares)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `o` **Projetar na essencial valida (valores singulares 1,1,0)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:496 (projetarNaEssencial)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `o` **Decomposicao em valores singulares 3x3**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:518 (decomporEmValoresSingulares)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `o` **Essencial robusta por RANSAC (ignorar o ponto que escorregou)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:690 (essencialRobusta, tentativas/limiar/semente)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: tentativas e limiar sao fixos (400 e 2 px). Nada mostra quantos pares foram descartados como errados, que e a informacao que diz se a filmagem tinha muita coisa se mexendo.
+- `o` **As quatro poses possiveis de uma essencial**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:558 (posesDaEssencial)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `o` **Escolher a pose pela cheiralidade (pontos na frente das duas cameras)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:741 (escolherPorCheiralidade)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `o` **Triangular um ponto com duas ou mais vistas**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:643 (triangular)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `o` **Resseccao: descobrir a pose de um quadro pelos pontos conhecidos**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:778 (resolverPose, Gauss-Newton com Huber)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: iteracoes e huber sao fixos. Falta a ficha dizer quantos quadros ficaram SEM pose (linha 1106 descarta em silencio) — e isso e o que faz a camera 'pular' no meio.
+- `o` **Intersecao: retriangular os pontos com todos os quadros**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1113-1144`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Peca de base.
+- `*` **Teste do angulo de paralaxe (a camera realmente andou?)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1041-1058`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:77-81 (so a mensagem de recusa)`
+  - falta: O numero (mediana do angulo) nunca aparece; so o sim/nao. Falta um medidor de paralaxe na ficha.
+- `*` **Teste do percurso da camera contra o tamanho da cena**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1183-1223`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:77-81 (so a mensagem)`
+  - falta: Mesma coisa: 'a camera andou 3% do tamanho da cena' seria util e nao existe.
+- `o` **Por o mundo em pe (+Y para cima)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1458 (_arrumarMundo)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: E um palpite ('ninguem filma de lado'). Falta o corretivo: definirChao, que existe e nao tem porta (item abaixo).
+- `o` **Normalizar o tamanho do mundo (nuvem cabe em raio 350)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1503`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `NENHUMA`
+  - falta: Falta 'definir a escala' — dizer que aquela distancia entre dois pontos e 1 metro. Sem isso qualquer modelo importado entra no tamanho errado.
+- `o` **Definir o plano do chao e a origem por pontos escolhidos**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:1540 (definirChao)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O equivalente ao 'set ground plane and origin' do After Effects existe pronto e nao tem chamador em lugar nenhum do app. Falta: um metodo no controller que aplique definirChao e regrave com CameraTrackService.guardar, e uma tela que deixe tocar em tres pontos da nuvem.
+- `o` **Determinismo do solve (semente fixa)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:697 e plano_do_rastreio.dart:274`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e uma garantia, nao um controle.
+- `*` **Erro medio de reprojecao, em pixels**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:118 (erroPixels)`
+  - comando: `rastrearCamera3D — editor_controller.dart:2836`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:139`
+  - falta: Nada.
+- `o` **A qualidade do solve em palavras (Otimo/Bom/Aceitavel/Ruim)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:218 (SolucaoCamera3D.qualidade)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O painel reimplementa a mesma coisa com outros limiares em painel_de_rastreio.dart:168 e nunca chama o getter do dominio. Falta so trocar a chamada — duas escalas de qualidade divergindo e um bug esperando.
+- `o` **Nota de uma a cinco estrelas do solve**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:170 (estrelas)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Combina erro E quantidade de pontos (uma cena com 20 pontos e fragil mesmo com erro baixo) — exatamente o que o painel NAO mostra hoje. Falta uma fileira de estrelas na ficha.
+- `o` **Quantos pontos aguentam segurar um objeto**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:189 (pontosBons)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O painel mostra 'Pontos seguidos' (o bruto, antes do descarte) e nao os que sobreviveram. Falta a linha 'X pontos bons de Y seguidos'.
+- `o` **Erro de cada ponto, em pixels**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:130 (errosPorPonto)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Gravado no JSON e nunca lido pela tela. Falta pintar a nuvem colorida por erro.
+- `o` **Em quantos quadros cada ponto foi visto**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:134 (vistasPorPonto)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesma coisa: existe, e guardado, nao aparece.
+- `o` **Qualidade de um ponto (Excelente/Bom/Fraco/Ruim)**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:149 (qualidadeDoPonto) e 311 (QualidadeDoPonto)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Falta a lista/nuvem de pontos com o cracha de qualidade — e o que precede 'apagar os ruins'.
+- `o` **Listar os pontos de uma dada qualidade**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:160 (pontosDaQualidade)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E o 'selecionar todos os ruins' de um clique. Falta o botao, e o comando no controller.
+- `o` **Apagar pontos ruins e ver o erro melhorar (sem recalcular a camera)**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:315 (semPontos)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O 'delete bad tracks' esta escrito, e instantaneo e reversivel, e nao tem porta. Falta um comando no controller e a selecao de pontos na tela.
+- `o` **Resolver de novo sem reler o video (depois de apagar pontos ou trocar opcao)**
+  - motor: `lib/src/features/editor/application/camera_track_service.dart:189 (resolverDeNovo) e 55 (podeResolverDeNovo)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O servico guarda os rastros 2D em memoria justamente para isto (linha 49) e ninguem usa. Falta um comando no controller e o botao 'Resolver de novo' ao lado de 'Rastrear de novo' — a diferenca e de dezenas de segundos para quase nada.
+- `*` **Progresso e etapa nomeada da analise**
+  - motor: `lib/src/features/editor/application/camera_track_service.dart:38-40 e 260 (EtapaDoRastreio)`
+  - comando: `NENHUM COMANDO (notificadores lidos direto do servico)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:116 e 118`
+  - falta: Funciona, mas nao ha como CANCELAR: um rastreio de modo Preciso num clipe longo prende a pessoa ate o fim. Falta um botao de cancelar e o suporte a ele no servico.
+- `o` **Gravar a solucao em disco**
+  - motor: `lib/src/features/editor/application/camera_track_service.dart:244 (guardar)`
+  - comando: `NENHUM COMANDO (chamado de dentro do rastrear)`
+  - porta: `NENHUMA`
+  - falta: Grava certo e ninguem le de volta (ver o item seguinte) — hoje e escrita pura.
+- `o` **Reler do disco o rastreio ja feito**
+  - motor: `lib/src/features/editor/application/camera_track_service.dart:65 (load)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: NINGUEM chama load em lib inteiro. Ao reabrir o projeto o cache esta vazio, o painel mostra 'Rastrear a camera' como se nunca tivesse rastreado, e a pessoa paga os dezenas de segundos de novo — apesar de o JSON estar la. Falta chamar load ao abrir a camada (ou ao montar o painel).
+- `o` **Jogar fora a solucao guardada**
+  - motor: `lib/src/features/editor/application/camera_track_service.dart:234 (clear)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Falta 'apagar o rastreio' no painel — hoje so da para sobrescrever rastreando de novo.
+- `*` **Criar a cena 3D em cima do clipe, com a camera rastreada**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:168 (camadaDoRastreio)`
+  - comando: `criarCenaDoRastreio — editor_controller.dart:2874`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: Nada.
+- `*` **Criar a cena sem a nuvem de pontos (mais leve)**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:184 e 189 (comNuvem)`
+  - comando: `criarCenaDoRastreio(comNuvem: false) — editor_controller.dart:2877`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:159`
+  - falta: Nada — mas e um caminho so de ida: nao da para ligar/desligar a nuvem depois, so criar outra cena.
+- `*` **Camera com um keyframe de posicao e alvo por quadro analisado**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:52 (cameraDoRastreio)`
+  - comando: `criarCenaDoRastreio — editor_controller.dart:2874`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: Nada.
+- `*` **Giro (roll) da camera por quadro, para a cena nao entrar tombada**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:41 (giroDaPose)`
+  - comando: `criarCenaDoRastreio — editor_controller.dart:2874`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: Nada: entra junto com a camera.
+- `*` **Distancia focal da camera criada, em milimetros**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:32 (focalEmMilimetros)`
+  - comando: `criarCenaDoRastreio — editor_controller.dart:2874`
+  - porta: `NENHUMA (o painel recalcula a conta a mao em painel_de_rastreio.dart:146)`
+  - falta: So trocar a conta duplicada da linha 146 pela funcao do dominio.
+- `*` **Nuvem de pontos como um objeto instanciado na cena**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:125 (nuvemDoRastreio)`
+  - comando: `criarCenaDoRastreio — editor_controller.dart:2874`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: A nuvem aparece na cena mas nao e TOCAVEL: nao da para selecionar um ponto no palco. E o que trava todos os itens de plano e de nulo abaixo.
+- `*` **Entrar imediatamente acima do clipe rastreado (nao no topo da pilha)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2889-2891`
+  - comando: `criarCenaDoRastreio — editor_controller.dart:2874`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: Nada.
+- `o` **Por um nulo 3D num ponto rastreado**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:147 (noNoPonto)`
+  - comando: `criarNoDoPonto — editor_controller.dart:2898`
+  - porta: `NENHUMA`
+  - falta: O comando existe inteiro e nao tem chamador. Falta escolher o ponto: toque na nuvem no palco, ou uma lista de pontos ordenada por qualidade.
+- `o` **Ajustar um plano aos pontos escolhidos**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:129 (planoDosPontos)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Falta a selecao de pontos e um comando no controller que guarde o plano achado.
+- `o` **Achar sozinho a maior superficie da nuvem**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:237 (maiorPlano)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E o 'selecionei uns pontos e apareceu o alvo' automatico, pronto e sem porta. Falta um botao 'achar a superficie' depois do solve e o alvo desenhado no palco.
+- `o` **Dizer se e Chao, Parede ou Superficie inclinada**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:60 (tipo) e 109 (TipoDeSuperficie)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E o rotulo que faz a pessoa perceber na hora que escolheu a superficie errada. Falta a etiqueta em cima do alvo.
+- `o` **Avisar que aqueles pontos nao formam superficie nenhuma**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:52 (ehSuperficie) e 46 (espessura)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Falta o aviso 'isso nao e uma superficie' antes de deixar pousar um objeto num plano medio sem significado.
+- `o` **Tamanho da superficie achada**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:40 (tamanho)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Serve para desenhar o alvo do tamanho certo e para dimensionar o objeto; sem tela, nao serve para nada hoje.
+- `o` **Orientacao do plano em angulos de Euler do motor 3D**
+  - motor: `lib/src/features/editor/domain/plano_do_rastreio.dart:69 (orientacao) e 87 (anglesEmGraus)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E a conta que faz o objeto entrar deitado sem ninguem mexer em rotacao. Falta so quem a chame.
+- `o` **Pousar um objeto na superficie ja alinhado (nulo, solido, forma ou texto)**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:232 (noNoPlano) e 200 (ObjetoNoPlano)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E o ponto do rastreio inteiro — 'pouse um texto no chao do video' — e nao tem comando nem tela. Falta: um metodo no controller que receba plano+tipo e adicione o no na cena, e um menu de quatro opcoes depois de achar a superficie.
+- `o` **O objeto nasce no tamanho da superficie**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:242`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Depende do item acima existir.
+- `o` **O objeto pousa um pouco acima do plano para nao piscar**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:246 (alturinha)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Depende do item acima existir.
+- `o` **Usar uma camada como textura do objeto pousado**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:236 e 264 (textureLayerId)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E o caminho para 'projetar meu video/texto na parede rastreada'. Falta o seletor de camada.
+- `o` **Cor do objeto pousado**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:237 (cor)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Depende do item de pousar existir.
+- `o` **Pose da camera num quadro especifico**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:225 (poseDoQuadro)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada consulta a pose de um quadro; seria a base de 'mostrar a camera no palco' ou de checar um quadro suspeito.
+- `*` **Onde a camera esta / para onde olha / onde e o topo da imagem**
+  - motor: `lib/src/features/editor/domain/camera_solver3d.dart:57, 63, 71, 78 (posicao/frente/cima/direita)`
+  - comando: `criarCenaDoRastreio (consumido em cena_do_rastreio.dart:80-101)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152`
+  - falta: Nada de controle.
+- `o` **Analisar as regioes que se mexem no clipe (Blob Tracker)**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:431 (analyzeBlobs) e blob_track_service.dart:75`
+  - comando: `analyzeBlobsFor — editor_controller.dart:2712`
+  - porta: `NENHUMA`
+  - falta: O palco JA DESENHA as caixas quando ha analise (palco_de_previa.dart:3729), mas nada no app manda analisar — entao o efeito so mostra a simulacao do pintor, para sempre. Falta o botao 'Analisar' no painel do efeito.
+- `o` **Modo de deteccao das regioes: movimento, brilho, cor ou bordas**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:57 (BlobDetectBy) e 168 (detectionMask)`
+  - comando: `analyzeBlobsFor (le o parametro detect_by) — editor_controller.dart:2727`
+  - porta: `NENHUMA`
+  - falta: O parametro do efeito existe; falta o comando de analisar ter porta para que ele signifique alguma coisa.
+- `o` **Limiar e sensibilidade da deteccao de regioes**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:179 (corte)`
+  - comando: `analyzeBlobsFor — editor_controller.dart:2728-2729`
+  - porta: `NENHUMA`
+  - falta: Idem: so muda algo se houver como rodar a analise.
+- `o` **Area minima e maxima da regiao, e quantas regioes no maximo**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:64 (labelRegions, minArea/maxArea/maxBlobs)`
+  - comando: `analyzeBlobsFor — editor_controller.dart:2730-2732`
+  - porta: `NENHUMA`
+  - falta: Idem.
+- `o` **Fundir regioes vizinhas (a pessoa partida em tronco e pernas)**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:135 (mergeNearby)`
+  - comando: `analyzeBlobsFor — editor_controller.dart:2733`
+  - porta: `NENHUMA`
+  - falta: Idem.
+- `o` **Identidade estavel da regiao entre quadros (persistencia e suavizacao)**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:231 (BlobMatcher)`
+  - comando: `analyzeBlobsFor — editor_controller.dart:2734-2735`
+  - porta: `NENHUMA`
+  - falta: Idem.
+- `o` **Grudar uma camada numa regiao rastreada**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:370 (caminhoDe) + editor_controller.dart:2756 (grudarNoBlob)`
+  - comando: `grudarNoBlob — editor_controller.dart:2756`
+  - porta: `NENHUMA`
+  - falta: O comando esta inteiro (converte a caixa pela caixa da camada de video, respeita posicao/escala/giro) e nao tem chamador. Falta escolher a regiao: uma lista de blobs por duracao (blob_track.dart:345 idsPorDuracao, tambem sem uso) e o botao 'grudar esta camada aqui'.
+- `o` **Grudar acompanhando tambem o tamanho da regiao**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2761 (comEscala)`
+  - comando: `grudarNoBlob(comEscala: true) — editor_controller.dart:2761`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'acompanhar o tamanho' junto do botao acima.
+- `o` **Listar as regioes por quanto tempo duram**
+  - motor: `lib/src/features/editor/domain/blob_track.dart:345 (idsPorDuracao) e 358 (duracaoDe)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Escrito exatamente para a tela de escolher em que regiao grudar; a tela nunca existiu.
+- `o` **Jogar fora a analise de regioes**
+  - motor: `lib/src/features/editor/application/blob_track_service.dart:136 (clear)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Falta 'refazer a analise' no painel do efeito.
+- `o` **Reler do disco a analise de regioes ja feita**
+  - motor: `lib/src/features/editor/application/blob_track_service.dart:55 (load)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesmo defeito do rastreio 3D: grava e nunca le. Falta chamar load ao abrir o projeto/efeito.
+- `o` **Estabilizar: tirar o tremor da mao**
+  - motor: `lib/src/features/editor/domain/tracker2d.dart:192 (stabilizeOffsets) e 167 (smoothPath)`
+  - comando: `stabilizeLayer — editor_controller.dart:2916`
+  - porta: `NENHUMA`
+  - falta: O comando existe com janela e forca e nao tem chamador. Falta um botao 'Estabilizar' no cartao da camada de video, com deslizante de forca.
+- `o` **Ampliar o quanto basta para a estabilizacao nao mostrar borda preta**
+  - motor: `lib/src/features/editor/domain/tracker2d.dart:204 (stabilizeZoom)`
+  - comando: `stabilizeLayer — editor_controller.dart:2939`
+  - porta: `NENHUMA`
+  - falta: Depende do botao acima existir.
+- `o` **Reenquadrar sozinho (horizontal virando vertical seguindo o assunto)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2972 (autoReframeLayer) sobre tracker2d.dart:128 (trackSequence)`
+  - comando: `autoReframeLayer — editor_controller.dart:2972`
+  - porta: `NENHUMA`
+  - falta: Comando pronto, sem chamador. Falta o botao 'Reenquadrar' no cartao da camada de video.
+- `o` **Seguir um unico ponto pelo clipe**
+  - motor: `lib/src/features/editor/domain/tracker2d.dart:128 (trackSequence) e 34 (TrackPoint com confianca)`
+  - comando: `stabilizeLayer / autoReframeLayer — editor_controller.dart:2932 e 2985`
+  - porta: `NENHUMA`
+  - falta: So e usado de dentro dos dois comandos orfaos, sempre no CENTRO do quadro. Falta o rastreio de ponto escolhido pela pessoa (tocar no objeto), que e o uso obvio da peca.
+
+### Correcoes do conferente (34)
+
+- **Quadros por segundo lidos do video**
+  - afirmado: sem porta; comando rastrearCamera3D(fps:) — editor_controller.dart:2840
+  - verdade: TEM porta. lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:70-76 chama rastrearCamera3D com o modo escolhido; a taxa sai de `fps ?? modo.fps` (camera_track_service.dart:103, camera_solver3d.dart:396) e o valor ainda aparece na ficha 'Quadros: N a M qps' (painel_de_rastreio.dart:141). Cartao 'Rastrear a camera' em painel_da_camada.dart:196 -> controles_da_camada.dart:113 -> editor_screen.dart.
+- **Quantos pontos seguir ao mesmo tempo**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: `maximoDePontos ?? modo.pontos` (camera_track_service.dart:104 e 129, camera_solver3d.dart:403), e o seletor Modo (Rapido/Equilibrado/Preciso) esta em painel_de_rastreio.dart:100-105, que manda o modo para rastrearCamera3D na linha 72. E o mesmo caso que o mapeamento aceitou em 'Teto de quadros' e 'Rodadas de refinamento'.
+- **Teto de quadros lidos do clipe**
+  - afirmado: sem porta; rastrearCamera3D (fixo pelo modo) — editor_controller.dart:2836
+  - verdade: TEM porta: o seletor Modo em painel_de_rastreio.dart:100-105 fixa modo.maximoDeQuadros (camera_solver3d.dart:412), usado em camera_track_service.dart:111 na chamada disparada pelo botao 'Rastrear a camera' (painel_de_rastreio.dart:122-129).
+- **Rodadas de refinamento (pose e pontos alternados)**
+  - afirmado: sem porta; rastrearCamera3D (fixo pelo modo) — editor_controller.dart:2836
+  - verdade: TEM porta: modo.refinos (camera_solver3d.dart:419) entra em resolverCamera3D via camera_track_service.dart:172 (`rodadasDeRefino: modo.refinos`), e o modo vem do seletor em painel_de_rastreio.dart:100-105.
+- **Varredura automatica da distancia focal**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: painel_de_rastreio.dart:72 chama rastrearCamera3D sem focalPx, entao a varredura roda em resolverCamera3D (camera_solver3d.dart:1300+), e o resultado aparece na ficha 'Lente ... mm' (painel_de_rastreio.dart:144-147).
+- **Extrair os quadros do trecho em cinza e a 240 px**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: TrackingService.grayFrames e chamado em camera_track_service.dart:105, dentro do rastrear que painel_de_rastreio.dart:72 dispara.
+- **Achar cantos bons (Shi-Tomasi, menor autovalor)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: forcaDeCanto/detectarCantos (pontos_seguidos.dart:64 e 112) rodam dentro de seguirPontos (camera_track_service.dart:127), disparado por painel_de_rastreio.dart:72.
+- **Espalhar os pontos pelo quadro (supressao por distancia)**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: a supressao por distancia esta em detectarCantos (pontos_seguidos.dart:139-163) e o parametro `distanciaMinima: 8` e passado em camera_track_service.dart:130, dentro do rastrear chamado por painel_de_rastreio.dart:72.
+- **Seguir muitos pontos pela sequencia**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: seguirPontos (pontos_seguidos.dart:207) e chamado em camera_track_service.dart:127, dentro do rastrear que painel_de_rastreio.dart:72 dispara.
+- **Repor pontos que morreram, para o travelling longo nao ficar sem nada**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: a reposicao (`semear`) esta em pontos_seguidos.dart:278-287, dentro de seguirPontos, que camera_track_service.dart:127 chama no rastrear disparado por painel_de_rastreio.dart:72.
+- **Matar o ponto que perdeu o alvo ou saiu pela borda**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: os dois cortes (semelhanca abaixo do minimo e borda) estao em pontos_seguidos.dart:248-263, dentro de seguirPontos, chamado no rastrear (camera_track_service.dart:127) que o painel dispara.
+- **Descartar ponto visto em poucos quadros**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: o filtro `p.duracao >= duracaoMinima` esta em pontos_seguidos.dart:296-299 e o valor `duracaoMinima: 6` e passado em camera_track_service.dart:131, dentro do rastrear chamado por painel_de_rastreio.dart:72.
+- **Refino subpixel do casamento (parabola)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: refinarSubpixel (pontos_seguidos.dart:175) roda em seguirPontos (pontos_seguidos.dart:268), dentro do rastrear disparado por painel_de_rastreio.dart:72.
+- **Semelhanca entre pedacos de imagem (correlacao normalizada)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: ncc (tracker2d.dart:52) e usado por matchPatch/refinarSubpixel dentro de seguirPontos, no caminho do rastrear que painel_de_rastreio.dart:72 dispara.
+- **Busca grosseira e depois fina do molde**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: matchPatch faz os dois passes (`for (final passo in const [3, 1])`, tracker2d.dart:90-110) e e chamado por seguirPontos (pontos_seguidos.dart:241), dentro do rastrear disparado pelo painel.
+- **Ler que tipo de cena e (tripe / quase plana / com profundidade)**
+  - afirmado: sem porta; rastrearCamera3D — chamado em camera_track_service.dart:143
+  - verdade: TEM porta: painel_de_rastreio.dart:72 dispara o rastrear que chama lerCena (camera_track_service.dart:143); a recusa de tripe volta como RastreioException e e MOSTRADA em painel_de_rastreio.dart:77-84 e 130-133, e o tipo de tomada aparece na ficha 'Tomada' (linha 143) alem do seletor nas linhas 107-112.
+- **Medida de quanto uma transformacao plana explica o movimento**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: residuoPlanoDaCena (camera_solver3d.dart:1259) e chamado por lerCena (camera_solver3d.dart:1294), que roda em todo rastrear (camera_track_service.dart:143) disparado por painel_de_rastreio.dart:72.
+- **Residuo de homografia entre dois quadros**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: residuoDeHomografia (camera_solver3d.dart:624) e chamado em residuoPlanoDaCena (linha 1276), dentro de lerCena, no rastrear que o painel dispara.
+- **Homografia de quatro pontos (DLT normalizado)**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: homografiaDePares (camera_solver3d.dart:574) e chamado por residuoDeHomografia (linha 625), dentro do caminho lerCena -> rastrear -> painel_de_rastreio.dart:72.
+- **Escolher o par inicial pela qualidade, e nao pelo quadro zero**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: _notaDoPar (camera_solver3d.dart:918) roda dentro de resolverCamera3D, chamado em camera_track_service.dart:165, no rastrear disparado por painel_de_rastreio.dart:72.
+- **Matriz essencial de oito pontos**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: essencialDePares (camera_solver3d.dart:451) roda em _resolverComFocal dentro de resolverCamera3D, chamado no rastrear que o painel dispara (painel_de_rastreio.dart:72).
+- **Projetar na essencial valida (valores singulares 1,1,0)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: projetarNaEssencial (camera_solver3d.dart:496) roda dentro de resolverCamera3D, no rastrear disparado por painel_de_rastreio.dart:72.
+- **Decomposicao em valores singulares 3x3**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: a SVD 3x3 e usada por projetarNaEssencial/posesDaEssencial dentro de resolverCamera3D, no rastrear disparado por painel_de_rastreio.dart:72.
+- **Essencial robusta por RANSAC (ignorar o ponto que escorregou)**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA comando e HA porta: essencialRobusta (camera_solver3d.dart:690) e chamada em _resolverComFocal (camera_solver3d.dart:1015), dentro de resolverCamera3D -> camera_track_service.dart:165 -> painel_de_rastreio.dart:72.
+- **As quatro poses possiveis de uma essencial**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: posesDaEssencial (camera_solver3d.dart:558) roda dentro de resolverCamera3D, no rastrear disparado pelo painel (painel_de_rastreio.dart:72).
+- **Escolher a pose pela cheiralidade (pontos na frente das duas cameras)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: escolherPorCheiralidade (camera_solver3d.dart:742) roda dentro de resolverCamera3D, no rastrear disparado por painel_de_rastreio.dart:72.
+- **Triangular um ponto com duas ou mais vistas**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: triangular (camera_solver3d.dart:643) roda dentro de resolverCamera3D, no rastrear disparado por painel_de_rastreio.dart:72.
+- **Resseccao: descobrir a pose de um quadro pelos pontos conhecidos**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: a resseccao esta em _resolverComFocal (camera_solver3d.dart, etapa 5 do cabecalho na linha 31), dentro de resolverCamera3D chamado em camera_track_service.dart:165, disparado por painel_de_rastreio.dart:72.
+- **Intersecao: retriangular os pontos com todos os quadros**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: a intersecao esta em camera_solver3d.dart:1113 ('intersecao: retriangula com TODAS as vistas'), dentro de resolverCamera3D, no rastrear disparado pelo painel.
+- **Por o mundo em pe (+Y para cima)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: _arrumarMundo (camera_solver3d.dart:1458) e aplicado no fim de resolverCamera3D (linhas 1372 e 1440), no rastrear disparado por painel_de_rastreio.dart:72.
+- **Normalizar o tamanho do mundo (nuvem cabe em raio 350)**
+  - afirmado: sem porta; rastrearCamera3D — editor_controller.dart:2836
+  - verdade: TEM porta: a escala `350 / raio` esta em _arrumarMundo (camera_solver3d.dart:1503), aplicado em todo resolverCamera3D disparado pelo painel.
+- **Determinismo do solve (semente fixa)**
+  - afirmado: NENHUM COMANDO
+  - verdade: HA porta: a semente fixa (math.Random(semente ?? 20260907), camera_solver3d.dart:697) vale em toda chamada de essencialRobusta feita por resolverCamera3D — ou seja, em todo rastreio disparado por painel_de_rastreio.dart:72. So o override do parametro `semente` continua sem porta.
+- **A qualidade do solve em palavras (Otimo/Bom/Aceitavel/Ruim)**
+  - afirmado: NENHUM COMANDO
+  - verdade: A pessoa VE a qualidade em palavras: a ficha 'Qualidade' em painel_de_rastreio.dart:140 mostra 'Gruda (abaixo de 1 px)/Boa/Aceitavel/Escorrega' pela funcao _qualidade (linha 168). O que segue sem chamador e o getter SolucaoCamera3D.qualidade (camera_solver3d.dart:218) — o painel reimplementou com outras palavras em vez de usa-lo.
+- **Gravar a solucao em disco**
+  - afirmado: NENHUM COMANDO (chamado de dentro do rastrear)
+  - verdade: HA porta pelo mesmo caminho dos demais passos: guardar() (camera_track_service.dart:244) roda no fim de rastrear (linha 178), e rastrear e disparado por painel_de_rastreio.dart:72 — toda vez que a pessoa toca 'Rastrear a camera' a solucao e gravada. (Reler do disco e descartar, esses sim, continuam sem chamador.)
+
+---
+
+## Animacao e keyframes da cena 3D
+
+A cena 3D tem 31 trilhas AnimatedDouble (7 por no, 1 por luz, 13 na camera, 10 na profundidade de campo). TODAS aceitam keyframe, curva por trecho, loop e expressao, e TODAS sao gravadas e lidas no arquivo (_ad/_asAd em project_store.dart). Nenhuma delas tem diamante, editor de curva ou trilha na linha do tempo: o unico painel da dimensao (painel_da_cena.dart) tem 8 botoes, e apenas UM deles (Rigs) produz keyframe. O arquivo scene_motion.dart — que existe justamente para ser o ponto unico de edicao de trilha da cena (editMotionValue, editCameraMotion, mapNodeMotion, nodeMotionTracks, cameraMotionTracks, mapCameraMotion) — nao e importado por NENHUM arquivo de lib/: o unico import esta em test/scene_motion_authoring_test.dart. O mesmo vale para sceneLocalDelta (scene3d.dart:1229). O editor de curva (editor_de_curva.dart) e generico, mas so e aberto de dois lugares (controles_da_camada.dart:294 para LayerProp e painel_de_cor.dart:62): NAO alcanca nenhuma trilha 3D. Nao existe toggleKeyframe, moverKeyframe nem apagarKeyframe para cena 3D — o toggleKeyframe do controller (4649) so cobre LayerProp da camada da composicao. Como keyframe 3D nasce hoje: so por gerador (applyRigToScene, addOrbitRig, cameraDoRastreio) ou por template em codigo. Como se apaga: nao se apaga — nao ha comando. Nao ha nenhum interruptor de keyframe automatico (o autoKeyframeProvider foi removido; ver comentario em editor_controller.dart:62). DOIS DEFEITOS ENCONTRADOS: setCameraFocalLength (1598) escreve `AnimatedDouble(v)` cru, apagando os keyframes de lente que o rig Dolly zoom acabou de criar — e o slider de lente esta na tela (painel_da_cena.dart:86); frameBounds (camera3d.dart:713) faz o mesmo com a distancia de foco. Alem disso orbitCamera/dollyCamera/panCamera/resolveTouch (camera3d.dart:585-680) nao tem chamador nenhum em lib/: navegar a camera 3D com o dedo nao existe no app.
+
+- `o` **Posicao X do objeto 3D (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:472`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico, recebe uma funcao SceneNode->SceneNode; nenhum comando dedicado escreve x nem marca keyframe nele. Unico escritor real: addSceneNode (1970), que so define o valor de nascimento.`
+  - porta: `NENHUMA`
+  - falta: Uma linha de parametro 'Posicao X' no painel da cena, com campo de valor e diamante de keyframe, chamando um setSceneNodeX(cenaId, noId, tempo, valor) que passe por editMotionValue.
+- `o` **Posicao Y do objeto 3D (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:473`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Mesma linha de parametro do X, no mesmo bloco de transformacao do no.
+- `o` **Posicao Z (profundidade) do objeto 3D**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:474`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Mesma linha de parametro; e o eixo que so existe em 3D e o unico que a tela nunca ofereceu.
+- `o` **Giro X do objeto 3D (inclinar)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:475`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Um dial de angulo (dial_de_angulo.dart ja existe) por eixo, com diamante.
+- `o` **Giro Y do objeto 3D (girar)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:476`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico. addOrbitRig (editor_controller.dart:1841) escreve dois keyframes (0 e 360) neste campo, mas so num nulo novo chamado 'Orbita'.`
+  - porta: `NENHUMA`
+  - falta: Dial de angulo com diamante; e o giro mais pedido (logo girando) e hoje so chega por rig.
+- `o` **Giro Z do objeto 3D (rolar)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:477`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Dial de angulo com diamante.
+- `o` **Escala do objeto 3D**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:478`
+  - comando: `updateSceneNode (editor_controller.dart:1986) — generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Um slider de escala com diamante. Hoje nem o valor fixo tem controle.
+- `o` **Intensidade da luz (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:266`
+  - comando: `updateSceneLight (editor_controller.dart:2073) — generico, recebe Light3D->Light3D; NENHUM COMANDO dedicado escreve intensity`
+  - porta: `NENHUMA`
+  - falta: Uma lista de luzes no painel da cena com slider de intensidade e diamante — acender e apagar uma luz no tempo e o unico jeito de fazer luz piscar, e nao existe tela.
+- `*` **Posicao X da camera 3D**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:347`
+  - comando: `updateScene3DCamera (1579) e updateSceneCameraById (1609), ambos genericos. Escritores reais: applyRigToScene (2029, keyframes), frameSceneAll (2047), frameSceneNode (2184), applySavedView (2322), alignCameraToRender (2338), alignCameraToCurrentView (2348) — todos escrevem valor base, nao keyframe.`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135 (applyRigToScene) e :144 (frameSceneAll)`
+  - falta: Linha de parametro 'Posicao' da camera com os tres eixos e diamante; hoje so um rig inteiro escreve keyframe aqui, e nao ha como corrigir um valor depois.
+- `*` **Posicao Y da camera 3D**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:348`
+  - comando: `updateScene3DCamera (1579) generico; applyRigToScene (2029) escreve keyframes so no rig 'Camera na mao'; frameSceneAll (2047) e alignCameraToRender (2338) escrevem base`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Mesma linha de parametro da posicao, com diamante por eixo.
+- `*` **Posicao Z da camera 3D**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:349`
+  - comando: `updateScene3DCamera (1579) generico; applyRigToScene (2029) escreve keyframes nos rigs Dolly e Dolly zoom`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Mesma linha de parametro; e a aproximacao (perspectiva), diferente do zoom.
+- `*` **Ponto de interesse X (para onde a camera olha)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:352`
+  - comando: `updateScene3DCamera (1579) generico; frameSceneAll (2047), frameSceneNode (2184), applySavedView (2322), alignCameraToRender (2338) escrevem base; applyRigToScene (2029, orbita) escreve valor fixo`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135 e :144`
+  - falta: Linha de parametro 'Olha para' com tres eixos e diamante — animar o alvo e o que faz a camera acompanhar a acao.
+- `*` **Ponto de interesse Y**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:353`
+  - comando: `updateScene3DCamera (1579) generico; mesmos escritores de base do POI X`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: Mesma linha de parametro do alvo.
+- `*` **Ponto de interesse Z**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:354`
+  - comando: `updateScene3DCamera (1579) generico; mesmos escritores de base do POI X`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: Mesma linha de parametro do alvo.
+- `o` **Orientacao X da camera (caminho curto, pitch)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:358`
+  - comando: `updateScene3DCamera (1579) generico; alignToView via alignCameraToRender (2338) e alignCameraToCurrentView (2348) escrevem AnimatedDouble cru (apaga keyframes)`
+  - porta: `NENHUMA`
+  - falta: Dial de angulo com diamante, separado da rotacao aditiva — o dominio distingue os dois de proposito (camera3d.dart:356-357) e a tela nao mostra nenhum.
+- `o` **Orientacao Y da camera (yaw)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:359`
+  - comando: `updateScene3DCamera (1579) generico; alignCameraToRender (2338) escreve AnimatedDouble cru`
+  - porta: `NENHUMA`
+  - falta: Dial de angulo com diamante.
+- `o` **Orientacao Z da camera (roll / inclinacao do horizonte)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:360`
+  - comando: `updateScene3DCamera (1579) generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Dial de roll com diamante. O motor ja gira o vetor 'para cima' corretamente (renderAt, camera3d.dart:424-432) e ninguem consegue pedir isso.
+- `o` **Rotacao X da camera (aditiva, aceita varias voltas)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:361`
+  - comando: `updateScene3DCamera (1579) generico; alignToView zera este campo; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Dial de angulo com diamante, no bloco 'Rotacao' separado do bloco 'Orientacao'.
+- `*` **Rotacao Y da camera (panoramica de varias voltas)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:362`
+  - comando: `applyRigToScene (editor_controller.dart:2029) — o rig Tripe escreve dois keyframes (-12 a +12 graus) neste campo`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Dial de angulo com diamante para editar os graus depois de aplicar o Tripe — hoje o rig e o unico valor possivel.
+- `o` **Rotacao Z da camera (roll aditivo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:363`
+  - comando: `updateScene3DCamera (1579) generico; NENHUM COMANDO dedicado`
+  - porta: `NENHUMA`
+  - falta: Dial de roll com diamante.
+- `*` **Distancia focal / lente da camera (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:365`
+  - comando: `setCameraFocalLength (editor_controller.dart:1598) — ATENCAO: escreve `AnimatedDouble(v)` cru, o que APAGA todos os keyframes de lente. applyRigToScene (2029) escreve dois keyframes no rig Dolly zoom, e mexer no slider depois destroi o rig.`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:86 e :88`
+  - falta: O controle ja existe (slider + digitacao); falta o diamante ao lado dele e trocar o `AnimatedDouble(v)` por editMotionValue/withBase para nao apagar a animacao.
+- `*` **Distancia de foco da profundidade de campo**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:87`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160) — usa withBase, preserva keyframes. frameBounds (camera3d.dart:713, via frameSceneAll/frameSceneNode) escreve AnimatedDouble cru e APAGA os keyframes de foco.`
+  - porta: `NENHUMA (frameSceneAll chega da painel_da_cena.dart:144, mas so como efeito colateral do enquadrar)`
+  - falta: Uma linha 'Foco' com slider, diamante e o botao 'Focar no selecionado' — puxar foco de um objeto para outro e a jogada mais basica de camera e nao ha porta nenhuma.
+- `o` **Abertura da iris (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:88`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider de abertura com diamante num bloco 'Profundidade de campo' — junto com o interruptor `enabled`, que tambem nao tem comando.
+- `o` **Nivel de desfoque (multiplicador artistico 0..200%)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:91`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante no mesmo bloco de profundidade de campo.
+- `o` **Giro da iris (orientacao do bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:95`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Dial de angulo com diamante, dentro de um sub-bloco 'Iris' recolhido por padrao.
+- `o` **Arredondamento das laminas da iris (-100 a 100)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:98`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante no sub-bloco 'Iris'.
+- `o` **Proporcao da iris (bokeh oval / anamorfico)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:101`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante no sub-bloco 'Iris'.
+- `o` **Franja de difracao**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:102`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante no sub-bloco 'Iris'.
+- `o` **Ganho de realce (o que faz o ponto de luz virar bola de bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:105`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante — o proprio comentario do dominio diz que sem ele 'luz fora de foco vira borrao cinza'.
+- `o` **Limiar de realce**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:106`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante, ao lado do ganho.
+- `o` **Saturacao do realce**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:107`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider com diamante, ao lado do ganho.
+- `o` **Marcar um keyframe numa trilha da cena 3D**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:600 (AnimatedDouble.withKeyframe)`
+  - comando: `NENHUM COMANDO — o toggleKeyframe do controller (editor_controller.dart:4649) so aceita LayerProp (transformacao da camada da composicao), nunca uma trilha da cena`
+  - porta: `NENHUMA`
+  - falta: Um diamante por trilha 3D (o mesmo AlvoDoRail de controles_da_camada.dart:288) ligado a um toggleSceneKeyframe(cenaId, alvo, trilha, tempo).
+- `o` **Tirar um keyframe de uma trilha da cena 3D**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:611 (AnimatedDouble.withoutKeyframe)`
+  - comando: `NENHUM COMANDO — apagarKeyframeDeTransformacao (editor_controller.dart:4588) so mexe nas trilhas da Layer`
+  - porta: `NENHUMA`
+  - falta: O mesmo diamante, que ja e um interruptor: com keyframe no instante, tira. Hoje um rig aplicado por engano nao tem como ser desfeito a nao ser pelo Desfazer.
+- `o` **Mover um keyframe 3D no tempo**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:611+600 (withoutKeyframe + withKeyframe, o par que moverKeyframeDeTransformacao usa em editor_controller.dart:4563)`
+  - comando: `NENHUM COMANDO para cena 3D`
+  - porta: `NENHUMA`
+  - falta: Uma trilha da cena na linha do tempo com os losangos arrastaveis — hoje a linha do tempo so pinta a camada de cena de uma cor (linha_do_tempo.dart:24).
+- `o` **Editar um valor da cena sem criar keyframe (a regra do keyframe explicito)**
+  - motor: `lib/src/features/editor/domain/scene_motion.dart:15 (editMotionValue) e lib/src/features/editor/domain/keyframe.dart:643 (AnimatedDouble.edited)`
+  - comando: `NENHUM COMANDO — editMotionValue nao e importado por nenhum arquivo de lib/; o unico import esta em test/scene_motion_authoring_test.dart:5`
+  - porta: `NENHUMA`
+  - falta: Que os comandos de valor da cena (a comecar por setCameraFocalLength) passem por aqui em vez de escrever AnimatedDouble cru — sem isso, mexer no valor apaga a animacao.
+- `o` **Saber se a trilha 3D aceita edicao neste instante (trava do valor congelado)**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:653 (aceitaEdicaoEm)`
+  - comando: `NENHUM COMANDO para trilha 3D`
+  - porta: `NENHUMA`
+  - falta: O slider da cena precisa ficar cinza (ou o diamante piscar) quando a trilha esta animada e o playhead nao esta em cima de um keyframe.
+- `o` **Percorrer as 7 trilhas de um no de uma vez (mapear/somar/inverter)**
+  - motor: `lib/src/features/editor/domain/scene_motion.dart:21 (nodeMotionTracks) e :31 (mapNodeMotion)`
+  - comando: `NENHUM COMANDO — arquivo nao importado por lib/`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Marcar keyframe em tudo' no cabecalho do no, que e exatamente o que mapNodeMotion serve para fazer.
+- `o` **Percorrer as 13 trilhas da camera de uma vez**
+  - motor: `lib/src/features/editor/domain/scene_motion.dart:44 (cameraMotionTracks) e :60 (mapCameraMotion)`
+  - comando: `NENHUM COMANDO — arquivo nao importado por lib/`
+  - porta: `NENHUMA`
+  - falta: Um diamante mestre da camera (marca posicao, alvo, orientacao e lente juntos), como o toggleKeyframe universal do efeito (editor_controller.dart:4927).
+- `o` **Navegar a camera gravando SO o que mudou (preserva keys antes e depois)**
+  - motor: `lib/src/features/editor/domain/scene_motion.dart:81 (editCameraMotion)`
+  - comando: `NENHUM COMANDO — arquivo nao importado por lib/`
+  - porta: `NENHUMA`
+  - falta: E a funcao que faltava ligar entre o gesto no palco e a camera: sem ela, qualquer navegacao sobrescreve a animacao inteira em vez de cravar um keyframe no instante.
+- `o` **Converter um arrasto do mundo para o espaco do pai (arrastar filho de nulo girado)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1229 (sceneLocalDelta)`
+  - comando: `NENHUM COMANDO — so chamado em test/scene_motion_authoring_test.dart:79`
+  - porta: `NENHUMA`
+  - falta: Alcas de arrasto no palco para o no selecionado da cena; sem isto, arrastar um objeto pendurado num nulo girado o mandaria para o lado errado.
+- `o` **Curva (easing) do trecho entre dois keyframes 3D**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:664 (withEase) e :656 (easeAt)`
+  - comando: `NENHUM COMANDO — setSegmentEase (editor_controller.dart:4708) so cobre LayerProp`
+  - porta: `NENHUMA`
+  - falta: Abrir o EditorDeCurva (editor_de_curva.dart:72) a partir de uma trilha 3D: ele ja e generico (recebe um callback), so falta quem o abra — hoje so controles_da_camada.dart:294 e painel_de_cor.dart:62 o abrem.
+- `o` **Aplicar a mesma curva a TODOS os trechos de uma trilha 3D**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:675 (withEaseAll)`
+  - comando: `NENHUM COMANDO — applyEaseToAllSegments (editor_controller.dart:4756) so cobre LayerProp`
+  - porta: `NENHUMA`
+  - falta: O botao 'vale para todos' do rail do editor de curva (editor_de_curva.dart:107), quando o alvo for uma trilha da cena.
+- `o` **Tipos de curva nao-bezier em trilha 3D (quica, elastico, mola, passos, ciclico, aleatorio)**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:9 (EasingType) e :97 (Easing.transform)`
+  - comando: `NENHUM COMANDO para cena 3D`
+  - porta: `NENHUMA`
+  - falta: O rail de presets do editor de curva ja tem os sete (editor_de_curva.dart:38); falta so a trilha 3D poder ser o alvo.
+- `o` **Loop de keyframes de uma trilha 3D (ciclo, ping-pong, deslocado, continuar)**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:365 (LoopSpec) e :597 (withLoop)`
+  - comando: `NENHUM COMANDO — setPropertyLoop (editor_controller.dart:1411) so cobre LayerProp`
+  - porta: `NENHUMA`
+  - falta: Um seletor de loop na trilha 3D. Dois keyframes de giro Y em ciclo dariam um objeto girando para sempre sem encher a linha do tempo — o motor ja faz isso e nao ha porta.
+- `o` **Expressao numa trilha 3D (value/time, contrato do After Effects)**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:493 (expression) e :593 (withExpression)`
+  - comando: `NENHUM COMANDO — setExpression (editor_controller.dart:1381) so cobre as trilhas da Layer`
+  - porta: `NENHUMA`
+  - falta: Campo de expressao na linha de parametro 3D. E o caminho para 'wiggle' de camera sem keyframe nenhum.
+- `o` **Inverter no tempo a animacao de uma trilha 3D**
+  - motor: `lib/src/features/editor/domain/keyframe.dart:685 (reversedInTime)`
+  - comando: `NENHUM COMANDO — reverseProperty (editor_controller.dart:1444) so cobre LayerProp`
+  - porta: `NENHUMA`
+  - falta: Item 'Inverter' no menu da trilha 3D.
+- `o` **Rig de orbita interno (nulo 3D + volta completa em Y, com keyframes reais)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:1841 (addOrbitRig)`
+  - comando: `addOrbitRig`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Orbita' no bloco de nos do painel da cena. Ele e diferente do rig de camera: cria o nulo, parenteia a camera nele e anima 0->360.
+- `*` **Rig de camera Orbita (8 keyframes de posicao numa volta)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:786 (applyCameraRig, caso orbit)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Nada para aplicar; falta poder ajustar o raio e a duracao (hoje vem de sceneBounds e da duracao da camada) e ver os 9 keyframes gerados.
+- `*` **Rig de camera Tripe (panoramica sem paralaxe)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:786 (applyCameraRig, caso tripod)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Um controle de intensidade — o parametro `intensity` de applyCameraRig existe e o comando nunca o repassa (fica sempre 1).
+- `*` **Rig de camera Dolly (aproximacao em Z)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:786 (applyCameraRig, caso dolly)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Controle de intensidade e de sentido (entra ou sai); hoje so entra 60% do raio.
+- `*` **Rig de camera na mao (17 keyframes de tremor deterministico)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:786 (applyCameraRig, caso handheld)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Slider de intensidade do tremor — o parametro existe no dominio e o comando nao o expoe.
+- `*` **Rig Dolly zoom (posicao e lente em oposicao, o efeito vertigo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:786 (applyCameraRig, caso dollyZoom)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Aviso (ou correcao) de que mexer no slider de lente logo depois apaga os keyframes de focalLength que este rig acabou de escrever.
+- `*` **Camera com keyframes vindos do rastreio (um keyframe por quadro analisado)**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:52 (cameraDoRastreio)`
+  - comando: `criarCenaDoRastreio (editor_controller.dart:2874)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152 e :159`
+  - falta: Nada para criar; falta poder ver e limpar essa animacao depois (pode ter centenas de keyframes em posX/posY/posZ/poiX/poiY/poiZ e roll, e nao ha trilha na tela).
+- `o` **Nulo num ponto rastreado, para pendurar objetos animados**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart (noNoPonto, chamado em editor_controller.dart:2899)`
+  - comando: `criarNoDoPonto (editor_controller.dart:2898)`
+  - porta: `NENHUMA`
+  - falta: Toque num ponto da nuvem no painel de rastreio que chame criarNoDoPonto — o comando existe e ninguem o chama.
+- `*` **Corte de camera num instante (tomada)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:17 (CameraShot) e :79 (shotAt)`
+  - comando: `setCameraShot (editor_controller.dart:1669)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:105`
+  - falta: Nada para cortar no playhead; falta ver as tomadas ja marcadas numa regua e poder arrasta-las.
+- `*` **Transicao suave entre tomadas (a camera anterior derrete na nova)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:31 (CameraShot.transition) e :98 (resolveCamera)`
+  - comando: `setCameraShot (editor_controller.dart:1669), parametro nomeado `transition``
+  - porta: `NENHUMA — painel_da_cena.dart:105 chama sem o parametro, entao e sempre corte seco`
+  - falta: Um campo de duracao ao lado do corte (0 = seco). O motor ja interpola posicao, alvo, 'para cima' e lente com easeInOut.
+- `*` **Interpolacao logaritmica da lente entre tomadas**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:56 (lerpCamera)`
+  - comando: `setCameraShot com transition > 0 (editor_controller.dart:1669)`
+  - porta: `NENHUMA (nenhuma chamada passa transition)`
+  - falta: O mesmo campo de duracao da transicao — sem ele este codigo nunca roda no app.
+- `o` **Apagar uma tomada de camera**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:17 (CameraShot)`
+  - comando: `removeCameraShot (editor_controller.dart:1692)`
+  - porta: `NENHUMA`
+  - falta: Toque longo numa marca de tomada na regua do tempo. Hoje so da para limpar TODAS.
+- `*` **Limpar todas as tomadas (voltar a uma camera so)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:17`
+  - comando: `clearCameraShots (editor_controller.dart:1706)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:122`
+  - falta: Nada.
+- `o` **Camera olha para um no e o segue sozinha, sem keyframe**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:374 (lookAtNodeId), resolvido em lib/src/features/editor/domain/layer.dart:2518`
+  - comando: `setCameraLookAt (editor_controller.dart:2273)`
+  - porta: `NENHUMA`
+  - falta: Um seletor 'Olhar para' com a lista de nos da cena no painel da camera.
+- `*` **Camera filha de um nulo 3D (orbita hierarquica sem animar a camera)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:704 (cameraParentId), resolvido em layer.dart:2525`
+  - comando: `setSceneCameraParent (editor_controller.dart:1810)`
+  - porta: `NENHUMA (so addOrbitRig o define por dentro, e addOrbitRig tambem nao tem porta)`
+  - falta: Seletor de pai da camera dentro da cena.
+- `o` **Camera filha de um nulo da COMPOSICAO (ponte entre as duas hierarquias)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2490 (cameraParentLayerId), resolvido em layer.dart:2505`
+  - comando: `setSceneCameraCompParent (editor_controller.dart:1824)`
+  - porta: `NENHUMA`
+  - falta: Seletor de nulo da composicao no painel da cena — e o caminho para a camera 3D herdar uma animacao ja feita na linha do tempo.
+- `o` **Heranca de transformacao animada (pai gira, filho da a volta)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1191 (resolveNodeTransform) e :1246 (composeTransforms)`
+  - comando: `setSceneNodeParent (editor_controller.dart:1775)`
+  - porta: `NENHUMA`
+  - falta: Uma arvore de nos com arrastar-para-dentro, ou um seletor 'Pai' por no.
+- `o` **Escolher qual clipe de animacao do modelo importado toca**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:493 (ModelMotion3D.clip)`
+  - comando: `NENHUM COMANDO — nenhum metodo do controller escreve modelMotion`
+  - porta: `NENHUMA`
+  - falta: Uma lista dos clipes (os nomes ja vem em modelSource.animationNames, scene3d.dart:387) com o clipe atual marcado.
+- `o` **Velocidade do clipe de animacao do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:494 (ModelMotion3D.speed)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Slider de velocidade abaixo da lista de clipes.
+- `o` **Deslocamento (inicio) do clipe de animacao do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:494 (ModelMotion3D.offset)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Campo de deslocamento em segundos — e o que faz dois personagens iguais nao andarem em sincronia.
+- `o` **Repetir o clipe de animacao do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:495 (ModelMotion3D.loop)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Interruptor 'Repetir' ao lado da lista de clipes.
+- `o` **Pose crua do modelo gravada por keyframe (quando o esqueleto FBX sai explodido)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:496 (keys), :547 (withPose) e :551 (poseAt)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um 'Gravar pose' no instante atual — o dominio ja interpola linearmente entre poses gravadas e so os templates em codigo (abyss_cinematic_template.dart:365) usam isso.
+- `o` **Nome do clipe do .glb preso ao no**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:511 (animationClip)`
+  - comando: `NENHUM COMANDO (copyWith tem clearAnimationClip, nada o chama)`
+  - porta: `NENHUMA`
+  - falta: Mesma lista de clipes; hoje o campo so e preenchido ao ler o arquivo.
+- `o` **Orientacao automatica da camera (ao longo do caminho / para o ponto de interesse)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:369 e :516 (enum AutoOrient)`
+  - comando: `NENHUM COMANDO — o campo e copiado em duplicateSceneCamera (editor_controller.dart:2265) e gravado em project_store.dart:1853, mas NENHUM renderizador o le`
+  - porta: `NENHUMA`
+  - falta: Antes da tela, falta o motor honrar o campo em renderAt; hoje escolher 'ao longo do caminho' nao mudaria um pixel.
+- `o` **Orbitar a camera 3D com o dedo (pivo fixado no inicio do gesto)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:600 (orbitCamera)`
+  - comando: `NENHUM COMANDO — a funcao nao tem nenhum chamador em lib/`
+  - porta: `NENHUMA`
+  - falta: Um gesto de um dedo no palco da cena 3D ligado a orbitCamera + editCameraMotion. E a navegacao basica de qualquer editor 3D e nao existe.
+- `o` **Aproximar/afastar a camera 3D com pinca (dolly, sem mexer na lente)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:646 (dollyCamera)`
+  - comando: `NENHUM COMANDO — sem chamador em lib/`
+  - porta: `NENHUMA`
+  - falta: Pinca de dois dedos no palco. O dominio separa de proposito dolly (perspectiva) de zoom (lente) e a tela nao oferece nenhum dos dois por gesto.
+- `o` **Deslocar a camera e o alvo juntos (pan de dois dedos)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:662 (panCamera)`
+  - comando: `NENHUM COMANDO — sem chamador em lib/`
+  - porta: `NENHUMA`
+  - falta: Arrasto de dois dedos no palco.
+- `o` **Decidir se o dedo move a camada ou gira a camera**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:585 (TouchIntent) e :587 (resolveTouch)`
+  - comando: `NENHUM COMANDO — sem chamador em lib/`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'modo navegacao' no palco da cena, que e exatamente o parametro `navigationMode` que resolveTouch espera.
+- `*` **Enquadrar a cena inteira (move camera, alvo e foco)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:686 (frameBounds) e :743 (sceneBounds)`
+  - comando: `frameSceneAll (editor_controller.dart:2047)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: Nada para acionar; falta so o cuidado de nao apagar keyframes de foco (camera3d.dart:713 escreve AnimatedDouble cru).
+- `o` **Enquadrar o objeto selecionado**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:686 (frameBounds), usado em editor_controller.dart:2193`
+  - comando: `frameSceneNode (editor_controller.dart:2184)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Enquadrar selecionado' — que depende antes de existir selecao de no na tela, que tambem nao existe.
+- `o` **Focar no objeto selecionado (distancia de foco vem do objeto)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2160 (focusCameraOnNode)`
+  - comando: `focusCameraOnNode`
+  - porta: `NENHUMA`
+  - falta: Botao 'Focar no selecionado' no bloco de profundidade de campo.
+- `o` **Alinhar a camera a vista livre navegada**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView)`
+  - comando: `alignCameraToRender (editor_controller.dart:2338)`
+  - porta: `NENHUMA`
+  - falta: O botao que o proprio comentario chama de 'o comando mais usado de todos' — navegar livre e a camera assumir o enquadramento. Depende da navegacao por gesto, que tambem falta.
+- `o` **Alinhar a camera a vista ortografica atual (frente, topo, lado)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:556 (orthoViewCamera) e :719 (alignToView)`
+  - comando: `alignCameraToCurrentView (editor_controller.dart:2348)`
+  - porta: `NENHUMA`
+  - falta: Um botao ao lado do seletor de vista (painel_da_cena.dart:65 ja troca a vista, mas nao oferece 'a camera assume esta vista').
+- `o` **Guardar um enquadramento com nome (vista salva)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:720 (savedViews)`
+  - comando: `saveSceneView (editor_controller.dart:2297)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Salvar vista' com campo de nome.
+- `o` **Voltar a um enquadramento salvo**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView), usado em editor_controller.dart:2327`
+  - comando: `applySavedView (editor_controller.dart:2322)`
+  - porta: `NENHUMA`
+  - falta: Lista de vistas salvas no painel da cena, com toque para aplicar.
+- `o` **Apagar uma vista salva**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:720 (savedViews)`
+  - comando: `removeSceneView (editor_controller.dart:2310)`
+  - porta: `NENHUMA`
+  - falta: Deslizar para apagar na mesma lista de vistas salvas.
+- `*` **Trocar a camera em uso / vista da previa (camera, frente, topo, lado)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart (SceneView) e layer.dart:2544`
+  - comando: `setScene3DView (editor_controller.dart:1963)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: Nada.
+- `*` **Perspectiva ou ortografica (a vista que responde 'esta atras ou so e menor?')**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:367 (orthographic)`
+  - comando: `setCameraOrthographic (editor_controller.dart:1591)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:76`
+  - falta: Nada.
+- `*` **Acrescentar uma camera com o enquadramento atual (para poder cortar)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2480 (extraCameras)`
+  - comando: `addScene3DCamera (editor_controller.dart:1628) — nota: copia so posicao, alvo e lente pelo `.base`, entao a camera nova nasce SEM os keyframes da original`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:115`
+  - falta: Nada para criar; falta deixar claro (ou permitir) levar a animacao junto.
+- `*` **Duplicar uma camera com a animacao inteira**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2241 (duplicateSceneCamera) — este passa as trilhas por referencia, entao os keyframes VAO junto`
+  - comando: `duplicateSceneCamera`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:108`
+  - falta: Nada.
+- `o` **Duplicar um objeto 3D levando as trilhas animadas**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:433 (SceneNode.duplicado — copia x,y,z,rotX,rotY,rotZ,scale por referencia)`
+  - comando: `duplicateSceneNode (editor_controller.dart:2206)`
+  - porta: `NENHUMA`
+  - falta: Item 'Duplicar' num menu do no — que depende de existir lista de nos na tela.
+- `*` **Reproduzir a animacao da cena no tempo local da camada**
+  - motor: `lib/src/features/editor/domain/layer.dart:2505 (cameraAt) e scene3d.dart:1191 (resolveNodeTransform)`
+  - comando: `NENHUM COMANDO (e leitura, chamada pelo renderizador)`
+  - porta: `lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4037`
+  - falta: Nada: a previa toca a animacao 3D corretamente. O buraco desta dimensao e so de AUTORIA.
+- `o` **Persistir keyframes, curvas, loop e expressao das trilhas 3D no arquivo**
+  - motor: `lib/src/features/editor/domain/project_store.dart:85 (_ad), :1648 (nos), :1688 (luzes), :1838 (camera), :1857 (profundidade de campo)`
+  - comando: `NENHUM COMANDO (roda no salvar/abrir)`
+  - porta: `NENHUMA`
+  - falta: Nada: tudo o que se conseguisse animar seria guardado. O formato ja esta pronto para uma tela que ainda nao existe.
+
+---
+
+## Cameras (motor 3D da Cena 3D: Camera3D, profundidade de campo, vistas, cortes/tomadas, rigs, parentesco e rastreio)
+
+Inventario de 79 recursos de camera que o motor sabe fazer. Apenas 13 tem porta na tela, e TODAS elas estao num unico arquivo: lib/src/features/editor/presentation/widgets/painel_da_cena.dart (vista fixa, perspectiva/ortografica, lente em mm, nova/duplicar/apagar camera, corte no cabecote, limpar cortes, os 5 rigs e enquadrar tudo) — mais duas em painel_de_rastreio.dart (rastrear camera e criar cena do rastreio). Nao ha UM controle para: as 13 trilhas animadas da camera (posicao, ponto de interesse, orientacao, rotacao) — o unico jeito de move-la e um rig ou "enquadrar"; a profundidade de campo INTEIRA (13 parametros, incluindo iris, bokeh, ganho/limiar/saturacao de realce) — o pintor e a GPU honram tudo e nao ha nem um interruptor de liga/desliga; o tipo da camera (dois nos / um no) e a conversao que preserva o enquadramento; olhar-para-um-no; largura do filme; parentesco da camera (nem ao no interno, nem ao nulo da composicao — inclusive addOrbitRig, que e o rig documentado como "o maior retorno por menos codigo"); vistas salvas (salvar/aplicar/apagar); alinhar camera a vista; enquadrar/focar no objeto selecionado; e a NAVEGACAO por gesto inteira — orbitCamera, dollyCamera, panCamera, resolveTouch e editCameraMotion (scene_motion.dart) tem ZERO chamadores em todo o lib, dentro e fora de presentation. Tres campos estao mortos no proprio motor: autoOrient e dof.lockToZoom sao gravados e lidos do arquivo mas nenhum renderizador os consulta; near/far/up so existem em RenderCamera e Camera3D.renderAt nunca os preenche. As vistas livres custom1/custom2 sao explicitamente filtradas para fora da grade em painel_da_cena.dart:60.
+
+- `o` **Nome da camera**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:344`
+  - comando: `renameSceneCamera (editor_controller.dart:2232)`
+  - porta: `NENHUMA`
+  - falta: Toque longo (ou lapis) na linha da camera em painel_da_cena.dart:96 abrindo um campo de texto.
+- `o` **Tipo da camera: dois nos (com ponto de interesse) ou um no (livre)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:345 (enum CameraKind, :14)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de dois estados na linha da camera; hoje nem existe metodo, so copyWith(kind:) usado por rigs e templates.
+- `o` **Converter tipo preservando o enquadramento (a cena nao pula)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:437 (convertedTo)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O mesmo seletor de tipo chamando convertedTo(alvo, local) em vez de copyWith cru. convertedTo tem zero chamadores em lib.
+- `o` **Posicao X da camera (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:347`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma LinhaDeParametro por eixo no painel da cena, escrevendo com editCameraMotion (scene_motion.dart:81) para respeitar a regra de keyframe explicito.
+- `o` **Posicao Y da camera (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:348`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro de Y no painel da cena.
+- `o` **Posicao Z da camera (trilha animavel)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:349`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro de Z no painel da cena — hoje so um rig ou frameSceneAll movem a camera.
+- `o` **Ponto de interesse X (para onde a camera de dois nos olha)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:352`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Bloco 'Alvo' com tres LinhaDeParametro, visivel so quando kind == twoNode.
+- `o` **Ponto de interesse Y**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:353`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro no bloco 'Alvo'.
+- `o` **Ponto de interesse Z**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:354`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro no bloco 'Alvo'.
+- `o` **Orientacao X (caminho curto, sem voltas)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:358`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Bloco 'Orientacao' com tres DialDeAngulo, visivel quando kind == oneNode.
+- `o` **Orientacao Y**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:359`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: DialDeAngulo no bloco 'Orientacao'.
+- `o` **Orientacao Z (rolagem da camera)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:360; aplicada ao vetor up em renderAt, :422`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um dial 'Rolagem' — o motor ja gira o proprio up (nao o Z do mundo), inclusive olhando quase reto para baixo.
+- `o` **Rotacao X separada (aditiva, aceita varias voltas)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:361`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Bloco 'Rotacao' com tres dials sem limite de volta, ao lado de 'Orientacao'.
+- `o` **Rotacao Y separada**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:362`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Dial no bloco 'Rotacao'.
+- `o` **Rotacao Z separada**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:363`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Dial no bloco 'Rotacao'.
+- `*` **Distancia focal (lente em mm)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:365`
+  - comando: `setCameraFocalLength (editor_controller.dart:1598)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:86 e :88`
+  - falta: Nada para o valor base; falta poder marcar keyframe (o comando escreve AnimatedDouble novo e apaga qualquer animacao existente da lente).
+- `o` **Predefinicoes de lente (15, 20, 24, 28, 35, 50, 80, 135, 200 mm)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:17 (lensPresets)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma fila de pilulas acima da LinhaDeParametro 'Lente' chamando setCameraFocalLength. lensPresets tem zero leitores em lib.
+- `*` **Angulo de visao (a mesma grandeza da lente, em graus)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:383 (fovAt); conversao em scene3d.dart:1014 (focalFromFov)`
+  - comando: `NENHUM COMANDO (so leitura)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:93 (apenas MOSTRA o valor)`
+  - falta: Deixar o campo de graus editavel, convertendo com focalFromFov e chamando setCameraFocalLength.
+- `o` **Zoom em pixels (lente traduzida para a largura da composicao)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:389 (zoomAt); scene3d.dart:1021 zoomFromFocal, :1027 focalFromZoom`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Terceira leitura ao lado de mm e graus, editavel via focalFromZoom. zoomAt/zoomFromFocal/focalFromZoom nao tem leitor nenhum em lib.
+- `o` **Largura do filme (o sensor, 36 mm por padrao)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:366`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de formato (Super 35, full frame, 16 mm) no modo Pro — muda o angulo para a mesma lente.
+- `*` **Perspectiva ou ortografica**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:367`
+  - comando: `setCameraOrthographic (editor_controller.dart:1591)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:76`
+  - falta: Nada — este e o unico caminho completo alem da lente.
+- `o` **Escala da vista ortografica (quanto de mundo cabe na tela)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:958 (orthoScale); usada em camera3d.dart:576`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um controle de zoom que apareca quando a camera esta ortografica; hoje o valor e fixo em 0.5 dentro de orthoViewCamera.
+- `o` **Auto-orientar (desligado / ao longo do caminho / para o ponto de interesse)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:369 e enum AutoOrient :516`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres estados — mas antes falta o motor: nenhum renderizador le autoOrient; ele so e gravado (project_store.dart:1853) e copiado (editor_controller.dart:2265).
+- `o` **Olhar para um no (a camera segue o objeto sozinha, sem keyframe)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:374 (lookAtNodeId); resolvido em layer.dart:2518`
+  - comando: `setCameraLookAt (editor_controller.dart:2273)`
+  - porta: `NENHUMA`
+  - falta: Um seletor 'Olhar para' na linha da camera, listando os nos da cena mais a opcao 'nenhum'.
+- `o` **Ligar a profundidade de campo**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:86 (DepthOfField.enabled)`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160) — liga como efeito colateral; nao ha comando que desligue`
+  - porta: `NENHUMA`
+  - falta: Um _Interruptor 'Profundidade de campo' no painel da cena e um setCameraDof(enabled:) que aceite false.
+- `o` **Distancia de foco**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:87`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160) e frameBounds via frameSceneAll (camera3d.dart:713)`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro 'Foco' com um botao 'Focar no selecionado' que chame focusCameraOnNode.
+- `o` **Abertura (vira f-stop pela distancia focal)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:88; fStopFor :110; chega na GPU em scene3d_gpu.dart:383`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro 'Abertura' mostrando o f-stop resultante ao lado.
+- `o` **Nivel de desfoque (multiplicador artistico 0..200%)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:91; usado em scene3d_gpu.dart:384`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro em porcentagem dentro do bloco de profundidade de campo.
+- `o` **Travar o foco ao zoom**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:92 (lockToZoom)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor — mas antes falta o motor: lockToZoom so e gravado e lido do arquivo (project_store.dart:1860 e :1900); nenhum renderizador o consulta.
+- `o` **Formato da iris (retangulo rapido, triangulo, quadrado ate decagono)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:94 (enum IrisShape :20, rotulos irisLabel :44); honrado em scene3d_painter.dart:1133 e scene3d_gpu.dart:385`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma _Grade<IrisShape> usando irisLabel, igual a grade de vistas.
+- `o` **Rotacao da iris**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:95; usada em scene3d_painter.dart:1124 e scene3d_gpu.dart:386`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: DialDeAngulo no bloco da iris.
+- `o` **Arredondamento da iris (-100 laminas concavas a 100 circulo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:98; aplicado em irisPath :159 e scene3d_painter.dart:1135`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro de -100 a 100 no bloco da iris.
+- `o` **Proporcao da iris (bokeh oval, o visual anamorfico)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:101; scene3d_painter.dart:1126`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro de proporcao no bloco da iris.
+- `o` **Franja de difracao (o anel brilhante na borda da bola de bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:102; desenhada em scene3d_painter.dart:1127 e :1147`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro 0..100 no bloco da iris.
+- `o` **Ganho de realce (e o que faz o ponto de luz virar bola de bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:105; highlightBoost :213; bokehSprites :246`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro 'Realce' — sem ela a profundidade de campo nunca passa de borrao cinza.
+- `o` **Limiar de realce (abaixo dele nada vira bokeh)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:106; usado em camera3d.dart:248 e :265`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro 0..1 ao lado do ganho.
+- `o` **Saturacao de realce (quanta cor a bola preserva; 0 = cinza)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:107; aplicada em camera3d.dart:249 e :282`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: LinhaDeParametro 0..2 ao lado do ganho.
+- `o` **Diafragma f-stop derivado (lente / abertura)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:110 (fStopFor); consumido em scene3d_gpu.dart:383`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Leitura f/x.x ao lado da abertura, como o angulo de visao esta ao lado da lente.
+- `*` **Vistas fixas: Frente, Tras, Esquerda, Direita, Topo, Base**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:529 (enum SceneView), rotulos :541, camera em :556 (orthoViewCamera)`
+  - comando: `setScene3DView (editor_controller.dart:1963)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: Nada.
+- `*` **Vistas livres 1 e 2 (enquadramentos navegaveis a parte)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:537 e :538 (SceneView.custom1/custom2)`
+  - comando: `setScene3DView (editor_controller.dart:1963) as aceita`
+  - porta: `NENHUMA — sao explicitamente filtradas para fora da grade em painel_da_cena.dart:60`
+  - falta: Duas pilulas a mais na grade, mais o gesto de orbita que da sentido a uma vista 'livre'.
+- `o` **Distancia da camera das vistas fixas**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:558 (parametro distance de orthoViewCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Pinca no palco durante uma vista fixa, ou um controle de afastamento; hoje e sempre 1500.
+- `o` **Centro das vistas fixas**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:560 (parametro center de orthoViewCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um 'centrar no selecionado' para as vistas fixas; hoje e sempre Vec3.zero.
+- `o` **Guardar o enquadramento atual como vista salva**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:623 (SavedView), lista em scene3d.dart:720`
+  - comando: `saveSceneView (editor_controller.dart:2297)`
+  - porta: `NENHUMA`
+  - falta: Botao 'Salvar esta vista' com campo de nome no painel da cena.
+- `o` **Voltar a uma vista salva**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView) sobre scene3d.dart:720`
+  - comando: `applySavedView (editor_controller.dart:2322)`
+  - porta: `NENHUMA`
+  - falta: Lista das vistas salvas, cada linha aplicando com um toque.
+- `o` **Apagar uma vista salva**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:720 (savedViews)`
+  - comando: `removeSceneView (editor_controller.dart:2309)`
+  - porta: `NENHUMA`
+  - falta: Deslizar para apagar na mesma lista de vistas salvas.
+- `o` **Alinhar a camera a vista fixa em que se esta**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView)`
+  - comando: `alignCameraToCurrentView (editor_controller.dart:2348)`
+  - porta: `NENHUMA`
+  - falta: Uma _Acao 'A camera assume esta vista', visivel so quando cena.view != SceneView.camera — o comentario do proprio codigo o chama de 'o comando mais usado de todos'.
+- `o` **Alinhar a camera a um enquadramento de render qualquer (a vista navegada)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719 (alignToView)`
+  - comando: `alignCameraToRender (editor_controller.dart:2338)`
+  - porta: `NENHUMA`
+  - falta: Depende do gesto de navegacao no palco: sem vista livre navegavel nao ha RenderCamera para passar.
+- `*` **Enquadrar a cena inteira**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:686 (frameBounds) e :743 (sceneBounds)`
+  - comando: `frameSceneAll (editor_controller.dart:2047)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: Nada; falta so expor a margem (parametro margin, camera3d.dart:690, fixo em 1.35).
+- `o` **Enquadrar o objeto selecionado**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:686 (frameBounds)`
+  - comando: `frameSceneNode (editor_controller.dart:2184)`
+  - porta: `NENHUMA`
+  - falta: Uma _Acao 'Enquadrar o selecionado' — precisa de selecao de no, que o painel da cena ainda nao tem.
+- `o` **Focar no objeto selecionado (a distancia de foco vem do objeto)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2165 sobre camera3d.dart:87`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160)`
+  - porta: `NENHUMA`
+  - falta: Botao 'Focar no selecionado' no bloco de profundidade de campo, com selecao de no.
+- `o` **Orbitar a camera em volta de um pivo fixo**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:600 (orbitCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Gesto de um dedo no palco para camadas de cena 3D, commitado por editCameraMotion. orbitCamera tem zero chamadores em todo o lib.
+- `o` **Aproximar/afastar a camera (dolly por pinca, sem mexer na lente)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:646 (dollyCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Pinca de dois dedos no palco. dollyCamera tem zero chamadores em lib.
+- `o` **Deslocar a camera e o alvo juntos (pan de dois dedos)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:662 (panCamera)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Arraste de dois dedos no palco. panCamera tem zero chamadores em lib.
+- `o` **Decidir se o dedo move a camada ou gira a camera**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:587 (resolveTouch, enum TouchIntent :585)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um modo de navegacao (botao na barra do palco) e o GestureDetector que consulte resolveTouch. Zero chamadores em lib.
+- `o` **Gravar a navegacao como keyframe sem estragar as chaves vizinhas**
+  - motor: `lib/src/features/editor/domain/scene_motion.dart:81 (editCameraMotion), trilhas em :44`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E a ponte que faltaria entre o gesto e o projeto; editCameraMotion, cameraMotionTracks e mapCameraMotion nao tem um unico chamador em lib.
+- `*` **Nova camera com o enquadramento de agora**
+  - motor: `lib/src/features/editor/domain/layer.dart:2480 (extraCameras)`
+  - comando: `addScene3DCamera (editor_controller.dart:1628)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:115`
+  - falta: Nada — mas a camera nova nao copia orientacao, rotacao, profundidade de campo nem olhar-para (editor_controller.dart:1632).
+- `*` **Duplicar uma camera (mesmo enquadramento, id novo)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2480`
+  - comando: `duplicateSceneCamera (editor_controller.dart:2241)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:108`
+  - falta: Nada.
+- `*` **Apagar uma camera (e os cortes que apontavam para ela)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2480 e :2483`
+  - comando: `removeScene3DCamera (editor_controller.dart:1649)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:109`
+  - falta: Nada.
+- `o` **Substituir uma camera inteira por outra versao**
+  - motor: `lib/src/features/editor/domain/layer.dart:2553 (copyScene)`
+  - comando: `updateSceneCameraById (editor_controller.dart:1609)`
+  - porta: `NENHUMA`
+  - falta: E o comando de baixo nivel que qualquer painel de camera usaria; hoje so renameSceneCamera e setCameraLookAt o chamam, e nenhum dos dois tem tela.
+- `o` **Editar a camera principal por funcao**
+  - motor: `lib/src/features/editor/domain/layer.dart:2551 (withCamera)`
+  - comando: `updateScene3DCamera (editor_controller.dart:1579)`
+  - porta: `NENHUMA`
+  - falta: E a porta generica para as 13 trilhas; nenhum arquivo de lib fora do controller a chama.
+- `*` **Cortar para uma camera no cabecote**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:17 (CameraShot), campo time :26`
+  - comando: `setCameraShot (editor_controller.dart:1669)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:105`
+  - falta: Nada para o corte seco.
+- `*` **Transicao suave entre tomadas (a camera anterior derrete na nova)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:31 (transition), aplicada em :124-135`
+  - comando: `setCameraShot com transition: (editor_controller.dart:1673)`
+  - porta: `NENHUMA — painel_da_cena.dart:105 chama sem o parametro, entao e sempre corte seco`
+  - falta: Um campo de duracao ao lado do botao de corte (0 s = corte, >0 = transicao).
+- `o` **Apagar um corte especifico**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:17`
+  - comando: `removeCameraShot (editor_controller.dart:1692)`
+  - porta: `NENHUMA`
+  - falta: Marcas de corte clicaveis na linha do tempo (os tempos ja aparecem em layer.dart:2644).
+- `*` **Apagar todos os cortes de camera**
+  - motor: `lib/src/features/editor/domain/layer.dart:2483 (shots)`
+  - comando: `clearCameraShots (editor_controller.dart:1706)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:122`
+  - falta: Nada.
+- `o` **Mistura de duas cameras com a lente interpolada em log (o meio perceptual)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:56 (lerpCamera)`
+  - comando: `NENHUM COMANDO (automatico dentro de resolveCamera)`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; e o comportamento por baixo da transicao — que por sua vez nao tem porta.
+- `o` **Suavizacao das pontas da transicao (easeInOut, sem os dois solavancos)**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:134`
+  - comando: `NENHUM COMANDO (fixo em Easing.easeInOut)`
+  - porta: `NENHUMA`
+  - falta: Escolha de curva por tomada, se algum dia a transicao ganhar tela.
+- `*` **Qual camera esta no ar em cada instante, com queda para a principal**
+  - motor: `lib/src/features/editor/domain/camera_cuts.dart:98 (resolveCamera) e :79 (shotAt); usado em layer.dart:2509`
+  - comando: `NENHUM COMANDO (automatico)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:101 (so MOSTRA qual esta em uso)`
+  - falta: Nada; a leitura ja existe.
+- `o` **Camera filha de um no interno da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:704 (cameraParentId); resolvido em layer.dart:2525`
+  - comando: `setSceneCameraParent (editor_controller.dart:1810)`
+  - porta: `NENHUMA`
+  - falta: Um seletor 'Camera presa a' listando os nos nulos da cena.
+- `o` **Camera filha de um nulo da composicao (ponte entre as duas hierarquias)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2490 (cameraParentLayerId)`
+  - comando: `setSceneCameraCompParent (editor_controller.dart:1824)`
+  - porta: `NENHUMA`
+  - falta: Um seletor listando as camadas nulas do projeto, no mesmo bloco de parentesco.
+- `o` **A camera herda posicao e rotacao do pai, nunca a escala**
+  - motor: `lib/src/features/editor/domain/layer.dart:2533 (applyParentToCamera)`
+  - comando: `NENHUM COMANDO (automatico)`
+  - porta: `NENHUMA`
+  - falta: Nada; e regra do motor.
+- `*` **Rig de orbita (uma volta completa, keyframes de posicao em 8 passos)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:799 (CameraRig.orbit em applyCameraRig :786)`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Nada para aplicar; falta escolher alvo, raio e duracao.
+- `*` **Rig de tripe (camera fixa, so panoramica, sem paralaxe)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:820`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Nada para aplicar.
+- `*` **Rig de dolly (aproximacao em linha reta)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:829`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Nada para aplicar.
+- `*` **Rig de camera na mao (tremor suave e deterministico)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:837`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Nada para aplicar.
+- `*` **Rig de dolly zoom (o efeito vertigo: posicao e lente em oposicao)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:853`
+  - comando: `applyRigToScene (editor_controller.dart:2029)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:135`
+  - falta: Nada para aplicar.
+- `o` **Intensidade do rig (quanto de tremor, quanta panoramica)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:792 (parametro intensity)`
+  - comando: `applyRigToScene NAO o repassa (editor_controller.dart:2035-2041): fica sempre 1`
+  - porta: `NENHUMA`
+  - falta: Um slider 'Intensidade' na grade de rigs, mais o parametro no comando.
+- `o` **Duracao do rig**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:789 (parametro duration)`
+  - comando: `applyRigToScene fixa em layer.duration (editor_controller.dart:2038)`
+  - porta: `NENHUMA`
+  - falta: Campo de duracao junto da grade de rigs, para o movimento nao ocupar sempre a camada inteira.
+- `o` **Rig de orbita com nulo parenteado (o nulo gira 360, a camera vem junto)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:1845-1857 sobre scene3d.dart:704`
+  - comando: `addOrbitRig (editor_controller.dart:1841)`
+  - porta: `NENHUMA`
+  - falta: Uma _Acao 'Orbita com nulo' — e o unico rig que deixa o movimento editavel pelo objeto e nao pela camera, e nao tem botao.
+- `o` **Plano de corte perto (near)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:931; honrado em scene3d.dart:1595, scene3d_painter.dart:872, scene3d_gpu.dart:359`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Campo no modo Pro — e Camera3D.renderAt (camera3d.dart:408) nunca preenche near/far, entao hoje sao sempre 1 e 100000.
+- `o` **Plano de corte longe (far)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:932; honrado em scene3d.dart:1597 e scene3d_gpu.dart:362`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Campo no modo Pro, e Camera3D precisaria carregar o valor ate renderAt.
+- `*` **Rastrear a camera de um video (solucao 3D a partir do plano filmado)**
+  - motor: `lib/src/features/editor/application/camera_track_service.dart (SolucaoCamera3D, domain/camera_solver3d.dart)`
+  - comando: `rastrearCamera3D (editor_controller.dart:2836)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:72`
+  - falta: Nada.
+- `*` **Criar a cena 3D com a camera rastreada (com ou sem nuvem de pontos)**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart:108 (as trilhas da camera saem do rastreio)`
+  - comando: `criarCenaDoRastreio (editor_controller.dart:2874)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_rastreio.dart:152 e :159`
+  - falta: Nada.
+- `o` **Nulo num ponto rastreado, para pendurar coisas nele**
+  - motor: `lib/src/features/editor/domain/cena_do_rastreio.dart (noNoPonto)`
+  - comando: `criarNoDoPonto (editor_controller.dart:2898)`
+  - porta: `NENHUMA`
+  - falta: Toque nos pontos da nuvem desenhada no palco, ou uma lista de pontos no painel de rastreio.
+
+### Correcoes do conferente (1)
+
+- **Distancia de foco**
+  - afirmado: comando: focusCameraOnNode (editor_controller.dart:2160) e frameBounds via frameSceneAll (camera3d.dart:713) — sem nenhuma porta na interface
+  - verdade: TEM porta. frameBounds (camera3d.dart:711-713) termina com `out.copyWith(dof: out.dof.copyWith(focusDistance: AnimatedDouble(dist)))`, e quem o chama e frameSceneAll (editor_controller.dart:2044-2056), chamado em lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144, no botao 'Enquadrar a cena inteira' do PainelDaCena (montado em controles_da_camada.dart:112). Ou seja: tocar em 'Enquadrar a cena inteira' recalcula e grava a distancia de foco. Só focusCameraOnNode continua sem chamador; a segunda via citada pelo proprio mapeamento tem chamador em presentation.
+
+---
+
+## Modelos importados (motor 3D do Aurea)
+
+O motor sabe importar quatro formatos (GLB, glTF 2.0 textual, OBJ+MTL e FBX 7.x binario/ASCII) por um leitor completo em isolate (lib/src/features/editor/application/model_import_service.dart:11), com skinning, morph targets, clipes de animacao, texturas, materiais PBR, poses editaveis por osso, LOD de rascunho, orcamento de triangulos, creditos de autoria e um relatorio inteiro de metadados (ModelSource3D com 12 campos). Mas o EditorController so expoe DUAS portas: addGlbNode (lib/src/features/editor/application/editor_controller.dart:1867, caminho antigo que le so a geometria) e addModel3D (editor_controller.dart:1906, que recebe um ModelAsset3D JA DECODIFICADO). Nenhum metodo do controller le arquivo, e a busca por "addGlbNode|addModel3D|updateSceneNode" em todo o lib devolve APENAS as tres definicoes dentro do proprio editor_controller.dart: ZERO chamadas em lib/**/presentation/**. Os campos que controlam a animacao do modelo (modelMotion: clipe, velocidade, deslocamento, laco, poses), a escolha de materiais (useModelMaterials), o LOD do no (lod) e o modelo por caminho de arquivo da camada 3D (Element3DLayer.meshPath) nao tem NENHUM metodo do controller que os escreva — so nascem no construtor, na leitura do projeto ou nos templates. O unico caminho vivo pela tela e indireto: projects_tab.dart:118 e :138 chamam carregarAstronauta()/carregarMonolitoModelos(), que passam pelo mesmo importador para montar templates prontos. Ou seja: o usuario nao consegue trazer um modelo proprio para dentro do app por tela nenhuma. Campo animationClip (scene3d.dart:511) e escrito por ninguem e lido por ninguem alem da serializacao: e um campo morto. Idem todo o ModelSource3D e o ModelCredit3D.badge, que sao gravados no projeto e nunca exibidos.
+
+- `o` **Trazer um modelo GLB (glTF 2.0 binario) para a cena**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:20 (importGltf3D, binary:true); leitor de arquivo em lib/src/features/editor/application/model_import_service.dart:142`
+  - comando: `addModel3D (editor_controller.dart:1906) — recebe o ModelAsset3D ja decodificado; nenhum metodo do controller le arquivo`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Importar modelo' na barra da cena 3D que abra o seletor de arquivos, chame readModel3DFiles e depois addModel3D.
+- `o` **Trazer um modelo glTF textual (.gltf) com .bin e texturas ao lado**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:80 (ramo binary:false) e resolucao de recursos em lib/src/features/editor/application/model_import_service.dart:121-141`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: O mesmo seletor, mas com selecao MULTIPLA de arquivos (o .gltf sozinho falha pedindo o .bin).
+- `o` **Trazer um modelo OBJ com o material MTL**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:10 (importObj3D); resolucao do mtllib em lib/src/features/editor/application/model_import_service.dart:99-119`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: Seletor multiplo que aceite .obj + .mtl + imagem na mesma escolha.
+- `o` **Trazer um modelo FBX (binario Kaydara ou ASCII)**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:27 (importFbx3D), deteccao binario/texto em fbx_import3d.dart:34-40`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: Seletor de arquivo que aceite a extensao .fbx e as imagens junto.
+- `o` **Importar sem travar a tela (leitura em isolate)**
+  - motor: `lib/src/features/editor/application/model_import_service.dart:11-12 (Isolate.run)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um indicador de progresso enquanto o isolate le, ligado ao Future de readModel3DFiles.
+- `o` **Recusar arquivo de formato desconhecido com recado claro**
+  - motor: `lib/src/features/editor/application/model_import_service.dart:18-25 (regex glb|gltf|obj|fbx e a mensagem 'Selecione um modelo GLB, glTF, OBJ ou FBX')`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma caixa de aviso que mostre a ModelImportException no lugar de silencio.
+- `o` **Bloquear recurso fora da pasta do modelo (seguranca do caminho)**
+  - motor: `lib/src/features/editor/application/model_import_service.dart:38-45 e :68-75`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada na tela: e uma regra do importador. Falta so mostrar o erro quando dispara.
+- `o` **Pedir o arquivo complementar que faltou (.bin, .mtl, textura)**
+  - motor: `lib/src/features/editor/application/model_import_service.dart:57-61 e lib/src/features/editor/domain/model_import3d.dart:112-116`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um dialogo que leia a mensagem e ofereca 'escolher o arquivo que falta'.
+- `o` **Aceitar GLB com bytes sobrando no fim (arquivo de CDN/empacotador)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:48-52`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e tolerancia interna do leitor.
+- `o` **Recusar compressao Draco/Meshopt explicando o que exportar**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:250-261 (so KHR_materials_unlit, KHR_mesh_quantization e KHR_texture_transform sao suportadas)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar a mensagem 'Exporte GLB sem compressao Draco/Meshopt' na tela de importacao.
+- `o` **Avisar que uma extensao opcional do glTF nao foi aplicada**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:262-266 (entra em warnings)`
+  - comando: `addModel3D (editor_controller.dart:1922 junta os warnings em ModelSource3D.warning)`
+  - porta: `NENHUMA`
+  - falta: Uma faixa de avisos na ficha do no lendo modelSource.warning.
+- `o` **Material sem luz do modelo (KHR_materials_unlit)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:422 e lib/src/features/editor/domain/model_asset3d.dart:326 (MaterialKind.unlit)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada para editar; falta so um cracha 'sem luz' no material do modelo.
+- `o` **UV transformada pela textura (KHR_texture_transform: deslocamento, escala e giro)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:455-478`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e aplicado na importacao. Nao ha controle para reajustar depois.
+- `o` **Textura de cor base do modelo (embutida como imagem)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:387-403 (data URI) e lib/src/features/editor/domain/model_asset3d.dart:335 (imagePath do Material3D)`
+  - comando: `addModel3D (editor_controller.dart:1906, junto do modelo)`
+  - porta: `NENHUMA`
+  - falta: Um cracha 'com textura' e a opcao de trocar a imagem do material do modelo.
+- `o` **Modo de repeticao da textura (repetir, espelhar, esticar)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:336-345 (wrapS/wrapT -> TileMode), lido em lib/src/features/editor/domain/model_import3d.dart:392-396`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Tres botoes (repetir/espelhar/esticar) na ficha do material importado.
+- `o` **Cor base, metalico, rugosidade e brilho proprio vindos do material do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:311-323 (_readSurface: baseColor 315, metallic 321, roughness 322, emissive 323)`
+  - comando: `NENHUM COMANDO (o material do modelo nunca e editado; so o material do no, por outro caminho)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de materiais do modelo com controles de cor/metal/rugosidade por material.
+- `o` **Transparencia do modelo: opaco, mistura ou recorte com limiar**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:312 e :325-333 (alphaMode OPAQUE/BLEND/MASK e alphaCutoff)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de modo de transparencia e um controle do limiar de recorte.
+- `o` **Face dupla do material do modelo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:334 (doubleSided), lido em lib/src/features/editor/domain/model_import3d.dart:421`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'desenhar os dois lados' na ficha do material importado.
+- `o` **Usar os materiais do modelo ou pintar tudo com o material do no**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:514 (useModelMaterials) e lib/src/features/editor/application/fonte_de_malha.dart:96-104`
+  - comando: `NENHUM COMANDO (nenhum metodo do controller escreve useModelMaterials)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'usar as cores do modelo' na ficha do no de modelo.
+- `o` **Avisar que mapas normal/oclusao/metal-rugosidade/emissivo nao entram**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:404-411`
+  - comando: `addModel3D (junta em ModelSource3D.warning, editor_controller.dart:1922)`
+  - porta: `NENHUMA`
+  - falta: Mostrar os avisos ao terminar a importacao.
+- `o` **Avisar que cor por vertice nao e aplicada**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:440-444`
+  - comando: `addModel3D (editor_controller.dart:1922)`
+  - porta: `NENHUMA`
+  - falta: Mesma faixa de avisos.
+- `o` **Avisar que linhas e pontos foram ignorados**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:434-438`
+  - comando: `addModel3D (editor_controller.dart:1922)`
+  - porta: `NENHUMA`
+  - falta: Mesma faixa de avisos.
+- `o` **Ler triangulos em faixa e em leque (strip/fan), nao so triangulos soltos**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:547-555`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e conversao interna na importacao.
+- `o` **Hierarquia interna do modelo com nomes de cada peca**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:332-345 (nome e pai de cada no) e lib/src/features/editor/domain/scene3d.dart:384 (nodeNames)`
+  - comando: `addModel3D (editor_controller.dart:1919 preenche nodeNames)`
+  - porta: `NENHUMA`
+  - falta: Uma arvore de pecas do modelo na ficha do no, lendo modelSource.nodeNames.
+- `o` **Recusar hierarquia ciclica, com dois pais ou funda demais**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:282-302 (e o equivalente em FBX: fbx_import3d.dart:57-62 e :117-122)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar a mensagem de recusa.
+- `o` **Desenhar so a cena ativa do arquivo (nos soltos ficam de fora)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:303-320`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de cena quando o arquivo traz mais de uma.
+- `o` **Esqueleto e pele do modelo (skinning ate 256 ossos)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:347-383 (skins) e lib/src/features/editor/domain/model_asset3d.dart:240-258 (mistura das matrizes por vertice)`
+  - comando: `addModel3D (editor_controller.dart:1906, dentro do ModelAsset3D)`
+  - porta: `NENHUMA`
+  - falta: Nada para editar; falta so a lista de ossos aparecer para poder posar.
+- `o` **Limite de 8 influencias por vertice com recado de como exportar**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:515-519 (glTF) e lib/src/features/editor/domain/fbx_import3d.dart:412-416 (FBX)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar a mensagem 'Reduza para 8 ao exportar'.
+- `o` **Formas de mistura do modelo (morph targets, ate 64)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:557-576 (leitura) e lib/src/features/editor/domain/model_asset3d.dart:229-238 (aplicacao dos pesos)`
+  - comando: `NENHUM COMANDO (os pesos so mudam por clipe de animacao; nada os escreve direto)`
+  - porta: `NENHUMA`
+  - falta: Um controle deslizante por forma de mistura, escrevendo os pesos do no.
+- `o` **Clipes de animacao do modelo, com nome e duracao**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:593-660 (clips) e lib/src/features/editor/domain/model_asset3d.dart:21-23 (clips/clipNames)`
+  - comando: `addModel3D (editor_controller.dart:1920 preenche animationNames)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de clipes na ficha do no, lendo modelSource.animationNames.
+- `o` **Escolher qual clipe toca**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:495 (ModelMotion3D.clip) e :145-159 (avaliacao)`
+  - comando: `NENHUM COMANDO (nenhum metodo do controller escreve modelMotion)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de clipe que chame um setClipeDoModelo(sceneId, nodeId, indice) que ainda nao existe.
+- `o` **Velocidade do clipe**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:496 (speed) e :148`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um controle deslizante de velocidade ligado a um comando novo.
+- `o` **Deslocamento (defasagem) do clipe no tempo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:496 (offset) e :148`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um campo de segundos de atraso ligado a um comando novo.
+- `o` **Repetir o clipe em laco ou parar no fim**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:497 (loop) e :149-151`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'repetir' na ficha do modelo.
+- `o` **Modelo parado na pose de descanso (sem clipe)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:97-98 (staticPose quando clip fora da faixa) — basta clip = -1`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: A opcao 'Nenhum' na lista de clipes, escrevendo clip: -1.
+- `o` **Interpolacao dos keyframes do clipe: degrau, linear e curva suave**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:630-664 (sampleModelChannel: STEP, LINEAR com slerp, CUBICSPLINE) e lib/src/features/editor/domain/model_import3d.dart:609-612`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e o modo do arquivo. Nao ha (nem precisa) controle.
+- `o` **Posar um osso do modelo a mao (mover, girar, escalar)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:405-453 (ModelPose3D: translation, rotation, scale) e :171-180 (aplicada sobre a matriz do no)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Alcas por osso no palco (os ossos ja saem em ModelFrame3D.joints, model_asset3d.dart:362) e um comando que escreva modelMotion.keys.
+- `o` **Guardar a pose como keyframe no tempo**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:547-553 (withPose) e :456-485 (ModelPoseKey3D)`
+  - comando: `NENHUM COMANDO (withPose nao e chamado em lugar nenhum do lib)`
+  - porta: `NENHUMA`
+  - falta: Um botao de cadeado/keyframe na ficha da pose, chamando withPose pelo controller.
+- `o` **Poses interpoladas entre keyframes (com slerp na rotacao)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:554-572 (poseAt) e :445-453 (ModelPose3D.lerp)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: So depende do comando de pose acima existir.
+- `o` **Alcance util do arrasto de uma pose (escala do modelo)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:38 (poseTranslationRange)`
+  - comando: `NENHUM COMANDO (nao e lido em lugar nenhum do lib)`
+  - porta: `NENHUMA`
+  - falta: O controle de pose usar este valor como limite do deslizante.
+- `o` **Endireitar e centrar o modelo uma unica vez (normalizacao da pose de descanso)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:109-129 (_bindBounds) e :205-206`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e automatico e proposital (normalizar por quadro destruiria o rig).
+- `o` **Corrigir faces viradas do avesso quando o no esta espelhado**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:283-291 (determinante negativo inverte o enrolamento)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: correcao interna.
+- `o` **Quantos triangulos o modelo tem**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:30-33 (triangleCount) e lib/src/features/editor/domain/scene3d.dart:378 (ModelSource3D.triangles)`
+  - comando: `addModel3D (editor_controller.dart:1915)`
+  - porta: `NENHUMA`
+  - falta: O numero de triangulos na ficha do no.
+- `o` **Quanta memoria o modelo ocupa (usado pelo orcamento de qualidade)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:39-91 (estimatedBytes), consumido em lib/src/features/editor/domain/scene3d.dart:2168`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar o peso estimado junto do orcamento da cena.
+- `o` **Rascunho do modelo com menos faces enquanto toca (LOD do importado)**
+  - motor: `lib/src/features/editor/domain/model_asset3d.dart:382-402 (rascunho) e lib/src/features/editor/domain/scene3d.dart:1377-1379`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada obrigatorio; falta um cracha 'rascunho' avisando que a previa esta simplificada.
+- `o` **Teto de faces do pintor de CPU (40 mil parado, 12 mil tocando)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1334-1335 (tetoDeFacesCpu / tetoDeFacesCpuRascunho) e o corte em scene3d.dart:1146-1155`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um aviso quando o modelo passa do teto e a previa esta cortando faces.
+- `o` **Escolher o nivel de detalhe do no (automatico, alto, medio, baixo)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:341 (MeshLod3D) e :505 (SceneNode.lod); escolha em lib/src/features/editor/application/fonte_de_malha.dart:136-141`
+  - comando: `NENHUM COMANDO (nenhum metodo do controller escreve lod)`
+  - porta: `NENHUMA`
+  - falta: Quatro pilulas (auto/alto/medio/baixo) na ficha do no, com um comando novo.
+- `o` **Orcamento de 60 mil triangulos do GLB, com abertura mesmo acima do teto**
+  - motor: `lib/src/features/editor/domain/glb_import.dart:253-261 e o aviso em :275-280`
+  - comando: `addGlbNode (editor_controller.dart:1895 grava overBudget)`
+  - porta: `NENHUMA`
+  - falta: Um aviso 'modelo pesado, aberto com LOD automatico' ao importar.
+- `o` **Modo estrito que recusa modelo acima do orcamento**
+  - motor: `lib/src/features/editor/domain/glb_import.dart:256-261 (maxTriangles) e lib/src/features/editor/domain/fbx_import3d.dart:428-430`
+  - comando: `NENHUM COMANDO (o controller nunca passa maxTriangles)`
+  - porta: `NENHUMA`
+  - falta: Uma preferencia 'recusar modelos acima de N triangulos'.
+- `o` **Gerar niveis medio e baixo do GLB por agrupamento de vertices**
+  - motor: `lib/src/features/editor/domain/glb_import.dart:301-302 e :335-338, com o simplificador em lib/src/features/editor/domain/lod3d.dart:27`
+  - comando: `addGlbNode (editor_controller.dart:1877-1878 grava mediumMesh/lowMesh)`
+  - porta: `NENHUMA`
+  - falta: So o seletor de LOD acima; os niveis ja existem.
+- `o` **Creditos do modelo: autor, licenca e endereco de origem**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:343-356 (ModelCredit3D, com badge em :351), lidos do glTF em lib/src/features/editor/domain/glb_import.dart:305-307`
+  - comando: `addGlbNode (editor_controller.dart:1880-1884)`
+  - porta: `NENHUMA`
+  - falta: Uma linha de credito no rodape da ficha do no (ModelCredit3D.badge nunca e chamado em lugar nenhum).
+- `o` **Ficha do arquivo de origem: caminho, bytes, malhas, materiais, texturas e animacoes**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:361-389 (ModelSource3D) e lib/src/features/editor/domain/glb_import.dart:53-75 (GlbReport)`
+  - comando: `addGlbNode (editor_controller.dart:1885-1898) e addModel3D (editor_controller.dart:1913-1923)`
+  - porta: `NENHUMA`
+  - falta: Um painel 'Sobre este modelo' — os 12 campos sao gravados no projeto (project_store.dart:1562) e nunca lidos por ninguem.
+- `o` **Guardar o modelo importado no projeto sem reescrever tudo a cada salvamento**
+  - motor: `lib/src/features/editor/domain/project_store.dart:1666-1670 e :2692-2700 (_peso separa o modelo em arquivo proprio por id)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e do armazenamento.
+- `o` **Abrir o projeto mesmo quando o arquivo do modelo sumiu**
+  - motor: `lib/src/features/editor/domain/project_store.dart:2704-2712 (_semRef: referencia orfa) e :1715-1722`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um recado 'este modelo nao foi encontrado' no lugar do no vazio.
+- `*` **Modelos empacotados do app entrando pelo mesmo importador (astronauta, portal, arvore)**
+  - motor: `lib/src/features/projects/application/modelos_empacotados.dart:44 (carregarMonolitoModelos), :70 (carregarAstronauta) e lib/src/features/projects/application/campo_assets.dart:28`
+  - comando: `NENHUM COMANDO (os templates montam a cena direto, sem passar pelo controller)`
+  - porta: `lib/src/features/projects/presentation/projects_tab.dart:118 e lib/src/features/projects/presentation/projects_tab.dart:138 (chamam o carregador, nao o comando)`
+  - falta: Nada para estes tres; e a UNICA porta viva do importador hoje, e ela so serve modelos do proprio app.
+- `o` **Acender o portal: faces magenta do modelo viram material que brilha**
+  - motor: `lib/src/features/projects/application/modelos_empacotados.dart:107 (acenderPortal)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um comando geral 'separar material por cor da textura' — hoje so existe para o portal.
+- `o` **Grupos do OBJ viram pecas nomeadas do modelo**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:120-122 (o/g) e :163-165 (cada grupo vira um no)`
+  - comando: `addModel3D (editor_controller.dart:1919 leva os nomes para nodeNames)`
+  - porta: `NENHUMA`
+  - falta: A arvore de pecas ja citada.
+- `o` **Ler MTL: cor difusa, transparencia, brilho, metalico, rugosidade e textura**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:56 (Kd), :62 (d/Tr), :68 (Ns), :73 (Pm), :76 (Pr), :79 (map_Kd)`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: A lista de materiais do modelo na ficha do no.
+- `o` **Avisar que o OBJ nao carrega esqueleto nem clipes**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:19-21`
+  - comando: `addModel3D (editor_controller.dart:1922)`
+  - porta: `NENHUMA`
+  - falta: Mostrar o aviso na importacao.
+- `o` **Recortar poligonos concavos do OBJ/FBX em triangulos certos (ear clipping)**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:227 (triangulateModelPolygon), usado em obj_import3d.dart:197 e fbx_import3d.dart:425`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e do leitor.
+- `o` **Aceitar indice negativo (relativo) do OBJ**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:137-145`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e do leitor.
+- `o` **Converter o eixo de cima do FBX (Y-up ou Z-up) para a convencao do app**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:70-92`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e automatico. Convencoes fora do subconjunto sao recusadas com recado (fbx_import3d.dart:83).
+- `o` **Textura do FBX pelo nome do arquivo selecionado junto**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:139-186 (conexoes OP) e lib/src/features/editor/application/model_import_service.dart:83-92`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: Seletor multiplo que deixe marcar o FBX e a imagem na mesma escolha.
+- `o` **Avisar que as animacoes do FBX nao foram importadas (mas da para posar)**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:134-138`
+  - comando: `addModel3D (editor_controller.dart:1922)`
+  - porta: `NENHUMA`
+  - falta: Mostrar o aviso e oferecer o editor de pose (que tambem nao existe na tela).
+- `o` **Recusar FBX com pivos/offsets especiais ou ordem de rotacao diferente de XYZ**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:95-110`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar a mensagem 'Converta para GLB com transformacoes aplicadas'.
+- `o` **Ler a pele do FBX por clusters (ossos, pesos e matrizes de bind)**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:284-337`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: Nada para editar; falta a lista de ossos e o editor de pose.
+- `o` **Nome do clipe usado no no (campo animationClip)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:511 e o limpador clearAnimationClip em scene3d.dart:547`
+  - comando: `NENHUM COMANDO (nada no lib escreve nem le este campo alem da serializacao em project_store.dart:1665 e :1762)`
+  - porta: `NENHUMA`
+  - falta: Campo morto: ou some, ou vira o seletor de clipe por nome.
+- `*` **Modelo por caminho de arquivo numa camada 3D simples (OBJ/FBX ASCII)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2257 (Element3DLayer.meshPath), leitura em lib/src/features/editor/domain/mesh_import.dart:57 e cache em lib/src/features/editor/application/mesh_cache.dart:49`
+  - comando: `NENHUM COMANDO (nenhum metodo do controller escreve meshPath; copyElement3D nao e chamado com ele em application/)`
+  - porta: `NENHUMA (so leitura: lib/src/features/editor/presentation/widgets/world3d_painter.dart:180)`
+  - falta: Um botao 'escolher modelo' na ficha da camada 3D e um setMeshPath no controller.
+- `o` **Avisar que a malha da camada 3D e pesada, e cortar acima do maximo**
+  - motor: `lib/src/features/editor/domain/mesh_import.dart:15 (kMeshFacesHeavy = 15000), :19 (kMeshFacesMax = 80000) e :36 (heavy)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um aviso lendo MeshCache.instance.resultFor(caminho).heavy.
+- `o` **Recusar FBX binario no caminho da camada 3D, dizendo o que exportar**
+  - motor: `lib/src/features/editor/application/mesh_cache.dart:56-60 e lib/src/features/editor/domain/mesh_import.dart:46 (looksLikeBinaryFbx)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar MeshCache.instance.errorFor(caminho) na ficha da camada.
+- `o` **Contar o modelo importado no orcamento de qualidade da cena (triangulos, chamadas, texturas, se anima, se brilha)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:339-356`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: alimenta a receita de qualidade automaticamente.
+- `o` **Nao refazer o modelo na GPU quando nada mudou (assinatura por valor)**
+  - motor: `lib/src/features/editor/application/fonte_de_malha.dart:106-132 (assinatura) e o cache do quadro em lib/src/features/editor/domain/model_asset3d.dart:96-107`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e desempenho interno.
+
+### Correcoes do conferente (11)
+
+- **Importar sem travar a tela (leitura em isolate)**
+  - afirmado: NENHUM COMANDO
+  - verdade: O comando existe e tem porta: readModel3DFiles = Isolate.run (lib/src/features/editor/application/model_import_service.dart:11-12). A tela de projetos chama: lib/src/features/projects/presentation/projects_tab.dart:118 (carregarAstronauta), :143 (carregarMonolitoModelos) e :87 (prepareCampoArvore -> campo_assets.dart:28). Tocar em Deriva/Monolito/Campo roda o importador em isolate.
+- **Trazer um modelo OBJ com o material MTL**
+  - afirmado: addModel3D (editor_controller.dart:1906) e nenhum arquivo de presentation chama o comando
+  - verdade: addModel3D de fato nao tem chamador, mas o recurso TEM porta por outro caminho: projects_tab.dart:118/:143/:87 -> readModel3DFiles -> model_import_service.dart:95-118 (le mtllib e map_Kd) -> importObj3D. Os modelos do Monolito/Deriva/Campo (astronauta.obj/portal.obj/arvore.obj + .mtl + textura) entram pelo importador de OBJ a cada abertura desses templates.
+- **Ler MTL: cor difusa, transparencia, brilho, metalico, rugosidade e textura**
+  - afirmado: addModel3D (editor_controller.dart:1906) — sem porta
+  - verdade: O leitor de MTL (obj_import3d.dart:56 Kd, :62 d/Tr, :68 Ns, :73 Pm, :76 Pr, :79 map_Kd) roda na abertura dos templates: assets/models/monolito/astronauta.mtl tem Kd e map_Kd e passa por model_import_service.dart:97-118 vindo de projects_tab.dart:143/:118/:87.
+- **Textura de cor base do modelo (embutida como imagem)**
+  - afirmado: addModel3D (editor_controller.dart:1906, junto do modelo) — sem porta
+  - verdade: As texturas embutidas chegam na tela pelo mesmo caminho de template: modelos_empacotados.dart:73-95 seleciona Astronaut_BaseColornew.jpeg / NetherPortal.png / arvore.jpg, model_import_service.dart resolve e embute, e scene3d.dart:1489 e renderer3d/scene_glb.dart:56 usam o material do modelo. Porta: projects_tab.dart:118 e :143.
+- **Acender o portal: faces magenta do modelo viram material que brilha**
+  - afirmado: NENHUM COMANDO
+  - verdade: O comando e acenderPortal (lib/src/features/projects/application/modelos_empacotados.dart:107), chamado em modelos_empacotados.dart:84 dentro de carregarMonolitoModelos, que a interface chama em lib/src/features/projects/presentation/projects_tab.dart:143 (_openMonolito).
+- **Esqueleto e pele do modelo (skinning ate 256 ossos)**
+  - afirmado: addModel3D (editor_controller.dart:1906, dentro do ModelAsset3D) — sem porta
+  - verdade: O skinning e exercitado pela interface: buildAbyssCinematicTemplate monta um ModelAsset3D com pele de 17 ossos (abyss_cinematic_template.dart:65-70 'skin':0, :156-160 joints/weights, :304-307 skins/inverseBind) e projects_tab.dart:615 abre esse template com um toque.
+- **Poses interpoladas entre keyframes (com slerp na rotacao)**
+  - afirmado: NENHUM COMANDO
+  - verdade: Roda em producao: abyss_cinematic_template.dart:365-393 (_fallPose) cria 29 ModelPoseKey3D e :660 aplica em modelMotion; model_asset3d.dart:445-451 interpola com modelSlerp (:613). A porta e projects_tab.dart:615 (Abyss), e o quadro sai por scene3d_painter.dart:537 / scene3d.dart:1376.
+- **Rascunho do modelo com menos faces enquanto toca (LOD do importado)**
+  - afirmado: NENHUM COMANDO
+  - verdade: Quem liga e a propria interface: palco_de_previa.dart:4065 'final rascunho = tocando && !exporting', passado em :4086 (Scene3DGpuView.rascunho) e :4093 (scene.copyWith(draftMode: true)); scene3d_gpu_view.dart:117-118 repete. Dai orcamento_render.dart:421-423 / scene3d.dart:1174-1176 escolhem lowMesh/mediumMesh do importado.
+- **Teto de faces do pintor de CPU (40 mil parado, 12 mil tocando)**
+  - afirmado: NENHUM COMANDO
+  - verdade: O teto vive dentro de um arquivo de presentation e e aplicado em todo desenho: scene3d_painter.dart:280-284 (_tetoDeFaces, orcamentoDeCpu=3000 na previa) e :390 (trianglesEstimados com teto), e sem teto explicito scene3d.dart:1378 usa tetoDeFacesCpu=40000 / tetoDeFacesCpuRascunho=12000 (scene3d.dart:1334-1335) — caminho da exportacao. Nao e recurso sem porta: e o que decide o quadro que o usuario ve.
+- **Contar o modelo importado no orcamento de qualidade da cena (triangulos, chamadas, texturas, se anima, se brilha)**
+  - afirmado: NENHUM COMANDO
+  - verdade: O comando e PerfilDaCena.de (orcamento_render.dart:333, com malhaParaOrcamento em :406-414), chamado em scene3d_gpu.dart:450 dentro de _registrarSeMudou -> ControladorDeQualidade3D.registrarCena. A porta e palco_de_previa.dart:4077, que monta Scene3DGpuView sempre que a GPU esta disponivel; estresse3d_screen.dart:432-434 ainda mostra o resultado (PreviewStats.cena3d).
+- **Nao refazer o modelo na GPU quando nada mudou (assinatura por valor)**
+  - afirmado: NENHUM COMANDO
+  - verdade: A assinatura por valor esta em fonte_de_malha.dart:91-131 (compara usouMateriaisDoModelo, material e clipe) e e usada pelo renderizador de GPU (scene3d_gpu.dart:24 importa fonte_de_malha; LOD em :565-569). O caminho comeca em palco_de_previa.dart:4077 -> Scene3DGpuView -> Scene3DGpu, ou seja, roda a cada quadro de previa de cena 3D.
+
+---
+
+## Texto 3D, formas 3D e particulas
+
+O QUE EXISTE. (1) Texto 3D em dois sentidos: espessura por fatias em qualquer camada inclinada (layer_meta.extrude + ExtrudeSnapshotPainter), essa com porta na tela; e 3D POR UNIDADE no animador de texto (Rotacao X, Rotacao Y e Posicao Z por letra/palavra/frase), que o pintor aplica de verdade com focal 1200 mas que NENHUMA tela consegue criar. (2) Extrusao de verdade: contorno amostrado -> corte de orelha -> tampas + paredes (extrude3d.dart), com o contorno guardado no no para mudar a espessura depois. (3) Dezessete solidos nativos como camada, e os mesmos dezessete como no de cena. (4) Um sistema de particulas 3D estilo Particular/CC Particle World com 33 parametros, simulacao pura de (semente, indice, tempo), quatro emissores, tres modos de saida, vento/arrasto/gravidade em forma fechada, turbulencia por ruido 3D, seis formas de particula, rastro, cintilar, halo, cor de fim de vida e ordenacao por profundidade.
+
+O QUE NAO EXISTE. Nao ha texto 3D como MALHA: nenhum lugar extruda glifo para dentro da cena 3D — SceneNode nao tem campo de texto e nao ha nada que passe o Path de um TextLayer para extrudeOutline (extrudeShapeIntoScene so aceita ShapeLayer). Nao ha particulas DENTRO da cena 3D: scene3d.dart, scene3d_gpu.dart e scene3d_painter.dart nao mencionam particula nenhuma; ParticlesLayer e camada do compositor, nao no da cena. Nao ha emissor preso a texto/forma (nascer nas letras).
+
+BURACOS DE TELA MAIS GRAVES. extrudeShapeIntoScene e setExtrudeDepth nao tem UM chamador em todo o lib/ — a extrusao existe inteira e e inalcancavel. addSceneNode, updateSceneNode, arrayNodeInstances, removeSceneNode, duplicateSceneNode, renameSceneNode, setSceneNodeVisible, setSceneNodeLocked, isolateSceneNode e groupSceneNodes tambem nao tem chamador: painel_da_cena.dart so mexe em camera (addScene3DCamera, setCameraFocalLength, applyRigToScene, frameSceneAll, setScene3DView...). Das 33 chaves de particula, so DUAS chegam ao dedo (cor e cor do fim da vida, em painel_de_cor.dart); painel_da_camada.dart so libera o cartao "Cor e preenchimento" para ParticlesLayer, e nao existe painel de particulas. Dos 11 campos do Element3DLayer, so a cor tem porta. toggleAnimatorPropType (unico caminho para as tres propriedades 3D do texto) nao tem chamador nenhum, e nenhum preset de texto usa rotationX/rotationY/positionZ.
+
+DETALHE TECNICO. ParticlesPainter aceita rotZDeg, mas palco_de_previa.dart:4191 so passa rotXDeg e rotYDeg — o giro Z da nuvem nunca sai de zero. O atalho de estrelas (linha 337) so vale com forma ponto, halo zero e sem cor de fim.
+
+- `*` **Espessura 3D da camada (texto, forma, imagem viram volume ao inclinar)**
+  - motor: `lib/src/features/editor/domain/layer_meta.dart:927`
+  - comando: `setLayerExtrude (lib/src/features/editor/application/editor_controller.dart:6887)`
+  - porta: `lib/src/features/editor/presentation/widgets/controles_da_camada.dart:1219`
+  - falta: Nada: ja existe o deslizante Espessura. So aparece com giro X/Y diferente de zero e e negado a video, particulas e elemento 3D.
+- `*` **Fatias da espessura desenhadas em perspectiva por malha texturizada**
+  - motor: `lib/src/features/editor/presentation/widgets/extrude_painter.dart:15`
+  - comando: `NENHUM COMANDO`
+  - porta: `lib/src/features/editor/presentation/widgets/palco_de_previa.dart:1348`
+  - falta: Nada: e automatico. Numero de fatias sai da inclinacao (2 a 120), frente sem escurecer e laterais de 42% a 64% de brilho.
+- `*` **Rotacao X 3D por letra, palavra ou frase (texto que vira como uma porta)**
+  - motor: `lib/src/features/editor/domain/text_animator.dart:640`
+  - comando: `toggleAnimatorPropType (lib/src/features/editor/application/editor_controller.dart:5780)`
+  - porta: `NENHUMA (toggleAnimatorPropType nao tem UM chamador em lib/)`
+  - falta: Uma lista de propriedades no painel de animacao de texto com as tres 3D marcaveis; hoje o painel so chama setTextAnim/setTextAnimParam/applyTextPreset.
+- `o` **Rotacao Y 3D por letra, palavra ou frase**
+  - motor: `lib/src/features/editor/domain/text_animator.dart:641`
+  - comando: `toggleAnimatorPropType (editor_controller.dart:5780)`
+  - porta: `NENHUMA`
+  - falta: Mesma lista de propriedades do animador; render ja pronto em animated_text.dart:248.
+- `o` **Posicao Z por unidade de texto (a frase que vem de longe)**
+  - motor: `lib/src/features/editor/domain/text_animator.dart:642`
+  - comando: `toggleAnimatorPropType (editor_controller.dart:5780)`
+  - porta: `NENHUMA`
+  - falta: Mesma lista; o pintor ja converte Z em escala pela focal 1200 (animated_text.dart:251).
+- `*` **Extrudar uma forma do projeto para dentro da cena 3D (logo plano vira logo girando)**
+  - motor: `lib/src/features/editor/domain/extrude3d.dart:154 (extrudeOutline); editor_controller.dart:1717`
+  - comando: `extrudeShapeIntoScene (editor_controller.dart:1717)`
+  - porta: `NENHUMA (zero chamadores em todo o lib/)`
+  - falta: Um botao 'Extrudar para a cena' no painel da camada de forma, ou um item na lista de nos da cena que escolha uma ShapeLayer do projeto.
+- `o` **Espessura do objeto extrudado dentro da cena (mudar depois sem perder ajustes)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:495 (extrudeDepth)`
+  - comando: `setExtrudeDepth (editor_controller.dart:1935)`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de Espessura no painel do no selecionado da cena — painel que nao existe (painel_da_cena.dart so trata camera).
+- `o` **Tampas de forma concava (o 'C' e o 'S' fecham certo) por corte de orelha**
+  - motor: `lib/src/features/editor/domain/extrude3d.dart:48 (earClip)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle: e interno da extrusao. So chega ao usuario junto com extrudeShapeIntoScene.
+- `o` **Contorno pego so do maior subcaminho (o furo do 'o' nao e costurado por fora)**
+  - motor: `lib/src/features/editor/domain/extrude3d.dart:106 (outlineOfPath)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle. Limitacao conhecida: furos somem, a letra 'o' sai macica.
+- `o` **Contorno guardado no objeto para re-extrudar sem pedir a forma de novo**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:493 (outline)`
+  - comando: `setExtrudeDepth (editor_controller.dart:1935) reaproveita o contorno`
+  - porta: `NENHUMA`
+  - falta: O mesmo deslizante de espessura do no; o dado ja sobrevive ao salvar (project_store.dart:1674).
+- `*` **Adicionar objeto 3D como camada (17 solidos: cubo, piramide, cone, esfera, cilindro, prisma, diamante, anel 3D, estrela 3D, plano, capsula, tubo, octaedro, rampa, cupula, coroa, coroa fina)**
+  - motor: `lib/src/features/editor/domain/element3d.dart:7 (enum) e :629 (nomes)`
+  - comando: `addElement3DLayer (editor_controller.dart:1536)`
+  - porta: `lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:111`
+  - falta: Nada: os 17 tem cartao proprio com icone em Adicionar > 3D > Objetos 3D.
+- `*` **Tamanho do solido da camada 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2241 (size)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA (updateElement3D so e chamado em painel_de_cor.dart:163, e so para cor)`
+  - falta: Um deslizante de Tamanho num painel de Elemento 3D; hoje so a escala da camada muda o desenho.
+- `*` **Cor do solido da camada 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2243 (color)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_cor.dart:163`
+  - falta: Nada.
+- `o` **Arestas tracadas do solido (look tecnico)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2246 (edges)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Arestas' no painel do elemento 3D.
+- `o` **Reflexo do ambiente no solido (0 a 1)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2249 (reflect)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de Reflexo.
+- `o` **Qual ambiente se reflete (Estudio, Ceu, Por do sol, Neon, Noite, Branco, Interior)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2250 (environment); enum em element3d.dart:35`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Uma fileira de sete escolhas com amostra; sem ambiente nao ha reflexo (espelho de nada e preto).
+- `o` **Imagem vestindo o solido (projecao de caixa)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2253 (imagePath)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Escolher imagem' que grave imagePath (e o 'limpar' via clearImage).
+- `o` **Modelo importado OBJ/FBX vestindo a camada 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2257 (meshPath)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de arquivo que grave meshPath na camada (o importador existe, mas a camada nao tem porta).
+- `o` **Material do solido (solido, brilhante, vidro, metal, fosco)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2261 (material)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Cinco cartoes de material no painel do elemento 3D.
+- `o` **Cores do degrade do material brilhante**
+  - motor: `lib/src/features/editor/domain/layer.dart:2264 (gradient)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Uma tira de paradas de cor (o painel de cor so oferece a cor unica).
+- `o` **Brilho especular do solido (tamanho do ponto de luz)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2267 (shininess)`
+  - comando: `updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Um deslizante de Brilho.
+- `o` **Adicionar um solido como objeto dentro da cena 3D**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:1970 (addSceneNode)`
+  - comando: `addSceneNode (editor_controller.dart:1970)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de objetos no painel da cena com um '+' que ofereca os 17 solidos; painel_da_cena.dart hoje so tem camera.
+- `o` **Tamanho do objeto dentro da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:479 (size)`
+  - comando: `updateSceneNode (editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Painel do no selecionado com deslizante de tamanho.
+- `o` **Suavizacao do solido por subdivisao (mais faces, silhueta redonda)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:508 (subdivisions; aplicado em scene3d.dart:1391)`
+  - comando: `updateSceneNode (editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um passo 0/1/2 de suavizacao no painel do no.
+- `o` **Grade de copias do mesmo objeto (instancias em X, Y e Z com espacamento)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:484 (instances)`
+  - comando: `arrayNodeInstances (editor_controller.dart:2101)`
+  - porta: `NENHUMA`
+  - falta: Tres campos de contagem e um de espacamento; ate 40 por eixo, desenhados numa chamada so.
+- `o` **Malha propria no lugar do solido pronto (logo virado volume dentro da cena)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:489 (mesh)`
+  - comando: `NENHUM COMANDO direto (so via extrudeShapeIntoScene:1717, addModel3D:1906, addGlbNode:1867)`
+  - porta: `NENHUMA`
+  - falta: Qualquer entrada de objeto na cena: nem extrusao, nem modelo, nem GLB tem botao.
+- `o` **Duplicar um objeto da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:604 (duplicate)`
+  - comando: `duplicateSceneNode (editor_controller.dart:2206)`
+  - porta: `NENHUMA`
+  - falta: Item 'Duplicar' na lista de objetos da cena.
+- `o` **Apagar um objeto da cena**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2014`
+  - comando: `removeSceneNode (editor_controller.dart:2014)`
+  - porta: `NENHUMA`
+  - falta: Item 'Apagar' na lista de objetos da cena.
+- `o` **Renomear um objeto da cena**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2219`
+  - comando: `renameSceneNode (editor_controller.dart:2219)`
+  - porta: `NENHUMA`
+  - falta: Toque duplo no nome na lista de objetos.
+- `o` **Esconder ou mostrar um objeto da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:480 (visible)`
+  - comando: `setSceneNodeVisible (editor_controller.dart:2222)`
+  - porta: `NENHUMA`
+  - falta: Um olho por linha na lista de objetos.
+- `o` **Travar um objeto da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:503 (locked)`
+  - comando: `setSceneNodeLocked (editor_controller.dart:2002)`
+  - porta: `NENHUMA`
+  - falta: Um cadeado por linha; todas as outras mudancas ja respeitam o bloqueio.
+- `o` **Isolar um objeto (esconde todo o resto)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2134`
+  - comando: `isolateSceneNode (editor_controller.dart:2134)`
+  - porta: `NENHUMA`
+  - falta: Botao 'Isolar' no painel do no.
+- `o` **Agrupar varios objetos sob um nulo**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2286`
+  - comando: `groupSceneNodes (editor_controller.dart:2286)`
+  - porta: `NENHUMA`
+  - falta: Selecao multipla na lista de objetos + botao 'Agrupar'.
+- `*` **Adicionar sistema de particulas (nasce como campo de estrelas de 5000 pontos)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1802 (ParticlesLayer)`
+  - comando: `addParticlesLayer (editor_controller.dart:1500)`
+  - porta: `lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:143`
+  - falta: Nada para criar. Depois de criado, so a cor e ajustavel.
+- `*` **Quantidade de particulas vivas**
+  - motor: `lib/src/features/editor/domain/layer.dart:1863 (count)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA (updateParticles so e chamado em painel_de_cor.dart:127/141/153, e so para cor)`
+  - falta: Um painel de particulas com deslizante de quantidade.
+- `o` **Semente do sorteio (troca o desenho inteiro sem mudar os numeros)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1864 (seed)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Um campo de semente com botao de re-sortear.
+- `o` **Distribuicao uniforme (tira as faixas diagonais do sorteio antigo)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1865 (uniformDistribution)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor; projetos antigos mantem o sorteio velho de proposito.
+- `o` **Velocidade inicial das particulas**
+  - motor: `lib/src/features/editor/domain/layer.dart:1868 (speed)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de velocidade (px/s) no painel de particulas.
+- `o` **Abertura do cone de saida**
+  - motor: `lib/src/features/editor/domain/layer.dart:1869 (spreadDeg)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante em graus, so faz sentido no modo cone.
+- `o` **Direcao media da saida**
+  - motor: `lib/src/features/editor/domain/layer.dart:1870 (directionDeg)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Um dial de angulo (o app ja tem dial_de_angulo.dart).
+- `o` **Gravidade (px/s2, positivo cai)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1873 (gravity)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de gravidade.
+- `o` **Tamanho base da particula**
+  - motor: `lib/src/features/editor/domain/layer.dart:1876 (size)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de tamanho (px).
+- `o` **Tempo de vida da particula**
+  - motor: `lib/src/features/editor/domain/layer.dart:1877 (lifetimeMs)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Campo de vida em segundos.
+- `o` **Profundidade do nascimento em Z (perspectiva de verdade)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1881 (depth)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de profundidade.
+- `o` **Largura da area do emissor**
+  - motor: `lib/src/features/editor/domain/layer.dart:1885 (emitW)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de largura; tambem e o raio (metade) da esfera e do anel.
+- `o` **Altura da area do emissor**
+  - motor: `lib/src/features/editor/domain/layer.dart:1886 (emitH)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de altura, ou alcas no palco desenhando a caixa do emissor.
+- `o` **Cintilar (alfa oscila por particula)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1889 (twinkle)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Cintilar'.
+- `*` **Cor da particula**
+  - motor: `lib/src/features/editor/domain/layer.dart:1891 (color)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_cor.dart:127`
+  - falta: Nada.
+- `o` **Estrela ou ponto (chave antiga, hoje semente do campo forma)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1894 (star)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Nada de novo: quem manda hoje e o campo forma; este so serve para ler projeto antigo.
+- `o` **Forma do emissor (caixa, ponto, esfera cheia, anel)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1900 (emitter)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Quatro cartoes de escolha no painel de particulas.
+- `o` **Modo de saida (cone, todas as direcoes, para fora do centro)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1904 (emitMode)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Tres cartoes de escolha; o cone e o unico que usa direcao e abertura.
+- `o` **Vento em X**
+  - motor: `lib/src/features/editor/domain/layer.dart:1907 (windX)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de vento horizontal.
+- `o` **Vento em Y**
+  - motor: `lib/src/features/editor/domain/layer.dart:1908 (windY)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de vento vertical.
+- `o` **Resistencia do ar (velocidade terminal com gravidade)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1912 (drag)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de arrasto 0..20.
+- `o` **Turbulencia: quanto o campo de ruido empurra**
+  - motor: `lib/src/features/editor/domain/layer.dart:1916 (turbulence)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de amplitude (px).
+- `o` **Tamanho do detalhe da turbulencia**
+  - motor: `lib/src/features/editor/domain/layer.dart:1917 (turbulenceScale)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de escala do ruido (px).
+- `o` **Velocidade de evolucao da turbulencia**
+  - motor: `lib/src/features/editor/domain/layer.dart:1918 (turbulenceSpeed)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante em ciclos por segundo.
+- `o` **Tamanho ao longo da vida (fixo, cresce, encolhe, sobe e desce)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1922 (sizeOverLife)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Quatro cartoes de escolha.
+- `o` **Tamanho aleatorio entre particulas**
+  - motor: `lib/src/features/editor/domain/layer.dart:1923 (sizeRandom)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Opacidade ao longo da vida (entra e sai, some, aparece, fixa)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1927 (opacityOverLife)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Quatro cartoes de escolha.
+- `o` **Opacidade aleatoria entre particulas**
+  - motor: `lib/src/features/editor/domain/layer.dart:1928 (opacityRandom)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `*` **Cor no fim da vida (faisca vira brasa)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1931 (colorEnd)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_cor.dart:141 (interruptor) e :153 (a cor)`
+  - falta: Nada.
+- `o` **Forma da particula (esfera, estrela, risco, nuvem, quadrado, anel)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1935 (shape)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Seis cartoes com previa; o risco ainda se alonga sozinho na direcao do movimento.
+- `o` **Giro proprio da particula (graus/s)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1938 (spin)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante de giro; so muda formas com orientacao (estrela, quadrado).
+- `o` **Rastro (copias fantasmas em idades anteriores)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1941 (trail)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1; ate seis fantasmas por particula.
+- `o` **Vida aleatoria (parte das particulas vive menos)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1944 (lifeRandom)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1.
+- `o` **Brilho (halo atras da particula, sem desfoque caro)**
+  - motor: `lib/src/features/editor/domain/layer.dart:1947 (glow)`
+  - comando: `updateParticles (editor_controller.dart:1528)`
+  - porta: `NENHUMA`
+  - falta: Deslizante 0..1; halo desligado e o que libera o atalho rapido de campo de estrelas.
+- `*` **Giro da nuvem de particulas no eixo Z**
+  - motor: `lib/src/features/editor/presentation/widgets/particles_painter.dart:41 (rotZDeg)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (palco_de_previa.dart:4191 so passa rotX e rotY; rotZ fica sempre em zero)`
+  - falta: Ligar a rotacao Z da camada (ou do nulo pai) ao pintor; o simulador ja sabe girar nos tres eixos.
+
+---
+
+## Render, qualidade e orcamento do motor 3D
+
+O motor tem um sistema de render e orcamento inteiro e maduro — receita de qualidade com sete botoes (escala, MSAA, sombra, cascatas, spots, bloom, DOF, textura, LOD, teto de preview), quatro sinais que descem e sobem a escada (orcamento de GPU estimado, tempo de quadro, memoria do sistema, termico), escolha GPU x pintor de CPU com migalha de queda, orcamento de CPU com substituto, quadro guardado e LOD por agrupamento de vertices. TODO ele e automatico. So TRES controles chegam a tela, e nenhum passa pelo EditorController: Ajustes > Cena 3D tem "Motor 3D" (Automatico/Sempre GPU/Sempre CPU, settings_tab.dart:412), "Qualidade 3D" (Automatica/Maxima/Equilibrada/Leve, settings_tab.dart:507) e "Desenhar com OpenGL ES" (settings_tab.dart:456), mais o teste de estresse e o registro de travadas. Do lado do EditorController a situacao e pior: existe UM comando de render (setScene3DHelpers, editor_controller.dart:1957) e ele tem ZERO chamadores em lib/**/presentation/**; o generico updateScene3D (1573) so e chamado pela tela de estresse (estresse3d_screen.dart:330), nunca pelo editor. Consequencia: msaa da cena, tonemap, grade do chao, cor de fundo, nevoa, reflexo planar, sonda de reflexo, LOD por no, modo rascunho e ajudas de cena sao gravados no projeto, lidos pelo render e NAO tem nenhum controle. Quatro pecas do dominio estao mortas por completo (degradeScene, lowProfileBudget, estimateSceneMemoryMb, AdaptiveQuality): nenhum arquivo de lib as chama.
+
+- `*` **Escolher quem desenha a cena 3D: GPU, CPU ou automatico**
+  - motor: `lib/src/features/editor/application/motor3d_modo.dart:22 (enum Motor3DModo) e :100 (definirModo)`
+  - comando: `NENHUM COMANDO no EditorController (o comando e Motor3DPreferencia.definirModo, motor3d_modo.dart:100)`
+  - porta: `NENHUMA para o EditorController; a preferencia e chamada em lib/src/features/settings/presentation/settings_tab.dart:412`
+  - falta: Ja tem controle (Ajustes > Cena 3D > Motor 3D). Falta o mesmo interruptor perto da cena, e nao a tres telas de distancia.
+- `*` **Desligar a GPU sozinho depois de o app fechar desenhando (migalha de queda)**
+  - motor: `lib/src/features/editor/application/motor3d_modo.dart:64 (carregar/resolve), :126 marcarTentativa, :129 marcarSucesso, :107 caiu`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (o texto do estado aparece em settings_tab.dart:421, mas quem arma/desarma sao MarcaGpuViva.entrou/saiu, scene3d_gpu_view.dart:96 e :101)`
+  - falta: Um aviso na propria cena ("desenhando em CPU porque o app fechou") com um botao "tentar a GPU de novo", em vez de so uma linha em Ajustes.
+- `o` **Prazo em que a GPU se prova (15 s desenhando sem cair)**
+  - motor: `lib/src/features/editor/application/motor3d_modo.dart:188 (MarcaGpuViva.seProvaEm)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada para o usuario; e regra interna. No maximo, mostrar no relatorio de diagnostico que a janela ja passou.
+- `o` **Voltar a tentar a GPU depois de tres sessoes em CPU**
+  - motor: `lib/src/features/editor/application/motor3d_modo.dart:57 (sessoesAteTentarDeNovo) e :66`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um botao "tentar a GPU agora" que nao obrigue a esperar tres aberturas nem a trocar o modo para Sempre GPU.
+- `*` **Trocar entre Vulkan e OpenGL ES no Android (com migalha propria)**
+  - motor: `lib/src/features/settings/application/grafico_preferencia.dart:50 (definirOpenGl), :48 (caiu)`
+  - comando: `NENHUM COMANDO no EditorController (GraficoPreferencia.definirOpenGl)`
+  - porta: `NENHUMA para o EditorController; a preferencia e chamada em lib/src/features/settings/presentation/settings_tab.dart:456`
+  - falta: Ja tem controle em Ajustes. Falta so dizer que exige reabrir o app no proprio momento do toque (hoje esta so no paragrafo de baixo).
+- `*` **Subir o motor em GPU e saber se ele esta pronto ou indisponivel**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:118 (preparar), :161 (comoDesenha), :171 (pronto), :174 (indisponivel), :168 (motivo)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (a decisao e tomada sem interface, em palco_de_previa.dart:4076 e scene3d_gpu_view.dart:76)`
+  - falta: Um cracha GPU/CPU visivel na previa (hoje o dado so existe em Estatisticas3D e no relatorio de estresse).
+- `*` **Teto de qualidade 3D escolhido pela pessoa (Automatica, Maxima, Equilibrada, Leve)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:44 (TetoDeQualidade3D) e lib/src/features/editor/application/qualidade3d_controller.dart:103 (definirTeto)`
+  - comando: `NENHUM COMANDO no EditorController (ControladorDeQualidade3D.definirTeto)`
+  - porta: `NENHUMA para o EditorController; definirTeto e chamado em lib/src/features/settings/presentation/settings_tab.dart:507`
+  - falta: Ja tem controle em Ajustes. Falta o mesmo teto por PROJETO (hoje e global) e perto da cena.
+- `*` **Nivel de qualidade em vigor (Ultra, Alta, Media, Baixa, Emergencia)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:31 (Qualidade3D) e qualidade3d_controller.dart:41 (nivel)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA como comando; o valor e lido em settings_tab.dart:517 e em scene3d_gpu_view.dart:136`
+  - falta: Nao ha como CRAVAR um nivel exato: o teto so oferece quatro degraus e nunca deixa fixar Emergencia ou Alta. Faltaria um seletor de nivel exato para comparar.
+- `*` **Orcamento de memoria de GPU do aparelho (fracao da RAM, com piso e teto)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:218 (orcamentoGpuBytes) e qualidade3d_controller.dart:115 (informarRam)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (so aparece como texto no relatorio de estresse, estresse3d_screen.dart:521)`
+  - falta: Uma linha de diagnostico na propria cena: "GPU estimada X de Y". O texto ja existe pronto em ControladorDeQualidade3D.resumo (qualidade3d_controller.dart:351) e ninguem o mostra no editor.
+- `o` **Margem de seguranca do orcamento (60% no preview, 75% na exportacao)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:228 (fracaoSeguraDoOrcamento) e :233 (fracaoSeguraDaExportacao)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada para o usuario comum; e constante do motor. Um modo tecnico poderia expor a folga usada.
+- `*` **Estimar quanto de GPU a cena custa, por categoria (alvos, sombras, texturas, ambiente, geometria)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:447 (estimarGpu) e :236 (EstimativaGpu)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (calculada em qualidade3d_controller.dart:135 e exposta so via resumo)`
+  - falta: Um painel "custo da cena" com as cinco barras. O dado esta pronto e nao tem tela.
+- `*` **Ler a cena para o orcamento (triangulos, chamadas, texturas, spots com sombra, animada, emissiva)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:333 (PerfilDaCena.de)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (chamado por scene3d_gpu.dart:449)`
+  - falta: Mostrar esses numeros junto da cena, para a pessoa saber o que esta pesando antes de o app descer a qualidade.
+- `o` **Nivel de pressao da cena (seguro, alerta, pressao, emergencia)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:194 (NivelDePressao) e :203 (pressaoDaFracao); qualidade3d_controller.dart:44 (pressao)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um sinal (ponto amarelo/vermelho) na barra da cena quando a pressao sai de "seguro".
+- `o` **Escolher o nivel mais alto que cabe no orcamento antes do primeiro quadro**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:560 (escolherPeloOrcamento); chamado em qualidade3d_controller.dart:135`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; falta so o motivo aparecer ("Media porque a cena nao cabe em Alta neste aparelho").
+- `*` **Receita da exportacao, com queda de escala ate caber na memoria**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:594 (receitaDeExportacao) e qualidade3d_controller.dart:149 (paraExportacao)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (usado em scene3d_gpu.dart:409, no caminho de exportacao)`
+  - falta: Um aviso na tela de exportacao quando a escala cair abaixo de 1 (o video sai menos nitido e ninguem e avisado).
+- `o` **Descer um degrau quando o quadro passa de 33 ms (e subir depois de 120 quadros folgados)**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:261 (amostraDeQuadro) e :251 (_quadros)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nenhum controle direto; falta so um interruptor "nao mexer na qualidade sozinho" para quem quer comparar quadros.
+- `o` **Teto termico: aparelho quente nao ganha Ultra nem Alta**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:227 (_tetoTermico)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar "qualidade reduzida: aparelho esquentando" quando isso acontece (o motivo ja e gravado em motivo.value).
+- `o` **Teto por memoria disponivel do sistema (abaixo de 300 MB e de 150 MB)**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:232-239`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesmo aviso de motivo na tela; hoje a qualidade cai em silencio.
+- `o` **Emergencia por aviso de memoria do sistema (8 segundos no nivel minimo)**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:292 (didHaveMemoryPressure), :297 (pressaoDeMemoria), :302 (_emergencia)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; um aviso momentaneo ("poupando memoria") explicaria a queda visivel de qualidade.
+- `o` **Emergencia por memoria disponivel abaixo de 80 MB**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:240`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Idem: so falta o aviso.
+- `*` **Sonda do sistema a cada dois segundos (memoria, termico, RSS do processo)**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:186 (_sonda), :200 (sondar), :213 (atualizarSistema)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (ligada/desligada por scene3d_gpu_view.dart:69 e :102, nao por acao da pessoa)`
+  - falta: Nada; e infraestrutura. O RSS lido (PreviewStats.rssMb, preview_stats.dart:27) e que nao aparece em lugar nenhum do editor.
+- `*` **Historico das mudancas de nivel e o motivo de cada uma**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:57 (historico), :337, :351 (resumo)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (historico nao e lido por nenhum arquivo de presentation)`
+  - falta: Uma lista "por que a qualidade mudou" em Ajustes; os dados existem e nunca sao mostrados.
+- `*` **Zerar o controlador de qualidade (recomeco dos sinais)**
+  - motor: `lib/src/features/editor/application/qualidade3d_controller.dart:364 (zerar)`
+  - comando: `NENHUM COMANDO`
+  - porta: `lib/src/features/settings/presentation/estresse3d_screen.dart:307 (chama controlador.zerar)`
+  - falta: Um "recomecar a medicao" no editor, nao so dentro do teste de estresse.
+- `o` **Escala do alvo de render por nivel (1,0 / 0,85 / 0,7 / 0,5)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:82 (escalaRender) e :542 (escalaDoPreview); aplicada em scene3d_gpu.dart:432`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um controle de "resolucao da previa" (100/75/50%) independente do nivel automatico.
+- `o` **MSAA 4x contra FXAA (suavizacao de borda do motor)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:86 (receita.msaa) e lib/src/features/editor/application/scene3d_gpu.dart:477 (_aplicarAntialias, aplica em :483)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "suavizar bordas" na cena. Hoje so o nivel automatico decide.
+- `o` **Resolucao do atlas de sombra (2048/1024/512, limitada pelo que o alvo aproveita)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:89 (sombraResolucao) e :434 (sombraEfetiva); usada em scene3d_gpu.dart:815 (_ladoDaSombra)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de qualidade de sombra por cena (Alta/Media/Baixa/Sem sombra).
+- `o` **Numero de cascatas da luz direcional (2, 1 ou nenhuma)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:92 (cascatas); entra na conta em :480`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Faz parte do mesmo seletor de qualidade de sombra; hoje nao existe controle nenhum.
+- `o` **Quantos holofotes podem projetar sombra ao mesmo tempo (4, 2, 1, 0)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:95 (sombrasSpotMax); aplicado em :477 e :514`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um limite ajustavel, ou pelo menos o aviso de que a sombra daquele holofote foi cortada pelo orcamento.
+- `o` **Brilho estourado (bloom) ligado ou desligado pela receita e pelo rascunho**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:97 (bloom) e lib/src/features/editor/application/scene3d_gpu.dart:1212 (postProcess.bloom)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor de bloom na cena, e os parametros fixos no codigo (limiar 1.0, intensidade .45, espalhamento .7) como controles.
+- `*` **Profundidade de campo desligada abaixo do nivel Media e durante o rascunho**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:98 (dof) e lib/src/features/editor/application/scene3d_gpu.dart:370 (configurarProfundidadeDeCampo, decide em :375)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (o widget passa rascunho em scene3d_gpu_view.dart:150, sem escolha da pessoa)`
+  - falta: Um aviso de que o desfoque nao esta sendo mostrado nesta qualidade — quem ligou DOF na camera nao ve nada e nao sabe por que.
+- `o` **Teto do lado da textura subida para a GPU (2048/1024/512/256)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:101 (texturaMax); aplicado em scene3d_gpu.dart:211 e :769 (_decodificarComTeto)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de qualidade de textura por cena; e o botao que mais muda memoria em cenas com muitos materiais.
+- `o` **Nivel de detalhe da malha escolhido pela receita (alto, auto, medio, baixo)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:104 (receita.lod) e lib/src/features/editor/application/scene3d_gpu.dart:565 (_lodPelaReceita)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um controle de LOD da cena inteira, alem do LOD por no que tambem nao tem porta.
+- `o` **Nivel de detalhe escolhido no proprio objeto (auto, alto, medio, baixo)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:341 (enum MeshLod3D) e :505 (SceneNode.lod); usado em lib/src/features/editor/application/fonte_de_malha.dart:136 e scene3d.dart:1382`
+  - comando: `updateSceneNode (lib/src/features/editor/application/editor_controller.dart:1986) — generico; nenhum comando escreve `lod` diretamente`
+  - porta: `NENHUMA`
+  - falta: Uma linha "Detalhe" no painel do objeto com as quatro opcoes. O campo e salvo e carregado (project_store.dart:1661 e :1758) e nunca pode ser mudado.
+- `o` **Teto do lado maior do alvo no preview (1440/1080/720/480)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:108 (ladoMaximoPreview) e :525 (alvoDoPreview)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Parte do mesmo controle de resolucao da previa que nao existe.
+- `o` **Baixar a resolucao da previa enquanto se navega (720 mexendo, 1080 parado)**
+  - motor: `lib/src/features/editor/domain/preview_quality.dart:4 (scenePreviewScale); usado em lib/src/features/editor/application/scene3d_gpu.dart:423`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "previa sempre em qualidade cheia" para quem esta ajustando material e precisa ver nitido enquanto mexe.
+- `o` **Modo rascunho: sem sombra, sem DOF, sem ambiente por imagem enquanto toca**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:747 (draftMode); decidido em lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4065 e aplicado em :4093 e scene3d_gpu_view.dart:118`
+  - comando: `NENHUM COMANDO (nenhum metodo do EditorController escreve draftMode)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "previa em rascunho" (ligar/desligar/so tocando). Hoje o palco liga sozinho e o campo salvo no projeto nunca e escrito por ninguem.
+- `o` **Suavizacao de borda gravada na cena (Scene3D.msaa)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:743`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor. Pior: o campo e salvo (project_store.dart:1635) e o unico codigo que o le e degradeScene (scene3d.dart:2221), que ninguem chama — o render usa receita.msaa, nao este campo.
+- `o` **Curva de saida ACES no pintor de CPU (tonemap)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:736 (tonemap) e :2015 (uso no render)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "curva de cinema" na cena; hoje nasce ligado e nao ha como desligar.
+- `o` **Curva de saida do motor em GPU (pbrNeutral, fixa)**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:1217`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Escolha de curva (ACES / pbrNeutral / nenhuma). Hoje o valor esta cravado no codigo e o campo tonemap da cena nem chega ate aqui.
+- `o` **Grade do chao no preview**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:739 (showFloorGrid); desenhada em scene3d_painter.dart:399 e :473`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "grade" junto das ajudas de cena.
+- `*` **Ajudas de cena: grade, frustum da camera, eixos e caixa do selecionado**
+  - motor: `lib/src/features/editor/domain/layer.dart:2548 (Scene3DLayer.showHelpers); desenhadas em scene3d_painter.dart:520 e :525, e por cima da GPU em scene3d_gpu_view.dart:172`
+  - comando: `setScene3DHelpers (lib/src/features/editor/application/editor_controller.dart:1957)`
+  - porta: `NENHUMA (grep por setScene3DHelpers em lib devolve so a definicao)`
+  - falta: Um interruptor "mostrar ajudas" no painel da cena. O comando existe, funciona e nenhuma tela o chama — e o campo nasce ligado (layer.dart:2447), entao toda cena nova ja desenha ajudas sem que ninguem possa desligar.
+- `o` **Cor de fundo da cena (limpa o quadro antes do render)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:738 (background); usada em scene3d_painter.dart (fundo do quadro) e scene3d_gpu_view.dart:156`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de cor de fundo (com a opcao "transparente") no painel da cena.
+- `o` **Nevoa por distancia: densidade, inicio e cor**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:691-692 (fogDensity, fogStart, fogColor) e :693 (fogAt); aplicada em scene3d_gpu.dart:1178 e scene3d.dart:1612`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Tres linhas de parametro (densidade, inicio, cor) no painel da cena. Sao ajustes de render de cena inteira e nao ha como toca-los.
+- `o` **Reflexo planar do piso e a rugosidade dele**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:686-687 (planarFloorReflection, planarFloorRoughness); usado em scene3d_painter.dart:487`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor de reflexo do piso com um controle de nitidez; e o primeiro item que a degradacao desligaria, e nao pode ser ligado.
+- `o` **Qualidade da sonda de reflexo (128/256/512 por face) e quando ela atualiza**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:133 (ProbeQuality), :136 (faceResolution), :149 (ProbeUpdateMode), :159 (ReflectionProbe3D)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um cartao "reflexos" com ligar/desligar, tres qualidades e tres modos de atualizacao. Os rotulos em portugues ja estao escritos (panorama3d.dart:142 e :152) e nenhuma tela os usa.
+- `o` **Teto de triangulos do pintor de CPU por quadro (orcamento de 3.000)**
+  - motor: `lib/src/features/editor/presentation/widgets/scene3d_painter.dart:278 (orcamentoDeCpu) e :283 (_tetoDeFaces)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle direto; falta o aviso dizer o numero ("esta cena pede N triangulos, o limite em CPU e 3.000").
+- `o` **Substituto na tela quando a cena e pesada demais para o processador**
+  - motor: `lib/src/features/editor/presentation/widgets/scene3d_painter.dart:392 (a porta) e :288 (_pintarPesadoDemais)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O desenho nao explica nada nem oferece saida; faltaria um texto com o motivo e um botao "tentar a GPU".
+- `o` **Teto de faces do pintor de CPU (40.000, ou 12.000 em rascunho)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1334-1335 (tetoDeFacesCpu, tetoDeFacesCpuRascunho); aplicado em :1378 e :1152`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada para o usuario; constante do motor.
+- `*` **Ignorar o teto na exportacao (respeitarOrcamento)**
+  - motor: `lib/src/features/editor/presentation/widgets/scene3d_painter.dart:266 e :283; passado em palco_de_previa.dart:4103`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (o valor vem do proprio palco, nao de uma escolha)`
+  - falta: Nada; e a regra certa. Falta so dizer na exportacao que ela vai levar a cena inteira mesmo quando a previa mostrou o substituto.
+- `o` **Quadro guardado: reaproveitar o desenho quando nada da cena mudou**
+  - motor: `lib/src/features/editor/presentation/widgets/scene3d_painter.dart:424 (_ChaveDoQuadro), :445 (pegar) e :210 (quadroGuardadoAtivo, so para testes)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; e otimizacao interna.
+- `o` **Estimar quantos triangulos a cena pede antes de desenhar**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1120 (trianglesEstimados) e :1146 (facesQueONoDesenha); chamado em scene3d_painter.dart:390`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mostrar o numero junto da cena (hoje so vai para o registro de travadas, registro_de_travadas.dart:278).
+- `o` **LOD automatico por contagem de triangulos (acima de 150 mil vai ao baixo, acima de 60 mil ao medio)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:421 (lodAutomatico) e lib/src/features/editor/domain/scene3d.dart:1174 (_automaticLod)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle; os limiares poderiam aparecer num modo tecnico.
+- `o` **Gerar os dois niveis de detalhe de uma malha importada (medio e baixo, por agrupamento de vertices)**
+  - motor: `lib/src/features/editor/domain/lod3d.dart:137 (gerarLods) e :27 (simplificarPorGrade); chamado em glb_import.dart:336 e project_store.dart:1421`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um controle de "quanto simplificar" na importacao, e o numero de faces de cada nivel visivel na ficha do modelo.
+- `*` **Medir quanto da superficie um LOD conservou (area da malha)**
+  - motor: `lib/src/features/editor/domain/lod3d.dart:151 (areaDaMalha)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (nenhum arquivo de lib chama)`
+  - falta: E ferramenta de teste; no maximo entraria na ficha do modelo importado.
+- `*` **Ficha do ultimo quadro: motor, nivel, triangulos, chamadas, texturas, tiles de sombra, tamanho do alvo e escala**
+  - motor: `lib/src/features/editor/application/preview_stats.dart:280 (Estatisticas3D); publicada em scene3d_gpu.dart:456`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA no editor; so lida em lib/src/features/settings/presentation/estresse3d_screen.dart:432`
+  - falta: Um cracha/overlay na previa com essas oito informacoes. O dado e publicado a cada quadro e o editor nunca o mostra.
+- `*` **Memoria do processo em MB (RSS) durante a cena**
+  - motor: `lib/src/features/editor/application/preview_stats.dart:27 (rssMb); escrito em qualidade3d_controller.dart:224`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA no editor (usado so no relatorio de estresse, estresse3d_screen.dart:414)`
+  - falta: Entra no mesmo overlay de diagnostico que nao existe.
+- `*` **Registro de travadas com o custo da cena 3D em cada quadro lento**
+  - motor: `lib/src/features/editor/application/registro_de_travadas.dart:278 (marcarCena), :168 (marcando) e :295 (emTexto); marcado em scene3d_painter.dart:391 e scene3d_gpu.dart:303`
+  - comando: `NENHUM COMANDO`
+  - porta: `lib/src/features/settings/presentation/settings_tab.dart:159 (_TravadasRow)`
+  - falta: Ja tem porta em Ajustes; falta o registro apontar tambem o nivel de qualidade em vigor no momento da travada.
+- `*` **Bancada de perfil do motor 3D (fases e contadores por quadro)**
+  - motor: `lib/src/features/editor/application/perfil3d.dart:26 (ligado), :32 (fase), :44 (contar), :63 (relatorio)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (nasce desligado e nenhuma tela liga)`
+  - falta: Um interruptor de "modo tecnico" que ligue Perfil3D e mostre o relatorio; hoje so testes o ligam.
+- `*` **Teste de estresse do motor: nove cenas que miram cada recurso que ja matou app**
+  - motor: `lib/src/features/editor/domain/estresse3d.dart:21 (TesteDeEstresse) e :33 (ReceitaDeEstresse)`
+  - comando: `updateScene3D (lib/src/features/editor/application/editor_controller.dart:1573)`
+  - porta: `lib/src/features/settings/presentation/estresse3d_screen.dart:330`
+  - falta: Ja tem porta (Ajustes > Cena 3D > teste de estresse). E o unico lugar de todo o app que chama updateScene3D.
+- `*` **Degradacao automatica da cena por passos (reflexo, sombra da segunda luz em diante, MSAA, ambiente)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2197 (degradeScene)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (nenhum arquivo de lib chama degradeScene)`
+  - falta: Codigo morto: a escada de degradacao real e a das receitas. Ou se liga a alguem, ou se apaga — hoje e a unica coisa que le Scene3D.msaa.
+- `*` **Orcamento de perfil baixo (chamadas, triangulos, luzes, luzes com sombra, memoria)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2155 (lowProfileBudget) e :2148 (SceneBudget)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (nenhum chamador em lib)`
+  - falta: Codigo morto; o orcamento que vale e o de orcamento_render.dart.
+- `*` **Estimativa de memoria da cena em MB (geometria, texturas, panorama, sonda)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2163 (estimateSceneMemoryMb)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (nenhum chamador em lib)`
+  - falta: Codigo morto e concorrente de estimarGpu; nada na tela usa.
+- `*` **Qualidade adaptativa antiga por nivel 0-10 (sombras, oclusao de ambiente, MSAA, vies de LOD, escala)**
+  - motor: `lib/src/features/editor/application/renderer3d/adaptive_quality.dart:5 (AdaptiveQuality), :18-20 (shadows, ambientOcclusion, msaa, lodBias)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA (a classe nao e instanciada em lugar nenhum de lib)`
+  - falta: Codigo morto, sobra do caminho Filament. Traz a unica nocao de OCLUSAO DE AMBIENTE do projeto — que, portanto, nao existe em nenhum render vivo.
+
+### Correcoes do conferente (8)
+
+- **Modo rascunho: sem sombra, sem DOF, sem ambiente por imagem enquanto toca**
+  - afirmado: NENHUM COMANDO (nenhum metodo do EditorController escreve draftMode)
+  - verdade: TEM PORTA. O EditorController de fato nao escreve draftMode, mas a presentation escreve direto: lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4093 faz `l.scene.copyWith(draftMode: true)` e lib/src/features/editor/presentation/widgets/scene3d_gpu_view.dart:118 repete o mesmo copyWith; o gatilho e o ValueListenableBuilder de PlaybackController.tocandoAgora (palco_de_previa.dart:4063-4065, `final rascunho = tocando && !exporting`), e o mesmo booleano vai como `rascunho:` para Scene3DGpuView -> Scene3DGpu.sincronizar/configurarProfundidadeDeCampo/desenhar. A porta e o botao de Play.
+- **Nivel de pressao da cena (seguro, alerta, pressao, emergencia)**
+  - afirmado: NENHUM COMANDO
+  - verdade: TEM PORTA, e ela mostra o valor na tela. lib/src/features/settings/presentation/estresse3d_screen.dart:137 e :405 declaram/zeram `NivelDePressao _pressaoPior`, :420-424 amostram `ControladorDeQualidade3D.instancia.pressao.value` a cada 500 ms, e :464 grava `pressaoPior: nivelDePressaoRotulo(_pressaoPior)` no ResultadoDeEstresse, que e renderizado em texto por `ResultadoDeEstresse.linha` (:91-107) na tela Ajustes > Teste de estresse do motor 3D (aberta por _EstresseRow em settings_tab.dart:440-448).
+- **Estimar quantos triangulos a cena pede antes de desenhar**
+  - afirmado: NENHUM COMANDO
+  - verdade: TEM CHAMADOR EM PRESENTATION: lib/src/features/editor/presentation/widgets/scene3d_painter.dart:390 chama `trianglesEstimados(scene, teto: _tetoDeFaces)` a cada quadro do preview, e :391 passa o resultado para RegistroDeTravadas.marcarCena. E o unico chamador de producao da funcao, e ele esta sob presentation/.
+- **Teto de triangulos do pintor de CPU por quadro (orcamento de 3.000)**
+  - afirmado: NENHUM COMANDO
+  - verdade: O RECURSO VIVE DENTRO DA PRESENTATION e e ligado/desligado por ela. `static const orcamentoDeCpu = 3000` esta em lib/src/features/editor/presentation/widgets/scene3d_painter.dart:278, `_tetoDeFaces` em :282-283 e a comparacao em :392; o interruptor `respeitarOrcamento` e passado pela propria UI em lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4103 (`respeitarOrcamento: !exporting`) — preview respeita o teto, exportacao nao.
+- **Substituto na tela quando a cena e pesada demais para o processador**
+  - afirmado: NENHUM COMANDO
+  - verdade: TEM PORTA e e visivel ao usuario: lib/src/features/editor/presentation/widgets/scene3d_painter.dart:392-395 chama `_pintarPesadoDemais(canvas, size, pedidos)` e retorna, desenhando o substituto no palco. Quem decide se ele pode aparecer e a presentation: palco_de_previa.dart:4103 passa `respeitarOrcamento: !exporting`.
+- **Quadro guardado: reaproveitar o desenho quando nada da cena mudou**
+  - afirmado: NENHUM COMANDO
+  - verdade: IMPLEMENTADO E USADO EM PRESENTATION: lib/src/features/editor/presentation/widgets/scene3d_painter.dart:180-210 (_QuadrosGuardados, `quadroGuardadoAtivo`) e :413-459 — monta `_ChaveDoQuadro`, tenta `_QuadrosGuardados.pegar(chave)`, serve com `canvas.drawPicture(guardado.picture)` ou grava o Picture novo. Roda em todo repaint do palco; nao ha nada de inerte aqui.
+- **Escolher o nivel mais alto que cabe no orcamento antes do primeiro quadro**
+  - afirmado: NENHUM COMANDO
+  - verdade: TEM PORTA NOS AJUSTES: lib/src/features/settings/presentation/settings_tab.dart:487-530 (_Qualidade3DRow, montada em :155) expoe o segmentado `Qualidade 3D` com TetoDeQualidade3D.values e chama `ControladorDeQualidade3D.instancia.definirTeto(t)` (:508), que dispara _registrarDeNovo() -> escolherPeloOrcamento(...) em qualidade3d_controller.dart:107 e :129-140. A mesma linha ainda le `c.nivel` num ValueListenableBuilder (:513-520) e imprime o nivel escolhido e a explicacao 'Automatica escolhe pelo orcamento de memoria do aparelho'.
+- **Descer um degrau quando o quadro passa de 33 ms (e subir depois de 120 quadros folgados)**
+  - afirmado: NENHUM COMANDO
+  - verdade: E ARMADO E REZERADO POR PRESENTATION, e o resultado aparece na tela. lib/src/features/editor/presentation/widgets/scene3d_gpu_view.dart:69 chama `ControladorDeQualidade3D.instancia.entrou()` (e :102 `saiu()`), que registra o addTimingsCallback que alimenta amostraDeQuadro (qualidade3d_controller.dart:178-181, 285-289); settings_tab.dart:508 chama `definirTeto`, que zera `_degrausPorTempo/_lentos/_rapidos` (qualidade3d_controller.dart:101-105); e estresse3d_screen.dart:436/468 copia `controlador.historico` para `transicoes`, impresso no relatorio (estresse3d_screen.dart:105).
+
+---
+
+## Selecao, vistas e estado de estudio (motor 3D do Aurea)
+
+Varri camera3d.dart (vistas/enquadramento/navegacao), scene3d.dart (SavedView, pickNodeAt), layer.dart (Scene3DLayer.view/showHelpers), editor_controller.dart e os dois arquivos do estudio. Resultado: 44 recursos. Apenas TRES chegam a tela, e todos pelo mesmo arquivo (lib/src/features/editor/presentation/widgets/painel_da_cena.dart): trocar de vista fixa (linha 65), enquadrar a cena inteira (linha 144) e duplicar camera (linha 108). Achados duros: (1) lib/src/features/editor/domain/estudio_ux.dart e lib/src/features/editor/application/estudio_preferencia.dart nao sao importados por NENHUM arquivo do repositorio — nem por lib, nem por test (`grep -rln "estudio_ux|estudio_preferencia" --include=*.dart` volta vazio): grade de encaixe, trava de eixo, as quatro ferramentas, a hierarquia em arvore, a busca por nome e as quatro dicas de boas-vindas sao codigo morto por inteiro; (2) EstudioPreferencia.avancado (estudio_preferencia.dart:28) esta grampeado em `true` e definirAvancado (linha 31) grava `true` qualquer que seja o argumento — o interruptor Simples/Pro nao existe nem no dominio; (3) toda a cadeia de "navegar livre ate achar o enquadramento" existe (orbitCamera/dollyCamera/panCamera/resolveTouch) mas nao tem um unico chamador fora de test/, e por isso alignCameraToRender nunca recebe uma vista navegada; (4) pickNodeAt (scene3d.dart:2123) — a unica funcao que sabe QUAL solido esta sob o dedo — so e chamada em test/scene3d_test.dart: nao existe selecao de no no app, e por consequencia isolar, enquadrar-selecionado, focar, renomear, travar, agrupar e mostrar/esconder nao tem como saber em que objeto agir. As vistas salvas (SavedView) sao serializadas no projeto (project_store.dart:1826) e podem voltar de um arquivo, mas nao ha como criar, aplicar nem apagar uma pela tela.
+
+- `*` **Olhar pela camera da cena (vista "Camera")**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:530`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: a grade de vistas do painel ja tem o chip "Camera".
+- `*` **Vista de frente (ortografica)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:531`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: chip "Frente" na grade de vistas.
+- `*` **Vista de tras**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:532`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: chip "Tras".
+- `*` **Vista da esquerda**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:533`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: chip "Esquerda".
+- `*` **Vista da direita**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:534`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: chip "Direita".
+- `*` **Vista de cima (topo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:535`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: chip "Topo".
+- `*` **Vista de baixo (base)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:536`
+  - comando: `setScene3DView`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:65`
+  - falta: NADA: chip "Base".
+- `o` **Vista livre 1**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:537`
+  - comando: `setScene3DView`
+  - porta: `NENHUMA`
+  - falta: O painel filtra custom1/custom2 fora da grade (painel_da_cena.dart:60). Falta o chip "Livre 1" e, antes dele, um jeito de gravar o angulo dessa vista: hoje orthoViewCamera cai no ramo `_` (camera3d.dart:569) e devolve sempre o mesmo tres-quartos fixo para as duas.
+- `o` **Vista livre 2**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:538`
+  - comando: `setScene3DView`
+  - porta: `NENHUMA`
+  - falta: Mesmo caso da Livre 1: chip escondido e sem angulo proprio — as duas livres mostram a mesma coisa.
+- `*` **O nome de cada vista em portugues**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:541`
+  - comando: `NENHUM COMANDO`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:61`
+  - falta: NADA: e o rotulo dos chips.
+- `*` **A camera ortografica de cada vista fixa (distancia, escala e centro)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:556`
+  - comando: `NENHUM COMANDO`
+  - porta: `lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4083`
+  - falta: A vista fixa desenha, mas com distancia 1500 e escala 0,5 chumbadas. Falta um controle de aproximar/afastar na vista ortografica (um slider de escala) — hoje nao ha como enquadrar dentro dela.
+- `o` **A ordem das vistas no menu da camera**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:184`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: A constante vistasPredefinidas nao e importada por ninguem; o painel remonta a lista na mao a partir de SceneView.values. Falta o painel consumir a constante (ou apagar a constante).
+- `o` **Guardar o enquadramento de agora como vista salva**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:623`
+  - comando: `saveSceneView`
+  - porta: `NENHUMA`
+  - falta: Um botao "Salvar esta vista" com campo de nome no painel da cena. O comando ja recebe nome + RenderCamera, mas nao ha quem lhe entregue a camera navegada.
+- `o` **A lista de vistas salvas do projeto**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:720`
+  - comando: `NENHUM COMANDO (le-se por updateScene3D)`
+  - porta: `NENHUMA`
+  - falta: Uma lista das vistas salvas no painel. Elas ja gravam e leem do arquivo do projeto (project_store.dart:1826), entao um projeto importado pode ter vistas invisiveis para sempre.
+- `o` **Voltar para uma vista salva com um toque**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719`
+  - comando: `applySavedView`
+  - porta: `NENHUMA`
+  - falta: Cada linha da lista de vistas salvas precisa ser tocavel.
+- `o` **Apagar uma vista salva**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2309`
+  - comando: `removeSceneView`
+  - porta: `NENHUMA`
+  - falta: Um X (ou deslizar) em cada linha da lista de vistas salvas.
+- `o` **Alinhar a camera ao enquadramento navegado no estudio**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:719`
+  - comando: `alignCameraToRender`
+  - porta: `NENHUMA`
+  - falta: Um botao "A camera assume esta vista". Falta antes disso a propria vista livre: nao existe estado de camera navegada no app (orbitCamera/panCamera/dollyCamera nao sao chamados por ninguem).
+- `o` **Alinhar a camera a vista fixa em que se esta**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2348`
+  - comando: `alignCameraToCurrentView`
+  - porta: `NENHUMA`
+  - falta: Um botao no painel da cena, aceso so quando cena.view != SceneView.camera. E o passo que falta para as vistas fixas servirem de ferramenta de composicao e nao so de conferencia.
+- `o` **Zerar o rolamento da camera ao alinhar (rotX/rotY/rotZ = 0)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:736`
+  - comando: `alignCameraToRender / alignCameraToCurrentView / applySavedView`
+  - porta: `NENHUMA`
+  - falta: Vem de brinde no alinhamento, mas como nenhum alinhamento tem botao, nao ha como desentortar uma camera pela tela.
+- `*` **Enquadrar a cena inteira**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:743`
+  - comando: `frameSceneAll`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: NADA: e a acao "Enquadrar a cena inteira".
+- `o` **Enquadrar so o objeto escolhido**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2184`
+  - comando: `frameSceneNode`
+  - porta: `NENHUMA`
+  - falta: Selecao de no (nao existe: pickNodeAt so roda em teste) mais um botao "Enquadrar isto" — ou o toque duplo no palco que as dicas prometem.
+- `o` **A margem do enquadramento (o ar em volta do objeto)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:690`
+  - comando: `NENHUM COMANDO (frameSceneAll/frameSceneNode usam o padrao 1.35)`
+  - porta: `NENHUMA`
+  - falta: Um slider de margem ao lado do botao de enquadrar; hoje o valor e fixo e nenhum comando o repassa.
+- `*` **O enquadramento tambem acerta a distancia de foco**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:712`
+  - comando: `frameSceneAll / frameSceneNode`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: NADA para a cena inteira; para o objeto, depende da selecao que nao existe.
+- `o` **Focar a profundidade de campo no objeto escolhido**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2160`
+  - comando: `focusCameraOnNode`
+  - porta: `NENHUMA`
+  - falta: Selecao de no mais um botao "Focar aqui". Sem ele, a distancia de foco so pode ser um numero chutado.
+- `*` **O volume que envolve a cena inteira (base do enquadrar tudo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:743`
+  - comando: `frameSceneAll`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:144`
+  - falta: NADA — mas note que nos invisiveis e nulos ficam de fora do calculo (camera3d.dart:748), e nao ha aviso na tela quando a cena inteira esta escondida e o enquadrar nao faz nada.
+- `o` **Isolar o objeto (esconder todo o resto)**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2134`
+  - comando: `isolateSceneNode`
+  - porta: `NENHUMA`
+  - falta: Selecao de no mais um botao de olho "So este". O comando ja e um interruptor: chamar de novo no mesmo no desfaz.
+- `o` **Lembrar quem estava visivel antes de isolar**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:175`
+  - comando: `isolateSceneNode`
+  - porta: `NENHUMA`
+  - falta: Nada no dominio; a memoria e limpa ao abrir outro projeto (editor_controller.dart:361). Falta so o botao que a usa.
+- `o` **Saber qual objeto esta isolado agora**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:176`
+  - comando: `NENHUM COMANDO (campo privado, sem getter)`
+  - porta: `NENHUMA`
+  - falta: Um getter publico e um cracha "isolado" no cabecalho — sem isso a tela nunca poderia acender o botao de isolamento.
+- `o` **Escolher qual solido esta sob o dedo**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2123`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: E a peca central que falta: um GestureDetector no palco 3D que chame pickNodeAt no SceneFrame e grave o id num provider de no selecionado. Nada em lib/ chama esta funcao (so test/scene3d_test.dart:339).
+- `o` **Decidir se um dedo arrastando move a camada, gira a camera ou seleciona**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:587`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O gesto do palco. resolveTouch existe e e testado (test/scene3d_test.dart:543), mas nenhum widget o consulta — e por isso nao ha modo de navegacao nem toque que seleciona.
+- `o` **Girar a camera em volta de um pivo fixo (orbita de um dedo)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:600`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Arrasto de um dedo no palco alimentando orbitCamera e um estado de camera navegada — que nao existe. Sem ele, alignCameraToRender nao tem de onde receber vista.
+- `o` **Aproximar/afastar a camera com a pinca (sem mexer na lente)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:646`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Gesto de pinca no palco. Hoje so a lente (mm) tem controle (painel_da_cena.dart:78), que e a outra grandeza — exatamente a confusao que o comentario do dominio pede para evitar.
+- `o` **Deslizar a camera com dois dedos (pan)**
+  - motor: `lib/src/features/editor/domain/camera3d.dart:662`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Arrasto de dois dedos no palco.
+- `o` **Ver a cena como arvore, cada pai seguido dos filhos**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:95`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um painel de hierarquia. A funcao esta pronta e nao e importada por arquivo nenhum do repositorio.
+- `o` **Objeto orfao nao some: volta para a raiz da arvore**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:108`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Depende do painel de hierarquia acima.
+- `o` **Luzes e cameras listadas depois dos objetos**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:129`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Depende do painel de hierarquia. As cameras ja aparecem soltas em painel_da_cena.dart:95, mas por outro caminho, sem luzes e sem arvore.
+- `o` **O nome de cada tipo de luz na lista (direcional, ponto, ambiente, spot)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:152`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: A lista de luzes na tela — nao existe nenhuma.
+- `o` **Marcar na lista o item selecionado e a camera no ar**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:89`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um provider de no selecionado (nao existe: o controller so tem selectedLayerProvider:59 e multiSelectProvider:168, ambos de CAMADA) para preencher os parametros `selecionado`/`cameraAtiva` de hierarquiaDaCena.
+- `o` **Ver de relance se o objeto esta escondido, travado ou e um grupo**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:85`
+  - comando: `setSceneNodeVisible (editor_controller.dart:2222) / setSceneNodeLocked (2002)`
+  - porta: `NENHUMA`
+  - falta: Icones de olho e cadeado em cada linha da hierarquia.
+- `o` **Buscar objeto pelo nome, sem ligar para caixa nem acento**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:160`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um campo de busca no topo do painel de hierarquia. A funcao (e o tira-acentos de estudio_ux.dart:169) nunca foi ligada em nada.
+- `o` **Ferramenta ativa do estudio: Selecionar, Mover, Girar ou Escalar**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:50`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: A barra de quatro ferramentas embaixo do palco e um estado que guarde qual esta ativa. O enum e o rotulo (estudio_ux.dart:52) nao sao importados por ninguem.
+- `o` **Encaixar o valor no multiplo mais perto (snap na grade)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:15`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Encaixar na grade" e o arrasto no palco que passe por encaixar()/encaixarVec3 (estudio_ux.dart:24).
+- `o` **Passo de encaixe ao mover (10 unidades)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:20`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nem o valor fixo chega a tela; falta o interruptor de encaixe e, depois, um campo para trocar o passo.
+- `o` **Passo de encaixe ao girar (15 graus)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:21`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesmo caso: sem ferramenta Girar no palco, o passo nao tem onde ser aplicado.
+- `o` **Passo de encaixe ao escalar (0,25x)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:22`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesmo caso da escala: falta a ferramenta Escalar.
+- `o` **Travar o arrasto num eixo so (X, Y ou Z)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:30`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Tres chips X/Y/Z (mais "Livre") ao lado das ferramentas, e o arrasto passando por travarEixo (estudio_ux.dart:39). O rotulo pronto esta em estudio_ux.dart:32 e ninguem o le.
+- `o` **Mostrar ou esconder as ajudas de cena (grade do chao, eixos, frustum)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2548`
+  - comando: `setScene3DHelpers`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Ajudas" no painel da cena. Nasce LIGADO (layer.dart:2447) e so o palco o le (palco_de_previa.dart:4054) — nao ha como desliga-lo, e ele ja custou desempenho antes (ver docs/motor3d-auditoria.md).
+- `o` **Grade do chao da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:739`
+  - comando: `NENHUM COMANDO (so pelo generico updateScene3D, editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor proprio. O campo grava e le do arquivo do projeto (project_store.dart:1634 e 1798) e os templates o desligam na mao, mas a pessoa nao tem chave nenhuma.
+- `o` **Lembrar que a pessoa ligou o modo avancado (Simples/Pro)**
+  - motor: `lib/src/features/editor/application/estudio_preferencia.dart:28`
+  - comando: `NENHUM COMANDO (nao e do EditorController; definirAvancado esta em estudio_preferencia.dart:31)`
+  - porta: `NENHUMA`
+  - falta: O interruptor Simples/Pro. E mais grave que ausencia de tela: o getter devolve `true` chumbado e definirAvancado grava `true` seja qual for o argumento — mesmo com o interruptor pronto, nao daria para voltar ao Simples.
+- `o` **Lembrar que as dicas de boas-vindas ja foram lidas**
+  - motor: `lib/src/features/editor/application/estudio_preferencia.dart:29`
+  - comando: `NENHUM COMANDO (marcarDicasVistas em estudio_preferencia.dart:35)`
+  - porta: `NENHUMA`
+  - falta: A folha de dicas na primeira abertura, com um "Entendi" que chame marcarDicasVistas. A classe inteira nao e importada por ninguem.
+- `o` **As quatro dicas de boas-vindas do estudio**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:196`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: A folha que as mostra. Repare que as quatro prometem coisas que hoje nao existem: tocar para selecionar, tocar duas vezes para enquadrar, um dedo gira a camera e a barra Mover/Girar/Escalar.
+- `o` **Renomear um objeto da cena**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2219`
+  - comando: `renameSceneNode`
+  - porta: `NENHUMA`
+  - falta: Toque longo na linha da hierarquia abrindo um campo de texto.
+- `o` **Duplicar um objeto ao lado do original**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2206`
+  - comando: `duplicateSceneNode`
+  - porta: `NENHUMA`
+  - falta: Selecao de no mais um item "Duplicar" no menu da linha.
+- `o` **Agrupar varios objetos sob um nulo novo**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2286`
+  - comando: `groupSceneNodes`
+  - porta: `NENHUMA`
+  - falta: Selecao MULTIPLA de nos (nao existe: multiSelectProvider guarda ids de camada, nao de no) e um botao "Agrupar".
+- `o` **A camera passa a olhar para um objeto**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2273`
+  - comando: `setCameraLookAt`
+  - porta: `NENHUMA`
+  - falta: Um seletor "Olhar para" na linha da camera, listando os nos da cena — e um jeito de limpar (o comando aceita null).
+- `o` **Renomear uma camera**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2232`
+  - comando: `renameSceneCamera`
+  - porta: `NENHUMA`
+  - falta: Toque longo no nome da camera em painel_da_cena.dart:96, que hoje so corta para ela.
+- `*` **Duplicar uma camera com o mesmo enquadramento**
+  - motor: `lib/src/features/editor/application/editor_controller.dart:2241`
+  - comando: `duplicateSceneCamera`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_da_cena.dart:108`
+  - falta: NADA: e o icone de copiar na linha da camera.
+
+### Correcoes do conferente (1)
+
+- **A ordem das vistas no menu da camera**
+  - afirmado: NENHUM COMANDO (sem porta na interface)
+  - verdade: Ha porta: lib/src/features/editor/presentation/widgets/painel_da_cena.dart:57-66 monta um menu de vistas (titulo 'De onde se olha') percorrendo SceneView.values e chamando sceneViewLabel, o que rende exatamente Camera, Frente, Tras, Esquerda, Direita, Topo, Base - a mesma ordem da constante vistasPredefinidas. O que de fato nao tem leitor nenhum e a constante do motor (lib/src/features/editor/domain/estudio_ux.dart:184): o painel reimplementou a ordem em vez de consumi-la. Como recurso visivel ao usuario, o menu ordenado existe; como constante do motor, esta morta.
+
+---
+
+## Ambiente, mundo e ceu (Scene3D + Panorama3D + ReflectionProbe3D + EnvironmentKind)
+
+Varri o dominio (scene3d.dart, panorama3d.dart, element3d.dart, environment_radiance.dart, layer.dart), o motor de GPU (scene3d_gpu.dart), o pintor de CPU (scene3d_painter.dart), o cache (panorama_cache.dart) e o EditorController inteiro. Resultado duro: o EditorController NAO TEM UM UNICO comando nomeado para nenhum campo desta dimensao. O grep por environment/envReflect/panorama/reflectionProbe/planarFloor/fog*/skyColor/groundColor/tonemap/showFloorGrid/ambient dentro de editor_controller.dart devolve tres linhas, e nenhuma delas escreve num campo da cena (linha 384 e a cor de fundo do PROJETO, 534 e um comentario, 1565 e um comentario). As unicas portas sao dois metodos genericos que recebem uma funcao de fora: updateScene3D (editor_controller.dart:1573) e updateElement3D (editor_controller.dart:1550). Do lado da tela e pior: o grep por esses mesmos nomes filtrado por lib/**/presentation/** nao acha NENHUMA escrita — so leituras do pintor. A unica chamada de updateScene3D em presentation e lib/src/features/settings/presentation/estresse3d_screen.dart:330, que troca a cena INTEIRA por uma receita de teste de estresse; e a unica chamada de updateElement3D em presentation e lib/src/features/editor/presentation/widgets/painel_de_cor.dart:163, que so escreve a cor. Ou seja: 44 recursos de ambiente que o motor sabe executar, honrados no render, salvos no arquivo (project_store.dart:1429-1469 e 1622-1789) e usados pelos templates de projeto — e ZERO chegam ao dedo do usuario. O painel da cena (painel_da_cena.dart) so oferece vista, camera ortografica, distancia focal e cameras salvas; nao existe aba Ambiente, nem Neblina, nem Panorama, nem Sonda. Tres achados extras: (a) Panorama3D.sourceLayerId / PanoramaSource.layer / comesFromLayer estao definidos e sao salvos no projeto, mas NENHUM renderizador le — a funcionalidade "usar uma camada como ceu" existe so no formato; (b) installUrbanEnvironment (panorama_cache.dart:30) instala o HDR urbano dos assets e nunca e chamada de lugar nenhum; (c) Panorama3D.approximate e convertedAtImport so viajam ate o disco, ninguem os consome no desenho. Vale notar tambem que tonemap, showFloorGrid, planarFloorReflection, envReflect e reflectionProbe existem SO no pintor de CPU: o grep por eles em scene3d_gpu.dart nao retorna nada, entao no caminho de GPU (o de producao desde o IPA 38) esses cinco simplesmente nao acontecem.
+
+- `o` **Escolher o ambiente que os objetos refletem (Estudio, Ceu, Por do sol, Neon, Noite, Branco, Interior)**
+  - motor: `lib/src/features/editor/domain/element3d.dart:36 (enum EnvironmentKind) e lib/src/features/editor/domain/scene3d.dart:679 (Scene3D.environment)`
+  - comando: `NENHUM COMANDO — so o generico updateScene3D (editor_controller.dart:1573), que exige o chamador montar o copyWith`
+  - porta: `NENHUMA`
+  - falta: Uma tira de 7 miniaturas (uma esfera de metal renderizada em cada ambiente) numa aba Ambiente do painel da cena, chamando updateScene3D com copyWith(environment:)
+- `o` **Nome legivel de cada ambiente para mostrar na tela**
+  - motor: `lib/src/features/editor/domain/element3d.dart:38 (environmentLabel)`
+  - comando: `NENHUM COMANDO (e funcao pura de leitura)`
+  - porta: `NENHUMA`
+  - falta: Nada alem do seletor acima: o rotulo ja esta pronto e em portugues, so nao ha widget que o imprima
+- `o` **Forca global do reflexo do ambiente (multiplica a refletividade de cada material)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:680 (envReflect, usado em scene3d.dart:1906)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1 "Reflexo do ambiente" na aba Ambiente; hoje so os templates escrevem (ex.: flor_template.dart:846)
+- `o` **Intensidade da luz ambiente da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:721 (ambient, usado em scene3d.dart:1832-1834 e scene3d_gpu.dart:977)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider "Luz ambiente" 0..1 na aba Ambiente
+- `o` **Cor da luz que vem de cima (ceu)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:731 (skyColor)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um EscolhaDeCor "Cor do ceu" no painel da cena (o widget de cor ja existe em painel_de_cor.dart, so nao ha caso para a cena)
+- `o` **Cor da luz que volta do chao**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:732 (groundColor)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um EscolhaDeCor "Cor do chao" ao lado do de ceu
+- `o` **Ceu procedural com gradiente e sol vindo da luz principal (na GPU)**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:1134 (_ceuProcedural), acionado quando Scene3D.environment == EnvironmentKind.ceu (scene3d_gpu.dart:1040)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O proprio seletor de ambiente: sem uma opcao "Ceu" alcancavel, o gradiente de zenite/horizonte/chao com sol nunca liga
+- `o` **Assar o ambiente em radiancia HDR equiretangular para reflexo e iluminacao**
+  - motor: `lib/src/features/editor/domain/environment_radiance.dart:8 (environmentRadiance), consumido em scene3d_gpu.dart:1084`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada visivel: e maquinaria por tras do seletor de ambiente
+- `o` **Curva de saida ACES (tonemap) que impede o realce de estourar em branco chapado**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:736 (tonemap, aplicado em scene3d.dart:2015)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor Cupertino "Curva de cinema (ACES)" na aba Ambiente. Atencao: o caminho de GPU nao le este campo
+- `o` **Cor de fundo da cena 3D (atras de tudo)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:738 (background, desenhado em scene3d_painter.dart:467 e lido em scene3d_gpu_view.dart:156)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573). O setBackgroundColor (editor_controller.dart:384) e do PROJETO, nao da cena`
+  - porta: `NENHUMA`
+  - falta: Um EscolhaDeCor "Fundo da cena" com opcao de limpar (o campo e anulavel: nulo = transparente)
+- `o` **Grade do piso ligada ou desligada**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:739 (showFloorGrid, desenhada em scene3d_painter.dart:399 e :473)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Grade do piso". Nota dura: a grade so aparece se showHelpers tambem estiver ligado, e setScene3DHelpers (editor_controller.dart:1957) tambem nao tem nenhuma chamada em presentation
+- `o` **Reflexo planar do piso (o objeto espelhado no chao)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:686 (planarFloorReflection, desenhado em scene3d_painter.dart:487)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Reflexo no chao" na aba Ambiente
+- `o` **Rugosidade do reflexo do piso (o quanto o espelho do chao borra)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:687 (planarFloorRoughness, usado em scene3d_painter.dart:724 e :730)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1 logo abaixo do interruptor de reflexo no chao (0 = espelho, 1 = quase apagado)
+- `o` **Densidade da neblina (perspectiva atmosferica)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:691 (fogDensity), calculada em scene3d.dart:693 (fogAt) e aplicada em scene3d_gpu.dart:1185 e scene3d_painter.dart:913`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider "Neblina" (0 desliga) numa aba Neblina; hoje so os templates ligam
+- `o` **Distancia onde a neblina comeca**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:691 (fogStart), usado em scene3d.dart:693 e scene3d_gpu.dart:1185`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um segundo slider "Comeca a" na aba Neblina, so habilitado quando a densidade for maior que zero
+- `o` **Cor da neblina**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:692 (fogColor), usado em scene3d_painter.dart:1032 e scene3d_gpu.dart:1186`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um EscolhaDeCor "Cor da neblina" na aba Neblina
+- `o` **Panorama pronto: escolher entre os seis ambientes de fabrica (Estudio, Por do sol, Noite, Neon, Branco, Interior)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:14 (enum PanoramaPreset) e :48 (Panorama3D.preset); a ponte para o ambiente esta em scene3d.dart:635 (environmentForPanorama)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: A mesma tira de miniaturas do ambiente, mas escrevendo panorama.copyWith(preset:) e chamando environmentForPanorama para manter os dois em acordo
+- `o` **Nome legivel de cada panorama pronto**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:16 (panoramaPresetLabel)`
+  - comando: `NENHUM COMANDO (funcao pura)`
+  - porta: `NENHUMA`
+  - falta: Nada alem da tira acima: o texto ja existe
+- `o` **Origem do panorama: predefinido, arquivo, camera do telefone ou camada do projeto**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:25 (enum PanoramaSource) e :49 (Panorama3D.source)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um seletor segmentado de origem no topo da aba Ambiente, que troca o resto do painel
+- `o` **Usar um arquivo HDR do disco como ambiente**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:50 (sourcePath) e :70 (hasImage); lido em panorama_cache.dart:73 e scene3d_painter.dart:571`
+  - comando: `NENHUM COMANDO — nao ha nenhum metodo de importacao de panorama no EditorController (o grep por 'panorama' no arquivo nao retorna nada)`
+  - porta: `NENHUMA`
+  - falta: Um botao "Importar HDR" que abra o seletor de arquivos, chame preparePanorama e grave o resultado pela updateScene3D
+- `o` **Usar uma camada do projeto como ceu**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:51 (sourceLayerId) e :71 (comesFromLayer)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Antes da tela, falta o motor: comesFromLayer nao e lido por nenhum renderizador (nem scene3d_painter.dart, nem scene3d_gpu.dart, nem panorama_cache.dart). Hoje o campo so vai e volta do disco em project_store.dart:1429/1458
+- `o` **Girar o ambiente (um angulo move o reflexo e a luz juntos)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:54 (rotationDegrees), aplicado em scene3d.dart:1800, scene3d_painter.dart:584 e scene3d_gpu.dart:974`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider circular 0-360 "Girar ambiente", que e o controle mais util da dimensao: reposiciona o brilho na superficie sem mexer em luz nenhuma
+- `o` **Intensidade do panorama (o quanto o ambiente ilumina)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:55 (intensity), usado em scene3d.dart:1830, scene3d_painter.dart:613/665 e scene3d_gpu.dart:978`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..4 "Intensidade do ambiente"
+- `o` **Desfocar o fundo do panorama (sujeito nitido, ceu borrado)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:56 (backgroundBlur), usado em scene3d_painter.dart:586/693 e scene3d_gpu.dart:1000`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..30 "Desfoque do fundo", habilitado so quando o fundo estiver visivel
+- `o` **Mostrar o panorama como fundo visivel (e nao so como reflexo)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:57 (showBackground), usado em scene3d_painter.dart:469 e scene3d_gpu.dart:1171 (skybox)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Mostrar o ceu no fundo". Nasce DESLIGADO, entao hoje nenhum usuario ve o ambiente que escolheu
+- `o` **Reforcar os realces do panorama (recuperar brilho de foto que nao e HDR)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:58 (highlightBoost), usado em scene3d_painter.dart:610 e :666`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..2 "Reforcar realces", junto do importador de foto
+- `o` **Marcar o ambiente como aproximado (foto de celular, nao HDR de verdade)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:61 (approximate)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O campo e decidido sozinho por preparePanorama e salvo (project_store.dart:1435), mas NENHUM renderizador le. Faltaria primeiro o motor usar, depois um cracha "aproximado" na ficha do ambiente
+- `o` **Cobertura do panorama em graus (foto que cobre so parte da esfera)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:62 (coverageDegrees), usado em panorama_cache.dart:182 e scene3d_painter.dart:645/651`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um campo numerico 1..360 no dialogo de importacao (preparePanorama ja aceita como parametro, so nao ha quem o chame)
+- `o` **Espelhar a foto para fechar os 360 graus**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:63 (mirrorTo360), usado em panorama_cache.dart:180 e scene3d_painter.dart:643/650`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Espelhar para fechar 360" no dialogo de importacao
+- `o` **Suavidade da emenda do panorama espelhado**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:64 (seamSoftness), usado em panorama_cache.dart:204`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..0,45 "Suavizar emenda", visivel so quando o espelhamento estiver ligado
+- `o` **Preencher o topo e o fundo da esfera (zenite e nadir) que a foto nao cobriu**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:65 (fillZenithNadir), usado em panorama_cache.dart:190`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Preencher topo e fundo" no dialogo de importacao
+- `o` **Marca de que o preparo custoso ja aconteceu na importacao**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:68 (convertedAtImport)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle: e bandeira interna, gravada em project_store.dart:1440 e nunca lida no desenho
+- `o` **Preparo automatico e deterministico do panorama na importacao (decide sozinho espelhar, suavizar emenda, preencher polos e reforcar realce a partir de quem tirou a foto)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:113 (preparePanorama)`
+  - comando: `NENHUM COMANDO — a funcao nao e chamada de dentro do EditorController`
+  - porta: `NENHUMA`
+  - falta: O botao de importar do item "arquivo HDR": ele chamaria preparePanorama(path:, coverageDegrees:, capturedWithPhone:) e o resto viria de graca
+- `*` **Instalar o HDR urbano que ja vem nos assets do app como ambiente**
+  - motor: `lib/src/features/editor/application/panorama_cache.dart:30 (installUrbanEnvironment)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA — a funcao nao tem UM UNICO chamador em lib/ inteiro`
+  - falta: Um item "Rua urbana (HDR)" na tira de ambientes que chame installUrbanEnvironment e grave o Panorama3D devolvido. O arquivo ja esta empacotado em assets/environments/urban_street_04_1k.hdr e ninguem consegue chegar nele
+- `*` **Garantir o panorama pronto antes de exportar (senao os primeiros quadros saem sem ceu)**
+  - motor: `lib/src/features/editor/application/panorama_cache.dart:89 (PanoramaCache.prepare)`
+  - comando: `NENHUM COMANDO (nao passa pelo EditorController)`
+  - porta: `lib/src/features/export/presentation/export_video_screen.dart:443`
+  - falta: Nada — este e o UNICO recurso da dimensao inteira que tem porta real na tela, e ainda assim automatico, sem controle do usuario
+- `o` **Sonda de reflexo da cena ligada ou desligada (objetos refletindo uns aos outros, e nao so o ceu)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:172 (ReflectionProbe3D.enabled), consumida em scene3d.dart:2036 (_sampleSceneProbe)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Objetos se refletem" numa aba Reflexos. Nasce DESLIGADA
+- `o` **Qualidade da sonda de reflexo (Baixa 128, Media 256, Alta 512 por face)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:133 (enum ProbeQuality), :136 (faceResolution), :142 (label) e :173 (campo quality)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres posicoes com os rotulos que ja existem em portugues (Baixa/Media/Alta)
+- `o` **Modo de atualizacao da sonda (Parado, Ao mover, Continuo)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:149 (enum ProbeUpdateMode), :152 (label) e :174 (campo updateMode)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres posicoes com os rotulos prontos, e uma linha de ajuda dizendo que Continuo custa seis capturas por volta
+- `o` **Uma sonda por objeto em vez de uma sonda para a cena toda**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:175 (perObject), aplicado em scene3d.dart:2043`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Reflexo por objeto" na aba Reflexos (mais caro, mais correto)
+- `o` **Posicao da sonda de reflexo no espaco**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:176 (position) e :3 (ProbePoint3D)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Tres campos X/Y/Z, ou melhor: uma alca arrastavel no palco, como a das camadas
+- `o` **Escolher quais objetos entram no reflexo**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:177 (includeNodeIds), decidido em :181 (includes)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de objetos da cena com caixinhas de marcar (vazio = todos)
+- `o` **Escolher quais objetos ficam de fora do reflexo**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:178 (excludeNodeIds), decidido em :181 (includes)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: A mesma lista, com um segundo estado "excluir" por item
+- `o` **Captura da sonda espalhada em seis faces, uma por quadro, com parada quando nada mudou**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:232 (ReflectionProbeScheduler) e :208 (ProbeCapturePass)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada de controle direto; no maximo um indicador "reflexo atualizando" enquanto isDirty for verdadeiro
+- `o` **Nivel de embaçamento do reflexo escolhido pela rugosidade do material (mip)**
+  - motor: `lib/src/features/editor/domain/panorama3d.dart:278 (roughnessMip), usado em scene3d.dart:2046 e panorama_cache.dart:354`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada: e derivado da rugosidade do material, que pertence a outra dimensao
+- `*` **Ambiente refletido por uma camada 3D simples (nao a cena)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2250 (Element3DLayer.environment), usado em element3d_painter.dart:160 e world3d_painter.dart:357`
+  - comando: `NENHUM COMANDO — so o generico updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA — a unica chamada de updateElement3D em presentation e painel_de_cor.dart:163, e ela so escreve a cor`
+  - falta: A mesma tira de 7 ambientes, no painel da camada 3D
+- `o` **Quanto a camada 3D simples reflete o ambiente (0 a 1)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2249 (Element3DLayer.reflect)`
+  - comando: `NENHUM COMANDO — so o generico updateElement3D (editor_controller.dart:1550)`
+  - porta: `NENHUMA`
+  - falta: Um slider "Reflexo" no painel da camada 3D; sem ele o campo fica preso no zero de fabrica e o ambiente da camada nunca aparece
+- `o` **Luz ambiente como um tipo de luz da cena (soma na intensidade do ambiente)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:246 (Light3DKind.ambient), somada em scene3d_gpu.dart:971-978 e tratada em scene3d_gpu.dart:917`
+  - comando: `addSceneLight (editor_controller.dart:2061) e updateSceneLight (editor_controller.dart:2072)`
+  - porta: `NENHUMA`
+  - falta: Um botao "Adicionar luz" com escolha de tipo no painel da cena; hoje o comando existe e ninguem o chama de lugar nenhum da tela
+- `o` **Rebaixamento automatico do ambiente quando o orcamento aperta (desliga reflexo do piso, baixa a sonda, corta a luz ambiente em 20%)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2197 (degradeScene, passos 1 e 5)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Nada obrigatorio; ajudaria um aviso na ficha da cena dizendo qual passo de degradacao esta ativo, para o usuario nao achar que o reflexo sumiu por bug
+- `o` **Contabilizar a memoria que o panorama e a sonda ocupam no orcamento da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2163 (estimateSceneMemoryMb, panorama em :2185 e sonda em :2188)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma linha "Ambiente: X MB" na ficha da cena, para o usuario entender por que a qualidade caiu ao ligar a sonda em Alta
+- `o` **Modo rascunho apaga sonda de reflexo e reflexo do piso durante a navegacao**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2039 (draftMode barra a sonda) e lib/src/features/editor/presentation/widgets/scene3d_painter.dart:487 (draftMode barra o reflexo do piso)`
+  - comando: `NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Rascunho" na barra da cena, ou o proprio motor ligando enquanto o dedo esta na tela e desligando ao soltar
+
+### Correcoes do conferente (1)
+
+- **Modo rascunho apaga sonda de reflexo e reflexo do piso durante a navegacao**
+  - afirmado: NENHUM COMANDO — so updateScene3D (editor_controller.dart:1573)
+  - verdade: TEM PORTA, e ela nao passa por updateScene3D: a propria camada de apresentacao liga o draftMode sozinha. lib/src/features/editor/presentation/widgets/palco_de_previa.dart:4065 calcula `final rascunho = tocando && !exporting;` e a linha 4093 entrega ao pintor `l.scene.copyWith(draftMode: true)`; lib/src/features/editor/presentation/widgets/scene3d_gpu_view.dart:118 faz o mesmo (`widget.rascunho ? widget.scene.copyWith(draftMode: true) : widget.scene`) enquanto a GPU nao esta pronta. E esse draftMode e exatamente o que desliga a sonda (scene3d.dart:2037 `if (!probe.enabled || scene.draftMode) return null;` e panorama3d.dart:249) e o reflexo do piso (scene3d_painter.dart:487 `if (scene.planarFloorReflection && !scene.draftMode)`). Ou seja: o recurso esta vivo e acionado pela interface a cada play, sem nenhum copyWith montado pelo chamador.
+
+---
+
+## Materiais e texturas do motor 3D
+
+O motor tem um material PBR completo por objeto da Cena 3D (Material3D, 18 campos), 12 materiais prontos (MaterialPreset3D) e um material separado, mais simples, para a camada "Elemento 3D" (5 estilos + degrade + brilho + imagem). NADA disso tem comando proprio no EditorController: uma varredura por TODOS os nomes de campo (baseColor, metallic, roughness, emissive, opacity, reflectivity, imagePath, faceImagePaths, normalStrength, occlusionStrength, alphaCutoff, doubleSided, packedChannels, textureWrapX/Y, textureLayerId, useModelMaterials, kind, name) em lib/src/features/editor/application/editor_controller.dart devolve apenas duas linhas (1890 e 1918), e as duas sao LEITURA de contagem de materiais de modelo importado, nao escrita. O unico caminho de escrita e o generico updateSceneNode (editor_controller.dart:1986) recebendo uma funcao — e a busca por chamadas dele em lib/**/presentation/** devolve ZERO. Ou seja: o painel da cena (painel_da_cena.dart) nao tem uma linha sequer sobre material; as unicas mencoes a material em presentation sao o import do Flutter, o pintor lendo n.material.baseColor para desenhar a alca (scene3d_painter.dart:1331) e a tela de exportacao juntando caminhos de textura (export_video_screen.dart:420-426). O UNICO controle de material que existe na tela em todo o app e a cor da camada Elemento 3D, em painel_de_cor.dart:163. Alem do vazio de UI, tres campos sao vazios tambem no motor: normalStrength e packedChannels so viajam ate o arquivo (project_store) e nenhum renderizador os le, e textureLayerId (a "precomp animada virando a tela do celular 3D", que o comentario do codigo chama de "o recurso que mais rende num app de motion") nao e lido por pintor de CPU nem por ponte de GPU — e so um campo salvo. Os 12 presets tambem nao tem nenhum chamador: materialFromPreset e materialPresetLabel sao codigo morto fora de scene3d.dart.
+
+- `o` **Nome do material**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:49`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um campo de texto no cabecalho da secao Material do objeto selecionado. O nome ja sai no GLB exportado (renderer3d/scene_glb.dart:141), entao hoje todo material exportado se chama 'Material'.
+- `o` **Cor base do material**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:50`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de cor na secao Material do painel do objeto 3D — o mesmo widget EscolhaDeCor que painel_de_cor.dart ja usa para a camada Elemento 3D, apontado para node.material.baseColor.
+- `o` **Metalicidade (0..1)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:51`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1. O motor honra nos dois caminhos: pintor de CPU (scene3d.dart:1894, tinge o especular) e GPU (scene3d_gpu.dart:687, metallicFactor).
+- `o` **Rugosidade (0..1)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:52`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1. E o parametro que decide o tamanho do ponto de luz (scene3d.dart:1887) e o nivel de mip do reflexo do ambiente (scene3d.dart:1922/1987); na GPU vira roughnessFactor (scene3d_gpu.dart:688).
+- `o` **Emissao (o objeto acende sozinho)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:53`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..2 (o preset neon usa 1.4). Na GPU o valor e multiplicado por 6 para estourar em HDR e o bloom pegar (scene3d_gpu.dart:691-693) e ele ainda alimenta o orcamento de render (orcamento_render.dart:363).
+- `o` **Opacidade do material**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:54`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1. Abaixo de 0.999 o objeto passa a ser tratado como transparente (isTransparent, scene3d.dart:84-86), o que muda a fila de desenho e desliga o descarte de costas.
+- `o` **Tipo de material: PBR**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:25 (MaterialKind.pbr), campo em :55`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um seletor segmentado de quatro opcoes na secao Material. PBR e o padrao e o unico alcancavel hoje.
+- `o` **Tipo de material: sem luz (unlit)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:25 (MaterialKind.unlit)`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Uma opcao no seletor de tipo. E o modo 'grafismo em cima do video': o pintor devolve a cor crua sem sombreamento (scene3d.dart:1776-1779), a GPU usa UnlitMaterial (scene3d_gpu.dart:672) e o GLB exporta KHR_materials_unlit (scene_glb.dart:149).
+- `o` **Tipo de material: transparente**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:25 (MaterialKind.transparent)`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Uma opcao no seletor de tipo. Manda o triangulo para a fila transparente e desliga o descarte de costas (scene3d.dart:1552); na GPU vira AlphaMode.blend (scene3d_gpu.dart:697).
+- `o` **Tipo de material: recorte (cutout)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:25 (MaterialKind.cutout)`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Uma opcao no seletor de tipo, ligada ao slider de corte. Na GPU vira AlphaMode.mask (scene3d_gpu.dart:698) e no GLB vira alphaMode MASK (scene_glb.dart:143).
+- `o` **Reflexo do ambiente por material (0..1)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:61`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1 na secao Material. Ele MULTIPLICA a forca global da cena (scene3d.dart:1906: material.reflectivity * scene.envReflect), entao sem ele um objeto nunca vira espelho mesmo com o ambiente ligado.
+- `o` **Imagem na superficie (textura de cor)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:65`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um botao 'Escolher imagem' (galeria/arquivo) e um 'Remover' — o copyWith ja tem o clearImage (scene3d.dart:105/121) esperando por ele. O motor projeta por caixa no pintor de CPU (scene3d.dart:1466-1530) e sobe como baseColorTexture na GPU (scene3d_gpu.dart:702).
+- `o` **Textura diferente por face**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:69`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Uma lista de faces com uma miniatura por face (o comentario do codigo diz que e para embalagem/tela sem multiplicar objetos). Consumida em scene3d.dart:1494 e em renderer3d/scene_glb.dart:59; sem UI, o Map<int,String> nasce sempre vazio.
+- `o` **Forca do relevo (mapa de normais)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:71`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Antes da tela, falta o motor: normalStrength so aparece em project_store.dart:1528 (salvar) e :1555 (ler). Nenhum renderizador le esse campo — um slider hoje nao mudaria pixel nenhum.
+- `o` **Forca da oclusao (sombra de contato)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:72`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1. Este e consumido de verdade pelo pintor de CPU (scene3d.dart:1831), so nao tem porta.
+- `o` **Limiar do recorte (alpha cutoff)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:73`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1 que so aparece quando o tipo for Recorte. Chega na GPU (scene3d_gpu.dart:701) e no GLB (scene_glb.dart:146).
+- `o` **Desenhar os dois lados da face**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:74`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor. E o conserto da lasca de face invertida: desliga o descarte de costas (scene3d.dart:1552) e vira a normal do vertice para a camera (scene3d.dart:1576); na GPU e doubleSided (scene3d_gpu.dart:675/695).
+- `o` **Canais empacotados (metal/rugosidade num mapa so)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:75`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Como o normalStrength: antes da tela falta o motor. packedChannels so existe em project_store.dart:1532/1559; nenhum renderizador consulta.
+- `o` **Repeticao da textura no eixo X (grudar / repetir / espelhar)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:76`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de tres estados. O pintor ja passa o valor para cada triangulo (scene3d.dart:1663) — hoje so muda quando vem de dentro de um modelo importado (model_asset3d.dart:336).
+- `o` **Repeticao da textura no eixo Y**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:76`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: O par do de cima; consumido em scene3d.dart:1664, importado em model_asset3d.dart:341.
+- `o` **Usar uma camada da cena como textura (precomp animada na superficie)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:81`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Falta tudo: um seletor de camada NA TELA e, antes, o consumo NO MOTOR. textureLayerId so aparece em project_store.dart:1520/1545 (salvar/ler) e num construtor auxiliar sem chamador (cena_do_rastreio.dart:236/264). O comentario do proprio campo chama isso de 'o recurso que mais rende num app de motion' e ele nao desenha nada.
+- `o` **Material pronto: Metal polido**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:164 (rotulo em :149)`
+  - comando: `NENHUM COMANDO (materialFromPreset/materialPresetLabel nao tem chamador nenhum em lib fora de scene3d.dart)`
+  - porta: `NENHUMA`
+  - falta: Uma tira de miniaturas de material no painel do objeto. Os rotulos em portugues ja existem (materialPresetLabel, scene3d.dart:148) — falta a tira e um comando aplicarMaterialPreset(cena, no, preset).
+- `o` **Material pronto: Metal escovado**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:171 (rotulo em :150)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Cromo**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:178 (rotulo em :151)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Plastico**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:185 (rotulo em :152)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Vidro**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:191 (rotulo em :153)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na tira. Ja vem com kind transparente, opacidade 0.24 e dois lados — a combinacao que a pessoa nao acerta na mao.
+- `o` **Material pronto: Vidro fosco**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:200 (rotulo em :154)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Ceramica**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:209 (rotulo em :155)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Borracha**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:215 (rotulo em :156)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Madeira**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:221 (rotulo em :157)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Tinta fosca**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:227 (rotulo em :158)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Material pronto: Emissivo neon**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:233 (rotulo em :159)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na tira. E o unico preset com emissive > 1 (1.4), o valor que faz o bloom pegar.
+- `o` **Material pronto: Sem luz**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:239 (rotulo em :160)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Item na mesma tira de materiais prontos.
+- `o` **Usar os materiais que vieram dentro do modelo importado**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:514 (SceneNode.useModelMaterials, padrao true em :424)`
+  - comando: `NENHUM COMANDO (so o generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor 'Materiais do modelo / Material meu' no painel do objeto importado. Desligado, o motor pinta o modelo inteiro com o material do no (fonte_de_malha.dart:96-109 e scene3d.dart:1489-1491) — e o unico jeito de repintar um modelo importado, e nao ha botao.
+- `*` **Materiais lidos de um modelo glTF/GLB (cor, metal, rugosidade, emissivo, transparencia, corte, dois lados, sem-luz, imagem, repeticao)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:412-425 (leitura) e lib/src/features/editor/domain/model_asset3d.dart:307-346 (viram Material3D)`
+  - comando: `addGlbNode (editor_controller.dart:1873) / addModel3D (editor_controller.dart:1908) — trazem o modelo COM os materiais, mas nenhum metodo edita esses materiais depois`
+  - porta: `NENHUMA (nenhum arquivo em lib/**/presentation/** chama addGlbNode nem addModel3D)`
+  - falta: Uma lista dos materiais do modelo no painel do objeto, com o nome de cada um e a possibilidade de trocar cor/rugosidade por material. Hoje o que o arquivo traz e o que fica, para sempre.
+- `o` **Aviso de mapa de textura nao aplicado (normal, oclusao, metal-rugosidade, emissivo)**
+  - motor: `lib/src/features/editor/domain/model_import3d.dart:404-410`
+  - comando: `NENHUM COMANDO (o texto viaja em ModelAsset3D.warnings e vira SceneNode.modelSource.warning em editor_controller.dart:1927)`
+  - porta: `NENHUMA`
+  - falta: Uma faixa de aviso na ficha do modelo importado dizendo quais mapas foram ignorados. O texto ja esta escrito e nunca chega aos olhos de ninguem.
+- `o` **Materiais lidos de um .mtl de OBJ (Kd, d/Tr, Ns, Pm, Pr, map_Kd)**
+  - motor: `lib/src/features/editor/domain/obj_import3d.dart:46-92`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: O mesmo painel de materiais do modelo. O importador ate converte brilho Ns em rugosidade e embute a textura em base64, e avisa quando map_Bump/map_Ks sao ignorados (obj_import3d.dart:89-91) — sem tela para mostrar.
+- `o` **Material e textura de um FBX**
+  - motor: `lib/src/features/editor/domain/fbx_import3d.dart:190-204`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Idem. O FBX entra sempre com metallic 0 e roughness 0.6 fixos, e a cor vira branca quando ha textura — sem controle para corrigir depois.
+- `*` **Cor do solido da camada Elemento 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2243`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, recebe copyElement3D(color:)`
+  - porta: `lib/src/features/editor/presentation/widgets/painel_de_cor.dart:163`
+  - falta: NADA — este e o UNICO controle de material que existe na tela em todo o app.
+- `o` **Estilo do material do Elemento 3D (solido / brilhante / vidro / metal / fosco)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2261 (o int material, comentado em :2259)`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, aceita copyElement3D(material:)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de cinco opcoes ao lado do seletor de cor. O pintor implementa os cinco (world3d_painter.dart:383-…: 1 iridescente, 2 vidro, 3 metal, 4 fosco) e o valor nasce e morre em 0.
+- `o` **Cores do degrade iridescente do Elemento 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2264`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, aceita copyElement3D(gradient:)`
+  - porta: `NENHUMA`
+  - falta: Um editor de paradas de cor que so apareca quando o estilo for 'brilhante'. Usado em world3d_painter.dart:387; hoje so existem as tres cores padrao.
+- `o` **Brilho especular do Elemento 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2267`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, aceita copyElement3D(shininess:)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1. O valor e salvo e lido (project_store.dart:1288/2394) e chega ao palco (palco_de_previa.dart:1029) — sem nada que o mude.
+- `o` **Reflexo do ambiente no Elemento 3D**
+  - motor: `lib/src/features/editor/domain/layer.dart:2249`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, aceita copyElement3D(reflect:)`
+  - porta: `NENHUMA`
+  - falta: Um slider 0..1. O pintor calcula fresnel com ele (element3d_painter.dart:152-171) e o vidro usa para decidir o que reflete (world3d_painter.dart:395).
+- `o` **Imagem vestindo o Elemento 3D (projecao de caixa)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2253`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, aceita copyElement3D(imagePath:) e clearImage`
+  - porta: `NENHUMA`
+  - falta: Um botao de escolher/remover imagem. Consumida em element3d_painter.dart:84 e world3d_painter.dart:435-437; quando ha textura o pintor ignora o estilo de material e cai no caso 0 (world3d_painter.dart:383).
+- `o` **Tracar as arestas das faces do Elemento 3D (look tecnico)**
+  - motor: `lib/src/features/editor/domain/layer.dart:2246`
+  - comando: `updateElement3D (editor_controller.dart:1550) — generico, aceita copyElement3D(edges:)`
+  - porta: `NENHUMA`
+  - falta: Um interruptor. Desenhado em element3d_painter.dart:249, nasce ligado e nao ha como desligar.
+- `o` **Teto de resolucao das texturas (2048 / 1024 / 512 / 256 conforme a receita de qualidade)**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:101 (texturaMax; valores em :119, :133, :147, :161, :176)`
+  - comando: `NENHUM COMANDO (nenhum metodo do editor_controller toca receita/qualidade)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de qualidade de textura em Ajustes > Cena 3D. Hoje quem decide e so o orcamento automatico; a ponte de GPU ja sabe reduzir e resubir sem refazer geometria (scene3d_gpu.dart:277-297 e :733).
+
+### Correcoes do conferente (2)
+
+- **Teto de resolucao das texturas (2048 / 1024 / 512 / 256 conforme a receita de qualidade)**
+  - afirmado: NENHUM COMANDO (nenhum metodo do editor_controller toca receita/qualidade)
+  - verdade: TEM PORTA. O comando nao mora no editor_controller, mora no ControladorDeQualidade3D — e os Ajustes o chamam. lib/src/features/settings/presentation/settings_tab.dart:155 monta _Qualidade3DRow (definido em settings_tab.dart:486-531), um _SegmentedRow<TetoDeQualidade3D> rotulado 'Qualidade 3D' cujo onChanged faz `await c.definirTeto(t)` (ControladorDeQualidade3D.definirTeto, lib/src/features/editor/application/qualidade3d_controller.dart:103). O teto escolhe o nivel e o nivel escolhe a receita (`ReceitaDeQualidade.de(nivel)`, qualidade3d_controller.dart:89), e e a receita que carrega texturaMax = 2048 / 1024 / 1024 / 512 / 256 (lib/src/features/editor/domain/orcamento_render.dart:101 e 119, 133, 147, 161, 176). O proprio texto de ajuda embaixo do seletor cita 'textura' entre os degraus. Alem disso lib/src/features/settings/presentation/estresse3d_screen.dart:518-525 le e mostra o teto no relatorio. Buscar so por metodos do editor_controller foi o erro: a porta existe em Ajustes.
+- **Materiais lidos de um .mtl de OBJ (Kd, d/Tr, Ns, Pm, Pr, map_Kd)**
+  - afirmado: NENHUM COMANDO
+  - verdade: TEM PORTA, e sao tres cartoes na aba Projetos. lib/src/features/projects/presentation/projects_tab.dart:118 chama carregarAstronauta(), :138 chama carregarMonolitoModelos() e o mesmo arquivo importa campo_assets.dart (:16) para prepareCampoArvore(). Os tres caem em readModel3DFiles (lib/src/features/editor/application/model_import_service.dart:11) com pares .obj + .mtl reais e empacotados no app: modelos_empacotados.dart:74-77 (astronauta.obj/astronauta.mtl), :85-95 (portal.mtl, arvore.mtl) e campo_assets.dart:20-31 (arvore.obj/arvore.mtl/arvore.jpg) — os arquivos existem em assets/models/monolito/ e estao declarados em pubspec.yaml:104. O leitor de .mtl e lib/src/features/editor/domain/obj_import3d.dart (newmtl na linha 45, map_Kd na linha 79). Ou seja: um toque em 'Deriva', 'Monolito' ou no campo da arvore faz um arquivo de presentation disparar a leitura do .mtl e os materiais entram na cena. O que nao existe e um seletor de arquivo para um .mtl DO USUARIO (nenhum FilePicker de modelo: projects_tab.dart:199 so aceita json/aurea e :230 e XML de cena) — mas 'NENHUM COMANDO' esta errado.
+
+---
+
+## Nos e objetos da cena 3D (SceneNode / Element3DKind / Element3DMesh)
+
+O motor tem um grafo de cena completo — 17 primitivas, hierarquia com pai, nulos, agrupamento, isolamento, array instanciado, extrusao de forma, importacao de modelo, LOD, travar/esconder/duplicar/renomear — e o EditorController expoe 19 comandos para isso. NENHUM deles e chamado por qualquer arquivo sob lib/**/presentation/**: a busca por cada nome de metodo em lib retorna zero chamadores fora do proprio controller. O unico ponto de presentation que toca o grafo e lib/src/features/settings/presentation/estresse3d_screen.dart:330, que chama updateScene3D e SUBSTITUI a cena inteira por uma receita de teste de estresse — nao e uma porta para nenhum recurso desta dimensao. O painel de cena que existe (lib/src/features/editor/presentation/widgets/painel_da_cena.dart) trata so de vista, camera, rig e enquadramento; seu proprio comentario (linhas 17-25) diz que o estudio 3D foi apagado com a UI antiga e que "48 comandos 3D com zero chamadores" continuam sem botao. Consequencia pratica: addScene3DLayer nasce com uma cena VAZIA (editor_controller.dart:1567) e nao existe nenhum caminho pela tela para colocar um unico objeto dentro dela. Alem disso, 14 campos do SceneNode (posicao, rotacao, escala, tamanho, tipo, subdivisoes, etiqueta de cor, LOD, credito, ficha do modelo, clipe de animacao, materiais do modelo, movimento do modelo, contorno) nao tem sequer um metodo dedicado no controller — so o escape generico updateSceneNode, que tambem nao e chamado por ninguem. O que falta primeiro nao e um controle por recurso: e uma lista de objetos da cena com selecao, porque quase todo comando aqui recebe um nodeId e hoje nao ha nada na tela que produza um nodeId.
+
+- `o` **Criar um objeto na cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:392 (classe SceneNode)`
+  - comando: `addSceneNode (editor_controller.dart:1970)`
+  - porta: `NENHUMA`
+  - falta: Um botao "Adicionar objeto" dentro do painel da cena 3D; hoje a cena nasce vazia (editor_controller.dart:1567) e nao ha caminho nenhum para o primeiro objeto.
+- `o` **Escolher a forma pronta (17 primitivas: cubo, piramide, cone, esfera, cilindro, prisma, diamante, anel 3D, estrela 3D, plano, capsula, tubo, octaedro, rampa, cupula, coroa, coroa fina)**
+  - motor: `lib/src/features/editor/domain/element3d.dart:7 (enum Element3DKind); rotulos em element3d.dart:629`
+  - comando: `addSceneNode (editor_controller.dart:1970), que recebe o Element3DKind`
+  - porta: `NENHUMA`
+  - falta: Uma grade de 17 formas com o rotulo de element3DLabel, igual a grade de vistas que ja existe em painel_da_cena.dart:57.
+- `o` **Trocar a forma de um objeto ja criado**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:470 (campo kind) e :520 (copyWith kind)`
+  - comando: `NENHUM COMANDO (so o escape generico updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Um seletor de forma na ficha do objeto selecionado, e um setSceneNodeKind no controller para nao obrigar a UI a montar um copyWith cru.
+- `o` **Renomear o objeto**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:469 (campo name)`
+  - comando: `renameSceneNode (editor_controller.dart:2219)`
+  - porta: `NENHUMA`
+  - falta: Toque longo (ou duplo toque) no nome, na lista de objetos da cena, abrindo campo de texto.
+- `o` **Mostrar ou esconder o objeto**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:480 (campo visible); o pintor pula em scene3d.dart:1365`
+  - comando: `setSceneNodeVisible (editor_controller.dart:2222)`
+  - porta: `NENHUMA`
+  - falta: Um olho por linha na lista de objetos da cena — o mesmo gesto que a lista de camadas ja tem.
+- `o` **Travar o objeto (protege de qualquer edicao)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:503 (campo locked); respeitado em updateSceneNode (editor_controller.dart:1993), removeSceneNode (:2016), setSceneNodeParent (:1778) e setExtrudeDepth (:1938)`
+  - comando: `setSceneNodeLocked (editor_controller.dart:2002)`
+  - porta: `NENHUMA`
+  - falta: Um cadeado por linha na lista de objetos da cena.
+- `o` **Apagar o objeto (soltando os filhos e a camera presa nele)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:392 (o no) + :499 (parentId dos filhos) + :704 (cameraParentId)`
+  - comando: `removeSceneNode (editor_controller.dart:2014)`
+  - porta: `NENHUMA`
+  - falta: Um X (ou arrastar para o lado) por linha na lista de objetos da cena.
+- `o` **Duplicar o objeto ao lado do original**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:435 (SceneNode.duplicado) e :587 (SceneNode.duplicate)`
+  - comando: `duplicateSceneNode (editor_controller.dart:2206)`
+  - porta: `NENHUMA`
+  - falta: Um botao de duplicar na ficha do objeto selecionado (a linha da camera em painel_da_cena.dart:108 ja tem esse gesto para cameras).
+- `o` **Tamanho do objeto (escala base em pixels, padrao 100)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:479 (campo size); usado no pintor em scene3d.dart:1397`
+  - comando: `NENHUM COMANDO (so updateSceneNode, editor_controller.dart:1986)`
+  - porta: `NENHUMA`
+  - falta: Uma LinhaDeParametro "Tamanho" na ficha do objeto (o widget ja existe e ja e usado para a lente em painel_da_cena.dart:78).
+- `o` **Posicao X do objeto (animavel, com keyframes)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:472 (AnimatedDouble x); lida em positionAt, scene3d.dart:516`
+  - comando: `NENHUM COMANDO (nenhum metodo do controller escreve x de um SceneNode)`
+  - porta: `NENHUMA`
+  - falta: Uma LinhaDeParametro por eixo, com cronometro de keyframe, na ficha do objeto — ou arrasto no palco, que exigiria selecao de no la.
+- `o` **Posicao Y do objeto (animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:473 (AnimatedDouble y)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesma LinhaDeParametro do eixo X, na ficha do objeto.
+- `o` **Posicao Z do objeto (profundidade, animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:474 (AnimatedDouble z)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesma LinhaDeParametro do eixo X; e o eixo que so a vista ortografica torna legivel, ja disponivel em painel_da_cena.dart:57.
+- `o` **Giro no eixo X do objeto (animavel, em graus)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:475 (AnimatedDouble rotX); aplicado em scene3d.dart:1398`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Tres LinhaDeParametro de giro na ficha do objeto, em graus.
+- `o` **Giro no eixo Y do objeto (animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:476 (AnimatedDouble rotY)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesma LinhaDeParametro do giro X.
+- `o` **Giro no eixo Z do objeto (animavel)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:477 (AnimatedDouble rotZ)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Mesma LinhaDeParametro do giro X.
+- `o` **Escala do objeto (multiplicador animavel, herdado pelos filhos)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:478 (AnimatedDouble scale); composta com o pai em composeTransforms, scene3d.dart:1246`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma LinhaDeParametro "Escala" na ficha do objeto.
+- `o` **Subdividir a primitiva (0 a 4 niveis, deixa a forma mais densa)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:508 (campo subdivisions); malha gerada em _subdividedPrimitive, scene3d.dart:1086; escolhida em scene3d.dart:1391`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um passo de 0 a 4 na ficha do objeto (so vale quando o no nao tem malha propria). Hoje o campo so existe no arquivo salvo (project_store.dart:1662).
+- `o` **Repetir o objeto em grade 3D (array instanciado: quantos em X, Y e Z, e o espacamento)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:484 (campo instances); desenhado em scene3d.dart:1411`
+  - comando: `arrayNodeInstances (editor_controller.dart:2101)`
+  - porta: `NENHUMA`
+  - falta: Quatro controles na ficha do objeto: tres contagens (1 a 40, ja limitadas em editor_controller.dart:2109) e um espacamento.
+- `o` **Desfazer a grade (voltar a um objeto so)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:484 (lista vazia = so o proprio no)`
+  - comando: `arrayNodeInstances com 1x1x1 (editor_controller.dart:2113 zera as instancias)`
+  - porta: `NENHUMA`
+  - falta: O proprio controle de grade cobrindo isso ao voltar as tres contagens para 1.
+- `o` **Transformar uma forma do projeto em volume 3D (extrudar um logo para dentro da cena)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:489 (campo mesh) e :493 (campo outline); extrusao em lib/src/features/editor/domain/extrude3d.dart:154`
+  - comando: `extrudeShapeIntoScene (editor_controller.dart:1717)`
+  - porta: `NENHUMA`
+  - falta: Um item "Trazer forma para a cena" que liste as camadas de forma do projeto e chame o comando com o id escolhido.
+- `o` **Espessura do volume extrudado (refazer a malha sem perder os ajustes do objeto)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:495 (campo extrudeDepth, padrao 40)`
+  - comando: `setExtrudeDepth (editor_controller.dart:1935)`
+  - porta: `NENHUMA`
+  - falta: Uma LinhaDeParametro "Espessura" que so aparece quando o objeto tem contorno (n.outline != null).
+- `o` **Nulo 3D (um pivo que so transforma e nao desenha)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:502 (campo isNull); o pintor pula em scene3d.dart:1367`
+  - comando: `addSceneNull (editor_controller.dart:1759)`
+  - porta: `NENHUMA`
+  - falta: Um botao "Novo nulo" ao lado do "Adicionar objeto", na mesma lista da cena.
+- `o` **Pendurar um objeto em outro (pai dentro da cena)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:499 (campo parentId); resolvido em resolveNodeTransform, scene3d.dart:1191`
+  - comando: `setSceneNodeParent (editor_controller.dart:1775)`
+  - porta: `NENHUMA`
+  - falta: Um seletor "Pai" na ficha do objeto listando os outros nos da cena (ou arrastar uma linha para dentro de outra na lista).
+- `o` **Soltar do pai**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:536 (parametro clearParent do copyWith) e :569`
+  - comando: `setSceneNodeParent com parentId nulo (editor_controller.dart:1775)`
+  - porta: `NENHUMA`
+  - falta: A opcao "Nenhum" no mesmo seletor de pai.
+- `o` **Recusar o parentesco circular (A pai de B e B pai de A travaria o quadro)**
+  - motor: `guarda em lib/src/features/editor/application/editor_controller.dart:1798 (_criaCiclo); limite de profundidade tambem no dominio, scene3d.dart:1208`
+  - comando: `setSceneNodeParent (editor_controller.dart:1780)`
+  - porta: `NENHUMA`
+  - falta: Nada de controle novo — mas o seletor de pai precisa avisar quando a escolha foi recusada, porque hoje o comando volta em silencio.
+- `o` **Agrupar varios objetos (um nulo novo vira pai de todos)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:499 (parentId) + :502 (isNull)`
+  - comando: `groupSceneNodes (editor_controller.dart:2286)`
+  - porta: `NENHUMA`
+  - falta: Selecao de VARIOS objetos na lista da cena (hoje nao existe nem a selecao de um) mais um botao "Agrupar".
+- `o` **Isolar o objeto (esconde todos os outros; tocar de novo devolve tudo como estava)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:480 (campo visible); memoria do estado anterior em editor_controller.dart:176 e :2147`
+  - comando: `isolateSceneNode (editor_controller.dart:2134)`
+  - porta: `NENHUMA`
+  - falta: Um botao de solo por linha na lista de objetos, com estado ligado/desligado visivel.
+- `o` **Enquadrar o objeto selecionado na camera**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:479 (size) + :332 (Bounds3D); frameBounds em lib/src/features/editor/domain/camera3d.dart`
+  - comando: `frameSceneNode (editor_controller.dart:2184)`
+  - porta: `NENHUMA`
+  - falta: Um botao "Enquadrar este objeto" na secao Enquadrar do painel da cena, que hoje so tem "Enquadrar a cena inteira" (painel_da_cena.dart:140).
+- `o` **Focar a profundidade de campo no objeto (a distancia de foco vem do objeto)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1191 (resolveNodeTransform, de onde sai a posicao do mundo)`
+  - comando: `focusCameraOnNode (editor_controller.dart:2160)`
+  - porta: `NENHUMA`
+  - falta: Um botao "Focar neste objeto" na ficha do objeto selecionado.
+- `o` **Prender a camera da cena a um objeto (orbitar de dentro)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:704 (campo cameraParentId da Scene3D)`
+  - comando: `setSceneCameraParent (editor_controller.dart:1810)`
+  - porta: `NENHUMA`
+  - falta: Um seletor "Camera presa a" listando os nos da cena, na secao Cameras do painel.
+- `o` **Rig de orbita em um toque (cria o nulo, prende a camera e escreve os keyframes de uma volta inteira)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:502 (isNull) + :476 (rotY animavel) + :704 (cameraParentId)`
+  - comando: `addOrbitRig (editor_controller.dart:1841)`
+  - porta: `NENHUMA`
+  - falta: Um item na grade "Movimento pronto" do painel da cena (painel_da_cena.dart:130), que hoje so lista os CameraRig.
+- `o` **Trazer um modelo .glb para a cena como objeto**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:489 (mesh) + :506 (mediumMesh) + :507 (lowMesh); leitura em lib/src/features/editor/domain/glb_import.dart:267`
+  - comando: `addGlbNode (editor_controller.dart:1867)`
+  - porta: `NENHUMA`
+  - falta: Um item "Importar modelo 3D" que abra o seletor de arquivos e mostre o erro de leitura (o comando ja deixa a GlbException subir de proposito).
+- `o` **Trazer um modelo com esqueleto e animacoes (ModelAsset3D) para a cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:512 (campo modelAsset); avaliado por quadro em scene3d.dart:1376`
+  - comando: `addModel3D (editor_controller.dart:1906)`
+  - porta: `NENHUMA`
+  - falta: O mesmo item de importar modelo, escolhendo este caminho quando o arquivo tem animacao.
+- `o` **Escolher qual animacao do modelo toca**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:511 (campo animationClip) e :547 (clearAnimationClip); nomes disponiveis em ModelSource3D.animationNames, scene3d.dart:385`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma lista de clipes na ficha do objeto de modelo, alimentada por modelSource.animationNames.
+- `o` **Como o modelo se move no tempo (ModelMotion3D)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:513 (campo modelMotion); usado em scene3d.dart:1376`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Controles de velocidade/laco do clipe na ficha do objeto de modelo.
+- `o` **Usar os materiais que vieram no modelo (ou o material do no)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:514 (campo useModelMaterials, padrao ligado); decidido em scene3d.dart:1489`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um interruptor "Usar os materiais do modelo" na ficha do objeto (o widget _Interruptor ja existe em painel_da_cena.dart:67).
+- `o` **Nivel de detalhe do objeto (automatico, alto, medio ou baixo)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:341 (enum MeshLod3D) e :505 (campo lod); escolha em scene3d.dart:1382 e no caminho de GPU, lib/src/features/editor/application/fonte_de_malha.dart:136`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Uma grade de quatro opcoes na ficha do objeto; hoje o campo so e lido do arquivo salvo (project_store.dart:1758).
+- `o` **Malha media do objeto (o degrau intermediario do detalhe)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:506 (campo mediumMesh)`
+  - comando: `NENHUM COMANDO dedicado (so preenchido por addGlbNode, editor_controller.dart:1877)`
+  - porta: `NENHUMA`
+  - falta: Nada de controle direto — mas a ficha do objeto precisa dizer que os tres degraus existem, senao a escolha de nivel de detalhe fica sem sentido.
+- `o` **Malha baixa do objeto (usada em rascunho e em cena pesada)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:507 (campo lowMesh); escolhida no rascunho em scene3d.dart:1176`
+  - comando: `NENHUM COMANDO dedicado (so preenchido por addGlbNode, editor_controller.dart:1878)`
+  - porta: `NENHUMA`
+  - falta: O mesmo aviso na ficha do objeto, junto do nivel de detalhe.
+- `o` **Etiqueta de cor do objeto (para achar na lista)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:504 (campo colorTag, padrao 0xFF7C62FF)`
+  - comando: `NENHUM COMANDO`
+  - porta: `NENHUMA`
+  - falta: Um seletor de cor na ficha do objeto e um ponto colorido na linha da lista. Hoje o campo so vai e volta do arquivo salvo (project_store.dart:1660) e nenhum renderizador o le.
+- `o` **Credito do modelo importado (autor, licenca, endereco)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:343 (ModelCredit3D) e :509 (campo credit); cracha pronto em scene3d.dart:351`
+  - comando: `NENHUM COMANDO dedicado (so preenchido por addGlbNode, editor_controller.dart:1880)`
+  - porta: `NENHUMA`
+  - falta: Mostrar credit.badge na ficha do objeto — o texto ja vem montado do dominio.
+- `o` **Ficha do modelo importado (triangulos, bytes, malhas, materiais, texturas, animacoes, nomes dos nos, aviso, acima do orcamento)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:361 (ModelSource3D) e :510 (campo modelSource)`
+  - comando: `NENHUM COMANDO dedicado (so preenchido por addGlbNode, editor_controller.dart:1885, e addModel3D, :1913)`
+  - porta: `NENHUMA`
+  - falta: Um bloco de leitura na ficha do objeto, com destaque para overBudget e warning, que hoje sao calculados e jogados fora.
+- `o` **Pendurar um nulo num ponto rastreado do video**
+  - motor: `no criado em lib/src/features/editor/domain/cena_do_rastreio.dart:132 (noNoPonto)`
+  - comando: `criarNoDoPonto (editor_controller.dart:2898)`
+  - porta: `NENHUMA`
+  - falta: Um toque no ponto rastreado, na previa do rastreio, que chame o comando com o id do ponto.
+- `o` **Arrastar o objeto no palco respeitando o giro e a escala do pai**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1229 (sceneLocalDelta)`
+  - comando: `NENHUM COMANDO (a funcao do dominio nao tem um unico chamador em lib)`
+  - porta: `NENHUMA`
+  - falta: Selecao de no no palco mais um gesto de arrasto que converta o deslocamento da tela em delta local — e a peca que painel_da_cena.dart:23-25 diz explicitamente ter ficado de fora.
+- `o` **Quanto a cena pesa antes de desenhar (triangulos por objeto, ja contando as copias da grade)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1120 (trianglesEstimados) e :1146 (facesQueONoDesenha)`
+  - comando: `NENHUM COMANDO (leitura pura; o controller nao chama)`
+  - porta: `NENHUMA`
+  - falta: Um numero de triangulos no cabecalho da lista de objetos — hoje a conta so aparece no teste de estresse.
+
+### Correcoes do conferente (4)
+
+- **Escolher a forma pronta (17 primitivas: cubo, piramide, cone, esfera, cilindro, prisma, diamante, anel 3D, estrela 3D, plano, capsula, tubo, octaedro, rampa, cupula, coroa, coroa fina)**
+  - afirmado: Sem porta: so addSceneNode (editor_controller.dart:1970), que nao tem chamador em presentation
+  - verdade: TEM PORTA. lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:105-112 percorre Element3DKind.values e monta um cartao por primitiva (rotulo element3DLabel + glifo _icone3D, linhas 85-102), dentro do menu 'Objetos 3D' (linha 134-137) da categoria 3D; o toque chama c.addElement3DLayer(em, k) (linha 111). O menu esta ligado no editor (editor_screen.dart:13 e linha_do_tempo.dart:9). A porta existe pelo caminho da CAMADA Element3DLayer, nao pelo no da Scene3D — mas as 17 formas sao escolhiveis pelo usuario hoje.
+- **Nulo 3D (um pivo que so transforma e nao desenha)**
+  - afirmado: Sem porta: so addSceneNull (editor_controller.dart:1759)
+  - verdade: TEM PORTA com esse mesmo nome. adicionar_conteudo.dart:127-132 tem o item id 'nulo3d', rotulo 'Nulo 3D', que chama c.addNullLayer(em) (editor_controller.dart:1487) — um NullLayer 3D que so transforma e nao desenha. O que nao tem porta e o nulo DENTRO da Scene3D (addSceneNull); o recurso descrito, do ponto de vista do usuario, esta no menu Adicionar.
+- **Rig de orbita em um toque (cria o nulo, prende a camera e escreve os keyframes de uma volta inteira)**
+  - afirmado: Sem porta: so addOrbitRig (editor_controller.dart:1841)
+  - verdade: TEM PORTA para a orbita em um toque com keyframes reais. painel_da_cena.dart:126-138 ('Movimento pronto') lista CameraRig.values, entre eles CameraRig.orbit rotulado 'Orbita', e chama c.applyRigToScene(cena.id, r) (editor_controller.dart:2029) -> applyCameraRig (camera3d.dart:799-818), que escreve uma volta completa em 8 keyframes de posX/posZ, editaveis. O painel esta ligado (controles_da_camada.dart:15). O que falta de addOrbitRig e so o mecanismo (criar o nulo e parentear a camera), nao o resultado de um toque.
+- **Quanto a cena pesa antes de desenhar (triangulos por objeto, ja contando as copias da grade)**
+  - afirmado: NENHUM COMANDO (leitura pura; o controller nao chama) e nenhuma porta em presentation
+  - verdade: E CHAMADA EM presentation. trianglesEstimados (scene3d.dart:1120, que multiplica pelas copias em no.instances na linha 1124) tem chamador em lib/src/features/editor/presentation/widgets/scene3d_painter.dart:390 — usa o resultado para RegistroDeTravadas.marcarCena e para cair no substituto 'pesado demais' quando passa do orcamento de CPU (linhas 391-395). O controller de fato nao chama, mas a afirmacao de que nenhum arquivo sob presentation/ chama esta errada.
+
+---
+
+## Luzes e sombras
+
+O motor tem uma iluminacao completa (4 tipos de luz, 9 propriedades por luz, ambiente por hemisferio, tonemap ACES, sombra de contato no pintor de CPU e mapas de sombra com cascatas na GPU) e ZERO porta de tela para tudo isso. Os tres unicos comandos de luz do EditorController — addSceneLight (:2061), updateSceneLight (:2073), removeSceneLight (:2086) — nao tem UM chamador em lugar nenhum do repositorio (nem em teste): a busca por esses nomes so retorna as proprias definicoes. Os campos de sombra/ambiente da cena (ambient, skyColor, groundColor, tonemap, msaa, draftMode, showFloorGrid, background) nao tem comando dedicado nenhum; a unica porta e o generico updateScene3D (:1573), e o unico chamador dele em lib/**/presentation/** e settings/presentation/estresse3d_screen.dart:330, que TROCA a cena inteira por uma cena de teste de estresse em vez de editar campo algum. A unica coisa desta dimensao que um usuario alcanca hoje e o rig de tres pontos que vem de graca ao criar a camada (adicionar_conteudo.dart:125 -> addScene3DLayer -> Scene3D.tresPontos): a cena nasce iluminada e depois e IMUTAVEL. Detalhes achados na varredura: (a) Light3D nao tem campo de nome — o rotulo vem do tipo, por luzLabel (estudio_ux.dart:152); (b) hierarquiaDaCena (estudio_ux.dart:96) ja monta a lista de luzes prontinha para uma folha de hierarquia e tambem nao tem um unico chamador; (c) degradeScene (scene3d.dart:2197), que desliga a sombra da segunda luz em diante e derruba o ambiente, e codigo morto — nenhum chamador em lib/; (d) o pintor de CPU nao tem mapa de sombra nenhum: castsShadow so liga a mancha de contato (scene3d_painter.dart:494/781), a sombra projetada de verdade so existe no caminho de GPU; (e) o unico controle de tela que mexe (indiretamente) em sombra e o seletor "Qualidade 3D" em settings_tab.dart:501, que fixa resolucao do mapa, cascatas e quantos spots podem projetar sombra. Ficaram de fora desta dimensao, por serem de materiais/reflexos: emissive e occlusionStrength (Material3D), planarFloorReflection/planarFloorRoughness, envReflect, panorama e reflectionProbe.
+
+- `o` **Adicionar uma luz a cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:719 (Scene3D.lights)`
+  - comando: `addSceneLight(String layerId, Light3DKind kind) — editor_controller.dart:2061`
+  - porta: `NENHUMA`
+  - falta: Um item 'Luz' na folha de adicionar (adicionar_conteudo.dart, familia 3D, ao lado de 'Cena 3D'), com as quatro opcoes de tipo.
+- `o` **Remover uma luz da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:719 (Scene3D.lights)`
+  - comando: `removeSceneLight(String layerId, String lightId) — editor_controller.dart:2086`
+  - porta: `NENHUMA`
+  - falta: Uma lista de luzes da cena com deslizar-para-apagar ou botao de lixeira por linha.
+- `o` **Tipo da luz (direcional, ponto, ambiente, spot)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:246 (enum Light3DKind) e :264 (Light3D.kind)`
+  - comando: `addSceneLight (editor_controller.dart:2061) escolhe na criacao; updateSceneLight (:2073) troca depois`
+  - porta: `NENHUMA`
+  - falta: Um seletor segmentado de 4 opcoes na ficha da luz; os rotulos ja existem prontos em estudio_ux.dart:152 (luzLabel).
+- `o` **Cor da luz**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:265 (Light3D.color)`
+  - comando: `updateSceneLight(layerId, lightId, (l) => l.copyWith(color: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Um seletor de cor na ficha da luz (o widget ja existe: escolha_de_cor.dart / painel_de_cor.dart).
+- `o` **Intensidade da luz (animavel por keyframe)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:266 (Light3D.intensity, AnimatedDouble)`
+  - comando: `updateSceneLight(...copyWith(intensity: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Um ParameterRow com slider e cronometro de keyframe; o motor de GPU ja trata intensidade animada sem refazer o mapa de sombra (scene3d_gpu.dart:930).
+- `o` **Direcao da luz (direcional e spot)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:267 (Light3D.direction, Vec3)`
+  - comando: `updateSceneLight(...copyWith(direction: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Tres campos X/Y/Z, ou uma almofada de arrasto tipo 'bola de luz' que gira o vetor; uma alca no palco seria o ideal.
+- `o` **Posicao da luz (ponto e spot)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:268 (Light3D.position, Vec3)`
+  - comando: `updateSceneLight(...copyWith(position: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Tres campos X/Y/Z na ficha da luz, e um gizmo no palco (a luz hoje nao e nem desenhada como ajuda visual).
+- `o` **Alcance da luz (raio de ponto/spot; tambem faz o culling por objeto)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:272 (Light3D.range); atenuacao em :1849-1855 e :1857-1875`
+  - comando: `updateSceneLight(...copyWith(range: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Um slider 'Alcance' na ficha da luz, visivel so para ponto e spot.
+- `o` **Projetar sombra (liga/desliga por luz)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:273 (Light3D.castsShadow)`
+  - comando: `updateSceneLight(...copyWith(castsShadow: ...)) — editor_controller.dart:2073; addSceneLight (:2067) liga automaticamente so na primeira luz da cena`
+  - porta: `NENHUMA`
+  - falta: Um interruptor Cupertino 'Projeta sombra' por luz.
+- `o` **Abertura do cone do spot**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:274 (Light3D.coneDegrees); usado em :1863-1866 (CPU) e scene3d_gpu.dart:907-910 (GPU)`
+  - comando: `updateSceneLight(...copyWith(coneDegrees: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Um slider em graus (1-179) na ficha do spot, ou um dial de angulo (dial_de_angulo.dart ja existe).
+- `o` **Suavidade da borda do spot (penumbra)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:275 (Light3D.softness); cone interno em :1867-1874, innerConeAngle em scene3d_gpu.dart:909`
+  - comando: `updateSceneLight(...copyWith(softness: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: Um slider 0-1 'Suavidade da borda' na ficha do spot.
+- `o` **Suavidade da sombra (borda mole do mapa de sombra)**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:866 (direcional: 3 + softness*14) e :913 (spot: 2 + softness*6) — derivado de Light3D.softness, scene3d.dart:275`
+  - comando: `updateSceneLight(...copyWith(softness: ...)) — editor_controller.dart:2073`
+  - porta: `NENHUMA`
+  - falta: O mesmo slider de suavidade, mas com rotulo honesto: hoje um unico numero controla DUAS coisas (borda do cone e moleza da sombra) sem o usuario saber.
+- `*` **Rig de tres pontos (principal, preenchimento, contraluz)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:831 (Scene3D.tresPontos)`
+  - comando: `addScene3DLayer(Duration at) — editor_controller.dart:1558, que injeta o rig na linha :1567`
+  - porta: `lib/src/features/editor/presentation/widgets/adicionar_conteudo.dart:125`
+  - falta: Nada para criar — mas falta um botao 'Restaurar luz de tres pontos' depois, ja que a cena nasce com o rig e nunca mais pode ser mexida nem reposta.
+- `o` **Luz ambiente como quarto tipo de luz (soma sem direcao)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1842-1846 (CPU); lib/src/features/editor/application/scene3d_gpu.dart:970-978 (soma na environmentIntensity)`
+  - comando: `addSceneLight(layerId, Light3DKind.ambient) — editor_controller.dart:2061`
+  - porta: `NENHUMA`
+  - falta: A opcao 'Luz ambiente' no seletor de tipo ao adicionar luz.
+- `*` **Forca do ambiente da cena**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:721 (Scene3D.ambient, padrao 0.28); aplicada em :1832-1834 e scene3d_gpu.dart:977`
+  - comando: `NENHUM COMANDO dedicado — so o generico updateScene3D(id, fn), editor_controller.dart:1573`
+  - porta: `NENHUMA (o unico chamador de updateScene3D em presentation e settings/presentation/estresse3d_screen.dart:330, que substitui a cena inteira por uma cena de teste)`
+  - falta: Um slider 'Ambiente' na ficha da cena, e um setAmbient(layerId, double) no controller para nao vazar copyWith cru para a tela.
+- `*` **Cor do ceu (hemisferio de cima do ambiente)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:731 (Scene3D.skyColor); interpolada pela normal em :1796-1800`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um seletor de cor 'Luz do ceu' na secao Ambiente da ficha da cena.
+- `*` **Cor do chao (hemisferio de baixo do ambiente)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:732 (Scene3D.groundColor); interpolada em :1796-1800`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um seletor de cor 'Luz do chao' ao lado do de ceu, com previa das duas juntas.
+- `*` **Curva de saida ACES (tonemap)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:736 (Scene3D.tonemap); aplicada em :2015`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um interruptor 'Curva de cinema (ACES)' na ficha da cena.
+- `*` **Modo rascunho (desliga sombra, DOF e reflexo planar so no preview)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:747 (Scene3D.draftMode); gates em scene3d_painter.dart:487, :495 e :510`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um interruptor 'Previa rapida' no menu ⋮ da barra da cena.
+- `o` **Sombra de contato (mancha escura sob cada objeto)**
+  - motor: `lib/src/features/editor/presentation/widgets/scene3d_painter.dart:781 (_paintContactShadows), ligada em :493-497 quando existe luz com castsShadow e intensidade > 0`
+  - comando: `NENHUM COMANDO (nao ha campo de dominio: opacidade 0x66, desfoque sigma 9 e proporcoes da elipse sao constantes no pintor)`
+  - porta: `NENHUMA`
+  - falta: Campos na Scene3D (forca e desfoque da sombra de contato) e dois sliders; hoje nem existe o que ligar na tela.
+- `*` **Resolucao do mapa de sombra**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:89 (ReceitaDeQualidade.sombraResolucao: 2048/1024/1024/512/0) e :434 (sombraEfetiva, que limita pelo tamanho do alvo); aplicada em scene3d_gpu.dart:869`
+  - comando: `NENHUM COMANDO em editor_controller.dart (quem manda e ControladorDeQualidade3D.definirTeto, qualidade3d_controller.dart:103)`
+  - porta: `lib/src/features/settings/presentation/settings_tab.dart:501 (seletor 'Qualidade 3D' — Automatica/Maxima/Equilibrada/Leve; escolhe a receita inteira, nao a resolucao)`
+  - falta: Um controle por cena (ou ao menos por projeto) de qualidade da sombra; hoje so da para mexer no teto global escondido em Ajustes.
+- `*` **Cascatas da luz direcional**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:92 (ReceitaDeQualidade.cascatas: 2/2/2/1/0); aplicada em scene3d_gpu.dart:868`
+  - comando: `NENHUM COMANDO em editor_controller.dart`
+  - porta: `lib/src/features/settings/presentation/settings_tab.dart:501 (indireto, pelo teto de qualidade)`
+  - falta: Nada de tela obvia — mas nem um cracha dizendo quantas cascatas estao ativas existe hoje.
+- `*` **Quantos spots podem projetar sombra ao mesmo tempo**
+  - motor: `lib/src/features/editor/domain/orcamento_render.dart:95 (ReceitaDeQualidade.sombrasSpotMax: 4/2/1/0/0); contagem em scene3d_gpu.dart:900-903`
+  - comando: `NENHUM COMANDO em editor_controller.dart`
+  - porta: `lib/src/features/settings/presentation/settings_tab.dart:501 (indireto, pelo teto de qualidade)`
+  - falta: Um aviso na lista de luzes: 'esta luz esta com sombra ligada mas o aparelho so aguenta N spots' — hoje a sombra some em silencio.
+- `o` **Sombra so na luz principal (a primeira direcional que projeta)**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:874-880 e :922-924 (so a principal vira cena.directionalLight com cascatas; as outras direcionais entram como componentes)`
+  - comando: `NENHUM COMANDO (regra do motor, sem campo de dominio)`
+  - porta: `NENHUMA`
+  - falta: Marcar a luz principal na lista de luzes, para o usuario entender por que a segunda direcional com 'projeta sombra' ligado nao faz sombra.
+- `o` **Alcance e desvanecimento da sombra (distancia maxima e faixa de fade)**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:867 (shadowMaxDistance: 5000) e :872 (shadowFadeRange: 400)`
+  - comando: `NENHUM COMANDO (constantes fixas no motor, sem campo de dominio)`
+  - porta: `NENHUMA`
+  - falta: Campos na Scene3D e dois sliders na secao Sombra; numa cena grande a sombra some a 5000 unidades e nao ha como esticar.
+- `o` **Correcao de acne da sombra (vies de profundidade e de normal)**
+  - motor: `lib/src/features/editor/application/scene3d_gpu.dart:870 (shadowDepthBias: 0.8) e :871 (shadowNormalBias: 0.8)`
+  - comando: `NENHUM COMANDO (constantes fixas no motor, sem campo de dominio)`
+  - porta: `NENHUMA`
+  - falta: Um par de campos em 'Avancado' da ficha da cena; sem isso nao ha o que fazer quando uma cena especifica listra.
+- `o` **Sol do reflexo e do ceu vem da luz direcional mais forte**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:1911-1922 (CPU: escolhe a direcional de maior intensidade e usa direcao e cor dela como sol do ambiente); lib/src/features/editor/application/scene3d_gpu.dart:1140-1147 (GPU: sunDirection/sunColor do ceu procedural)`
+  - comando: `NENHUM COMANDO direto — muda junto por updateSceneLight (editor_controller.dart:2073) ao mexer na direcional`
+  - porta: `NENHUMA`
+  - falta: Nenhum controle novo: basta a ficha da luz direcional existir, e uma nota de que ela tambem posiciona o sol do ceu.
+- `o` **Rebaixar sombra e ambiente sob pressao (degradacao automatica)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:2197 (degradeScene): passo 2 desliga a sombra da segunda luz em diante (:2208-2218), passo 5 corta o ambiente em 20% (:2221)`
+  - comando: `NENHUM COMANDO — e alem disso degradeScene nao tem UM chamador em lib/ (codigo morto)`
+  - porta: `NENHUMA`
+  - falta: Ou ligar a funcao no controlador de qualidade, ou apagar; hoje ela existe, esta testada e nunca roda.
+- `*` **Grade do chao (referencia visual do plano onde a sombra cai)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:739 (Scene3D.showFloorGrid); desenhada em scene3d_painter.dart:1163, so quando showHelpers esta ligado (:399 e :473)`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573 (setScene3DHelpers, :1957, controla a OUTRA metade da condicao e tambem nao tem chamador em presentation)`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um interruptor 'Grade do chao' junto das ajudas; hoje o campo esta ligado por padrao e ninguem consegue desliga-lo nem ve-lo se showHelpers estiver desligado.
+- `*` **Cor de fundo da cena (o que aparece atras da luz e da sombra)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:738 (Scene3D.background)`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573 (setBackgroundColor, :384, e do PROJETO, nao da cena 3D)`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um seletor de cor 'Fundo da cena' com opcao 'transparente' (o campo e anulavel de proposito).
+- `*` **Suavizacao de borda MSAA (afeta a borda da sombra desenhada)**
+  - motor: `lib/src/features/editor/domain/scene3d.dart:743 (Scene3D.msaa); teto pela receita em orcamento_render.dart:83`
+  - comando: `NENHUM COMANDO dedicado — so updateScene3D, editor_controller.dart:1573`
+  - porta: `NENHUMA (so estresse3d_screen.dart:330, que troca a cena toda)`
+  - falta: Um interruptor em 'Avancado' da ficha da cena, e um aviso de que o teto de qualidade pode desliga-lo por cima.
+- `o` **Lista de luzes na hierarquia da cena (com rotulo por tipo)**
+  - motor: `lib/src/features/editor/domain/estudio_ux.dart:96 (hierarquiaDaCena, parametro luzes) e :129-138; rotulos em :152 (luzLabel)`
+  - comando: `NENHUM COMANDO — e a funcao nao tem um unico chamador em lib/`
+  - porta: `NENHUMA`
+  - falta: A folha de hierarquia que consome essa lista: o dado ja sai pronto (id, nome, tipo, ativo), falta so o widget e passar cena.lights.

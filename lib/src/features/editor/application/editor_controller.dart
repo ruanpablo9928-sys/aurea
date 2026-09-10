@@ -20,6 +20,7 @@ import '../domain/camera_solver3d.dart';
 import '../domain/cena_do_rastreio.dart';
 import '../domain/cut.dart';
 import '../domain/cut_ops.dart';
+import '../domain/panorama3d.dart';
 import '../domain/scene3d.dart';
 import '../domain/effect.dart';
 import '../domain/oscillate.dart';
@@ -162,6 +163,86 @@ extension _ValorEditadoPath on AnimatedPath {
     return withKeyframe(t, v, easeAt(t));
   }
 }
+
+/// AS PROPRIEDADES ANIMAVEIS DE UM OBJETO DA CENA 3D.
+///
+/// Sete trilhas por objeto. O nome tipado existe para que exista
+/// LOSANGO: um diamante precisa saber de que trilha ele fala, e
+/// `updateSceneNode` com uma funcao crua nao sabe de nada.
+enum PropDoNo { x, y, z, giroX, giroY, giroZ, escala }
+
+String propDoNoLabel(PropDoNo p) => switch (p) {
+  PropDoNo.x => 'Posicao X',
+  PropDoNo.y => 'Posicao Y',
+  PropDoNo.z => 'Posicao Z',
+  PropDoNo.giroX => 'Giro X',
+  PropDoNo.giroY => 'Giro Y',
+  PropDoNo.giroZ => 'Giro Z',
+  PropDoNo.escala => 'Escala',
+};
+
+/// A UNICA TRILHA ANIMAVEL DE UMA LUZ.
+enum PropDaLuz { intensidade }
+
+String propDaLuzLabel(PropDaLuz p) => switch (p) {
+  PropDaLuz.intensidade => 'Intensidade',
+};
+
+/// AS 23 TRILHAS ANIMAVEIS DE UMA CAMERA 3D.
+///
+/// Treze de enquadramento e dez de profundidade de campo. Todas sao
+/// lidas pelo pintor e pela GPU, e nenhuma tinha controle.
+enum PropDaCamera {
+  posX,
+  posY,
+  posZ,
+  alvoX,
+  alvoY,
+  alvoZ,
+  orientX,
+  orientY,
+  orientZ,
+  giroX,
+  giroY,
+  giroZ,
+  lente,
+  foco,
+  abertura,
+  desfoque,
+  giroDaIris,
+  arredondamentoDaIris,
+  proporcaoDaIris,
+  franja,
+  ganhoDoRealce,
+  limiarDoRealce,
+  corDoRealce,
+}
+
+String propDaCameraLabel(PropDaCamera p) => switch (p) {
+  PropDaCamera.posX => 'Posicao X',
+  PropDaCamera.posY => 'Posicao Y',
+  PropDaCamera.posZ => 'Posicao Z',
+  PropDaCamera.alvoX => 'Alvo X',
+  PropDaCamera.alvoY => 'Alvo Y',
+  PropDaCamera.alvoZ => 'Alvo Z',
+  PropDaCamera.orientX => 'Orientacao X',
+  PropDaCamera.orientY => 'Orientacao Y',
+  PropDaCamera.orientZ => 'Orientacao Z',
+  PropDaCamera.giroX => 'Giro X',
+  PropDaCamera.giroY => 'Giro Y',
+  PropDaCamera.giroZ => 'Giro Z',
+  PropDaCamera.lente => 'Lente',
+  PropDaCamera.foco => 'Distancia de foco',
+  PropDaCamera.abertura => 'Abertura',
+  PropDaCamera.desfoque => 'Desfoque',
+  PropDaCamera.giroDaIris => 'Giro da iris',
+  PropDaCamera.arredondamentoDaIris => 'Arredondamento da iris',
+  PropDaCamera.proporcaoDaIris => 'Proporcao da iris',
+  PropDaCamera.franja => 'Franja',
+  PropDaCamera.ganhoDoRealce => 'Ganho do realce',
+  PropDaCamera.limiarDoRealce => 'Limiar do realce',
+  PropDaCamera.corDoRealce => 'Cor do realce',
+};
 
 /// Selecao MULTIPLA (toque longo nas barras): a barra de acoes opera no
 /// conjunto — agrupar, duplicar e excluir em lote.
@@ -1595,14 +1676,21 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// A DISTANCIA FOCAL da camera em uso, em milimetros.
-  void setCameraFocalLength(String id, double mm) {
+  ///
+  /// Escrevia `AnimatedDouble(v)` CRU: mexer na lente apagava os
+  /// keyframes de lente — inclusive os que o rig "Dolly zoom" tinha
+  /// acabado de criar, que sao a razao de o rig existir. Agora passa
+  /// pela regra de sempre (`docs/keyframe-explicito.md`): sobre a marca
+  /// atualiza, fora dela fica pendente ate o losango.
+  void setCameraFocalLength(String id, Duration globalTime, double mm) {
     final layer = _layer(id);
     if (layer is! Scene3DLayer) return;
-    final v = mm.clamp(4.0, 400.0);
-    _replace(
-      layer.withCamera(
-        layer.camera.copyWith(focalLength: AnimatedDouble(v)),
-      ),
+    editSceneCameraProp(
+      id,
+      layer.camera.id,
+      PropDaCamera.lente,
+      globalTime,
+      mm.clamp(4.0, 400.0),
     );
   }
 
@@ -1953,6 +2041,516 @@ class EditorController extends Notifier<VideoProject> {
       ),
     );
   }
+
+
+  // ------------------------------------------------ cena 3D: as trilhas
+
+  /// AS TRILHAS ANIMAVEIS DE UM OBJETO DA CENA.
+  ///
+  /// Ate hoje o unico caminho ate elas era [updateSceneNode] com uma
+  /// funcao crua — que escreve o que quiser, do jeito que quiser, sem
+  /// passar por regra nenhuma. Era por isso que a cena 3D nao tinha
+  /// losango: nao havia o que ligar um losango a uma trilha.
+  ///
+  /// Com o alvo nomeado, a cena passa a obedecer a mesma regra do resto
+  /// do app: editar valor nunca cria keyframe
+  /// (`docs/keyframe-explicito.md`).
+  AnimatedDouble _trilhaDoNo(SceneNode n, PropDoNo p) => switch (p) {
+    PropDoNo.x => n.x,
+    PropDoNo.y => n.y,
+    PropDoNo.z => n.z,
+    PropDoNo.giroX => n.rotX,
+    PropDoNo.giroY => n.rotY,
+    PropDoNo.giroZ => n.rotZ,
+    PropDoNo.escala => n.scale,
+  };
+
+  SceneNode _comTrilhaDoNo(SceneNode n, PropDoNo p, AnimatedDouble t) =>
+      switch (p) {
+        PropDoNo.x => n.copyWith(x: t),
+        PropDoNo.y => n.copyWith(y: t),
+        PropDoNo.z => n.copyWith(z: t),
+        PropDoNo.giroX => n.copyWith(rotX: t),
+        PropDoNo.giroY => n.copyWith(rotY: t),
+        PropDoNo.giroZ => n.copyWith(rotZ: t),
+        PropDoNo.escala => n.copyWith(scale: t),
+      };
+
+  /// O valor de [p] no cabecote — o que a ficha mostra.
+  double sceneNodeValueAt(SceneNode n, PropDoNo p, Duration local) =>
+      _trilhaDoNo(n, p).valueAt(local);
+
+  List<Duration> sceneNodeKeyframeTimes(SceneNode n, PropDoNo p) =>
+      [for (final k in _trilhaDoNo(n, p).keyframes) k.time];
+
+  void editSceneNodeProp(
+    String layerId,
+    String nodeId,
+    PropDoNo p,
+    Duration globalTime,
+    double valor,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final local = layer.localTime(globalTime);
+    updateSceneNode(
+      layerId,
+      nodeId,
+      (n) => _comTrilhaDoNo(n, p, _trilhaDoNo(n, p).editada(local, valor)),
+    );
+  }
+
+  void toggleSceneNodeKeyframe(
+    String layerId,
+    String nodeId,
+    PropDoNo p,
+    Duration globalTime,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    if (_cravarPendencia(layerId, globalTime)) return;
+    final local = layer.localTime(globalTime);
+    updateSceneNode(layerId, nodeId, (n) {
+      final t = _trilhaDoNo(n, p);
+      return _comTrilhaDoNo(
+        n,
+        p,
+        t.hasKeyframeAt(local)
+            ? t.withoutKeyframe(local)
+            : t.withKeyframe(local, t.valueAt(local)),
+      );
+    });
+  }
+
+  void setSceneNodePropEase(
+    String layerId,
+    String nodeId,
+    PropDoNo p,
+    Duration comecoLocal,
+    Easing curva,
+  ) => updateSceneNode(
+    layerId,
+    nodeId,
+    (n) => _comTrilhaDoNo(n, p, _trilhaDoNo(n, p).withEase(comecoLocal, curva)),
+  );
+
+  /// A INTENSIDADE E A UNICA TRILHA ANIMAVEL DE UMA LUZ.
+  ///
+  /// Enum de um membro so de proposito: a ficha da luz trata o losango
+  /// igual ao do objeto e ao da camera, e o dia em que a cor virar
+  /// trilha nao muda a forma de nada.
+  AnimatedDouble _trilhaDaLuz(Light3D l, PropDaLuz p) => switch (p) {
+    PropDaLuz.intensidade => l.intensity,
+  };
+
+  Light3D _comTrilhaDaLuz(Light3D l, PropDaLuz p, AnimatedDouble t) =>
+      switch (p) {
+        PropDaLuz.intensidade => l.copyWith(intensity: t),
+      };
+
+  double sceneLightValueAt(Light3D l, PropDaLuz p, Duration local) =>
+      _trilhaDaLuz(l, p).valueAt(local);
+
+  List<Duration> sceneLightKeyframeTimes(Light3D l, PropDaLuz p) =>
+      [for (final k in _trilhaDaLuz(l, p).keyframes) k.time];
+
+  void editSceneLightProp(
+    String layerId,
+    String lightId,
+    PropDaLuz p,
+    Duration globalTime,
+    double valor,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final local = layer.localTime(globalTime);
+    updateSceneLight(
+      layerId,
+      lightId,
+      (l) => _comTrilhaDaLuz(l, p, _trilhaDaLuz(l, p).editada(local, valor)),
+    );
+  }
+
+  void toggleSceneLightKeyframe(
+    String layerId,
+    String lightId,
+    PropDaLuz p,
+    Duration globalTime,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    if (_cravarPendencia(layerId, globalTime)) return;
+    final local = layer.localTime(globalTime);
+    updateSceneLight(layerId, lightId, (l) {
+      final t = _trilhaDaLuz(l, p);
+      return _comTrilhaDaLuz(
+        l,
+        p,
+        t.hasKeyframeAt(local)
+            ? t.withoutKeyframe(local)
+            : t.withKeyframe(local, t.valueAt(local)),
+      );
+    });
+  }
+
+  /// AS 23 TRILHAS DE UMA CAMERA 3D.
+  ///
+  /// Treze de enquadramento (posicao, ponto de interesse, orientacao,
+  /// giro e lente) e dez de profundidade de campo. O motor honra todas
+  /// — o pintor de CPU e a ponte de GPU leem cada uma — e nenhuma tinha
+  /// controle.
+  AnimatedDouble _trilhaDaCamera(Camera3D c, PropDaCamera p) => switch (p) {
+    PropDaCamera.posX => c.posX,
+    PropDaCamera.posY => c.posY,
+    PropDaCamera.posZ => c.posZ,
+    PropDaCamera.alvoX => c.poiX,
+    PropDaCamera.alvoY => c.poiY,
+    PropDaCamera.alvoZ => c.poiZ,
+    PropDaCamera.orientX => c.orientX,
+    PropDaCamera.orientY => c.orientY,
+    PropDaCamera.orientZ => c.orientZ,
+    PropDaCamera.giroX => c.rotX,
+    PropDaCamera.giroY => c.rotY,
+    PropDaCamera.giroZ => c.rotZ,
+    PropDaCamera.lente => c.focalLength,
+    PropDaCamera.foco => c.dof.focusDistance,
+    PropDaCamera.abertura => c.dof.aperture,
+    PropDaCamera.desfoque => c.dof.blurLevel,
+    PropDaCamera.giroDaIris => c.dof.irisRotation,
+    PropDaCamera.arredondamentoDaIris => c.dof.irisRoundness,
+    PropDaCamera.proporcaoDaIris => c.dof.irisAspect,
+    PropDaCamera.franja => c.dof.diffractionFringe,
+    PropDaCamera.ganhoDoRealce => c.dof.highlightGain,
+    PropDaCamera.limiarDoRealce => c.dof.highlightThreshold,
+    PropDaCamera.corDoRealce => c.dof.highlightSaturation,
+  };
+
+  Camera3D _comTrilhaDaCamera(Camera3D c, PropDaCamera p, AnimatedDouble t) =>
+      switch (p) {
+        PropDaCamera.posX => c.copyWith(posX: t),
+        PropDaCamera.posY => c.copyWith(posY: t),
+        PropDaCamera.posZ => c.copyWith(posZ: t),
+        PropDaCamera.alvoX => c.copyWith(poiX: t),
+        PropDaCamera.alvoY => c.copyWith(poiY: t),
+        PropDaCamera.alvoZ => c.copyWith(poiZ: t),
+        PropDaCamera.orientX => c.copyWith(orientX: t),
+        PropDaCamera.orientY => c.copyWith(orientY: t),
+        PropDaCamera.orientZ => c.copyWith(orientZ: t),
+        PropDaCamera.giroX => c.copyWith(rotX: t),
+        PropDaCamera.giroY => c.copyWith(rotY: t),
+        PropDaCamera.giroZ => c.copyWith(rotZ: t),
+        PropDaCamera.lente => c.copyWith(focalLength: t),
+        PropDaCamera.foco => c.copyWith(
+          dof: c.dof.copyWith(focusDistance: t),
+        ),
+        PropDaCamera.abertura => c.copyWith(dof: c.dof.copyWith(aperture: t)),
+        PropDaCamera.desfoque => c.copyWith(dof: c.dof.copyWith(blurLevel: t)),
+        PropDaCamera.giroDaIris => c.copyWith(
+          dof: c.dof.copyWith(irisRotation: t),
+        ),
+        PropDaCamera.arredondamentoDaIris => c.copyWith(
+          dof: c.dof.copyWith(irisRoundness: t),
+        ),
+        PropDaCamera.proporcaoDaIris => c.copyWith(
+          dof: c.dof.copyWith(irisAspect: t),
+        ),
+        PropDaCamera.franja => c.copyWith(
+          dof: c.dof.copyWith(diffractionFringe: t),
+        ),
+        PropDaCamera.ganhoDoRealce => c.copyWith(
+          dof: c.dof.copyWith(highlightGain: t),
+        ),
+        PropDaCamera.limiarDoRealce => c.copyWith(
+          dof: c.dof.copyWith(highlightThreshold: t),
+        ),
+        PropDaCamera.corDoRealce => c.copyWith(
+          dof: c.dof.copyWith(highlightSaturation: t),
+        ),
+      };
+
+  double sceneCameraValueAt(Camera3D c, PropDaCamera p, Duration local) =>
+      _trilhaDaCamera(c, p).valueAt(local);
+
+  List<Duration> sceneCameraKeyframeTimes(Camera3D c, PropDaCamera p) =>
+      [for (final k in _trilhaDaCamera(c, p).keyframes) k.time];
+
+  /// Edita a camera de id [cameraId] — a da cena ou uma das extras.
+  void _mexerNaCamera(
+    String layerId,
+    String cameraId,
+    Camera3D Function(Camera3D) fn,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    if (layer.camera.id == cameraId) {
+      _replace(layer.withCamera(fn(layer.camera)));
+      return;
+    }
+    if (!layer.extraCameras.any((c) => c.id == cameraId)) return;
+    _replace(
+      layer.copyScene(
+        extraCameras: [
+          for (final c in layer.extraCameras) c.id == cameraId ? fn(c) : c,
+        ],
+      ),
+    );
+  }
+
+  void editSceneCameraProp(
+    String layerId,
+    String cameraId,
+    PropDaCamera p,
+    Duration globalTime,
+    double valor,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    final local = layer.localTime(globalTime);
+    _mexerNaCamera(
+      layerId,
+      cameraId,
+      (c) => _comTrilhaDaCamera(
+        c,
+        p,
+        _trilhaDaCamera(c, p).editada(local, valor),
+      ),
+    );
+  }
+
+  void toggleSceneCameraKeyframe(
+    String layerId,
+    String cameraId,
+    PropDaCamera p,
+    Duration globalTime,
+  ) {
+    final layer = _layer(layerId);
+    if (layer is! Scene3DLayer) return;
+    if (_cravarPendencia(layerId, globalTime)) return;
+    final local = layer.localTime(globalTime);
+    _mexerNaCamera(layerId, cameraId, (c) {
+      final t = _trilhaDaCamera(c, p);
+      return _comTrilhaDaCamera(
+        c,
+        p,
+        t.hasKeyframeAt(local)
+            ? t.withoutKeyframe(local)
+            : t.withKeyframe(local, t.valueAt(local)),
+      );
+    });
+  }
+
+  void setSceneCameraPropEase(
+    String layerId,
+    String cameraId,
+    PropDaCamera p,
+    Duration comecoLocal,
+    Easing curva,
+  ) => _mexerNaCamera(
+    layerId,
+    cameraId,
+    (c) => _comTrilhaDaCamera(
+      c,
+      p,
+      _trilhaDaCamera(c, p).withEase(comecoLocal, curva),
+    ),
+  );
+
+  // -------------------------------------------- cena 3D: o que nao anima
+
+  void setSceneNodeKind(String layerId, String nodeId, Element3DKind kind) =>
+      updateSceneNode(layerId, nodeId, (n) => n.copyWith(kind: kind));
+
+  void setSceneNodeSize(String layerId, String nodeId, double size) =>
+      updateSceneNode(
+        layerId,
+        nodeId,
+        (n) => n.copyWith(size: size.clamp(1.0, 20000.0)),
+      );
+
+  void setSceneNodeSubdivisions(String layerId, String nodeId, int n) =>
+      updateSceneNode(
+        layerId,
+        nodeId,
+        (no) => no.copyWith(subdivisions: n.clamp(0, 4)),
+      );
+
+  void setSceneNodeColorTag(String layerId, String nodeId, Color cor) =>
+      updateSceneNode(layerId, nodeId, (n) => n.copyWith(colorTag: cor));
+
+  void setSceneNodeLod(String layerId, String nodeId, MeshLod3D lod) =>
+      updateSceneNode(layerId, nodeId, (n) => n.copyWith(lod: lod));
+
+  /// O MATERIAL INTEIRO de um objeto — os 18 campos numa tacada.
+  void setSceneNodeMaterial(String layerId, String nodeId, Material3D m) =>
+      updateSceneNode(layerId, nodeId, (n) => n.copyWith(material: m));
+
+  /// Um dos 12 materiais prontos. `materialFromPreset` era codigo morto:
+  /// existia, era testado, e nao tinha um chamador.
+  void applySceneNodeMaterialPreset(
+    String layerId,
+    String nodeId,
+    MaterialPreset3D preset,
+  ) => updateSceneNode(
+    layerId,
+    nodeId,
+    (n) => n.copyWith(
+      material: materialFromPreset(preset).copyWith(name: n.material.name),
+    ),
+  );
+
+  void setSceneLightKind(String layerId, String lightId, Light3DKind kind) =>
+      updateSceneLight(layerId, lightId, (l) => l.copyWith(kind: kind));
+
+  void setSceneLightColor(String layerId, String lightId, Color cor) =>
+      updateSceneLight(layerId, lightId, (l) => l.copyWith(color: cor));
+
+  void setSceneLightShadow(String layerId, String lightId, bool sombra) =>
+      updateSceneLight(
+        layerId,
+        lightId,
+        (l) => l.copyWith(castsShadow: sombra),
+      );
+
+  void setSceneLightRange(String layerId, String lightId, double alcance) =>
+      updateSceneLight(
+        layerId,
+        lightId,
+        (l) => l.copyWith(range: alcance.clamp(1.0, 20000.0)),
+      );
+
+  void setSceneLightCone(String layerId, String lightId, double graus) =>
+      updateSceneLight(
+        layerId,
+        lightId,
+        (l) => l.copyWith(coneDegrees: graus.clamp(1.0, 179.0)),
+      );
+
+  void setSceneLightSoftness(String layerId, String lightId, double s) =>
+      updateSceneLight(
+        layerId,
+        lightId,
+        (l) => l.copyWith(softness: s.clamp(0.0, 1.0)),
+      );
+
+  void setSceneLightDirection(String layerId, String lightId, Vec3 d) =>
+      updateSceneLight(layerId, lightId, (l) => l.copyWith(direction: d));
+
+  void setSceneLightPosition(String layerId, String lightId, Vec3 p) =>
+      updateSceneLight(layerId, lightId, (l) => l.copyWith(position: p));
+
+  /// DOIS NOS (com ponto de interesse) ou UM NO (so orientacao).
+  void setSceneCameraKind(String layerId, String cameraId, CameraKind kind) =>
+      _mexerNaCamera(layerId, cameraId, (c) => c.copyWith(kind: kind));
+
+  void setSceneCameraFilmWidth(String layerId, String cameraId, double mm) =>
+      _mexerNaCamera(
+        layerId,
+        cameraId,
+        (c) => c.copyWith(filmWidth: mm.clamp(1.0, 200.0)),
+      );
+
+  void setSceneCameraDofEnabled(String layerId, String cameraId, bool on) =>
+      _mexerNaCamera(
+        layerId,
+        cameraId,
+        (c) => c.copyWith(dof: c.dof.copyWith(enabled: on)),
+      );
+
+  void setSceneCameraIris(String layerId, String cameraId, IrisShape forma) =>
+      _mexerNaCamera(
+        layerId,
+        cameraId,
+        (c) => c.copyWith(dof: c.dof.copyWith(irisShape: forma)),
+      );
+
+  void renameSceneCameraById(String layerId, String cameraId, String nome) =>
+      _mexerNaCamera(layerId, cameraId, (c) => c.copyWith(name: nome));
+
+  // ---------------------------------------------------- cena 3D: o mundo
+
+  void setSceneEnvironment(String layerId, EnvironmentKind e) =>
+      updateScene3D(layerId, (s) => s.copyWith(environment: e));
+
+  void setSceneEnvReflect(String layerId, double v) => updateScene3D(
+    layerId,
+    (s) => s.copyWith(envReflect: v.clamp(0.0, 1.0)),
+  );
+
+  void setSceneAmbient(String layerId, double v) => updateScene3D(
+    layerId,
+    (s) => s.copyWith(ambient: v.clamp(0.0, 3.0)),
+  );
+
+  void setSceneSkyColor(String layerId, Color c) =>
+      updateScene3D(layerId, (s) => s.copyWith(skyColor: c));
+
+  void setSceneGroundColor(String layerId, Color c) =>
+      updateScene3D(layerId, (s) => s.copyWith(groundColor: c));
+
+  void setSceneBackground(String layerId, Color? c) => updateScene3D(
+    layerId,
+    (s) => Scene3D(
+      environment: s.environment,
+      envReflect: s.envReflect,
+      panorama: s.panorama,
+      reflectionProbe: s.reflectionProbe,
+      planarFloorReflection: s.planarFloorReflection,
+      planarFloorRoughness: s.planarFloorRoughness,
+      fogDensity: s.fogDensity,
+      fogStart: s.fogStart,
+      fogColor: s.fogColor,
+      nodes: s.nodes,
+      lights: s.lights,
+      savedViews: s.savedViews,
+      ambient: s.ambient,
+      skyColor: s.skyColor,
+      groundColor: s.groundColor,
+      tonemap: s.tonemap,
+      background: c,
+      showFloorGrid: s.showFloorGrid,
+      msaa: s.msaa,
+      draftMode: s.draftMode,
+      cameraParentId: s.cameraParentId,
+    ),
+  );
+
+  void setSceneFloorGrid(String layerId, bool on) =>
+      updateScene3D(layerId, (s) => s.copyWith(showFloorGrid: on));
+
+  void setSceneTonemap(String layerId, bool on) =>
+      updateScene3D(layerId, (s) => s.copyWith(tonemap: on));
+
+  void setSceneMsaa(String layerId, bool on) =>
+      updateScene3D(layerId, (s) => s.copyWith(msaa: on));
+
+  void setScenePlanarFloor(String layerId, bool on, {double? aspereza}) =>
+      updateScene3D(
+        layerId,
+        (s) => s.copyWith(
+          planarFloorReflection: on,
+          planarFloorRoughness: aspereza?.clamp(0.0, 1.0),
+        ),
+      );
+
+  void setSceneFog(
+    String layerId, {
+    double? densidade,
+    double? comeco,
+    Color? cor,
+  }) => updateScene3D(
+    layerId,
+    (s) => s.copyWith(
+      fogDensity: densidade?.clamp(0.0, 1.0),
+      fogStart: comeco,
+      fogColor: cor,
+    ),
+  );
+
+  void setScenePanorama(String layerId, Panorama3D p) =>
+      updateScene3D(layerId, (s) => s.copyWith(panorama: p));
+
+  void setSceneReflectionProbe(String layerId, ReflectionProbe3D p) =>
+      updateScene3D(layerId, (s) => s.copyWith(reflectionProbe: p));
 
   void setScene3DHelpers(String id, bool show) {
     final layer = _layer(id);

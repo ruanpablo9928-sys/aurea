@@ -709,8 +709,12 @@ Camera3D frameBounds(
       poiZ: cam.poiZ.withBase(bounds.center.z),
     );
   }
+  // `withBase`, e NAO `AnimatedDouble(dist)`: a trilha crua apagava os
+  // keyframes de foco que a pessoa tivesse cravado. Todo o resto desta
+  // funcao ja usava `withBase` — a distancia de foco era a unica linha
+  // que jogava fora o que existia (`docs/keyframe-explicito.md`).
   return out.copyWith(
-    dof: out.dof.copyWith(focusDistance: AnimatedDouble(dist)),
+    dof: out.dof.copyWith(focusDistance: out.dof.focusDistance.withBase(dist)),
   );
 }
 
