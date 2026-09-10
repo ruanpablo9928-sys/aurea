@@ -7,6 +7,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import 'controles_da_camada.dart';
 import 'editor_de_curva.dart';
+import 'painel_da_selecao.dart';
 
 /// AS FERRAMENTAS DA CAMADA SELECIONADA.
 ///
@@ -33,6 +34,14 @@ enum EstadoDoPainel {
 
   /// Uma categoria aberta, ocupando o painel.
   categoria,
+
+  /// AS ACOES DE VARIAS CAMADAS DE UMA VEZ.
+  ///
+  /// Estado proprio, e nao uma categoria, porque nao pertence a camada
+  /// nenhuma: ele fala do CONJUNTO. Enquanto ele esta aberto, o painel
+  /// nao mostra as ferramentas de camada — as duas coisas na tela ao
+  /// mesmo tempo fariam cada botao ter de dizer sobre quem ele age.
+  selecao,
 }
 
 /// O que o painel esta mostrando. Os estados sao MUTUAMENTE EXCLUSIVOS:
@@ -292,6 +301,32 @@ class PainelSobreposto extends ConsumerWidget {
     final estado = ref.watch(estadoDoPainelProvider);
     if (estado == EstadoDoPainel.recolhido) return const SizedBox.shrink();
 
+    // AS ACOES DO CONJUNTO ganham o painel inteiro. Elas nao pertencem
+    // a camada nenhuma, entao nao passam pela ficha da selecionada.
+    if (estado == EstadoDoPainel.selecao) {
+      if (ref.watch(multiSelectProvider).length < 2) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!ref.context.mounted) return;
+          ref.read(estadoDoPainelProvider.notifier).state =
+              EstadoDoPainel.recolhido;
+        });
+        return const SizedBox.shrink();
+      }
+      return Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: PainelDaCamada.alturaMaxima,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: AmColors.panelHigh,
+            border: Border(top: BorderSide(color: AmColors.hairline)),
+          ),
+          child: PainelDaSelecao(playback: playback),
+        ),
+      );
+    }
+
     final project = ref.watch(editorControllerProvider);
     final id = ref.watch(selectedLayerProvider);
     final camada = project.layers.where((l) => l.id == id).firstOrNull;
@@ -338,6 +373,22 @@ class PainelSobreposto extends ConsumerWidget {
 void abrirFerramentasDaCamada(WidgetRef ref) {
   ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.categorias;
   ref.read(categoriaAbertaProvider.notifier).state = null;
+}
+
+/// ABRE AS ACOES DA SELECAO. Chamado quando o toque longo junta a
+/// segunda camada — juntar sem mostrar o que fazer com o conjunto
+/// deixaria o gesto sem resposta.
+void abrirAcoesDaSelecao(WidgetRef ref) {
+  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.selecao;
+  ref.read(categoriaAbertaProvider.notifier).state = null;
+}
+
+/// DESFAZ A JUNCAO e fecha o painel dela.
+void limparSelecao(WidgetRef ref) {
+  ref.read(multiSelectProvider.notifier).state = const {};
+  if (ref.read(estadoDoPainelProvider) == EstadoDoPainel.selecao) {
+    ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.recolhido;
+  }
 }
 
 /// ABRE O FLUXO DE ADICAO: a barra de familias, em cima do `+`.
@@ -449,7 +500,10 @@ double alturaDaFerramentaAberta(WidgetRef ref) {
   }
   final estado = ref.watch(estadoDoPainelProvider);
   if (estado == EstadoDoPainel.recolhido) return 0;
-  if (estado == EstadoDoPainel.categoria) return PainelDaCamada.alturaMaxima;
+  if (estado == EstadoDoPainel.categoria ||
+      estado == EstadoDoPainel.selecao) {
+    return PainelDaCamada.alturaMaxima;
+  }
   final project = ref.watch(editorControllerProvider);
   final id = ref.watch(selectedLayerProvider);
   final camada = project.layers.where((l) => l.id == id).firstOrNull;

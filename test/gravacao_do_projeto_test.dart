@@ -19,33 +19,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// UM REPOSITORIO QUE NAO TOCA NO DISCO.
-///
-/// O que este teste cobra e a PONTE — a mutacao do editor chegando na
-/// lista que grava. Deixar a gravacao de verdade acontecer traria um
-/// arquivo real por teste, e a limpeza brigaria com a escrita ainda em
-/// voo (o Windows recusa apagar o que esta aberto).
-class _SemDisco extends ProjectRepository {
-  _SemDisco() : super(installBundledExamples: false);
-
-  final List<VideoProject> gravados = [];
-
-  @override
-  Future<List<VideoProject>> loadAll() async => const [];
-
-  @override
-  Future<void> save(VideoProject project) async => gravados.add(project);
-
-  @override
-  Future<void> delete(String id) async {}
-
-  @override
-  Future<void> flush() async {}
-}
+import 'apoio/repositorio_sem_disco.dart';
 
 Future<ProviderContainer> _montar(
   WidgetTester tester,
-  _SemDisco repo,
+  RepositorioSemDisco repo,
   VideoProject projeto,
 ) async {
   tester.view.physicalSize = const Size(1170, 2532);
@@ -73,7 +51,7 @@ Future<ProviderContainer> _montar(
 void main() {
   testWidgets('uma camada nova chega na lista de projetos', (tester) async {
     final projeto = VideoProject.empty('Teste');
-    final repo = _SemDisco();
+    final repo = RepositorioSemDisco();
     final container = await _montar(tester, repo, projeto);
 
     expect(
@@ -107,7 +85,7 @@ void main() {
     tester,
   ) async {
     final projeto = VideoProject.empty('Teste');
-    final container = await _montar(tester, _SemDisco(), projeto);
+    final container = await _montar(tester, RepositorioSemDisco(), projeto);
     final c = container.read(editorControllerProvider.notifier);
 
     c.addTextLayer(Duration.zero, text: 'Um');

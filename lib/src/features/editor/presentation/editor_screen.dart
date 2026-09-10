@@ -359,11 +359,26 @@ class _Cabecalho extends ConsumerWidget {
     if (ref.watch(curvaEmEdicaoProvider) != null) {
       return const _CabecalhoDaFerramenta(titulo: 'Curva de gradacao');
     }
-    final aberta = ref.watch(estadoDoPainelProvider) == EstadoDoPainel.categoria
+    final estado = ref.watch(estadoDoPainelProvider);
+    final aberta = estado == EstadoDoPainel.categoria
         ? ref.watch(categoriaAbertaProvider)
         : null;
     if (aberta != null) {
       return _CabecalhoDaFerramenta(titulo: tituloDaFerramenta(aberta));
+    }
+    // QUANTAS CAMADAS ESTAO JUNTAS, no lugar do nome do projeto.
+    //
+    // O conjunto muda o que TODO gesto faz, e uma barra que continuasse
+    // dizendo o nome do projeto esconderia isso. Sair daqui desfaz a
+    // juncao, que e o unico caminho de volta que faz sentido: um
+    // conjunto invisivel agindo por tras seria pior que nenhum.
+    final juntas = ref.watch(multiSelectProvider).length;
+    if (estado == EstadoDoPainel.selecao && juntas >= 2) {
+      return _CabecalhoDaFerramenta(
+        titulo: '$juntas camadas',
+        aoSair: () => limparSelecao(ref),
+        rotuloDeSair: 'Desfazer a juncao',
+      );
     }
     // DENTRO DE UM GRUPO, "VOLTAR" QUER DIZER SAIR DO GRUPO.
     //
@@ -447,9 +462,18 @@ class _Cabecalho extends ConsumerWidget {
 
 /// A BARRA TOMADA PELA FERRAMENTA: so o `‹` e o nome, centrado.
 class _CabecalhoDaFerramenta extends ConsumerWidget {
-  const _CabecalhoDaFerramenta({required this.titulo});
+  const _CabecalhoDaFerramenta({
+    required this.titulo,
+    this.aoSair,
+    this.rotuloDeSair,
+  });
 
   final String titulo;
+
+  /// O que a seta faz. Fechar a ferramenta e o caso comum; a barra da
+  /// selecao usa outra saida, porque la sair e desfazer a juncao.
+  final VoidCallback? aoSair;
+  final String? rotuloDeSair;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SizedBox(
@@ -460,10 +484,10 @@ class _CabecalhoDaFerramenta extends ConsumerWidget {
           container: true,
           excludeSemantics: true,
           button: true,
-          label: 'Fechar a ferramenta',
+          label: rotuloDeSair ?? 'Fechar a ferramenta',
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => fecharFerramenta(ref),
+            onTap: () => aoSair == null ? fecharFerramenta(ref) : aoSair!(),
             child: const SizedBox(
               width: 48,
               height: _Cabecalho.altura,

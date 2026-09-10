@@ -96,6 +96,27 @@ Os parametros de PONTO (`Centro X`, `Centro Y`) sairam do balde do
 linhas comuns, com fita, campo e losango do rail. A cruz arrastavel
 sobre a previa continua sendo o certo, e depende do palco ganhar gesto.
 
+**Selecao multipla (lote 8).** A auditoria chamou isto de raiz
+estrutural, e era: `multiSelectProvider` so era LIMPO, nunca preenchido
+— nenhum gesto punha duas camadas no conjunto, e por isso `groupLayers`,
+`reorderLayers`, `alignSelection`, `distributeSelection`,
+`cascadeSelection` e as acoes em lote ficavam todas sem porta.
+
+O toque longo na pilha junta (e a primeira juncao leva a selecionada
+junto, senao a pessoa manda juntar duas e ve "uma"). O anel verde no
+clipe diz quem vai junto — cor diferente da selecionada branca, porque
+sao duas coisas: a branca e a que as ferramentas abrem, a verde e a que
+a acao em lote pega. A barra de cima vira "N camadas", e sair dali
+desfaz a juncao.
+
+O painel do conjunto e um estado proprio (`EstadoDoPainel.selecao`), e
+nao uma categoria: ele nao pertence a camada nenhuma. Traz alinhar (as
+seis bordas, pela SELECAO e nao pela composicao — quem juntou duas
+camadas quer encostar uma na outra), espalhar (apagado com o motivo
+escrito abaixo de tres camadas), escalonar no tempo, subir e descer na
+pilha, agrupar, duplicar e apagar. Duplicar e apagar em lote usam
+`runAsOneUndo`: apagar cinco e uma acao, e nao cinco.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo

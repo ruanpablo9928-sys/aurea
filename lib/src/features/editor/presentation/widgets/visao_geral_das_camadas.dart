@@ -300,6 +300,7 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
 
     final altura = camadas.length * VisaoGeralDasCamadas.alturaDaTrilha;
     final ondas = _ondas(camadas);
+    final multi = ref.watch(multiSelectProvider);
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
       // ARRASTAR NA PILHA NAVEGA NO TEMPO. O cabecote esta parado no
@@ -375,6 +376,7 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                       degraus: _segurando == null ? 0 : _degraus,
                       familia: familiaDoApp(context),
                       ondas: ondas,
+                      juntas: multi,
                     ),
                     size: Size.infinite,
                   ),
@@ -387,13 +389,51 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                 children: [
                   for (final l in camadas)
                     SizedBox(
+                      // A CHAVE E O ENDERECO DA TRILHA.
+                      //
+                      // O nome da camada aparece em tres lugares na
+                      // mesma linha — o desenho do clipe, a pilula e
+                      // este alvo — e procurar por nome acha os tres.
+                      key: ValueKey('trilha-${l.id}'),
                       height: VisaoGeralDasCamadas.alturaDaTrilha,
                       child: Semantics(
                         button: true,
-                        selected: l.id == selecionada,
+                        selected:
+                            l.id == selecionada || multi.contains(l.id),
                         label: l.name,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
+                          // TOQUE LONGO JUNTA CAMADAS.
+                          //
+                          // `multiSelectProvider` existia desde sempre e
+                          // era so LIMPO, nunca preenchido: nao havia
+                          // gesto que pusesse duas camadas no conjunto,
+                          // e por isso agrupar varias, alinhar,
+                          // distribuir, escalonar e as acoes em lote
+                          // ficavam todas sem porta.
+                          //
+                          // O toque longo e o gesto que sobrava aqui: o
+                          // simples ja escolhe e abre, e o arrasto ja
+                          // navega no tempo.
+                          onLongPress: () {
+                            final atual = {
+                              ...ref.read(multiSelectProvider),
+                            };
+                            // A PRIMEIRA JUNCAO LEVA A SELECIONADA
+                            // JUNTO. Sem isso, segurar a segunda camada
+                            // deixaria o conjunto com uma so — e a
+                            // pessoa veria "1 camada" depois de mandar
+                            // juntar duas.
+                            if (atual.isEmpty && selecionada != null) {
+                              atual.add(selecionada);
+                            }
+                            if (!atual.add(l.id)) atual.remove(l.id);
+                            ref.read(multiSelectProvider.notifier).state =
+                                atual.length < 2 ? const {} : atual;
+                            if (atual.length >= 2) {
+                              abrirAcoesDaSelecao(ref);
+                            }
+                          },
                           // TOQUE DUPLO SAIU DAQUI DE PROPOSITO.
                           //
                           // Um `onDoubleTap` obriga o Flutter a segurar
@@ -559,6 +599,7 @@ class _PintorDasTrilhas extends CustomPainter {
     required this.degraus,
     required this.familia,
     required this.ondas,
+    required this.juntas,
   });
 
   final List<Layer> camadas;
@@ -579,6 +620,9 @@ class _PintorDasTrilhas extends CustomPainter {
 
   /// A forma de onda por camada, quando ja analisada.
   final Map<String, PeakPyramid> ondas;
+
+  /// As camadas juntadas por toque longo.
+  final Set<String> juntas;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -612,6 +656,20 @@ class _PintorDasTrilhas extends CustomPainter {
       canvas.restore();
 
       if (travadas.contains(l.id)) _pintarCadeado(canvas, barra);
+      // O ANEL VERDE DIZ "ESTA VAI JUNTO".
+      //
+      // Cor diferente da selecionada de propósito: a branca e a que as
+      // ferramentas abrem, a verde e a que a acao em lote pega. As duas
+      // podem valer ao mesmo tempo na mesma camada.
+      if (juntas.contains(l.id)) {
+        canvas.drawRRect(
+          rr.inflate(1.5),
+          Paint()
+            ..color = AmColors.accent
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      }
       if (l.id == selecionada) {
         canvas.drawRRect(
           rr.inflate(1.5),
@@ -837,7 +895,8 @@ class _PintorDasTrilhas extends CustomPainter {
       !identical(o.camadas, camadas) ||
       o.escondidas.length != escondidas.length ||
       o.travadas.length != travadas.length ||
-      o.ondas.length != ondas.length;
+      o.ondas.length != ondas.length ||
+      o.juntas.length != juntas.length;
 }
 
 /// ESTADO VAZIO: projeto sem camada nenhuma.
