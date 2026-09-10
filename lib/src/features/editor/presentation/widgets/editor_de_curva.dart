@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/am_colors.dart';
+import '../../application/editor_controller.dart';
 import '../../domain/keyframe.dart';
 
 /// QUAL CURVA ESTA ABERTA PARA EDICAO.
@@ -116,7 +117,16 @@ class _EditorDeCurvaState extends ConsumerState<EditorDeCurva> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(4, 10, 8, 2),
-                  child: _Quadro(curva: curva, aoMover: aplicar),
+                  child: _Quadro(
+                    curva: curva,
+                    aoMover: aplicar,
+                    aoComecar: () => ref
+                        .read(editorControllerProvider.notifier)
+                        .beginGesture(),
+                    aoTerminar: () => ref
+                        .read(editorControllerProvider.notifier)
+                        .endGesture(),
+                  ),
                 ),
               ),
               _NomeDoPreset(
@@ -372,10 +382,21 @@ class _Miniatura extends CustomPainter {
 /// primeiro movimento do dedo era sempre descartado. Num gesto curto, o
 /// botao nao obedecia nunca.
 class _Quadro extends StatefulWidget {
-  const _Quadro({required this.curva, required this.aoMover});
+  const _Quadro({
+    required this.curva,
+    required this.aoMover,
+    required this.aoComecar,
+    required this.aoTerminar,
+  });
 
   final Easing curva;
   final void Function(Easing) aoMover;
+
+  /// Abrem e fecham o lote de desfazer. Sem eles, arrastar um botao da
+  /// curva produzia dezenas de passos, e um toque em desfazer devolvia
+  /// so a ultima fracao do movimento.
+  final VoidCallback aoComecar;
+  final VoidCallback aoTerminar;
 
   /// Onde o botao [i] cai dentro de um quadro de [tamanho].
   static Offset pontoDoBotao(Easing c, int i, Size tamanho) {
@@ -421,11 +442,18 @@ class _QuadroState extends State<_Quadro> {
           final d0 = (_Quadro.pontoDoBotao(curva, 0, tamanho) - p).distance;
           final d1 = (_Quadro.pontoDoBotao(curva, 1, tamanho) - p).distance;
           _preso = d0 <= d1 ? 0 : 1;
+          widget.aoComecar();
           mover(p);
         },
         onPanUpdate: (d) => mover(d.localPosition),
-        onPanEnd: (_) => _preso = null,
-        onPanCancel: () => _preso = null,
+        onPanEnd: (_) {
+          _preso = null;
+          widget.aoTerminar();
+        },
+        onPanCancel: () {
+          _preso = null;
+          widget.aoTerminar();
+        },
         child: CustomPaint(
           key: const ValueKey('quadro-da-curva'),
           painter: _PintorDaCurva(curva: curva, comBotoes: bezier),

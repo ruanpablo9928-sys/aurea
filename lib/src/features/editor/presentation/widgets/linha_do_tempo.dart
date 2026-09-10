@@ -266,6 +266,8 @@ class LinhaDoTempo extends ConsumerWidget {
               temProxima: false,
               aoMoverKeyframe: null,
               aoApagarKeyframe: null,
+              aoComecarLote: () {},
+              aoTerminarLote: () {},
               aoTrocar: (_) {},
               aoAlternarOlho: null,
               aviso: 'Nenhuma camada ainda. O conteudo novo entra no cabecote.',
@@ -286,6 +288,10 @@ class LinhaDoTempo extends ConsumerWidget {
       aoApagarKeyframe: (local) => ref
           .read(editorControllerProvider.notifier)
           .apagarKeyframeDeTransformacao(atual.id, local),
+      aoComecarLote: () =>
+          ref.read(editorControllerProvider.notifier).beginGesture(),
+      aoTerminarLote: () =>
+          ref.read(editorControllerProvider.notifier).endGesture(),
       aoTrocar: (passo) {
         final v = _vizinha(camadas, atual, passo);
         if (v != null) {
@@ -335,7 +341,16 @@ class _Transporte extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(editorControllerProvider.notifier);
+    // O BOTAO DESFAZER PRECISA DO ESTADO, e nao so do notifier.
+    //
+    // `ref.watch(...notifier)` nao avisa quando a pilha de desfazer
+    // muda: o notifier e sempre o mesmo objeto. O botao so parecia certo
+    // porque o pai reconstruia por outro motivo — e quando nao
+    // reconstruia, ele ficava apagado com desfazer disponivel. Observar
+    // o ESTADO amarra a atualizacao a cada mutacao do projeto, que e
+    // exatamente quando `canUndo` pode ter mudado.
+    ref.watch(editorControllerProvider);
+    final controller = ref.read(editorControllerProvider.notifier);
     return SizedBox(
       height: LinhaDoTempo.alturaDoTransporte,
       child: Row(
@@ -740,6 +755,8 @@ class _Faixa extends StatefulWidget {
     required this.aoAlternarOlho,
     required this.aoMoverKeyframe,
     required this.aoApagarKeyframe,
+    required this.aoComecarLote,
+    required this.aoTerminarLote,
     this.aviso,
   });
 
@@ -753,6 +770,14 @@ class _Faixa extends StatefulWidget {
   final VoidCallback? aoAlternarOlho;
   final void Function(Duration de, Duration para)? aoMoverKeyframe;
   final void Function(Duration local)? aoApagarKeyframe;
+
+  /// ABREM E FECHAM O LOTE DE DESFAZER do arrasto de marca.
+  ///
+  /// Vem de fora porque esta faixa e um `State` comum, sem `ref` — e
+  /// inventar um `ConsumerState` so para chamar `beginGesture` seria
+  /// trocar o problema de lugar.
+  final VoidCallback aoComecarLote;
+  final VoidCallback aoTerminarLote;
 
   /// Texto no lugar da trilha, quando nao ha camada para desenhar.
   final String? aviso;
@@ -855,6 +880,20 @@ class _FaixaState extends State<_Faixa> {
       return;
     }
     _pego = k;
+    // UM ARRASTO, UM DESFAZER. Sem o lote, mover uma marca produzia
+    // dezenas de passos e um toque em desfazer devolvia so o ultimo
+    // pedacinho do movimento — o resto ficava preso na pilha.
+    _lote = true;
+    widget.aoComecarLote();
+  }
+
+  /// O lote de desfazer do arrasto de marca esta aberto?
+  bool _lote = false;
+
+  void _fecharLote() {
+    if (!_lote) return;
+    _lote = false;
+    widget.aoTerminarLote();
   }
 
   void _mover(Offset ponto) {
@@ -888,6 +927,7 @@ class _FaixaState extends State<_Faixa> {
     final l = widget.camada;
     final pego = _pego;
     _pego = null;
+    _fecharLote();
     if (l == null || pego == null) return;
     widget.playback.seek(l.startTime + pego);
   }
@@ -904,7 +944,10 @@ class _FaixaState extends State<_Faixa> {
           onHorizontalDragStart: (d) => _comecarArrasto(d.localPosition),
           onHorizontalDragUpdate: (d) => _mover(d.localPosition),
           onHorizontalDragEnd: (_) => _soltar(),
-          onHorizontalDragCancel: () => _pego = null,
+          onHorizontalDragCancel: () {
+            _pego = null;
+            _fecharLote();
+          },
           onLongPressStart: (_) {
             final k = _candidato;
             final l = widget.camada;

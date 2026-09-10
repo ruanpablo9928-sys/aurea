@@ -656,6 +656,59 @@ class ShapeParametric extends ShapeItem {
 
 /// Trilha animavel da primitiva parametrica por nome (controller e curve
 /// editor usam o mesmo mapa).
+/// OS PARAMETROS QUE CADA FORMA REALMENTE USA, na ordem de leitura.
+///
+/// [shapeParamTrackOf] devolve trilha para QUALQUER chave, em qualquer
+/// forma — e por isso a ficha do painel mostrava 'Largura' e 'Altura'
+/// numa estrela, onde o desenho e feito por raio e pontas. Os campos
+/// escreviam no projeto e a tela nao mudava: o pior tipo de controle,
+/// o que aceita o dedo e nao faz nada.
+///
+/// Esta lista e a fonte unica de quem aparece. Quem desenha a forma e
+/// quem monta a ficha passam a concordar por construcao.
+List<String> parametrosDaForma(ParamShapeKind kind) => switch (kind) {
+  ParamShapeKind.rect => const ['sizeX', 'sizeY', 'roundness'],
+  ParamShapeKind.ellipse => const ['sizeX', 'sizeY'],
+  ParamShapeKind.polygon => const [
+    'points',
+    'outerRadius',
+    'outerRoundness',
+    'shapeRotation',
+  ],
+  ParamShapeKind.star => const [
+    'points',
+    'outerRadius',
+    'innerRadius',
+    'outerRoundness',
+    'innerRoundness',
+    'shapeRotation',
+  ],
+  ParamShapeKind.sector => const [
+    'outerRadius',
+    'startAngle',
+    'sweep',
+    'sectorInner',
+  ],
+};
+
+/// O nome humano de cada parametro, e o teto para o passo da fita.
+({String rotulo, double teto}) fichaDoParametroDaForma(String chave) =>
+    switch (chave) {
+      'sizeX' => (rotulo: 'Largura', teto: 2000),
+      'sizeY' => (rotulo: 'Altura', teto: 2000),
+      'roundness' => (rotulo: 'Cantos', teto: 400),
+      'points' => (rotulo: 'Pontas', teto: 20),
+      'outerRadius' => (rotulo: 'Raio externo', teto: 1000),
+      'innerRadius' => (rotulo: 'Raio interno', teto: 1000),
+      'outerRoundness' => (rotulo: 'Suavidade externa', teto: 100),
+      'innerRoundness' => (rotulo: 'Suavidade interna', teto: 100),
+      'shapeRotation' => (rotulo: 'Giro do desenho', teto: 360),
+      'startAngle' => (rotulo: 'Angulo inicial', teto: 360),
+      'sweep' => (rotulo: 'Abertura', teto: 360),
+      'sectorInner' => (rotulo: 'Furo', teto: 1000),
+      _ => (rotulo: chave, teto: 1000),
+    };
+
 AnimatedDouble? shapeParamTrackOf(ShapeParametric s, String key) =>
     switch (key) {
       'sizeX' => s.sizeX,

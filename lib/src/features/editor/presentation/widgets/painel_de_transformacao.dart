@@ -156,7 +156,7 @@ class _PainelDeTransformacaoState
               rotulo: 'Largura',
               valor: l.scaleX.valueAt(_local) * 100,
               sufixo: '%',
-              aoDigitar: (v) => _escalar(v / 100, l.scaleY.valueAt(_local)),
+              aoDigitar: (v) => _escalar(v / 100),
             ),
             _Corrente(
               travada: travada,
@@ -167,7 +167,12 @@ class _PainelDeTransformacaoState
               rotulo: 'Altura',
               valor: l.scaleY.valueAt(_local) * 100,
               sufixo: '%',
-              aoDigitar: (v) => _escalar(l.scaleX.valueAt(_local), v / 100),
+              // COM A CORRENTE TRAVADA, QUEM MANDA E O CAMPO TOCADO.
+              //
+              // Aqui ia `(escalaX, v/100)`, e travado o metodo usava so
+              // o primeiro: digitar na Altura abria o teclado, aceitava
+              // o numero, fechava e nao mudava nada. O campo mentia.
+              aoDigitar: (v) => _escalar(v / 100, eixoY: true),
             ),
           ],
         );
@@ -230,7 +235,6 @@ class _PainelDeTransformacaoState
           aoTerminar: _fecharLote,
         );
       case ModoDeTransformacao.escalar:
-        final travada = ref.watch(escalaTravadaProvider);
         return Center(
           child: FitaDeAjuste(
             rotulo: 'Escala',
@@ -240,10 +244,7 @@ class _PainelDeTransformacaoState
             // que quase todo ajuste acontece.
             porPixel: .5,
             aoComecar: _abrirLote,
-            aoMudar: (v) => _escalar(
-              v / 100,
-              travada ? v / 100 : l.scaleY.valueAt(_local),
-            ),
+            aoMudar: (v) => _escalar(v / 100),
             aoTerminar: _fecharLote,
           ),
         );
@@ -279,13 +280,18 @@ class _PainelDeTransformacaoState
     }
   }
 
-  void _escalar(double x, double y) {
+  /// Escreve a escala. Travada, [valor] vale para os dois eixos; solta,
+  /// vale so para o eixo que [eixoY] escolhe.
+  void _escalar(double valor, {bool eixoY = false}) {
     if (ref.read(escalaTravadaProvider)) {
-      _c.editScaleUniform(widget.camada.id, widget.tempo, x);
+      _c.editScaleUniform(widget.camada.id, widget.tempo, valor);
       return;
     }
-    _c.editScaleX(widget.camada.id, widget.tempo, x);
-    _c.editScaleY(widget.camada.id, widget.tempo, y);
+    if (eixoY) {
+      _c.editScaleY(widget.camada.id, widget.tempo, valor);
+      return;
+    }
+    _c.editScaleX(widget.camada.id, widget.tempo, valor);
   }
 }
 

@@ -111,6 +111,9 @@ class ControlesDaCategoria extends ConsumerWidget {
     if (categoriaId == 'efeitos') {
       return alvoDoParametroDeEfeito(ref, camada, tempo);
     }
+    if (categoriaId == 'forma') {
+      return alvoDoParametroDaForma(ref, camada, tempo);
+    }
     return const AlvoDoRail();
   }
 }
@@ -195,7 +198,22 @@ AlvoDoRail alvoDaPropriedade(
   final c = ref.read(editorControllerProvider.notifier);
   final locais = c.propKeyframeTimes(camada, prop);
   final local = camada.localTime(tempo);
-  final temAqui = locais.contains(local);
+  // O LOSANGO TEM DE DIZER O QUE O TOQUE VAI FAZER.
+  //
+  // Ele comparava o instante EXATO com a lista, e o `toggleKeyframe` do
+  // motor usa a tolerancia da propria trilha. Com o cabecote a alguns
+  // milissegundos de uma marca, o rail mostrava "marcar aqui" e o toque
+  // APAGAVA a marca existente. Perguntar a mesma trilha que vai
+  // responder acaba com a discordancia.
+  final temAqui = switch (prop) {
+    LayerProp.position => camada.position.hasKeyframeAt(local),
+    LayerProp.scale => camada.scaleX.hasKeyframeAt(local),
+    LayerProp.rotation => camada.rotation.hasKeyframeAt(local),
+    LayerProp.opacity => camada.opacity.hasKeyframeAt(local),
+    LayerProp.skew => camada.skewX.hasKeyframeAt(local),
+    LayerProp.pivot => camada.pivot.hasKeyframeAt(local),
+    LayerProp.parent => false,
+  };
 
   Duration? inicioDoTrecho;
   Duration? depois;
@@ -265,6 +283,38 @@ AlvoDoRail alvoDoParametroDeEfeito(
     // O EFEITO NAO TEM CURVA POR TRECHO no motor de hoje: o comando que
     // existe e por keyframe da trilha, e nao por segmento. Prometer a
     // curva aqui abriria um editor sem onde escrever.
+    aoAbrirCurva: null,
+  );
+}
+
+/// O ALVO DO RAIL quando a ferramenta aberta e a de forma.
+///
+/// Sem isto, tocar numa linha da forma acendia o realce de "escolhida" e
+/// o losango do rail continuava apagado: o gesto prometia mirar e nao
+/// mirava nada. Em Opacidade e em Efeitos ele mira; aqui tinha de mirar
+/// tambem.
+AlvoDoRail alvoDoParametroDaForma(
+  WidgetRef ref,
+  Layer camada,
+  Duration tempo,
+) {
+  if (camada is! ShapeLayer) return const AlvoDoRail();
+  final chave = ref.watch(parametroAbertoProvider);
+  if (chave == null) return const AlvoDoRail();
+  final s = camada.contents.whereType<ShapeParametric>().firstOrNull;
+  final trilha = s == null ? null : shapeParamTrackOf(s, chave);
+  if (trilha == null) return const AlvoDoRail();
+
+  final c = ref.read(editorControllerProvider.notifier);
+  final local = camada.localTime(tempo);
+  return AlvoDoRail(
+    temKeyframeAqui: trilha.hasKeyframeAt(local),
+    animado: trilha.isAnimated,
+    aoAlternarKeyframe: () =>
+        c.toggleShapeParamKeyframe(camada.id, chave, tempo),
+    // COMO NO EFEITO, a curva do desenho ainda nao tem comando por
+    // trecho no motor: o que existe e por keyframe da trilha. Abrir o
+    // editor daria uma curva sem onde escrever.
     aoAbrirCurva: null,
   );
 }
@@ -424,36 +474,33 @@ class _Forma extends ConsumerWidget {
     }
     final s = formas.first;
 
-    Widget par(String chave, String rotulo, double max) {
-      final trilha = shapeParamTrackOf(s, chave);
-      if (trilha == null) return const SizedBox.shrink();
-      return LinhaDeParametro(
-        rotulo: rotulo,
-        valor: trilha.valueAt(local),
-        casas: 0,
-        porPixel: max / 300,
-        escolhida: escolhida == chave,
-        aoEscolher: () =>
-            ref.read(parametroAbertoProvider.notifier).state = chave,
-        aoComecar: c.beginGesture,
-        aoMudar: (v) => c.editShapeParam(l.id, chave, tempo, v),
-        aoTerminar: c.endGesture,
-        aoDigitar: (v) => c.editShapeParam(l.id, chave, tempo, v),
-      );
-    }
-
+    // SO OS PARAMETROS QUE ESTA FORMA USA.
+    //
+    // A ficha mostrava os sete para toda forma, e numa estrela
+    // 'Largura' e 'Altura' escreviam no projeto sem mudar nada na tela:
+    // o desenho da estrela sai de raio e pontas. Um controle que aceita
+    // o dedo e nao faz nada e pior que um controle ausente — o ausente
+    // manda procurar noutro lugar, o inerte manda desconfiar do app.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (formas.length > 1)
           const _Aviso('Ajustando o primeiro desenho desta camada.'),
-        par('sizeX', 'Largura', 2000),
-        par('sizeY', 'Altura', 2000),
-        par('roundness', 'Cantos', 400),
-        par('points', 'Pontas', 20),
-        par('outerRadius', 'Raio externo', 1000),
-        par('innerRadius', 'Raio interno', 1000),
-        par('sweep', 'Abertura', 360),
+        for (final chave in parametrosDaForma(s.kind))
+          if (shapeParamTrackOf(s, chave) case final trilha?)
+            LinhaDeParametro(
+              rotulo: fichaDoParametroDaForma(chave).rotulo,
+              valor: trilha.valueAt(local),
+              casas: 0,
+              porPixel: fichaDoParametroDaForma(chave).teto / 300,
+              escolhida: escolhida == chave,
+              aoEscolher: () =>
+                  ref.read(parametroAbertoProvider.notifier).state = chave,
+              aoComecar: c.beginGesture,
+              aoMudar: (v) => c.editShapeParam(l.id, chave, tempo, v),
+              aoTerminar: c.endGesture,
+              aoDigitar: (v) => c.editShapeParam(l.id, chave, tempo, v),
+            ),
       ],
     );
   }
@@ -685,10 +732,13 @@ class _ParametrosDoEfeito extends ConsumerWidget {
               // fita uma vez cobre o intervalo util, seja ele 0..1 ou
               // 0..4000.
               porPixel: faixa / 300,
-              // TRES CASAS NUM PARAMETRO DE 0 A 1, nenhuma num de 0 a
-              // 4000. Uma casa fixa mostraria "0,2" onde o motor le
-              // 0,250 — e a pessoa nao teria como ver o que mudou.
-              casas: faixa <= 4 ? 3 : 0,
+              // AS CASAS SAEM DA FAIXA, em escada.
+              //
+              // A regra era "faixa <= 4 ? 3 : 0", e ela mentia no meio:
+              // exposicao vai de -3 a +3, faixa 6, e caia em ZERO casa —
+              // o numero ficava parado em "0" enquanto o dedo arrastava.
+              // Uma escada cobre os dois extremos sem buraco no meio.
+              casas: casasParaFaixa(faixa),
               escolhida: escolhida == chave,
               aoEscolher: () =>
                   ref.read(parametroAbertoProvider.notifier).state = chave,
@@ -761,6 +811,20 @@ class _ParametrosDoEfeito extends ConsumerWidget {
 }
 
 /// A linha de cor: os tres numeros e o quadradinho.
+/// QUANTAS CASAS DECIMAIS um parametro daquela faixa precisa.
+///
+/// Poucas casas escondem o movimento; muitas enchem a caixa de digitos
+/// que nao mudam. A escada da a cada faixa a precisao que ela usa.
+///
+/// Publica porque ha teste em cima dela: a regra velha mentia no meio
+/// da escala, e o teste existe para nao mentir de novo.
+int casasParaFaixa(double faixa) {
+  if (faixa <= 2) return 3;
+  if (faixa <= 20) return 2;
+  if (faixa <= 200) return 1;
+  return 0;
+}
+
 class _AmostraDeCor extends StatelessWidget {
   const _AmostraDeCor({required this.cor});
 
