@@ -15,6 +15,7 @@ import 'linha_de_parametro.dart';
 import 'painel_da_cena.dart';
 import 'painel_de_animacao_de_texto.dart';
 import 'painel_de_borda.dart';
+import 'presets_da_camada.dart';
 import 'painel_de_cor.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_rastreio.dart';
@@ -127,6 +128,9 @@ class ControlesDaCategoria extends ConsumerWidget {
     'efeitos' => _Efeitos(camada: camada, tempo: tempo),
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),
+    'presets' => PresetsDaCamada(camada: camada),
+    // EDITAR GRUPO: entrar nele e o que a referencia chama assim.
+    'grupo' => _AcoesDaCamada(camada: camada, playback: playback),
     'mascara' => PainelDeMascaras(camada: camada, tempo: tempo),
     'cor' => PainelDeCor(camada: camada, tempo: tempo),
     _ => const _AindaNao(),

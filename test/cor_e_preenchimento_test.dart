@@ -246,15 +246,18 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.bySemanticsLabel('Ajustes da composicao'));
+      // A ENTRADA MUDOU: no AM as configuracoes do projeto abrem pela
+      // ENGRENAGEM do cabecalho, ao lado do exportar (V 01:47). O toque
+      // no nome continua valendo como caminho secundario.
+      await tester.tap(find.bySemanticsLabel('Ajustes do projeto'));
       await tester.pump();
       expect(
         container.read(estadoDoPainelProvider),
         EstadoDoPainel.composicao,
       );
-      expect(find.bySemanticsLabel('Fundo da composicao'), findsOneWidget);
+      expect(find.bySemanticsLabel('Plano de fundo'), findsWidgets);
 
-      await _tocar(tester, _amostra('Fundo da composicao', 9)); // roxo
+      await _tocar(tester, _amostra('Plano de fundo', 9)); // roxo
       expect(
         container.read(editorControllerProvider).backgroundColor.toARGB32(),
         EscolhaDeCor.prontas[9].toARGB32(),

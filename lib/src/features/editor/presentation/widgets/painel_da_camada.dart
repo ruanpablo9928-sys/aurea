@@ -141,18 +141,41 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
     ),
     CategoriaDaCamada(
       id: 'lente',
-      rotulo: 'Opcoes de camera',
+      rotulo: 'Opcoes de Camera',
       icone: Icons.camera_rounded,
     ),
     CategoriaDaCamada(
-      id: 'camada',
-      rotulo: 'Camada',
-      icone: Icons.layers_rounded,
+      id: 'presets',
+      rotulo: 'Presets',
+      icone: Icons.bookmark_border_rounded,
     ),
     CategoriaDaCamada(
       id: 'efeitos',
       rotulo: 'Efeitos',
       icone: Icons.auto_awesome_rounded,
+    ),
+  ] else if (camada is NullLayer) ...const [
+    // O NULO TEM A GRADE REDUZIDA (V 00:31): tres areas, e nada de
+    // preenchimento — ele existe justamente para nao desenhar.
+    CategoriaDaCamada(
+      id: 'transformar',
+      rotulo: 'Mover e transformar',
+      icone: Icons.open_with_rounded,
+    ),
+    CategoriaDaCamada(
+      id: 'presets',
+      rotulo: 'Presets',
+      icone: Icons.bookmark_border_rounded,
+    ),
+    CategoriaDaCamada(
+      id: 'efeitos',
+      rotulo: 'Efeitos',
+      icone: Icons.auto_awesome_rounded,
+    ),
+    CategoriaDaCamada(
+      id: 'camada',
+      rotulo: 'Camada',
+      icone: Icons.layers_rounded,
     ),
   ] else ...[
   const CategoriaDaCamada(
@@ -189,8 +212,18 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
   if (camada is ShapeLayer)
     const CategoriaDaCamada(
       id: 'forma',
-      rotulo: 'Forma',
+      // O ROTULO E O DA REFERENCIA: "Editar Forma", e nao "Forma". O
+      // tile abre um editor, e o nome tem de dizer isso.
+      rotulo: 'Editar Forma',
       icone: Icons.category_rounded,
+    ),
+  // GRUPO usa as mesmas familias de aparencia da forma e troca
+  // "Editar Forma" por "Editar grupo" (V 00:40).
+  if (camada is GroupLayer)
+    const CategoriaDaCamada(
+      id: 'grupo',
+      rotulo: 'Editar grupo',
+      icone: Icons.folder_open_rounded,
     ),
   // O SOM E DE QUEM TEM SOM — video E audio.
   //
@@ -268,6 +301,13 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
     id: 'borda',
     rotulo: 'Borda e sombra',
     icone: Icons.blur_on_rounded,
+  ),
+  // PRESETS: as propriedades e os keyframes desta camada, guardados
+  // para reusar. Existe na grade dos quatro tipos da referencia.
+  const CategoriaDaCamada(
+    id: 'presets',
+    rotulo: 'Presets',
+    icone: Icons.bookmark_border_rounded,
   ),
   const CategoriaDaCamada(
     id: 'efeitos',
@@ -607,7 +647,9 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'opacidade' => 'Homogeneizacao e opacidade',
   'texto' => 'Texto',
   'animacao' => 'Animacao do texto',
-  'forma' => 'Forma',
+  'forma' => 'Editar Forma',
+  'grupo' => 'Editar grupo',
+  'presets' => 'Presets',
   'som' => 'Som',
   'velocidade' => 'Velocidade',
   'cena' => 'Cena e camera',

@@ -25,9 +25,12 @@ analyzer:
     # remendos.
     - packages/*/test/**
     - packages/*/example/**
+    - packages/thermion_flutter/**
+    - packages/thermion_dart/**
     - android/**
     - ios/**
     - web/**
+    - tool/**
 
 linter:
   # The lint rules applied to this project can be customized in the

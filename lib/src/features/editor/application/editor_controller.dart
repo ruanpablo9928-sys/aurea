@@ -1566,6 +1566,40 @@ class EditorController extends Notifier<VideoProject> {
     );
   }
 
+  /// APLICA UM PRESET DE CAMADA.
+  ///
+  /// O que entra e a TRANSFORMACAO, a opacidade e os efeitos da camada
+  /// de origem, com todos os keyframes. O tempo (inicio e duracao), o
+  /// nome e o CONTEUDO ficam como estao: um preset que trocasse o texto
+  /// ou a duracao seria trocar a camada, e nao aplicar uma receita nela.
+  ///
+  /// Um passo de desfazer so, mesmo mexendo em dez trilhas.
+  void aplicarPresetDeCamada(String id, Layer fonte) {
+    final alvo = _layer(id);
+    if (alvo == null) return;
+    runAsOneUndo(
+      () => _replace(
+        alvo.copyLayer(
+          position: fonte.position,
+          positionZ: fonte.positionZ,
+          scaleX: fonte.scaleX,
+          scaleY: fonte.scaleY,
+          rotation: fonte.rotation,
+          rotationX: fonte.rotationX,
+          rotationY: fonte.rotationY,
+          opacity: fonte.opacity,
+          skewX: fonte.skewX,
+          skewY: fonte.skewY,
+          pivot: fonte.pivot,
+          blendMode: fonte.blendMode,
+          customBlend: fonte.customBlend,
+          is3D: fonte.is3D,
+          effects: [for (final e in fonte.effects) e.duplicated()],
+        ),
+      ),
+    );
+  }
+
   /// A CAMERA DA COMPOSICAO.
   ///
   /// Nasce no centro, com a lente neutra (1200) e o 3D ligado — com ela

@@ -6,6 +6,7 @@ import '../../application/editor_controller.dart';
 import '../../domain/layer.dart';
 import '../../domain/shape.dart';
 import 'editor_de_curva.dart';
+import 'ajustes_do_projeto.dart';
 import 'escolha_de_cor.dart';
 import 'linha_de_parametro.dart';
 import 'rails_do_painel.dart';
@@ -327,31 +328,13 @@ class PainelDeCor extends ConsumerWidget {
 class PainelDaComposicao extends ConsumerWidget {
   const PainelDaComposicao({super.key});
 
+  // O CONTEUDO MUDOU DE ARQUIVO. O sheet do projeto (V 01:47) tem
+  // proporcao, resolucao, quadros por segundo e plano de fundo, nessa
+  // ordem; aqui so havia a cor do fundo. Ele mora em
+  // `ajustes_do_projeto.dart`, e este widget continua sendo o nome pelo
+  // qual o painel sobreposto o monta.
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.read(editorControllerProvider.notifier);
-    final projeto = ref.watch(editorControllerProvider);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _Titulo('Fundo'),
-          EscolhaDeCor(
-            rotulo: 'Fundo da composicao',
-            cor: projeto.backgroundColor,
-            aoComecar: c.beginGesture,
-            aoTerminar: c.endGesture,
-            aoMudar: c.setBackgroundColor,
-          ),
-          const _Aviso(
-            'A cor do fundo sai no arquivo exportado. Para um fundo '
-            'transparente, exporte em sequencia PNG.',
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context, WidgetRef ref) => const AjustesDoProjeto();
 }
 
 class _Interruptor extends StatelessWidget {

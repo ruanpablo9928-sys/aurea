@@ -9,6 +9,7 @@ import '../domain/video_project.dart';
 import '../../export/presentation/export_video_screen.dart';
 import '../../projects/application/projects_controller.dart';
 import 'contexto_do_editor.dart';
+import 'widgets/ajustes_do_projeto.dart';
 import 'widgets/cabecalho_da_camada.dart';
 import 'widgets/linha_do_tempo.dart';
 import 'widgets/painel_da_camada.dart';
@@ -439,7 +440,8 @@ class _Cabecalho extends ConsumerWidget {
           titulo: tituloDaFerramenta(ref.watch(categoriaAbertaProvider)!),
         );
       case ContextoDoEditor.composicao:
-        return const _CabecalhoDaFerramenta(titulo: 'Composicao');
+      case ContextoDoEditor.projeto:
+        break;
       case ContextoDoEditor.selecao:
         // QUANTAS CAMADAS ESTAO JUNTAS, no lugar do nome do projeto.
         //
@@ -528,9 +530,29 @@ class _Cabecalho extends ConsumerWidget {
               ),
             ),
           ),
-          // O ALTERNADOR DE VISTA ocupa o lugar que a referencia da a
-          // engrenagem: ultimo antes do botao colorido.
+          // A ENGRENAGEM, no lugar que a referencia lhe da: ultimo
+          // antes do botao colorido. O alternador de vista, que e
+          // extensao do Aurea, cede o posto e fica antes dela.
           const AlternadorDeVista(altura: altura),
+          Semantics(
+            container: true,
+            excludeSemantics: true,
+            button: true,
+            label: 'Ajustes do projeto',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => abrirAjustesDoProjeto(ref),
+              child: const SizedBox(
+                width: 42,
+                height: altura,
+                child: Icon(
+                  Icons.settings_rounded,
+                  size: 19,
+                  color: AmColors.text,
+                ),
+              ),
+            ),
+          ),
           Semantics(
             container: true,
             excludeSemantics: true,

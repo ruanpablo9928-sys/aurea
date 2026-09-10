@@ -36,6 +36,67 @@ class CurvaEmEdicao {
 final curvaEmEdicaoProvider = StateProvider<CurvaEmEdicao?>((ref) => null);
 
 /// OS PRESETS, na ordem em que a mao costuma procurar.
+/// AS FAMILIAS DE CURVA (V 01:36–01:43).
+///
+/// A referencia poe DUAS colunas a direita do grafico: a de fora escolhe
+/// a FAMILIA, a de dentro escolhe o preset dentro dela. O Aurea tinha
+/// uma coluna so, com sete presets soltos — e as familias Saltar,
+/// Ciclico e Elastico ficavam sem caminho, apesar de o motor
+/// (`EasingType`) ter as tres desde sempre.
+enum FamiliaDeCurva { bezier, saltar, ciclico, elastico }
+
+String rotuloDaFamilia(FamiliaDeCurva f) => switch (f) {
+  FamiliaDeCurva.bezier => 'Bezier',
+  FamiliaDeCurva.saltar => 'Saltar',
+  FamiliaDeCurva.ciclico => 'Ciclico',
+  FamiliaDeCurva.elastico => 'Elastico',
+};
+
+IconData _iconeDaFamilia(FamiliaDeCurva f) => switch (f) {
+  FamiliaDeCurva.bezier => Icons.timeline_rounded,
+  FamiliaDeCurva.saltar => Icons.sports_basketball_rounded,
+  FamiliaDeCurva.ciclico => Icons.repeat_rounded,
+  FamiliaDeCurva.elastico => Icons.waves_rounded,
+};
+
+/// A QUAL FAMILIA UMA CURVA PERTENCE.
+///
+/// Sai do proprio easing, e nao de um provider: o botao de familia tem
+/// de refletir a curva APLICADA — trocar de intervalo ou de propriedade
+/// nao pode deixar o seletor apontando para a familia anterior.
+FamiliaDeCurva familiaDe(Easing e) => switch (e.type) {
+  EasingType.bounce => FamiliaDeCurva.saltar,
+  EasingType.cyclic => FamiliaDeCurva.ciclico,
+  EasingType.elastic || EasingType.elasticSteps => FamiliaDeCurva.elastico,
+  _ => FamiliaDeCurva.bezier,
+};
+
+/// OS PRESETS DE CADA FAMILIA, com parametros de verdade.
+///
+/// Cada entrada e uma configuracao que o `Easing.transform` sabe
+/// executar: nao ha botao aqui que nao mude o resultado renderizado.
+List<(String, Easing)> presetsDaFamilia(FamiliaDeCurva f) => switch (f) {
+  FamiliaDeCurva.bezier => presetsDeCurva,
+  FamiliaDeCurva.saltar => const [
+    ('Um salto', Easing(type: EasingType.bounce, count: 1)),
+    ('Dois saltos', Easing(type: EasingType.bounce, count: 2)),
+    ('Quatro saltos', Easing(type: EasingType.bounce, count: 4)),
+    ('Degraus', Easing(type: EasingType.steps, count: 4)),
+  ],
+  FamiliaDeCurva.ciclico => const [
+    ('Um ciclo', Easing(type: EasingType.cyclic, count: 1)),
+    ('Dois ciclos', Easing(type: EasingType.cyclic, count: 2)),
+    ('Quatro ciclos', Easing(type: EasingType.cyclic, count: 4)),
+    ('Ruido', Easing(type: EasingType.random, count: 6)),
+  ],
+  FamiliaDeCurva.elastico => const [
+    ('Solto', Easing(type: EasingType.elastic, intensity: .8)),
+    ('Medio', Easing(type: EasingType.elastic, intensity: .5)),
+    ('Firme', Easing(type: EasingType.elastic, intensity: .25)),
+    ('Em degraus', Easing(type: EasingType.elasticSteps, count: 3)),
+  ],
+};
+
 const presetsDeCurva = <(String, Easing)>[
   ('Linear', Easing.linear),
   ('Suave', Easing.easeInOut),
@@ -97,13 +158,19 @@ class _EditorDeCurvaState extends ConsumerState<EditorDeCurva> {
       ref.read(curvaEmEdicaoProvider.notifier).state = null;
     }
 
-    final iPreset = presetsDeCurva.indexWhere((p) => p.$2 == curva);
+    // A FAMILIA SAI DA CURVA APLICADA, e nao de um estado guardado:
+    // trocar de intervalo, de propriedade ou de camada tem de trocar o
+    // que o seletor mostra, sem herdar nada do contexto anterior.
+    final familia = familiaDe(curva);
+    final presets = presetsDaFamilia(familia);
+    final iPreset = presets.indexWhere((p) => p.$2 == curva);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _RailDaCurva(
           aoVoltar: fechar,
+          aoInverter: () => aplicar(_invertida(curva)),
           aoTodos: aberta.aoAplicarEmTodos == null
               ? null
               : () {
@@ -129,18 +196,39 @@ class _EditorDeCurvaState extends ConsumerState<EditorDeCurva> {
                   ),
                 ),
               ),
+              // O CONTROLE AMARELO das familias que tem parametro. Em
+              // Saltar e Ciclico e a contagem; em Elastico sao dois — a
+              // contagem e a intensidade, como na referencia.
+              if (familia != FamiliaDeCurva.bezier)
+                _ParametrosDaFamilia(
+                  familia: familia,
+                  curva: curva,
+                  aoMudar: aplicar,
+                ),
               _NomeDoPreset(
-                indice: iPreset,
+                nome: iPreset < 0
+                    ? '${rotuloDaFamilia(familia)} ajustado a mao'
+                    : presets[iPreset].$1,
                 aoTrocar: (d) {
-                  final n = presetsDeCurva.length;
+                  final n = presets.length;
                   final base = iPreset < 0 ? 0 : iPreset;
-                  aplicar(presetsDeCurva[(base + d + n) % n].$2);
+                  aplicar(presets[(base + d + n) % n].$2);
                 },
               ),
             ],
           ),
         ),
-        _RailDePresets(escolhido: iPreset, aoEscolher: aplicar),
+        // A COLUNA DE DENTRO: os presets da familia corrente.
+        _RailDePresets(
+          presets: presets,
+          escolhido: iPreset,
+          aoEscolher: aplicar,
+        ),
+        // A COLUNA DE FORA: a familia.
+        _RailDeFamilias(
+          escolhida: familia,
+          aoEscolher: (f) => aplicar(presetsDaFamilia(f).first.$2),
+        ),
       ],
     );
   }
@@ -148,9 +236,14 @@ class _EditorDeCurvaState extends ConsumerState<EditorDeCurva> {
 
 /// O rail esquerdo da curva: voltar e "vale para todos".
 class _RailDaCurva extends StatelessWidget {
-  const _RailDaCurva({required this.aoVoltar, required this.aoTodos});
+  const _RailDaCurva({
+    required this.aoVoltar,
+    required this.aoInverter,
+    required this.aoTodos,
+  });
 
   final VoidCallback aoVoltar;
+  final VoidCallback aoInverter;
   final VoidCallback? aoTodos;
 
   @override
@@ -164,6 +257,13 @@ class _RailDaCurva extends StatelessWidget {
           rotulo: 'Fechar a curva',
           tamanho: 24,
           aoTocar: aoVoltar,
+        ),
+        // INVERTER: o que entrava devagar passa a sair devagar. E o
+        // terceiro botao da coluna esquerda na referencia, e nao existia.
+        _BotaoDaCurva(
+          icone: Icons.swap_horiz_rounded,
+          rotulo: 'Inverter a curva',
+          aoTocar: aoInverter,
         ),
         _BotaoDaCurva(
           icone: Icons.repeat_rounded,
@@ -213,15 +313,194 @@ class _BotaoDaCurva extends StatelessWidget {
   );
 }
 
+/// A COLUNA DE FORA: a familia da curva.
+///
+/// Bezier, Saltar, Ciclico e Elastico. As tres ultimas existiam no motor
+/// (`EasingType.bounce`, `cyclic`, `elastic`) e nao tinham caminho
+/// nenhum na interface: a lista de presets era plana e so duas delas
+/// apareciam la, sem parametro.
+class _RailDeFamilias extends StatelessWidget {
+  const _RailDeFamilias({required this.escolhida, required this.aoEscolher});
+
+  final FamiliaDeCurva escolhida;
+  final void Function(FamiliaDeCurva) aoEscolher;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 46,
+    child: Column(
+      children: [
+        for (final f in FamiliaDeCurva.values)
+          Semantics(
+            container: true,
+            excludeSemantics: true,
+            button: true,
+            selected: f == escolhida,
+            label: 'Curva ${rotuloDaFamilia(f)}',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => aoEscolher(f),
+              child: Container(
+                width: 42,
+                height: 46,
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: f == escolhida ? AmColors.chip : null,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _iconeDaFamilia(f),
+                      size: 17,
+                      color: f == escolhida ? AmColors.accent : AmColors.muted,
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text(
+                          rotuloDaFamilia(f),
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: f == escolhida
+                                ? AmColors.accent
+                                : AmColors.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+/// OS CONTROLES AMARELOS: os parametros da familia escolhida.
+///
+/// Saltar e Ciclico tem um (quantos); Elastico tem dois (quantos e o
+/// quanto ele passa do ponto), como na referencia. Cada um escreve num
+/// campo REAL do `Easing`, e o resultado renderizado muda junto.
+class _ParametrosDaFamilia extends StatelessWidget {
+  const _ParametrosDaFamilia({
+    required this.familia,
+    required this.curva,
+    required this.aoMudar,
+  });
+
+  final FamiliaDeCurva familia;
+  final Easing curva;
+  final void Function(Easing) aoMudar;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 34,
+    child: Row(
+      children: [
+        _Passo(
+          rotulo: 'Repeticoes da curva',
+          valor: '${curva.count}',
+          aoMudar: (d) =>
+              aoMudar(curva.copyWith(count: (curva.count + d).clamp(1, 12))),
+        ),
+        if (familia == FamiliaDeCurva.elastico) ...[
+          const SizedBox(width: 10),
+          _Passo(
+            rotulo: 'Forca do elastico',
+            valor: '${(curva.intensity * 100).round()}%',
+            aoMudar: (d) => aoMudar(
+              curva.copyWith(
+                intensity: (curva.intensity + d * .1).clamp(0.05, 1.0),
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _Passo extends StatelessWidget {
+  const _Passo({
+    required this.rotulo,
+    required this.valor,
+    required this.aoMudar,
+  });
+
+  final String rotulo;
+  final String valor;
+  final void Function(int) aoMudar;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Semantics(
+      container: true,
+      label: rotulo,
+      value: valor,
+      child: Row(
+        children: [
+          _Seta(
+            icone: Icons.remove_rounded,
+            rotulo: 'Diminuir: $rotulo',
+            aoTocar: () => aoMudar(-1),
+          ),
+          Expanded(
+            child: FittedBox(
+              child: Text(
+                valor,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.action,
+                ),
+              ),
+            ),
+          ),
+          _Seta(
+            icone: Icons.add_rounded,
+            rotulo: 'Aumentar: $rotulo',
+            aoTocar: () => aoMudar(1),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// INVERTE A CURVA: o que entrava devagar passa a sair devagar.
+Easing inverterCurva(Easing e) => e.type == EasingType.cubicBezier
+    ? Easing(
+        type: e.type,
+        x1: 1 - e.x2,
+        y1: 1 - e.y2,
+        x2: 1 - e.x1,
+        y2: 1 - e.y1,
+        count: e.count,
+        smooth: e.smooth,
+        intensity: e.intensity,
+        response: e.response,
+        damping: e.damping,
+        initialVelocity: e.initialVelocity,
+      )
+    : e;
+
+Easing _invertida(Easing e) => inverterCurva(e);
+
 /// O nome da curva entre setas, embaixo do quadro.
 ///
 /// Trocar de preset sem tirar o dedo da regiao — e o que a referencia
 /// faz. A lista inteira esta no rail da direita; estas setas sao para
 /// quem quer experimentar em ordem, sem escolher.
 class _NomeDoPreset extends StatelessWidget {
-  const _NomeDoPreset({required this.indice, required this.aoTrocar});
+  const _NomeDoPreset({required this.nome, required this.aoTrocar});
 
-  final int indice;
+  final String nome;
   final void Function(int) aoTrocar;
 
   @override
@@ -236,7 +515,7 @@ class _NomeDoPreset extends StatelessWidget {
         ),
         Expanded(
           child: Text(
-            indice < 0 ? 'Bezier ajustada a mao' : presetsDeCurva[indice].$1,
+            nome,
             maxLines: 1,
             textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
@@ -292,7 +571,13 @@ class _Seta extends StatelessWidget {
 /// Nome nao serve aqui: "quica" e "elastico" sao a mesma palavra para
 /// quem nunca viu os dois. O desenho e o rotulo.
 class _RailDePresets extends StatelessWidget {
-  const _RailDePresets({required this.escolhido, required this.aoEscolher});
+  const _RailDePresets({
+    required this.presets,
+    required this.escolhido,
+    required this.aoEscolher,
+  });
+
+  final List<(String, Easing)> presets;
 
   final int escolhido;
   final void Function(Easing) aoEscolher;
@@ -302,9 +587,9 @@ class _RailDePresets extends StatelessWidget {
     width: 54,
     child: ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      itemCount: presetsDeCurva.length,
+      itemCount: presets.length,
       itemBuilder: (context, i) {
-        final (nome, e) = presetsDeCurva[i];
+        final (nome, e) = presets[i];
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Semantics(

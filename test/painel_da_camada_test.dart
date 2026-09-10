@@ -353,9 +353,18 @@ void main() {
       await abrirFerramentas(tester, m.c);
       // A GRADE ROLA: com a barra temporal acima dela, um texto tem
       // cartoes abaixo da dobra. Rolar ate ele e o que o dedo faria.
-      await tester.ensureVisible(find.byKey(const ValueKey('cartao-efeitos')));
+      // A GRADE E PREGUICOSA: um cartao abaixo da dobra nem chega a ser
+      // construido. Rolar ate ele e o que o dedo faria.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('cartao-efeitos')),
+        80,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('cartao-efeitos')));
+      await tester.tap(
+        find.byKey(const ValueKey('cartao-efeitos')),
+        warnIfMissed: false,
+      );
       await tester.pump();
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categoria);
       expect(m.c.read(categoriaAbertaProvider), 'efeitos');
