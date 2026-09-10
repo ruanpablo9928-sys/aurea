@@ -28,6 +28,24 @@ Com isto, quem abrir os modelos de fabrica que ja criavam mascaras
 (`dnyx_remix_template.dart`, `reference_rebuild_template.dart`) passa a
 **ver, editar e remover** o que antes so podia sofrer.
 
+**Composicao (lote 4).** O cartao "Mistura e recorte" liga `setBlendMode`
+e `setCustomBlend` (27 modos, em seis familias) e `setMatteFromAbove`
+(os cinco modos de matte, apagados com o motivo escrito quando nao ha
+camada com imagem acima). Na categoria "Camada" entraram o parentesco
+(`linkProperty(..., LayerProp.parent, ...)` / `unlinkProperty`, com uma
+lista de candidatos) e o grupo (`groupLayer`, `enterGroup`).
+
+`exitGroup` ganhou porta na barra de cima: dentro de um grupo, a seta de
+voltar vira "Sair do grupo", e o botao de voltar do sistema faz o mesmo
+(`PopScope`). Sem isso, entrar num grupo seria uma armadilha — as
+edicoes feitas la dentro so voltam para o grupo em `exitGroup`.
+
+**A gravacao do projeto (fora da auditoria, achado no caminho).** A
+ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
+morava na tela de edicao antiga e foi apagada com ela: o editor novo
+**nao gravava nada em disco**. Voltou, junto com um flush ao ir para o
+segundo plano.
+
 
 
 ---

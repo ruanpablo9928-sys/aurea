@@ -11,6 +11,8 @@ import '../../domain/shape.dart';
 import 'editor_de_curva.dart';
 import 'linha_de_parametro.dart';
 import 'painel_de_mascaras.dart';
+import 'painel_de_mistura.dart';
+import 'painel_da_camada.dart';
 import 'painel_de_transformacao.dart';
 import 'rails_do_painel.dart';
 
@@ -90,6 +92,7 @@ class ControlesDaCategoria extends ConsumerWidget {
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),
     'mascara' => PainelDeMascaras(camada: camada, tempo: tempo),
+    'mistura' => PainelDeMistura(camada: camada),
     _ => const _AindaNao(),
   };
 
@@ -1125,6 +1128,14 @@ class _Linha extends StatelessWidget {
 /// Elas nao sao propriedade — sao o que se faz COM a camada — e por isso
 /// tem categoria propria em vez de virarem mais uma linha no meio dos
 /// parametros.
+/// A CAMADA ESTA ESCOLHENDO UM PAI?
+///
+/// Um estado da propria categoria "Camada", e nao um painel novo: o
+/// painel tem 300 px e ja sobrepoe a previa, e uma segunda folha por
+/// cima taparia justamente a composicao onde se ve o resultado do
+/// vinculo.
+final escolhendoPaiProvider = StateProvider<bool>((ref) => false);
+
 class _AcoesDaCamada extends ConsumerWidget {
   const _AcoesDaCamada({required this.camada, required this.playback});
 
@@ -1135,6 +1146,9 @@ class _AcoesDaCamada extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.read(editorControllerProvider.notifier);
     final agora = playback.time.value;
+    if (ref.watch(escolhendoPaiProvider)) {
+      return _EscolhaDePai(camada: camada, playback: playback);
+    }
     // DIVIDIR SO FAZ SENTIDO COM O CABECOTE DENTRO DA CAMADA. Fora dela
     // nao ha o que cortar, e um corte na borda produziria uma camada de
     // duracao zero.
@@ -1177,12 +1191,138 @@ class _AcoesDaCamada extends ConsumerWidget {
           rotulo: 'Duplicar',
           aoTocar: () => c.duplicarCamada(camada.id),
         ),
+        // O PAI, O GRUPO E A ENTRADA NO GRUPO estavam prontos no motor e
+        // sem porta nenhuma: `linkProperty(..., LayerProp.parent, ...)`,
+        // `groupLayer`, `enterGroup` e `exitGroup` — nenhum com um unico
+        // chamador na interface.
+        _Pai(camada: camada),
+        if (camada is GroupLayer)
+          _Acao(
+            icone: Icons.login_rounded,
+            rotulo: 'Entrar no grupo',
+            aoTocar: () {
+              fecharFerramenta(ref);
+              c.enterGroup(camada.id);
+            },
+          )
+        else
+          _Acao(
+            icone: Icons.folder_open_rounded,
+            rotulo: 'Agrupar',
+            aoTocar: () => c.groupLayer(camada.id),
+          ),
         _Acao(
           icone: Icons.delete_outline_rounded,
           rotulo: 'Apagar',
           perigo: true,
           aoTocar: () => c.removeLayer(camada.id),
         ),
+      ],
+    );
+  }
+}
+
+/// QUEM ESTA CAMADA SEGUE.
+///
+/// Parentesco e o comando que troca "mover cinco camadas juntas" por
+/// "mover o nulo". Ele existia inteiro — `linkProperty` captura o
+/// transform EFETIVO do pai no instante do vinculo, entao nada pula na
+/// hora de parear — e nao tinha porta.
+class _Pai extends ConsumerWidget {
+  const _Pai({required this.camada});
+
+  final Layer camada;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projeto = ref.watch(editorControllerProvider);
+    final vinculo = projeto.linkFor(camada.id, LayerProp.parent);
+    final pai = vinculo == null
+        ? null
+        : projeto.layers.where((l) => l.id == vinculo.sourceLayerId).firstOrNull;
+    if (pai == null) {
+      return _Acao(
+        icone: Icons.link_rounded,
+        rotulo: 'Seguir outra camada',
+        porQueNao: projeto.layers.length < 2
+            ? 'E preciso ter outra camada para seguir'
+            : null,
+        aoTocar: () => ref.read(escolhendoPaiProvider.notifier).state = true,
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: _Acao(
+            icone: Icons.link_rounded,
+            rotulo: 'Segue "${pai.name}"',
+            aoTocar: () => ref.read(escolhendoPaiProvider.notifier).state = true,
+          ),
+        ),
+        Semantics(
+          container: true,
+          excludeSemantics: true,
+          button: true,
+          label: 'Parar de seguir',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => ref
+                .read(editorControllerProvider.notifier)
+                .unlinkProperty(camada.id, LayerProp.parent),
+            child: const SizedBox(
+              width: 40,
+              height: 44,
+              child: Icon(
+                Icons.link_off_rounded,
+                size: 18,
+                color: AmColors.muted,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A LISTA DE CANDIDATOS A PAI.
+///
+/// Toda camada da cena, menos ela mesma. O motor recusa o ciclo direto
+/// (`targetId == sourceId`), e a cadeia longa e resolvida por
+/// `effectiveTransform`, que ja anda pelo pai do pai.
+class _EscolhaDePai extends ConsumerWidget {
+  const _EscolhaDePai({required this.camada, required this.playback});
+
+  final Layer camada;
+  final PlaybackController playback;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projeto = ref.watch(editorControllerProvider);
+    final c = ref.read(editorControllerProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Acao(
+          icone: Icons.arrow_back_rounded,
+          rotulo: 'Voltar',
+          aoTocar: () => ref.read(escolhendoPaiProvider.notifier).state = false,
+        ),
+        for (final l in projeto.layers)
+          if (l.id != camada.id)
+            _Acao(
+              icone: Icons.subdirectory_arrow_right_rounded,
+              rotulo: l.name,
+              aoTocar: () {
+                c.linkProperty(
+                  camada.id,
+                  LayerProp.parent,
+                  l.id,
+                  playback.time.value,
+                );
+                ref.read(escolhendoPaiProvider.notifier).state = false;
+              },
+            ),
       ],
     );
   }

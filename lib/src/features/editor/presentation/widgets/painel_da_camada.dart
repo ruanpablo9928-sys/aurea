@@ -182,6 +182,15 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Mascara',
       icone: Icons.crop_free_rounded,
     ),
+  // MISTURA E RECORTE dividem cartao porque sao a mesma pergunta feita
+  // por dois lados — o que acontece no encontro desta camada com a
+  // vizinha — e porque nenhuma das duas, sozinha, enche um painel.
+  if (camada is! AudioLayer)
+    const CategoriaDaCamada(
+      id: 'mistura',
+      rotulo: 'Mistura e recorte',
+      icone: Icons.gradient_rounded,
+    ),
 ];
 
 /// COMO A CAMADA SE CHAMA POR TIPO, para o cabecalho.
@@ -408,6 +417,8 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'efeitos' => 'Efeitos',
   'midia' => 'Informacoes da midia',
   'camada' => 'Camada',
+  'mascara' => 'Mascara',
+  'mistura' => 'Mistura e recorte',
   _ => 'Ferramentas',
 };
 

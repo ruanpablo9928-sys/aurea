@@ -5,6 +5,7 @@ import '../../../core/ui/am_colors.dart';
 import '../application/editor_controller.dart';
 import '../application/playback_controller.dart';
 import '../application/video_layer_manager.dart';
+import '../domain/video_project.dart';
 import '../../export/presentation/export_video_screen.dart';
 import '../../projects/application/projects_controller.dart';
 import 'widgets/linha_do_tempo.dart';
@@ -117,6 +118,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     });
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
+    final controlador = ref.read(editorControllerProvider.notifier);
+    return PopScope(
+      // O BOTAO DE VOLTAR DO SISTEMA TAMBEM SAI DO GRUPO PRIMEIRO.
+      //
+      // Sem isto, o gesto de voltar do Android fecharia o editor com um
+      // grupo aberto — e as edicoes feitas la dentro so voltam para o
+      // grupo em `exitGroup`. Seria perder o trabalho por um gesto que
+      // todo mundo faz sem pensar.
+      canPop: !controlador.dentroDeGrupo,
+      onPopInvokedWithResult: (saiu, _) {
+        if (!saiu) controlador.exitGroup();
+      },
+      child: _corpo(project, selecionada),
+    );
+  }
+
+  Widget _corpo(VideoProject project, String? selecionada) {
     return Scaffold(
       backgroundColor: AmColors.bg,
       body: SafeArea(
@@ -347,6 +365,16 @@ class _Cabecalho extends ConsumerWidget {
     if (aberta != null) {
       return _CabecalhoDaFerramenta(titulo: tituloDaFerramenta(aberta));
     }
+    // DENTRO DE UM GRUPO, "VOLTAR" QUER DIZER SAIR DO GRUPO.
+    //
+    // Entrar num grupo troca a cena inteira pelos filhos dele. Se a
+    // unica seta da barra continuasse fechando o editor, entrar seria
+    // uma armadilha: quem entrasse sairia do projeto e as edicoes
+    // feitas la dentro nunca seriam gravadas de volta no grupo — e
+    // `exitGroup` e justamente quem faz essa gravacao.
+    ref.watch(editorControllerProvider);
+    final c = ref.read(editorControllerProvider.notifier);
+    final dentro = c.dentroDeGrupo;
     return SizedBox(
       height: altura,
       child: Row(
@@ -355,10 +383,12 @@ class _Cabecalho extends ConsumerWidget {
             container: true,
             excludeSemantics: true,
             button: true,
-            label: 'Voltar',
+            label: dentro ? 'Sair do grupo' : 'Voltar',
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => Navigator.of(context).maybePop(),
+              onTap: () => dentro
+                  ? c.exitGroup()
+                  : Navigator.of(context).maybePop(),
               child: const SizedBox(
                 width: 48,
                 height: altura,
