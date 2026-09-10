@@ -20,6 +20,26 @@ import 'visao_geral_das_camadas.dart';
 /// caro no aparelho. A cor responde a mesma pergunta — "o que e isto?" —
 /// por quase nada, e vale nos DOIS modos: uma camada nao pode trocar de
 /// cor so por mudar de vista.
+/// O GLIFO DO TIPO, para a pilula e para qualquer lista de camadas.
+///
+/// Exaustivo de proposito, como o rotulo em palavras: um tipo novo quebra
+/// a compilacao aqui em vez de aparecer com um icone generico.
+IconData iconeDaCamada(Layer camada) => switch (camada) {
+  TextLayer() => Icons.title_rounded,
+  ShapeLayer() => Icons.category_rounded,
+  ImageLayer() => Icons.image_rounded,
+  VideoLayer() => Icons.movie_rounded,
+  AudioLayer() => Icons.graphic_eq_rounded,
+  Scene3DLayer() => Icons.deblur_rounded,
+  Element3DLayer() => Icons.view_in_ar_rounded,
+  GroupLayer() => Icons.folder_rounded,
+  NullLayer() => Icons.control_camera_rounded,
+  CameraLayer() => Icons.videocam_rounded,
+  ParticlesLayer() => Icons.grain_rounded,
+  CaptionLayer() => Icons.closed_caption_rounded,
+  AdjustmentLayer() => Icons.tune_rounded,
+};
+
 Color corDaCamada(Layer camada) => switch (camada) {
   TextLayer() => AmColors.selection,
   Scene3DLayer() => AmColors.accent,
@@ -297,6 +317,17 @@ class LinhaDoTempo extends ConsumerWidget {
       aoApagarKeyframe: (local) => ref
           .read(editorControllerProvider.notifier)
           .apagarKeyframeDeTransformacao(atual.id, local),
+      // AS ALCAS DA FAIXA aparam a camada de verdade, pelos mesmos
+      // comandos que a pilha usa. Este era o estado "camada em edicao" do
+      // AM, e ele nao tinha extremidade nenhuma.
+      aoAparar: (inicio, quando) {
+        final c = ref.read(editorControllerProvider.notifier);
+        if (inicio) {
+          c.trimLayerStart(atual.id, quando);
+        } else {
+          c.trimLayerEnd(atual.id, quando);
+        }
+      },
       aoComecarLote: () =>
           ref.read(editorControllerProvider.notifier).beginGesture(),
       aoTerminarLote: () =>
@@ -971,6 +1002,7 @@ class _Faixa extends StatefulWidget {
     required this.aoAlternarOlho,
     required this.aoMoverKeyframe,
     required this.aoApagarKeyframe,
+    this.aoAparar,
     required this.aoComecarLote,
     required this.aoTerminarLote,
     this.aviso,
@@ -986,6 +1018,9 @@ class _Faixa extends StatefulWidget {
   final VoidCallback? aoAlternarOlho;
   final void Function(Duration de, Duration para)? aoMoverKeyframe;
   final void Function(Duration local)? aoApagarKeyframe;
+
+  /// APARA a camada. `inicio` diz qual ponta; o instante e GLOBAL.
+  final void Function(bool inicio, Duration quando)? aoAparar;
 
   /// ABREM E FECHAM O LOTE DE DESFAZER do arrasto de marca.
   ///
@@ -1011,6 +1046,9 @@ class _Faixa extends StatefulWidget {
   @override
   State<_Faixa> createState() => _FaixaState();
 }
+
+/// O QUE O DEDO PEGOU na faixa da camada.
+enum _Pegada { navegar, keyframe, apararInicio, apararFim }
 
 class _FaixaState extends State<_Faixa> {
   /// O keyframe que o dedo pegou, em tempo LOCAL da camada. Nulo quando
@@ -1064,10 +1102,40 @@ class _FaixaState extends State<_Faixa> {
     return melhor;
   }
 
+  /// O QUE O ARRASTO VAI FAZER, decidido no pouso.
+  _Pegada _pegada = _Pegada.navegar;
+
+  /// O RAIO DA ALCA, em pixels. A mesma tolerancia da pilha: o dedo tem
+  /// o mesmo tamanho seja qual for a escala do tempo.
+  static const double _raioDaAlca = 12;
+
   /// O dedo pousou: so ESCOLHE, nao age. Se o toque acabar sendo das
   /// setas, nada aconteceu.
+  ///
+  /// A ORDEM VALE SO PARA O ARRASTO: perto da ponta, arrastar APARA,
+  /// mesmo que haja uma marca ali — o primeiro keyframe costuma ficar no
+  /// comeco, e sem isto nao haveria como aparar uma camada que anima
+  /// desde o primeiro quadro. O toque e o toque longo continuam mirando
+  /// a MARCA, que e o alvo menor e o mais facil de perder.
   void _pousar(Offset ponto, double altura) {
     _candidato = _keyframeSobODedo(ponto, altura);
+    _pegada = _Pegada.navegar;
+    final l = widget.camada;
+    if (l == null) return;
+    final topo = _Faixa.topoDaTrilhaEm(altura);
+    if (ponto.dy < topo - 8) return;
+    final mapa = _mapaAgora;
+    final inicio = mapa.xDe(l.startTime);
+    final fim = mapa.xDe(l.endTime);
+    if ((ponto.dx - inicio).abs() <= _raioDaAlca) {
+      _pegada = _Pegada.apararInicio;
+      return;
+    }
+    if ((ponto.dx - fim).abs() <= _raioDaAlca) {
+      _pegada = _Pegada.apararFim;
+      return;
+    }
+    if (_candidato != null) _pegada = _Pegada.keyframe;
   }
 
   /// TOCAR NUM KEYFRAME LEVA O CABECOTE ATE ELE. E o gesto que a mao faz
@@ -1090,6 +1158,14 @@ class _FaixaState extends State<_Faixa> {
     final k = _candidato;
     _tempoAoComecar = widget.playback.time.value;
     _xAoComecar = ponto.dx;
+    if (l != null &&
+        (_pegada == _Pegada.apararInicio || _pegada == _Pegada.apararFim)) {
+      // UM ARRASTO, UM DESFAZER — igual ao da marca.
+      _lote = true;
+      widget.aoComecarLote();
+      widget.playback.pause();
+      return;
+    }
     if (k == null || l == null || !l.podeArrastarKeyframeEm(k)) {
       _pego = null;
       widget.playback.pause();
@@ -1116,6 +1192,14 @@ class _FaixaState extends State<_Faixa> {
     final l = widget.camada;
     final pego = _pego;
     final mapa = widget.mapa(_tempoAoComecar);
+    if (l != null && _pegada == _Pegada.apararInicio) {
+      widget.aoAparar?.call(true, mapa.tempoEm(ponto.dx));
+      return;
+    }
+    if (l != null && _pegada == _Pegada.apararFim) {
+      widget.aoAparar?.call(false, mapa.tempoEm(ponto.dx));
+      return;
+    }
     if (pego == null || l == null) {
       // NAVEGAR: o conteudo desliza sob o cabecote parado.
       widget.playback.seek(
@@ -1142,9 +1226,12 @@ class _FaixaState extends State<_Faixa> {
   void _soltar() {
     final l = widget.camada;
     final pego = _pego;
+    final aparou =
+        _pegada == _Pegada.apararInicio || _pegada == _Pegada.apararFim;
     _pego = null;
+    _pegada = _Pegada.navegar;
     _fecharLote();
-    if (l == null || pego == null) return;
+    if (aparou || l == null || pego == null) return;
     widget.playback.seek(l.startTime + pego);
   }
 
@@ -1162,6 +1249,7 @@ class _FaixaState extends State<_Faixa> {
           onHorizontalDragEnd: (_) => _soltar(),
           onHorizontalDragCancel: () {
             _pego = null;
+            _pegada = _Pegada.navegar;
             _fecharLote();
           },
           onLongPressStart: (_) {
@@ -1307,14 +1395,26 @@ class PilulaDaCamada extends StatelessWidget {
                 size: 15,
                 color: escondida ? AmColors.muted : AmColors.text,
               ),
+              // O QUADRADO COLORIDO NAO DIZIA O QUE A CAMADA E.
+              //
+              // Quatro tipos dividiam a mesma cor, e para imagem e video
+              // ele nao dizia nada. O AM poe miniatura ou icone aqui; a
+              // cor continua sendo o fundo, e o glifo por cima responde
+              // "o que e isto?" sem precisar ler o nome.
               Container(
-                width: 13,
+                width: 15,
                 height: 15,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: escondida
                       ? corDaCamada(camada).withValues(alpha: .3)
                       : corDaCamada(camada),
                   borderRadius: BorderRadius.circular(3),
+                ),
+                child: Icon(
+                  iconeDaCamada(camada),
+                  size: 10,
+                  color: AmColors.bg,
                 ),
               ),
             ],
@@ -1379,6 +1479,34 @@ class _PintorDaFaixa extends CustomPainter {
     canvas.clipRRect(rr);
     nome.paint(canvas, Offset(barra.left + 10, barra.center.dy - 8));
     canvas.restore();
+
+    // O ANEL E AS DUAS ALCAS.
+    //
+    // Este e o estado "camada em edicao" do AM, e ele nao tinha nem
+    // realce nem extremidades: a pilha tinha os dois e a faixa, que e
+    // onde se edita, nao. As alcas nao sao enfeite — elas dizem onde
+    // pegar para aparar.
+    canvas.drawRRect(
+      rr.inflate(1.5),
+      Paint()
+        ..color = AmColors.text
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6,
+    );
+    final tinta = Paint()..color = AmColors.text;
+    for (final x in [barra.left + 5, barra.right - 5]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x, barra.center.dy),
+            width: 3,
+            height: barra.height - 16,
+          ),
+          const Radius.circular(2),
+        ),
+        tinta,
+      );
+    }
 
     _pintarKeyframes(canvas, size, l, barra);
   }

@@ -371,8 +371,12 @@ void main() {
     });
 
     testWidgets('efeitos abre, e lista o que a camada tem', (tester) async {
-      final m = await _montar(tester);
+      final m = await _montar(tester, telaDeCelular: true);
       await abrirFerramentas(tester, m.c);
+      // A GRADE ROLA: com a barra temporal acima dela, um texto tem
+      // cartoes abaixo da dobra. Rolar ate ele e o que o dedo faria.
+      await tester.ensureVisible(find.byKey(const ValueKey('cartao-efeitos')));
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('cartao-efeitos')));
       await tester.pump();
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categoria);

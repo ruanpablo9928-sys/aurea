@@ -4651,6 +4651,101 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.copyLayer(startTime: start));
   }
 
+  /// DESLOCA TODA A ANIMACAO DA CAMADA no tempo local dela.
+  ///
+  /// Aparar o COMECO muda a origem do tempo local: o keyframe que estava
+  /// em 0,5 s da camada continua em 0,5 s, mas 0,5 s da camada agora e
+  /// outro instante do projeto. Sem este remapeamento a animacao inteira
+  /// desliza junto com a ponta enquanto a midia fica parada (o
+  /// `sourceOffset` compensa) — o quadro que a pessoa animou deixa de
+  /// coincidir com o pixel que ela viu ao animar.
+  ///
+  /// O que cai ANTES do novo comeco e PRESO em zero, e nao descartado: a
+  /// ultima marca de fora vira a marca do instante zero com o valor que
+  /// ela ja tinha ali. Assim o valor no comeco da camada e exatamente o
+  /// que era antes de aparar, e nenhuma animacao vira degrau.
+  static Layer _deslocarAnimacao(Layer layer, Duration delta) {
+    if (delta == Duration.zero) return layer;
+    AnimatedDouble d(AnimatedDouble t) => _deslocarD(t, delta);
+    AnimatedOffset o(AnimatedOffset t) => _deslocarO(t, delta);
+    return layer.copyLayer(
+      position: o(layer.position),
+      positionZ: d(layer.positionZ),
+      scaleX: d(layer.scaleX),
+      scaleY: d(layer.scaleY),
+      rotation: d(layer.rotation),
+      rotationX: d(layer.rotationX),
+      rotationY: d(layer.rotationY),
+      opacity: d(layer.opacity),
+      skewX: d(layer.skewX),
+      skewY: d(layer.skewY),
+      pivot: o(layer.pivot),
+      effects: [
+        for (final e in layer.effects)
+          e.copyWith(params: {
+            for (final entry in e.params.entries)
+              entry.key: _deslocarD(entry.value, delta),
+          }),
+      ],
+    );
+  }
+
+  static AnimatedDouble _deslocarD(AnimatedDouble t, Duration delta) {
+    if (!t.isAnimated) return t;
+    final noZero = t.valueAt(-delta);
+    final easeNoZero = t.easeAt(-delta);
+    final novos = <Keyframe<double>>[];
+    var presa = false;
+    for (final k in t.keyframes) {
+      final quando = k.time + delta;
+      if (quando < Duration.zero) {
+        presa = true;
+        continue;
+      }
+      novos.add(k.copyWith(time: quando));
+    }
+    if (presa) {
+      novos.removeWhere((k) => k.time == Duration.zero);
+      novos.insert(
+        0,
+        Keyframe<double>(
+          time: Duration.zero,
+          value: noZero,
+          ease: easeNoZero,
+        ),
+      );
+    }
+    return AnimatedDouble(t.base, novos, t.loop, t.expression);
+  }
+
+  static AnimatedOffset _deslocarO(AnimatedOffset t, Duration delta) {
+    if (!t.isAnimated) return t;
+    final noZero = t.valueAt(-delta);
+    final easeNoZero = t.easeAt(-delta);
+    final novos = <Keyframe<Offset>>[];
+    var presa = false;
+    for (final k in t.keyframes) {
+      final quando = k.time + delta;
+      if (quando < Duration.zero) {
+        presa = true;
+        continue;
+      }
+      novos.add(k.copyWith(time: quando));
+    }
+    if (presa) {
+      novos.removeWhere((k) => k.time == Duration.zero);
+      novos.insert(
+        0,
+        Keyframe<Offset>(
+          time: Duration.zero,
+          value: noZero,
+          ease: easeNoZero,
+        ),
+      );
+    }
+    return AnimatedOffset(t.base, novos, t.loop);
+  }
+
   void trimLayerStart(String id, Duration newStart) {
     final layer = _layer(id);
     if (layer == null) return;
@@ -4711,7 +4806,10 @@ class EditorController extends Notifier<VideoProject> {
       );
     } else {
       _replace(
-        layer.copyLayer(startTime: start, duration: layer.endTime - start),
+        _deslocarAnimacao(
+          layer.copyLayer(startTime: start, duration: layer.endTime - start),
+          -delta,
+        ),
       );
     }
   }
@@ -4851,6 +4949,13 @@ class EditorController extends Notifier<VideoProject> {
             ),
       );
     }
+
+    // A SEGUNDA METADE COMECA NOUTRO INSTANTE, e o tempo local dela
+    // recomeca do zero. Sem remapear, os keyframes anteriores ao corte
+    // ficam com tempo local negativo em relacao ao novo comeco e somem
+    // do desenho, e os posteriores aparecem deslocados do quadro em que
+    // foram feitos.
+    second = _deslocarAnimacao(second, -firstDur);
 
     final layers = <Layer>[];
     for (final l in state.layers) {

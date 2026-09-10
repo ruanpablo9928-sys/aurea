@@ -6,6 +6,7 @@ import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import '../contexto_do_editor.dart';
+import 'barra_temporal.dart';
 import 'controles_da_camada.dart';
 import 'editor_de_curva.dart';
 import 'painel_da_selecao.dart';
@@ -328,10 +329,17 @@ abstract final class PainelDaCamada {
   /// O PAINEL PEDE SO O QUE PRECISA, ate o teto. Com altura fixa, tres
   /// cartoes deixavam quase cem pixels de vazio — e vazio sobreposto
   /// tapa a linha do tempo sem motivo.
+  /// A BARRA TEMPORAL entra na conta: ela vive entre o cabecalho e a
+  /// grade, e sem ela aqui a ultima linha de cartoes ficava cortada.
+  static const _alturaDaBarraTemporal = 41.0;
+
   static double alturaAberta(int itens) {
     final linhas = (itens / 2).ceil();
     final pedida =
-        _alturaDoCabecalho + linhas * (_alturaDoCartao + 8) + _folgaDaGrade;
+        _alturaDoCabecalho +
+        _alturaDaBarraTemporal +
+        linhas * (_alturaDoCartao + 8) +
+        _folgaDaGrade;
     return pedida < alturaMaxima ? pedida : alturaMaxima;
   }
 }
@@ -557,8 +565,14 @@ class _Aberto extends ConsumerWidget {
         // ferramenta aberta: o nome ja esta la em cima, e o `‹` ja esta
         // no rail. Duas linhas de 44 px dizendo a mesma coisa, num
         // painel de 300, e espaco tirado do controle.
-        if (!naCategoria)
+        if (!naCategoria) ...[
           _Cabecalho(camada: camada, categoria: null),
+          // A BARRA TEMPORAL fica ENTRE o cabecalho e a grade, como no
+          // AM: aparar, dividir, velocidade e som a um toque, para
+          // qualquer tipo de camada.
+          BarraTemporalDaCamada(camada: camada, playback: playback),
+          const Divider(height: 1, color: AmColors.hairline),
+        ],
         Expanded(
           child: naCategoria
               ? ControlesDaCategoria(
