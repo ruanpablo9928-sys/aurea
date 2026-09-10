@@ -9,6 +9,7 @@ import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import '../../domain/shape.dart';
 import 'editor_de_curva.dart';
+import 'escolha_de_cor.dart';
 import 'linha_de_parametro.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_mistura.dart';
@@ -769,8 +770,34 @@ class _ParametrosDoEfeito extends ConsumerWidget {
               ),
             ),
           );
-        case ParamKind.color:
         case ParamKind.point:
+          // PONTO E DOIS NUMEROS, e a tabela ja os separa em "Centro X"
+          // e "Centro Y" com faixa 0..1. Eles caiam no balde do "ainda
+          // nao desenha" sem motivo: sao numeros comuns, e como numeros
+          // comuns ganham fita, campo e o losango do rail.
+          //
+          // Uma cruz arrastavel EM CIMA DA PREVIA seria melhor, e e o
+          // que a referencia faz — mas o palco ainda nao tem gesto
+          // nenhum, e prometer a cruz aqui seria prometer o palco.
+          final faixaP = (def.max - def.min).abs();
+          campos.add(
+            LinhaDeParametro(
+              rotulo: def.label,
+              valor: trilha.valueAt(local),
+              porPixel: faixaP / 300,
+              casas: casasParaFaixa(faixaP),
+              escolhida: escolhida == chave,
+              aoEscolher: () =>
+                  ref.read(parametroAbertoProvider.notifier).state = chave,
+              aoComecar: c.beginGesture,
+              aoMudar: (v) =>
+                  c.editEffectParam(camada.id, efeito.id, chave, tempo, v),
+              aoTerminar: c.endGesture,
+              aoDigitar: (v) =>
+                  c.editEffectParam(camada.id, efeito.id, chave, tempo, v),
+            ),
+          );
+        case ParamKind.color:
           semDesenho.add(def.label);
       }
     }
@@ -781,10 +808,27 @@ class _ParametrosDoEfeito extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ...campos,
-          // A COR MOSTRA OS TRES NUMEROS E A AMOSTRA, como na referencia,
-          // mesmo sem editor de cor ainda: ver a cor que esta valendo ja
-          // responde metade da pergunta.
-          if (spec.hasColor) _AmostraDeCor(cor: efeito.color),
+          // A COR AGORA MUDA. A linha mostrava os tres numeros e a
+          // amostra e nao deixava trocar — metade da pergunta
+          // respondida, com `setEffectColor` parado no motor sem um
+          // unico chamador.
+          if (spec.hasColor)
+            EscolhaDeCor(
+              rotulo: 'Cor',
+              cor: efeito.color,
+              aoComecar: c.beginGesture,
+              aoTerminar: c.endGesture,
+              aoMudar: (cor) => c.setEffectColor(camada.id, efeito.id, cor),
+            ),
+          for (var i = 0; i < spec.extraColors; i++)
+            EscolhaDeCor(
+              rotulo: 'Cor ${i + 2}',
+              cor: efeito.extraColor(i),
+              aoComecar: c.beginGesture,
+              aoTerminar: c.endGesture,
+              aoMudar: (cor) =>
+                  c.setEffectExtraColor(camada.id, efeito.id, i, cor),
+            ),
           // O QUE ESTA FICHA AINDA NAO DESENHA, DITO. Um parametro que
           // some sem explicacao faz o efeito inteiro parecer quebrado.
           if (semDesenho.isNotEmpty)
@@ -810,62 +854,6 @@ int casasParaFaixa(double faixa) {
   if (faixa <= 20) return 2;
   if (faixa <= 200) return 1;
   return 0;
-}
-
-class _AmostraDeCor extends StatelessWidget {
-  const _AmostraDeCor({required this.cor});
-
-  final Color cor;
-
-  @override
-  Widget build(BuildContext context) {
-    final r = (cor.r * 255).round();
-    final g = (cor.g * 255).round();
-    final b = (cor.b * 255).round();
-    return Semantics(
-      container: true,
-      excludeSemantics: true,
-      label: 'Cor do efeito',
-      value: '$r $g $b',
-      child: SizedBox(
-        height: LinhaDeParametro.altura,
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 94,
-              child: Text(
-                'Cor',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AmColors.muted,
-                ),
-              ),
-            ),
-            const Spacer(),
-            Text(
-              '$r $g $b',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AmColors.accent,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: cor,
-                borderRadius: BorderRadius.circular(7),
-                border: Border.all(color: AmColors.hairline),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Um parametro de lista: as opcoes viram chips.

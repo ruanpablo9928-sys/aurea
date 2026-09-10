@@ -29,6 +29,7 @@ class LinhaDeParametro extends StatelessWidget {
     required this.valor,
     required this.porPixel,
     required this.aoMudar,
+    this.nome,
     this.casas = 2,
     this.sufixo = '',
     this.escolhida = false,
@@ -39,6 +40,15 @@ class LinhaDeParametro extends StatelessWidget {
   });
 
   final String rotulo;
+
+  /// O QUE A LEITURA DE TELA ANUNCIA, quando difere do texto desenhado.
+  ///
+  /// Tres linhas chamadas "Vermelho" na mesma ficha — uma por cor de um
+  /// gradiente — sao distinguiveis pelo olho, que ve a amostra logo
+  /// acima de cada grupo, e indistinguiveis para quem ouve. O chip
+  /// continua curto; o nome ganha o dono.
+  final String? nome;
+
   final double valor;
 
   /// Quanto o valor anda por pixel de dedo na fita.
@@ -68,11 +78,16 @@ class LinhaDeParametro extends StatelessWidget {
     height: altura,
     child: Row(
       children: [
-        _Chip(rotulo: rotulo, escolhida: escolhida, aoTocar: aoEscolher),
+        _Chip(
+          rotulo: rotulo,
+          nome: nome,
+          escolhida: escolhida,
+          aoTocar: aoEscolher,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: FitaDeAjuste(
-            rotulo: rotulo,
+            rotulo: nome ?? rotulo,
             valor: valor,
             porPixel: porPixel,
             ativa: escolhida || aoEscolher == null,
@@ -92,7 +107,7 @@ class LinhaDeParametro extends StatelessWidget {
           // nome vai por [CampoDeValor.nome] porque o chip da esquerda
           // nao existe para quem ouve a tela.
           rotulo: '',
-          nome: rotulo,
+          nome: nome ?? rotulo,
           valor: valor,
           casas: casas,
           sufixo: sufixo,
@@ -107,11 +122,13 @@ class LinhaDeParametro extends StatelessWidget {
 class _Chip extends StatelessWidget {
   const _Chip({
     required this.rotulo,
+    required this.nome,
     required this.escolhida,
     required this.aoTocar,
   });
 
   final String rotulo;
+  final String? nome;
   final bool escolhida;
   final VoidCallback? aoTocar;
 
@@ -121,7 +138,7 @@ class _Chip extends StatelessWidget {
     excludeSemantics: true,
     button: aoTocar != null,
     selected: escolhida,
-    label: rotulo,
+    label: nome ?? rotulo,
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: aoTocar,

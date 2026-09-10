@@ -84,6 +84,18 @@ correcao sobrescrevia qualquer aparagem feita nesse meio-tempo. Agora a
 chegada do probe nao e uma edicao (nao empilha) e so estica o que ainda
 esta no provisorio.
 
+**Cor e ponto no efeito (lote 7).** A linha `Cor` era de LEITURA — os
+tres numeros e o quadradinho, sem como trocar — com `setEffectColor` e
+`setEffectExtraColor` parados sem chamador. Agora ha `EscolhaDeCor`:
+doze cores prontas para o caso comum e tres linhas de canal (0..255)
+para o resto, na mesma lingua de fita e campo do resto do painel. Sem
+roda de cor e sem deslizante.
+
+Os parametros de PONTO (`Centro X`, `Centro Y`) sairam do balde do
+"ajuste chega numa proxima entrega": sao numeros de 0 a 1 e viraram
+linhas comuns, com fita, campo e losango do rail. A cruz arrastavel
+sobre a previa continua sendo o certo, e depende do palco ganhar gesto.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo
