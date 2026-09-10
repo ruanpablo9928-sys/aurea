@@ -41,6 +41,13 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
     c.addTextLayer(Duration.zero, text: 'Camada ${i + 1}');
   }
   container.read(modoDaLinhaDoTempoProvider.notifier).state = modo;
+  // SEM CAMADA ESCOLHIDA, de proposito.
+  //
+  // Este arquivo cobra NAVEGAR no tempo, e arrastar sobre o clipe JA
+  // escolhido move o clipe — e a regra que faz os dois gestos caberem na
+  // mesma superficie. Criar camada ja seleciona, entao a selecao precisa
+  // ser limpa para o arrasto voltar a ser navegacao.
+  container.read(selectedLayerProvider.notifier).state = null;
   if (zoom != null) {
     container.read(zoomDaLinhaDoTempoProvider.notifier).state = zoom;
   }

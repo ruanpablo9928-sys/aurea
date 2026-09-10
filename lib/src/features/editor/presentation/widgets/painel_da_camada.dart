@@ -5,6 +5,7 @@ import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import 'controles_da_camada.dart';
 
 /// AS FERRAMENTAS DA CAMADA SELECIONADA.
 ///
@@ -142,6 +143,14 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Informacoes da midia',
       icone: Icons.info_outline_rounded,
     ),
+  // O QUE SE FAZ COM A CAMADA INTEIRA — dividir, duplicar, apagar — nao
+  // e propriedade dela, e por isso tem cartao proprio em vez de virar
+  // mais um deslizante perdido no meio dos outros.
+  const CategoriaDaCamada(
+    id: 'camada',
+    rotulo: 'Camada',
+    icone: Icons.layers_rounded,
+  ),
   const CategoriaDaCamada(
     id: 'cor',
     rotulo: 'Cor e preenchimento',
@@ -190,7 +199,12 @@ String tipoDaCamadaEmPalavras(Layer camada) => switch (camada) {
 abstract final class PainelDaCamada {
   /// O TETO do painel aberto. Ele SOBREPOE, entao esta altura sai da
   /// tela e nao do espaco dos outros.
-  static const alturaMaxima = 260.0;
+  ///
+  /// Subiu de 260 para 300 quando os controles de verdade entraram:
+  /// transformar tem quatro deslizantes mais o interruptor de keyframe,
+  /// e em 260 o ultimo ficava sempre abaixo da dobra. Acima de 300 ele
+  /// comeca a tapar a previa, que e o que se esta ajustando.
+  static const alturaMaxima = 300.0;
 
   static const _alturaDoCabecalho = 44.0;
   static const _alturaDoCartao = 56.0;
@@ -256,7 +270,7 @@ class PainelSobreposto extends ConsumerWidget {
           color: AmColors.panelHigh,
           border: Border(top: BorderSide(color: AmColors.hairline)),
         ),
-        child: _Aberto(camada: camada, estado: estado),
+        child: _Aberto(camada: camada, estado: estado, playback: playback),
       ),
     );
   }
@@ -295,10 +309,19 @@ void abrirAdicaoDeConteudo(WidgetRef ref, PlaybackController playback) {
 final barraDeAdicaoAbertaProvider = StateProvider<bool>((ref) => false);
 
 class _Aberto extends ConsumerWidget {
-  const _Aberto({required this.camada, required this.estado});
+  const _Aberto({
+    required this.camada,
+    required this.estado,
+    required this.playback,
+  });
 
   final Layer camada;
   final EstadoDoPainel estado;
+
+  /// O RELOGIO DESCE ATE OS CONTROLES. Uma propriedade animada vale
+  /// coisas diferentes em instantes diferentes, e o que o deslizante
+  /// mostra tem de ser o que a previa mostra.
+  final PlaybackController playback;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -313,7 +336,11 @@ class _Aberto extends ConsumerWidget {
         _Cabecalho(camada: camada, categoria: naCategoria ? atual : null),
         Expanded(
           child: naCategoria
-              ? _ConteudoDaCategoria(categoria: atual, camada: camada)
+              ? ControlesDaCategoria(
+                  categoriaId: atual.id,
+                  camada: camada,
+                  playback: playback,
+                )
               : _GradeDeCategorias(categorias: categorias),
         ),
       ],
@@ -549,29 +576,3 @@ class _Cartao extends ConsumerWidget {
 /// e propriedade animada nao vira estatica por causa de um slider. Pendurar
 /// controles aqui agora, sem esse contrato, e o caminho mais curto para
 /// estragar o historico.
-class _ConteudoDaCategoria extends StatelessWidget {
-  const _ConteudoDaCategoria({required this.categoria, required this.camada});
-
-  final CategoriaDaCamada categoria;
-  final Layer camada;
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Os controles de ${categoria.rotulo.toLowerCase()} chegam na '
-          'proxima entrega.',
-          key: const ValueKey('categoria-sem-controles'),
-          style: const TextStyle(
-            fontSize: 12,
-            color: AmColors.muted,
-            height: 1.4,
-          ),
-        ),
-      ],
-    ),
-  );
-}

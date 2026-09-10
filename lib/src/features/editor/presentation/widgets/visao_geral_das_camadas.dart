@@ -93,12 +93,19 @@ class AlternadorDeVista extends ConsumerWidget {
 ///   - toque na trilha JA escolhida .. abre ela no modo detalhado
 ///   - toque na pilula (olho) ........ esconde ou mostra aquela camada
 ///   - arrasto horizontal ............ navega no tempo
+///   - arrasto NO CLIPE ESCOLHIDO .... move a camada no tempo
+///   - arrasto NA PONTA do escolhido . apara aquele lado
 ///   - arrasto vertical .............. rola a lista de camadas
 ///   - arrasto na alca da direita .... muda a camada de lugar na pilha
 ///
-/// O que NAO ha, de proposito: aparar ponta, mover clipe no tempo,
-/// dividir, mexer em keyframe. Isso e do detalhado, ou de entregas que
-/// ainda nao vieram.
+/// MOVER E APARAR SO VALEM NO CLIPE JA ESCOLHIDO, e essa e a regra que
+/// faz os dois gestos caberem na mesma superficie. Se qualquer clipe
+/// respondesse ao arrasto, navegar no tempo viraria sorte: quase toda a
+/// largura da pilha tem clipe em cima. Escolher primeiro custa um
+/// toque e devolve a navegacao inteira.
+///
+/// O que NAO ha, de proposito: dividir e mexer em keyframe. Dividir tem
+/// botao proprio nas ferramentas da camada; keyframe e do detalhado.
 class VisaoGeralDasCamadas extends ConsumerStatefulWidget {
   const VisaoGeralDasCamadas({
     super.key,
@@ -141,9 +148,60 @@ class VisaoGeralDasCamadas extends ConsumerStatefulWidget {
       _VisaoGeralDasCamadasState();
 }
 
+/// O QUE O ARRASTO HORIZONTAL VAI FAZER, decidido no POUSO do dedo.
+///
+/// A decisao nao pode esperar o `onHorizontalDragStart`: ele so chega
+/// depois de uns dezoito pixels, e ja com a posicao nova — a essa altura
+/// nao da mais para saber se o dedo pousou na ponta do clipe ou no meio
+/// dele. Um `Listener` recebe o pouso cru e guarda a resposta aqui.
+enum _Arrasto { navegar, mover, apararInicio, apararFim }
+
 class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
   Duration _tempoAoComecar = Duration.zero;
   double _xAoComecar = 0;
+
+  /// A LARGURA DA ALCA DE APARAR, em pixels.
+  ///
+  /// Doze e o que cabe num clipe curto sem as duas pontas se
+  /// encostarem, e o bastante para o dedo achar. Abaixo disso aparar
+  /// vira pontaria; acima, um clipe de trinta pixels nao teria meio.
+  static const _alca = 12.0;
+
+  _Arrasto _oQueFazer = _Arrasto.navegar;
+  String? _clipe;
+  Duration _inicioAoComecar = Duration.zero;
+  Duration _fimAoComecar = Duration.zero;
+
+  /// O dedo pousou: so ESCOLHE o que o arrasto vai fazer. Se o gesto
+  /// acabar sendo um toque, nada aconteceu.
+  void _pousar(Offset ponto, List<Layer> camadas, String? selecionada) {
+    _oQueFazer = _Arrasto.navegar;
+    _clipe = null;
+    if (selecionada == null) return;
+    final i = ponto.dy ~/ VisaoGeralDasCamadas.alturaDaTrilha;
+    if (i < 0 || i >= camadas.length) return;
+    final l = camadas[i];
+    if (l.id != selecionada) return;
+
+    final mapa = widget.mapa(widget.playback.time.value);
+    final inicio = mapa.xDe(l.startTime);
+    final fim = mapa.xDe(l.endTime);
+    if (ponto.dx < inicio - _alca || ponto.dx > fim + _alca) return;
+
+    _clipe = l.id;
+    _inicioAoComecar = l.startTime;
+    _fimAoComecar = l.endTime;
+    // A PONTA GANHA DO MEIO. Num clipe estreito as duas alcas ocupam
+    // ele inteiro, e ai aparar e o unico gesto possivel — mover um
+    // clipe de doze pixels e pedir demais do dedo de qualquer forma.
+    if ((ponto.dx - inicio).abs() <= _alca) {
+      _oQueFazer = _Arrasto.apararInicio;
+    } else if ((ponto.dx - fim).abs() <= _alca) {
+      _oQueFazer = _Arrasto.apararFim;
+    } else {
+      _oQueFazer = _Arrasto.mover;
+    }
+  }
 
   /// A camada que a alca esta segurando, e quanto o dedo ja subiu ou
   /// desceu. Nulo quando ninguem esta reordenando.
@@ -170,6 +228,14 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
     ref.read(editorControllerProvider.notifier).reorderLayer(id, passos);
   }
 
+  void _fecharArrasto() {
+    if (_oQueFazer != _Arrasto.navegar) {
+      ref.read(editorControllerProvider.notifier).endGesture();
+    }
+    _oQueFazer = _Arrasto.navegar;
+    _clipe = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(editorControllerProvider);
@@ -190,17 +256,41 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
         widget.playback.pause();
         _tempoAoComecar = widget.playback.time.value;
         _xAoComecar = d.localPosition.dx;
+        // UM ARRASTO, UM DESFAZER. Mover um clipe manda dezenas de
+        // posicoes entre o toque e o solte; sem o grupo, desfazer
+        // devolveria so o ultimo passo do movimento.
+        if (_oQueFazer != _Arrasto.navegar) {
+          ref.read(editorControllerProvider.notifier).beginGesture();
+        }
       },
       onHorizontalDragUpdate: (d) {
         final mapa = widget.mapa(_tempoAoComecar);
-        widget.playback.seek(
-          _tempoAoComecar - mapa.tempoDe(d.localPosition.dx - _xAoComecar),
-        );
+        final andou = mapa.tempoDe(d.localPosition.dx - _xAoComecar);
+        final id = _clipe;
+        final c = ref.read(editorControllerProvider.notifier);
+        switch (_oQueFazer) {
+          case _Arrasto.navegar:
+            widget.playback.seek(_tempoAoComecar - andou);
+          case _Arrasto.mover:
+            if (id != null) c.moveLayer(id, _inicioAoComecar + andou);
+          case _Arrasto.apararInicio:
+            if (id != null) c.trimLayerStart(id, _inicioAoComecar + andou);
+          case _Arrasto.apararFim:
+            if (id != null) c.trimLayerEnd(id, _fimAoComecar + andou);
+        }
       },
+      onHorizontalDragEnd: (_) => _fecharArrasto(),
+      onHorizontalDragCancel: _fecharArrasto,
       child: SingleChildScrollView(
         child: SizedBox(
           height: altura,
-          child: Stack(
+          child: Listener(
+            // O POUSO CRU, em coordenadas do CONTEUDO. Ele nao entra na
+            // arena de gestos, entao nao rouba o toque de ninguem — so
+            // anota onde o dedo caiu.
+            onPointerDown: (e) =>
+                _pousar(e.localPosition, camadas, selecionada),
+            child: Stack(
             children: [
               // OS CLIPES SAO UM DESENHO SO.
               //
@@ -316,7 +406,8 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -457,9 +548,33 @@ class _PintorDasTrilhas extends CustomPainter {
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.6,
         );
+        _pintarAlcasDeAparar(canvas, barra);
       }
     }
     _pintarDestinoDaOrdem(canvas, size);
+  }
+
+  /// AS ALCAS DE APARAR, nas duas pontas do clipe escolhido.
+  ///
+  /// Elas so aparecem no escolhido porque so nele o arrasto apara — e um
+  /// desenho de alca num clipe que nao responde seria uma promessa
+  /// falsa. Sao dois tracinhos claros, do tamanho do alvo que o dedo
+  /// tem de acertar.
+  void _pintarAlcasDeAparar(Canvas canvas, Rect barra) {
+    final tinta = Paint()..color = AmColors.text;
+    for (final x in [barra.left + 4, barra.right - 4]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(x, barra.center.dy),
+            width: 2.5,
+            height: barra.height - 10,
+          ),
+          const Radius.circular(2),
+        ),
+        tinta,
+      );
+    }
   }
 
   /// A LINHA DE DESTINO do arrasto de ordem.
