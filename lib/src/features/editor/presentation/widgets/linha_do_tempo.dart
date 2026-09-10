@@ -85,6 +85,34 @@ class LinhaDoTempo extends ConsumerWidget {
             ),
             if (modo == ModoDaLinhaDoTempo.geral)
               Expanded(child: VisaoGeralDasCamadas(playback: playback))
+            // A REFERENCIA TEMPORAL FICA, MESMO SEM CAMADAS.
+            //
+            // Regua e cabecote nao dependem de haver conteudo: dependem
+            // de o projeto ter duracao. Some-los no projeto vazio tira a
+            // unica pista de ONDE o conteudo novo vai entrar — e e
+            // exatamente nesse momento que a pessoa precisa dela.
+            //
+            // Se a duracao nao for valida, dai sim nao ha regua que
+            // desenhar, e a mensagem ocupa o lugar: inventar uma duracao
+            // so para ter o que desenhar seria mentir sobre o projeto.
+            else if (camadas.isEmpty && project.duration > Duration.zero)
+              Expanded(
+                child: _Faixa(
+                  playback: playback,
+                  duracao: project.duration,
+                  camada: null,
+                  escondida: false,
+                  temAnterior: false,
+                  temProxima: false,
+                  aoMoverKeyframe: null,
+                  aoApagarKeyframe: null,
+                  aoTrocar: (_) {},
+                  aoAlternarOlho: null,
+                  aviso:
+                      'Nenhuma camada ainda. O conteudo novo entra no '
+                      'cabecote.',
+                ),
+              )
             else if (camadas.isEmpty)
               const Expanded(child: SemCamadasNaLinhaDoTempo())
             else if (atual == null)
@@ -304,6 +332,7 @@ class _Faixa extends StatefulWidget {
     required this.aoAlternarOlho,
     required this.aoMoverKeyframe,
     required this.aoApagarKeyframe,
+    this.aviso,
   });
 
   final PlaybackController playback;
@@ -316,6 +345,10 @@ class _Faixa extends StatefulWidget {
   final VoidCallback? aoAlternarOlho;
   final void Function(Duration de, Duration para)? aoMoverKeyframe;
   final void Function(Duration local)? aoApagarKeyframe;
+
+  /// Texto no lugar da trilha, quando nao ha camada para desenhar. A
+  /// regua e o cabecote continuam.
+  final String? aviso;
 
   @override
   State<_Faixa> createState() => _FaixaState();
@@ -472,6 +505,29 @@ class _FaixaState extends State<_Faixa> {
                           ),
                         ),
                       ),
+                      // O AVISO OCUPA A FAIXA DA TRILHA, e nao a regua.
+                      // A referencia temporal continua inteira: o que
+                      // falta e conteudo, e nao tempo.
+                      if (widget.aviso != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: _PintorDaFaixa.topoDaTrilha,
+                          height: _PintorDaFaixa.alturaDaTrilha,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: Text(
+                                widget.aviso!,
+                                key: const ValueKey('timeline-aviso'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AmColors.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       if (widget.temAnterior)
                         _Seta(
                           esquerda: true,

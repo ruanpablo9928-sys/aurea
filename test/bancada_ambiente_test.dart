@@ -41,9 +41,17 @@ void main() {
     await futuro;
     // A parte que importa e a SINCRONA: e ela que roda no fio que recebe
     // o toque. Medida em 2 ms aqui.
+    //
+    // O LIMITE E FOLGADO DE PROPOSITO. Isto mede tempo de PAREDE numa
+    // suite que roda em paralelo: com a maquina carregada, um spawn de
+    // 2 ms ja passou de 200. O que o teste protege nao e a variacao de
+    // dezenas de milissegundos — e o caso patologico que o iPhone
+    // mostrou, de MIL E QUATROCENTOS. Um limite apertado aqui so
+    // produziria falha intermitente, que e pior que teste nenhum: ensina
+    // a ignorar vermelho.
     expect(
       sincrono,
-      lessThan(200),
+      lessThan(1000),
       reason:
           'abrir o isolate custou $sincrono ms no fio principal; se isso '
           'cresce, o calculo em segundo plano deixa de compensar',

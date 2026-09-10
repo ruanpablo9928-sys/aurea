@@ -222,16 +222,23 @@ void main() {
   });
 
   group('estados vazios', () {
-    testWidgets('projeto sem camadas diz que esta vazio', (tester) async {
+    testWidgets('projeto sem camadas: regua no detalhado, aviso no geral', (
+      tester,
+    ) async {
       await _montar(tester, camadas: 0);
-      expect(find.byKey(const ValueKey('visao-geral-vazia')), findsOneWidget);
+      // NO DETALHADO A REFERENCIA TEMPORAL FICA. O projeto ja tem
+      // duracao valida (o minimo do motor e cinco segundos), e e a regua
+      // que diz onde o conteudo novo vai entrar.
+      expect(find.byKey(const ValueKey('timeline-aviso')), findsOneWidget);
+      expect(find.byKey(const ValueKey('visao-geral-vazia')), findsNothing);
 
       await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
       await tester.pump();
+      // NO GERAL nao ha pilha para mostrar, entao a mensagem ocupa o
+      // lugar dela.
       expect(
         find.byKey(const ValueKey('visao-geral-vazia')),
         findsOneWidget,
-        reason: 'o vazio vale nos dois modos',
       );
     });
 

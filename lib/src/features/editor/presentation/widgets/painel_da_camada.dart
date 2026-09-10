@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
+import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import 'adicionar_conteudo.dart';
 
 /// AS FERRAMENTAS DA CAMADA SELECIONADA.
 ///
@@ -25,6 +27,11 @@ enum EstadoDoPainel {
 
   /// Uma categoria aberta, ocupando o painel.
   categoria,
+
+  /// O menu de adicao. E um ESTADO do mesmo painel, e nao outro painel
+  /// por cima: assim nao sobra uma camada invisivel recebendo gesto
+  /// atras da outra.
+  adicionar,
 }
 
 /// O que o painel esta mostrando. Os estados sao MUTUAMENTE EXCLUSIVOS:
@@ -36,6 +43,15 @@ final estadoDoPainelProvider = StateProvider<EstadoDoPainel>(
 
 /// A categoria aberta, quando o estado e [EstadoDoPainel.categoria].
 final categoriaAbertaProvider = StateProvider<String?>((ref) => null);
+
+/// O INSTANTE EM QUE O CONTEUDO NOVO ENTRA.
+///
+/// Capturado quando o menu de adicao ABRE, e nao quando o toque no tipo
+/// acontece: assim que o relogio anda, os dois deixam de ser a mesma
+/// coisa — e o lugar que a pessoa escolheu foi o de quando abriu.
+final instanteDeInsercaoProvider = StateProvider<Duration>(
+  (ref) => Duration.zero,
+);
 
 /// O INTERRUPTOR DE VALIDACAO.
 ///
@@ -149,7 +165,11 @@ String tipoDaCamadaEmPalavras(Layer camada) => switch (camada) {
 
 /// O painel inferior. Ver [EstadoDoPainel] para os tres estados.
 class PainelDaCamada extends ConsumerWidget {
-  const PainelDaCamada({super.key});
+  const PainelDaCamada({super.key, required this.playback});
+
+  /// O relogio. O painel precisa dele por um motivo so: registrar em que
+  /// instante o conteudo novo entra, e pausar antes de criar.
+  final PlaybackController playback;
 
   /// A faixa recolhida. Alta o bastante para o dedo, baixa o bastante
   /// para nao roubar o preview.
@@ -169,10 +189,7 @@ class PainelDaCamada extends ConsumerWidget {
   /// embaixo — e cada pixel ali sai do preview, que e o que a pessoa
   /// esta olhando. Acima do teto o conteudo rola, em vez de empurrar a
   /// composicao para fora da tela.
-  static double alturaDoEstado(
-    EstadoDoPainel estado, {
-    int categorias = 0,
-  }) {
+  static double alturaDoEstado(EstadoDoPainel estado, {int categorias = 0}) {
     if (estado == EstadoDoPainel.recolhido) return alturaRecolhido;
     if (estado == EstadoDoPainel.categoria) return alturaMaxima;
     final linhas = (categorias / 2).ceil();
@@ -194,7 +211,12 @@ class PainelDaCamada extends ConsumerWidget {
     // camada sumiu (exclusao, desfazer), o painel se recolhe sozinho em
     // vez de ficar segurando uma referencia morta.
     final camada = project.layers.where((l) => l.id == id).firstOrNull;
-    if (camada == null && estado != EstadoDoPainel.recolhido) {
+    // ADICIONAR NAO DEPENDE DE CAMADA, e por isso escapa desta guarda.
+    // Sem a excecao, abrir o menu num projeto vazio o fechava no quadro
+    // seguinte — justamente no unico estado em que ele e indispensavel.
+    if (camada == null &&
+        estado != EstadoDoPainel.recolhido &&
+        estado != EstadoDoPainel.adicionar) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!ref.context.mounted) return;
         ref.read(estadoDoPainelProvider.notifier).state =
@@ -203,19 +225,101 @@ class PainelDaCamada extends ConsumerWidget {
       });
     }
 
+    // O PROJETO VAZIO E OUTRO ESTADO, e nao "sem selecao".
+    //
+    // Nao ter camada SELECIONADA e nao ter camada NENHUMA sao coisas
+    // diferentes, e a saida de cada uma e diferente: numa se escolhe,
+    // noutra se cria. Pedir para selecionar quando nao ha o que
+    // selecionar deixa a pessoa sem proxima acao.
+    //
+    // E quem responde isso e o PROJETO, nunca o que esta desenhado: o
+    // preview pode estar preto porque as camadas estao escondidas, ou
+    // porque o cabecote esta fora delas.
+    final vazio = project.layers.isEmpty;
+    final n = camada == null ? 0 : categoriasDaCamada(camada).length;
+
     return SizedBox(
       height: alturaDoEstado(
-        camada == null ? EstadoDoPainel.recolhido : estado,
-        categorias: camada == null ? 0 : categoriasDaCamada(camada).length,
+        camada == null && estado != EstadoDoPainel.adicionar
+            ? EstadoDoPainel.recolhido
+            : estado,
+        categorias: estado == EstadoDoPainel.adicionar
+            ? tiposDeConteudo.length
+            : n,
       ),
       child: ColoredBox(
         color: AmColors.panelHigh,
-        child: camada == null || estado == EstadoDoPainel.recolhido
-            ? _FaixaRecolhida(camada: camada)
-            : _Aberto(camada: camada, estado: estado),
+        child: switch (estado) {
+          EstadoDoPainel.adicionar => _Adicionar(),
+          _ when camada == null || estado == EstadoDoPainel.recolhido =>
+            _FaixaRecolhida(
+              camada: camada,
+              projetoVazio: vazio,
+              playback: playback,
+            ),
+          _ => _Aberto(camada: camada, estado: estado),
+        },
       ),
     );
   }
+}
+
+/// O MENU DE ADICAO, com o cabecalho de voltar.
+class _Adicionar extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            Semantics(
+              container: true,
+              excludeSemantics: true,
+              button: true,
+              label: 'Voltar',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => ref.read(estadoDoPainelProvider.notifier).state =
+                    EstadoDoPainel.recolhido,
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(
+                    Icons.chevron_left_rounded,
+                    size: 22,
+                    color: AmColors.text,
+                  ),
+                ),
+              ),
+            ),
+            const Expanded(
+              child: Text(
+                'Adicionar conteudo',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: MenuDeAdicao(
+          instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
+          aoAdicionar: () {
+            // Depois de criar, as ferramentas da camada nova. O criador
+            // ja a selecionou.
+            ref.read(estadoDoPainelProvider.notifier).state =
+                EstadoDoPainel.categorias;
+          },
+        ),
+      ),
+    ],
+  );
 }
 
 /// A FAIXA RECOLHIDA: o nome do que ha, e o `+`.
@@ -224,79 +328,170 @@ class PainelDaCamada extends ConsumerWidget {
 /// abre ferramentas do que ja existe. Encostar um no outro convida ao
 /// toque errado.
 class _FaixaRecolhida extends ConsumerWidget {
-  const _FaixaRecolhida({required this.camada});
+  const _FaixaRecolhida({
+    required this.camada,
+    required this.projetoVazio,
+    required this.playback,
+  });
 
   final Layer? camada;
+  final bool projetoVazio;
+  final PlaybackController playback;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Row(
-    children: [
-      Expanded(
-        child: Semantics(
-          container: true,
-          explicitChildNodes: false,
-          excludeSemantics: true,
-          button: camada != null,
-          label: camada == null
-              ? 'Selecione uma camada'
-              : 'Ferramentas da camada',
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: camada == null
-                ? null
-                : () => ref.read(estadoDoPainelProvider.notifier).state =
-                      EstadoDoPainel.categorias,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(
-                    camada == null
-                        ? Icons.touch_app_outlined
-                        : Icons.tune_rounded,
-                    size: 18,
-                    color: camada == null ? AmColors.muted : AmColors.text,
+  Widget build(BuildContext context, WidgetRef ref) {
+    // PROJETO VAZIO: a acao e CRIAR, e ela ocupa a faixa inteira. Nao
+    // adianta oferecer ferramentas de uma camada que nao existe.
+    if (projetoVazio) {
+      return Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              container: true,
+              excludeSemantics: true,
+              button: true,
+              label: 'Adicionar conteudo',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _abrirAdicao(ref, playback),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.add_rounded,
+                        size: 20,
+                        color: AmColors.action,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Seu projeto esta vazio',
+                              key: ValueKey('painel-projeto-vazio'),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AmColors.text,
+                              ),
+                            ),
+                            Text(
+                              'Toque para adicionar conteudo',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AmColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: Semantics(
+            container: true,
+            excludeSemantics: true,
+            button: camada != null,
+            label: camada == null
+                ? 'Selecione uma camada para editar'
+                : 'Ferramentas da camada',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: camada == null
+                  ? null
+                  : () => ref.read(estadoDoPainelProvider.notifier).state =
+                        EstadoDoPainel.categorias,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(
                       camada == null
-                          ? 'Selecione uma camada'
-                          : 'Ferramentas da camada',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: camada == null ? AmColors.muted : AmColors.text,
+                          ? Icons.touch_app_outlined
+                          : Icons.tune_rounded,
+                      size: 18,
+                      color: camada == null ? AmColors.muted : AmColors.text,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        camada == null
+                            ? 'Selecione uma camada para editar'
+                            : 'Ferramentas da camada',
+                        key: camada == null
+                            ? const ValueKey('painel-sem-selecao')
+                            : null,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: camada == null
+                              ? AmColors.muted
+                              : AmColors.text,
+                        ),
                       ),
                     ),
-                  ),
-                  if (camada != null)
-                    const Icon(
-                      Icons.keyboard_arrow_up_rounded,
-                      size: 20,
-                      color: AmColors.muted,
-                    ),
-                ],
+                    if (camada != null)
+                      const Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        size: 20,
+                        color: AmColors.muted,
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-      // O `+` TEM LUGAR RESERVADO NO LAYOUT.
-      //
-      // Ele nao flutua sobre a linha do tempo: sobrepor um keyframe, o
-      // olho, uma barra de camada ou a capsula de tempo tornaria esses
-      // alvos intocaveis justamente na regiao mais disputada da tela.
-      const _BotaoAdicionar(),
-    ],
-  );
+        // O `+` TEM LUGAR RESERVADO, E NAO DEPENDE DA SELECAO.
+        //
+        // Adicionar precisa de um projeto editavel e de um tipo
+        // suportado — nada mais. Amarrar isso a haver camada escolhida
+        // e o que fecha a porta de entrada do editor. (Duplicar, sim,
+        // depende de selecao: por isso ele vive no transporte.)
+        _BotaoAdicionar(aoTocar: () => _abrirAdicao(ref, playback)),
+      ],
+    );
+  }
+
+  /// ABRIR O FLUXO DE ADICAO: pausa e REGISTRA O INSTANTE.
+  ///
+  /// O instante e capturado aqui, e nao no toque que escolhe o tipo:
+  /// assim que o relogio anda, os dois deixam de ser a mesma coisa, e o
+  /// lugar que a pessoa escolheu foi o de quando abriu.
+  ///
+  /// Pausar antes evita o caso em que o cabecote passa por cima da
+  /// camada nova enquanto ela esta sendo criada.
+  static void _abrirAdicao(WidgetRef ref, PlaybackController playback) {
+    playback.pause();
+    ref.read(instanteDeInsercaoProvider.notifier).state = playback.time.value;
+    ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.adicionar;
+  }
 }
 
-/// O `+`. Na 2A ele existe, ocupa o lugar dele e explica que ainda nao
-/// faz nada — em vez de sumir e reaparecer noutra entrega, mudando o
-/// layout debaixo da mao de quem esta validando.
+/// O `+` COMPACTO, que aparece quando ja ha conteudo.
+///
+/// No projeto vazio quem convida e a faixa inteira, com texto; aqui, com
+/// camadas na tela, basta o simbolo. Os dois chamam o MESMO fluxo — nao
+/// ha duas implementacoes de adicionar.
 class _BotaoAdicionar extends StatelessWidget {
-  const _BotaoAdicionar();
+  const _BotaoAdicionar({required this.aoTocar});
+
+  final VoidCallback aoTocar;
 
   static const largura = 56.0;
 
@@ -305,18 +500,17 @@ class _BotaoAdicionar extends StatelessWidget {
     container: true,
     excludeSemantics: true,
     button: true,
-    enabled: false,
     label: 'Adicionar conteudo',
-    child: Tooltip(
-      message: 'Adicionar chega na proxima entrega',
-      child: SizedBox(
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: aoTocar,
+      child: const SizedBox(
         width: largura,
         height: PainelDaCamada.alturaRecolhido,
-        child: Icon(
-          Icons.add_rounded,
-          size: 24,
-          color: AmColors.muted.withValues(alpha: .45),
-        ),
+        // NA COR DE ACAO, e nao no cinza dos controles desligados. Um
+        // botao que parece morto nao e tocado, e este e o unico caminho
+        // para comecar a editar.
+        child: Icon(Icons.add_rounded, size: 24, color: AmColors.action),
       ),
     ),
   );

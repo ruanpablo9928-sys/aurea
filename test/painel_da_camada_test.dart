@@ -52,7 +52,7 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
             children: [
               const Spacer(),
               LinhaDoTempo(playback: playback),
-              const PainelDaCamada(),
+              PainelDaCamada(playback: playback),
             ],
           ),
         ),
@@ -70,15 +70,42 @@ void main() {
       expect(find.bySemanticsLabel('Ferramentas da camada'), findsOneWidget);
     });
 
-    testWidgets('sem selecao, diz o que fazer e nao abre', (tester) async {
+    testWidgets('COM camadas e SEM selecao, pede para selecionar', (
+      tester,
+    ) async {
       final m = await _montar(tester, selecionar: false);
-      expect(find.bySemanticsLabel('Selecione uma camada'), findsOneWidget);
-      await tester.tap(find.bySemanticsLabel('Selecione uma camada'));
-      await tester.pump();
       expect(
-        m.c.read(estadoDoPainelProvider),
-        EstadoDoPainel.recolhido,
-        reason: 'sem camada nao ha ferramentas para mostrar',
+        find.byKey(const ValueKey('painel-sem-selecao')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('painel-projeto-vazio')),
+        findsNothing,
+        reason:
+            'ter camadas e nao ter nenhuma escolhida sao coisas '
+            'diferentes: aqui existe o que selecionar',
+      );
+      await tester.tap(
+        find.bySemanticsLabel('Selecione uma camada para editar'),
+      );
+      await tester.pump();
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.recolhido);
+    });
+
+    testWidgets('PROJETO VAZIO oferece criar, e nao selecionar', (
+      tester,
+    ) async {
+      await _montar(tester, textos: 0);
+      expect(
+        find.byKey(const ValueKey('painel-projeto-vazio')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('painel-sem-selecao')),
+        findsNothing,
+        reason:
+            'pedir para selecionar quando nao ha o que selecionar deixa '
+            'a pessoa sem proxima acao',
       );
     });
 
@@ -447,6 +474,182 @@ void main() {
         reason: 'o olho nao abre ferramentas',
       );
       expect(m.p.time.value, tempo, reason: 'nem desloca o tempo');
+    });
+  });
+
+  group('adicionar conteudo', () {
+    testWidgets('o + abre o menu SEM camada selecionada', (tester) async {
+      final m = await _montar(tester, selecionar: false);
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      expect(
+        m.c.read(estadoDoPainelProvider),
+        EstadoDoPainel.adicionar,
+        reason:
+            'adicionar depende de projeto editavel e tipo suportado — '
+            'nao de haver camada escolhida',
+      );
+      expect(find.byKey(const ValueKey('adicionar-texto')), findsOneWidget);
+    });
+
+    testWidgets('o projeto vazio abre o MESMO menu', (tester) async {
+      final m = await _montar(tester, textos: 0);
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.adicionar);
+      expect(
+        find.byKey(const ValueKey('adicionar-texto')),
+        findsOneWidget,
+        reason:
+            'a acao grande do estado vazio e o + compacto sao o mesmo '
+            'fluxo, e nao duas implementacoes',
+      );
+    });
+
+    testWidgets('adicionar cria a camada, seleciona e mostra as ferramentas', (
+      tester,
+    ) async {
+      final m = await _montar(tester, textos: 0);
+      expect(m.c.read(editorControllerProvider).layers, isEmpty);
+
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
+      await tester.pump();
+
+      final camadas = m.c.read(editorControllerProvider).layers;
+      expect(camadas.length, 1);
+      expect(
+        m.c.read(selectedLayerProvider),
+        camadas.single.id,
+        reason: 'a camada nova entra selecionada',
+      );
+      expect(
+        m.c.read(estadoDoPainelProvider),
+        EstadoDoPainel.categorias,
+        reason: 'depois de criar, as ferramentas do que foi criado',
+      );
+    });
+
+    testWidgets('adicionar e desfazer devolve ao estado vazio', (tester) async {
+      final m = await _montar(tester, textos: 0);
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('adicionar-forma')));
+      await tester.pump();
+      expect(m.c.read(editorControllerProvider).layers.length, 1);
+
+      m.c.read(editorControllerProvider.notifier).undo();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        m.c.read(editorControllerProvider).layers,
+        isEmpty,
+        reason: 'uma adicao, um desfazer',
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('painel-projeto-vazio')),
+        findsOneWidget,
+        reason: 'desfazer a unica camada devolve o estado vazio',
+      );
+    });
+
+    testWidgets('o instante de insercao e o de ABRIR o menu', (tester) async {
+      final m = await _montar(tester, textos: 0);
+      m.p.seek(const Duration(milliseconds: 1200));
+      await tester.pump();
+
+      await tester.tap(find.bySemanticsLabel('Adicionar conteudo'));
+      await tester.pump();
+      // O relogio anda ENTRE abrir e escolher; o que vale e o de abrir.
+      m.p.seek(const Duration(milliseconds: 2600));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('adicionar-texto')));
+      await tester.pump();
+
+      expect(
+        m.c.read(editorControllerProvider).layers.single.startTime,
+        m.c.read(instanteDeInsercaoProvider),
+        reason:
+            'a pessoa escolheu o lugar ao abrir o menu, e nao ao tocar '
+            'no tipo',
+      );
+    });
+  });
+
+  group('o vazio vem dos DADOS, e nao do que esta desenhado', () {
+    testWidgets('esconder todas as camadas NAO e projeto vazio', (
+      tester,
+    ) async {
+      final m = await _montar(tester, textos: 2);
+      for (final l in m.c.read(editorControllerProvider).layers) {
+        m.c.read(editorControllerProvider.notifier).toggleHidden(l.id);
+      }
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('painel-projeto-vazio')),
+        findsNothing,
+        reason:
+            'o preview fica preto com tudo escondido, mas as camadas '
+            'continuam la — quem responde e o projeto, nao a imagem',
+      );
+    });
+
+    testWidgets('tirar so a selecao NAO e projeto vazio', (tester) async {
+      final m = await _montar(tester, textos: 2);
+      m.c.read(selectedLayerProvider.notifier).state = null;
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('painel-projeto-vazio')), findsNothing);
+      expect(find.byKey(const ValueKey('painel-sem-selecao')), findsOneWidget);
+    });
+  });
+
+  group('layout do editor', () {
+    testWidgets('a regua e o cabecote ficam no projeto vazio', (tester) async {
+      await _montar(tester, textos: 0);
+      expect(
+        find.byKey(const ValueKey('timeline-aviso')),
+        findsOneWidget,
+        reason:
+            'sem camadas, a referencia temporal continua: e ela que diz '
+            'onde o conteudo novo vai entrar',
+      );
+      expect(
+        find.byKey(const ValueKey('visao-geral-vazia')),
+        findsNothing,
+        reason: 'com duracao valida nao se troca a regua por um texto',
+      );
+    });
+
+    testWidgets('a linha do tempo nao encolhe abaixo do util', (tester) async {
+      await _montar(tester, textos: 0);
+      final altura = tester.getSize(find.byType(LinhaDoTempo)).height;
+      expect(
+        altura,
+        LinhaDoTempo.altura,
+        reason:
+            'a timeline tem altura reservada; quem cede espaco e o '
+            'preview, e nao ela',
+      );
+    });
+
+    testWidgets('os alvos do transporte tem 48 px de altura', (tester) async {
+      await _montar(tester);
+      for (final rotulo in ['Desfazer', 'Reproduzir', 'Exportar']) {
+        final caixa = tester.getSize(find.bySemanticsLabel(rotulo));
+        expect(
+          caixa.height,
+          greaterThanOrEqualTo(48),
+          reason:
+              'a area de toque de "$rotulo" tem $caixa — abaixo de 48 dp '
+              'o dedo erra',
+        );
+        expect(caixa.width, greaterThanOrEqualTo(44));
+      }
     });
   });
 }
