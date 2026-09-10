@@ -42,23 +42,45 @@ Color corDaCamada(Layer camada) => switch (camada) {
 ///     cabecote destacado;
 ///   - coluna fixa a esquerda (olho e cor) que nao rola com a trilha.
 class LinhaDoTempo extends ConsumerWidget {
-  const LinhaDoTempo({super.key, required this.playback, this.aoExportar});
+  const LinhaDoTempo({
+    super.key,
+    required this.playback,
+    this.aoExportar,
+    this.altura,
+  });
 
   final PlaybackController playback;
+
+  /// A altura que a tela reservou. Nula = o chao.
+  ///
+  /// Quem decide e a tela, porque so ela sabe quanto sobrou depois da
+  /// composicao — e num projeto deitado sobra MUITO. A linha do tempo e
+  /// area de trabalho, e nao rodape: havendo espaco, ele vem para ca.
+  final double? altura;
 
   /// Abrir a exportacao e NAVEGACAO, e navegacao e da tela — nao de um
   /// controle dentro dela. Por isso vem de fora.
   final VoidCallback? aoExportar;
 
-  /// Altura do modo detalhado: transporte + regua + trilha.
-  static const altura = 148.0;
+  /// O CHAO DA LINHA DO TEMPO: transporte + regua + uma trilha alta.
+  ///
+  /// Abaixo disto ela deixa de ser util — a trilha fica fina demais para
+  /// o dedo pegar keyframe, e a regua perde a escala. Nenhum calculo de
+  /// layout pode passar por baixo deste numero.
+  static const alturaMinima = 208.0;
 
   /// A altura que a linha do tempo ocupa, conforme o modo e quantas
   /// camadas ha para mostrar.
-  static double alturaDoModo(ModoDaLinhaDoTempo modo, int camadas) =>
-      modo == ModoDaLinhaDoTempo.detalhado
-      ? altura
-      : 48 + VisaoGeralDasCamadas.alturaPara(camadas);
+  /// O CHAO VALE PARA OS DOIS MODOS.
+  ///
+  /// Sem isso a pilha com poucas camadas ficava MENOR que a trilha
+  /// unica, e trocar de vista encolhia a area de trabalho — o oposto do
+  /// que a troca promete.
+  static double alturaDoModo(ModoDaLinhaDoTempo modo, int camadas) {
+    if (modo == ModoDaLinhaDoTempo.detalhado) return alturaMinima;
+    final pedida = 48 + VisaoGeralDasCamadas.alturaPara(camadas);
+    return pedida < alturaMinima ? alturaMinima : pedida;
+  }
 
   /// A largura da coluna fixa da esquerda (olho + cor da camada).
   static const larguraDaCabeca = 64.0;
@@ -70,8 +92,10 @@ class LinhaDoTempo extends ConsumerWidget {
     final modo = ref.watch(modoDaLinhaDoTempoProvider);
     final camadas = project.layers;
     final atual = camadas.where((l) => l.id == selecionada).firstOrNull;
+    final pedida = alturaDoModo(modo, camadas.length);
+    final a = altura;
     return SizedBox(
-      height: alturaDoModo(modo, camadas.length),
+      height: a == null || a < pedida ? pedida : a,
       child: ColoredBox(
         color: AmColors.panel,
         child: Column(
@@ -388,10 +412,19 @@ class _FaixaState extends State<_Faixa> {
   /// A tolerancia e em PIXELS, e nao em tempo: o dedo tem o mesmo tamanho
   /// seja qual for a duracao da composicao. Dezoito pixels e o raio que
   /// deixa pegar o losango sem precisar de pontaria.
-  Duration? _keyframeSobODedo(Offset ponto, double largura) {
+  Duration? _keyframeSobODedo(
+    Offset ponto,
+    double largura, {
+    double alturaDaFaixa = 0,
+  }) {
     final l = widget.camada;
     if (l == null || largura <= 0) return null;
-    if (ponto.dy < _PintorDaFaixa.topoDaTrilha - 8) return null;
+    // O LOSANGO SO E PEGAVEL NA FAIXA DA TRILHA. Acima dela esta a
+    // regua, e la o toque leva o cabecote.
+    final topo = alturaDaFaixa > 0
+        ? _PintorDaFaixa.topoDaTrilhaEm(alturaDaFaixa)
+        : _PintorDaFaixa.topoDaTrilha;
+    if (ponto.dy < topo - 8) return null;
     final us = widget.duracao.inMicroseconds;
     if (us <= 0) return null;
     Duration? melhor;
@@ -411,8 +444,12 @@ class _FaixaState extends State<_Faixa> {
 
   /// O dedo pousou: so ESCOLHE, nao age. Se o toque acabar sendo das
   /// setas, nada aconteceu.
-  void _pousar(Offset ponto, double largura) {
-    _candidato = _keyframeSobODedo(ponto, largura);
+  void _pousar(Offset ponto, double largura, double alturaDaFaixa) {
+    _candidato = _keyframeSobODedo(
+      ponto,
+      largura,
+      alturaDaFaixa: alturaDaFaixa,
+    );
   }
 
   /// TOCAR NUM KEYFRAME LEVA O CABECOTE ATE ELE. E o gesto que a mao faz
@@ -474,7 +511,8 @@ class _FaixaState extends State<_Faixa> {
           builder: (context, limites) {
             final largura = limites.maxWidth;
             return Listener(
-              onPointerDown: (e) => _pousar(e.localPosition, largura),
+              onPointerDown: (e) =>
+                  _pousar(e.localPosition, largura, limites.maxHeight),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTapUp: (d) => _tocar(d.localPosition, largura),
@@ -512,8 +550,10 @@ class _FaixaState extends State<_Faixa> {
                         Positioned(
                           left: 0,
                           right: 0,
-                          top: _PintorDaFaixa.topoDaTrilha,
-                          height: _PintorDaFaixa.alturaDaTrilha,
+                          top: _PintorDaFaixa.topoDaTrilhaEm(limites.maxHeight),
+                          height: _PintorDaFaixa.alturaDaTrilhaEm(
+                            limites.maxHeight,
+                          ),
                           child: IgnorePointer(
                             child: Center(
                               child: Text(
@@ -532,11 +572,23 @@ class _FaixaState extends State<_Faixa> {
                         _Seta(
                           esquerda: true,
                           aoTocar: () => widget.aoTrocar(-1),
+                          topo: _PintorDaFaixa.topoDaTrilhaEm(
+                            limites.maxHeight,
+                          ),
+                          altura: _PintorDaFaixa.alturaDaTrilhaEm(
+                            limites.maxHeight,
+                          ),
                         ),
                       if (widget.temProxima)
                         _Seta(
                           esquerda: false,
                           aoTocar: () => widget.aoTrocar(1),
+                          topo: _PintorDaFaixa.topoDaTrilhaEm(
+                            limites.maxHeight,
+                          ),
+                          altura: _PintorDaFaixa.alturaDaTrilhaEm(
+                            limites.maxHeight,
+                          ),
                         ),
                     ],
                   ),
@@ -553,17 +605,24 @@ class _FaixaState extends State<_Faixa> {
 /// A SETA que troca de camada, na ponta da trilha. E o unico caminho
 /// para mudar de camada aqui — como no Alight, a trilha e uma so.
 class _Seta extends StatelessWidget {
-  const _Seta({required this.esquerda, required this.aoTocar});
+  const _Seta({
+    required this.esquerda,
+    required this.aoTocar,
+    required this.topo,
+    required this.altura,
+  });
 
   final bool esquerda;
   final VoidCallback aoTocar;
+  final double topo;
+  final double altura;
 
   @override
   Widget build(BuildContext context) => Positioned(
     left: esquerda ? 0 : null,
     right: esquerda ? null : 0,
-    top: _PintorDaFaixa.topoDaTrilha,
-    height: _PintorDaFaixa.alturaDaTrilha,
+    top: topo,
+    height: altura,
     child: Semantics(
       button: true,
       label: esquerda ? 'Camada anterior' : 'Proxima camada',
@@ -655,9 +714,35 @@ class _PintorDaFaixa extends CustomPainter {
   final Layer? camada;
   final bool escondida;
 
-  static const topoDaTrilha = 46.0;
-  static const alturaDaTrilha = 38.0;
+  /// A REGUA TEM ALTURA FIXA; A TRILHA USA O QUE SOBRA.
+  ///
+  /// A regua e uma escala: mais alta nao diz mais nada. A trilha, sim —
+  /// e nela que o dedo pega keyframe, e cada pixel a mais e alvo maior.
+  /// Entao o espaco que a tela conceder vai todo para ela, ate um teto
+  /// em que crescer deixa de ajudar e so afasta os controles.
+  static const _alturaDaRegua = 46.0;
   static const _baseDaRegua = 30.0;
+  static const _tetoDaTrilha = 72.0;
+  static const _chaoDaTrilha = 38.0;
+
+  static double alturaDaTrilhaEm(double alturaDaFaixa) {
+    final sobra = alturaDaFaixa - _alturaDaRegua - 12;
+    if (sobra <= _chaoDaTrilha) return _chaoDaTrilha;
+    return sobra > _tetoDaTrilha ? _tetoDaTrilha : sobra;
+  }
+
+  static double topoDaTrilhaEm(double alturaDaFaixa) {
+    final h = alturaDaTrilhaEm(alturaDaFaixa);
+    // Centrada no que sobra depois da regua: sem isso, uma trilha baixa
+    // numa faixa alta fica colada no topo e o vazio vai todo para baixo.
+    final espaco = alturaDaFaixa - _alturaDaRegua;
+    final topo = _alturaDaRegua + (espaco - h) / 2;
+    return topo < _alturaDaRegua ? _alturaDaRegua : topo;
+  }
+
+  /// Referencia grosseira, para quem so precisa de um ponto de partida
+  /// sem conhecer a altura da faixa.
+  static const topoDaTrilha = 46.0;
 
   static Color corDe(Layer camada) => corDaCamada(camada);
 
@@ -705,11 +790,12 @@ class _PintorDaFaixa extends CustomPainter {
   ) {
     final inicio = x(l.startTime);
     final fim = x(l.endTime);
+    final topo = topoDaTrilhaEm(size.height);
     final barra = Rect.fromLTRB(
       inicio,
-      topoDaTrilha,
+      topo,
       fim <= inicio + 6 ? inicio + 6 : fim,
-      topoDaTrilha + alturaDaTrilha,
+      topo + alturaDaTrilhaEm(size.height),
     );
     final cor = corDe(l);
     final rr = RRect.fromRectAndRadius(barra, const Radius.circular(8));

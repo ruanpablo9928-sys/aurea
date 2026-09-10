@@ -32,6 +32,10 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
   // Para exercitar o estado "nada escolhido" e preciso limpar de
   // proposito.
   container.read(selectedLayerProvider.notifier).state = null;
+  // Este arquivo cobra a TROCA entre os modos, entao ele comeca no
+  // detalhado de proposito, e nao no padrao.
+  container.read(modoDaLinhaDoTempoProvider.notifier).state =
+      ModoDaLinhaDoTempo.detalhado;
   final playback = PlaybackController(
     vsync: _Vsync(),
     durationOf: () => container.read(editorControllerProvider).duration,
@@ -80,7 +84,9 @@ void main() {
     });
 
     testWidgets('a linha do tempo cresce no modo geral', (tester) async {
-      await _montar(tester, camadas: 3);
+      // COM POUCAS CAMADAS OS DOIS MODOS EMPATAM no chao: a pilha so
+      // pede mais que a trilha unica quando ha camadas que justifiquem.
+      await _montar(tester, camadas: 6);
       final antes = tester.getSize(find.byType(LinhaDoTempo)).height;
       await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
       await tester.pump();

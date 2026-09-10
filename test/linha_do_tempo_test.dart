@@ -10,6 +10,7 @@
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,6 +32,9 @@ Future<ProviderContainer> _montar(
   for (var i = 0; i < camadas; i++) {
     controller.addTextLayer(Duration.zero, text: 'Camada ${i + 1}');
   }
+  // A LINHA DO TEMPO ABRE NA PILHA; este arquivo cobra o DETALHADO.
+  container.read(modoDaLinhaDoTempoProvider.notifier).state =
+      ModoDaLinhaDoTempo.detalhado;
   final playback = PlaybackController(
     vsync: _Vsync(),
     durationOf: () => container.read(editorControllerProvider).duration,
@@ -154,6 +158,8 @@ void main() {
     container
         .read(editorControllerProvider.notifier)
         .addTextLayer(Duration.zero, text: 'Um');
+    container.read(modoDaLinhaDoTempoProvider.notifier).state =
+        ModoDaLinhaDoTempo.detalhado;
     final playback = PlaybackController(
       vsync: _Vsync(),
       durationOf: () => container.read(editorControllerProvider).duration,
@@ -176,10 +182,10 @@ void main() {
     expect(playback.time.value, Duration.zero);
     final faixa = tester.getRect(find.byType(LinhaDoTempo));
     // Um toque perto do fim da faixa tem de levar o cabecote para perto
-    // do fim da composicao.
-    await tester.tapAt(
-      Offset(faixa.right - 12, faixa.bottom - 20),
-    );
+    // do fim da composicao. A REGUA fica logo abaixo do transporte, e e
+    // ela que navega no tempo — mirar no rodape da faixa cai no vazio
+    // sob a trilha.
+    await tester.tapAt(Offset(faixa.right - 12, faixa.top + 70));
     await tester.pump();
     final duracao = container.read(editorControllerProvider).duration;
     expect(
@@ -208,6 +214,10 @@ void main() {
     c.addTextLayer(Duration.zero, text: 'Um');
     final id = container.read(editorControllerProvider).layers.single.id;
     container.read(selectedLayerProvider.notifier).state = id;
+    // Os losangos so existem no modo DETALHADO; na pilha os keyframes
+    // sao riscos, e riscos nao se pegam.
+    container.read(modoDaLinhaDoTempoProvider.notifier).state =
+        ModoDaLinhaDoTempo.detalhado;
     container.read(autoKeyframeProvider.notifier).state = true;
     for (final m in ms) {
       c.editOpacity(id, Duration(milliseconds: m), m / 10000);
@@ -248,8 +258,12 @@ void main() {
         faixa.left +
         LinhaDoTempo.larguraDaCabeca +
         util * (quando.inMicroseconds / duracao.inMicroseconds);
-    // A trilha comeca 46 px abaixo do topo da faixa, e tem 38 de altura.
-    return Offset(x, faixa.top + 48 + 46 + 19);
+    // A trilha e centrada no espaco que sobra depois da regua, e a
+    // altura dela acompanha a da faixa. O centro vertical da area util
+    // e uma mira estavel para qualquer altura.
+    final alturaDaFaixa = faixa.height - 48;
+    final centro = 48 + 46 + (alturaDaFaixa - 46) / 2;
+    return Offset(x, faixa.top + centro);
   }
 
   testWidgets('tocar num keyframe leva o cabecote exatamente ate ele', (

@@ -7,8 +7,10 @@ import '../application/playback_controller.dart';
 import '../application/video_layer_manager.dart';
 import '../../export/presentation/export_video_screen.dart';
 import 'widgets/linha_do_tempo.dart';
+import 'widgets/adicionar_conteudo.dart';
 import 'widgets/painel_da_camada.dart';
 import 'widgets/palco_de_previa.dart';
+import 'widgets/visao_geral_das_camadas.dart';
 
 /// A TELA DE EDICAO, no osso.
 ///
@@ -75,83 +77,182 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     return Scaffold(
       backgroundColor: AmColors.bg,
       body: SafeArea(
-        child: Column(
-          children: [
-            _Cabecalho(nome: project.name),
-            // O PREVIEW FICA COM O QUE SOBRA, e nao com uma altura fixa.
+        child: LayoutBuilder(
+          builder: (context, limites) {
+            // A DIVISAO VERTICAL, e a razao de cada conta.
             //
-            // A ordem de prioridade e: cabecalho e controles com espaco
-            // reservado, timeline com altura minima util, preview no
-            // resto. Ao contrario, um preview de altura fixa espremeria
-            // a timeline ate ela nao servir para nada num aparelho baixo
-            // — e e a timeline que diz ONDE se esta editando.
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: project.outputWidth / project.outputHeight,
-                    child: DecoratedBox(
-                      // OS LIMITES DA COMPOSICAO, visiveis.
-                      //
-                      // O quadro do projeto e o fundo do editor eram a
-                      // mesma coisa preta: nao dava para saber onde um
-                      // acabava e o outro comecava, nem conferir a
-                      // proporcao. Este contorno e DECORACAO DA TELA —
-                      // vive fora da arvore que a `CompositionView`
-                      // desenha, entao nao vira camada e nao aparece na
-                      // exportacao, que renderiza a composicao e nao
-                      // esta tela.
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AmColors.hairline),
-                        color: const Color(0xFF000000),
-                      ),
-                      child: ClipRect(
-                        child: FittedBox(
-                          fit: BoxFit.contain,
-                          child: SizedBox(
-                            width: project.outputWidth.toDouble(),
-                            height: project.outputHeight.toDouble(),
-                            // A ESCALA E VISUAL, e so ela. O `FittedBox`
-                            // encolhe o que ja foi desenhado no tamanho
-                            // do projeto: coordenadas, resolucao e escala
-                            // das camadas continuam as do projeto, e por
-                            // isso um toque continua caindo no mesmo
-                            // objeto depois de o preview mudar de
-                            // tamanho.
-                            child: CompositionView(
-                              time: _playback.time,
-                              videos: _videos,
-                              selectedId: selecionada,
+            // A composicao PEDE a altura que a proporcao dela exige na
+            // largura disponivel — e nao uma fatia fixa da tela. Foi essa
+            // a origem do vazio: reservar 40% da altura para um 16:9 que
+            // so precisa de 206 px deixa quase trezentos pixels mortos
+            // entre o cabecalho e a barra de transporte.
+            //
+            // O QUE SOBRA VAI PARA A LINHA DO TEMPO. Ela e area de
+            // trabalho, e nao rodape: num projeto deitado ela fica
+            // grande; num vertical, o preview e que ocupa a tela e ela
+            // recua ate o chao dela, nunca abaixo.
+            // A DIVISAO VERTICAL: CADA UM PEDE O QUE PRECISA, e o
+            // que sobra vai para o preview.
+            //
+            // Duas contas erradas ja foram tentadas aqui, e as duas
+            // deixaram buraco na tela:
+            //
+            //   - fatia FIXA para o preview: um 16:9 numa largura de 366
+            //     px so precisa de 206, e reservar 40% da altura deixava
+            //     quase trezentos pixels mortos sob a composicao;
+            //   - dar TODO o resto para a linha do tempo: com quatro
+            //     trilhas ela pedia 190 e recebia 600, e o vazio so
+            //     mudava de lugar.
+            //
+            // Entao os dois pedem: a composicao pede a altura que a
+            // proporcao dela exige, a linha do tempo pede o que as
+            // trilhas ocupam. O excedente e do preview, ate um teto —
+            // ele e quem sabe crescer sem inventar conteudo.
+            final util = limites.maxHeight;
+            final proporcao = project.outputWidth / project.outputHeight;
+
+            final painel = alturaDoPainel(ref);
+            final disponivel = util - _Cabecalho.altura - painel;
+
+            final pedidaPelaTimeline = LinhaDoTempo.alturaDoModo(
+              ref.watch(modoDaLinhaDoTempoProvider),
+              project.layers.length,
+            );
+
+            // A LINHA DO TEMPO PEDE O QUE AS TRILHAS OCUPAM. O que
+            // sobra e do preview.
+            //
+            // Ja tentei o contrario — esticar as trilhas para preencher
+            // — e foi pior: com poucas camadas elas viravam blocos
+            // enormes, e o tamanho de uma trilha passava a depender de
+            // quantas existem. Trilha tem altura fixa; o espaco livre
+            // embaixo dela e onde as proximas camadas entram.
+            var tempo = pedidaPelaTimeline;
+            var preview = disponivel - tempo;
+
+            // Numa composicao em pe, ela pediria a tela toda: ai o teto
+            // segura, e a linha do tempo fica com o resto.
+            final tetoDoPreview = disponivel * .5;
+            if (preview > tetoDoPreview) {
+              preview = tetoDoPreview;
+              tempo = disponivel - preview;
+            }
+            if (preview < 140) {
+              preview = 140;
+              tempo = disponivel - preview;
+            }
+            if (tempo < LinhaDoTempo.alturaMinima) {
+              tempo = LinhaDoTempo.alturaMinima;
+              preview = disponivel - tempo;
+            }
+
+            return Stack(
+              children: [
+                Column(
+                  children: [
+                    _Cabecalho(nome: project.name),
+                    SizedBox(
+                      height: preview,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Center(
+                          child: AspectRatio(
+                            aspectRatio: proporcao,
+                            child: DecoratedBox(
+                              // OS LIMITES DA COMPOSICAO, visiveis. O
+                              // quadro do projeto e o fundo do editor
+                              // eram a mesma coisa preta. Este contorno e
+                              // DECORACAO DA TELA: vive fora da arvore
+                              // que a `CompositionView` desenha, entao
+                              // nao vira camada e nao entra na
+                              // exportacao.
+                              decoration: BoxDecoration(
+                                border: Border.all(color: AmColors.hairline),
+                                color: const Color(0xFF000000),
+                              ),
+                              child: ClipRect(
+                                child: FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: project.outputWidth.toDouble(),
+                                    height: project.outputHeight.toDouble(),
+                                    // A ESCALA E VISUAL, e so ela. As
+                                    // coordenadas, a resolucao e a escala
+                                    // das camadas continuam as do
+                                    // projeto — e por isso um toque
+                                    // continua caindo no mesmo objeto
+                                    // depois de o preview mudar de
+                                    // tamanho.
+                                    child: CompositionView(
+                                      time: _playback.time,
+                                      videos: _videos,
+                                      selectedId: selecionada,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                    // TRANSPORTE, REGUA E TRILHAS SAO UM BLOCO SO. Eles
+                    // encostam de proposito: sao a mesma ferramenta.
+                    LinhaDoTempo(
+                      playback: _playback,
+                      altura: tempo,
+                      aoExportar: () {
+                        _playback.pause();
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ExportVideoScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    // O ESPACO DO PAINEL, ja descontado do preview acima.
+                    SizedBox(height: painel),
+                  ],
                 ),
-              ),
-            ),
-            LinhaDoTempo(
-              playback: _playback,
-              aoExportar: () {
-                _playback.pause();
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ExportVideoScreen(),
-                  ),
-                );
-              },
-            ),
-            // O PAINEL ENTRA ABAIXO DA LINHA DO TEMPO. Abrir reduz o
-            // espaco do preview, mas NAO muda proporcao, resolucao nem
-            // coordenadas: a composicao apenas encolhe no que resta.
-            PainelDaCamada(playback: _playback),
-          ],
+                // A FAIXA no rodape, e o painel POR CIMA dela quando
+                // aberto. A linha do tempo fica sempre inteira e visivel
+                // — nada do painel passa por cima dela.
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: FaixaDoPainel(playback: _playback),
+                ),
+                PainelSobreposto(playback: _playback),
+              ],
+            );
+          },
         ),
       ),
     );
   }
+}
+
+/// A ALTURA QUE O PAINEL OCUPA AGORA, para a tela descontar do preview.
+///
+/// Fica fora da tela de proposito: o teste monta as mesmas pecas e
+/// precisa da mesma conta, senao testa um arranjo que nao existe.
+double alturaDoPainel(WidgetRef ref) {
+  if (!ref.watch(painelDaCamadaLigadoProvider)) return 0;
+  final estado = ref.watch(estadoDoPainelProvider);
+  if (estado == EstadoDoPainel.recolhido) return FaixaDoPainel.altura;
+
+  final project = ref.watch(editorControllerProvider);
+  final id = ref.watch(selectedLayerProvider);
+  final camada = project.layers.where((l) => l.id == id).firstOrNull;
+  if (camada == null && estado != EstadoDoPainel.adicionar) {
+    return FaixaDoPainel.altura;
+  }
+  if (estado == EstadoDoPainel.categoria) return PainelDaCamada.alturaMaxima;
+  final itens = estado == EstadoDoPainel.adicionar
+      ? tiposDeConteudo.length
+      : categoriasDaCamada(camada!).length;
+  return PainelDaCamada.alturaAberta(itens);
 }
 
 /// A FAIXA DE CIMA: sair, e saber em que projeto se esta.
@@ -164,7 +265,7 @@ class _Cabecalho extends StatelessWidget {
 
   final String nome;
 
-  static const altura = 44.0;
+  static const altura = 52.0;
 
   @override
   Widget build(BuildContext context) => SizedBox(

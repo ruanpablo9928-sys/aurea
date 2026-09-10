@@ -22,11 +22,14 @@ import 'linha_do_tempo.dart';
 /// e o caminho de volta esta sempre a um toque.
 enum ModoDaLinhaDoTempo { detalhado, geral }
 
-/// O modo vigente. Vive so na sessao — sair do editor volta ao
-/// detalhado, que e onde se edita. Guardar isso em disco seria migracao
+/// O modo vigente. Vive so na sessao — guardar em disco seria migracao
 /// de dados, e migracao esta fora deste pacote.
+///
+/// ABRE NO GERAL. A primeira pergunta de quem entra num projeto e "o que
+/// tem aqui?", e quem responde e a pilha. O detalhado e o passo
+/// seguinte: escolher uma camada e mexer nela.
 final modoDaLinhaDoTempoProvider = StateProvider<ModoDaLinhaDoTempo>(
-  (ref) => ModoDaLinhaDoTempo.detalhado,
+  (ref) => ModoDaLinhaDoTempo.geral,
 );
 
 /// A VISTA DE TODAS AS CAMADAS.
@@ -54,9 +57,11 @@ class VisaoGeralDasCamadas extends ConsumerStatefulWidget {
 
   /// A altura de cada trilha na pilha. Baixa de proposito: aqui o que
   /// importa e ver MUITAS de uma vez.
-  static const alturaDaTrilha = 34.0;
+  static const alturaDaTrilha = 40.0;
 
-  /// Quantas trilhas cabem antes de a lista comecar a rolar.
+  /// Quantas trilhas cabem antes de a lista comecar a rolar. E o piso
+  /// do calculo: com mais espaco, a tela manda uma altura maior e mais
+  /// trilhas aparecem sem rolar.
   static const trilhasVisiveis = 4;
 
   static const alturaDaRegua = 28.0;
@@ -140,6 +145,15 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                   child: ListView.builder(
                     padding: EdgeInsets.zero,
                     itemCount: camadas.length,
+                    // ALTURA FIXA. Ja tentei estica-las para preencher
+                    // o espaco e o resultado foi pior: com poucas
+                    // camadas elas viravam blocos enormes, e o tamanho
+                    // de uma trilha passava a depender de quantas
+                    // existem — a mesma camada mudava de cara so porque
+                    // outra foi criada.
+                    //
+                    // O espaco que sobra embaixo nao e desperdicio: e
+                    // onde as proximas camadas entram.
                     itemExtent: VisaoGeralDasCamadas.alturaDaTrilha,
                     itemBuilder: (context, i) {
                       final l = camadas[i];

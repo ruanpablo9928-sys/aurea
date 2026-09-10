@@ -279,9 +279,8 @@ class Scene3DPainter extends CustomPainter {
 
   /// Quantas faces um modelo importado pode contribuir neste desenho.
   /// Na previa e o orcamento; na exportacao, o teto de sempre.
-  int? get _tetoDeFaces => respeitarOrcamento && !helpersOnly
-      ? orcamentoDeCpu
-      : null;
+  int? get _tetoDeFaces =>
+      respeitarOrcamento && !helpersOnly ? orcamentoDeCpu : null;
 
   /// O SUBSTITUTO da cena pesada demais para o processador.
   ///

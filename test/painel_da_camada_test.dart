@@ -36,6 +36,10 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
   final camadas = container.read(editorControllerProvider).layers;
   container.read(selectedLayerProvider.notifier).state =
       selecionar && camadas.isNotEmpty ? camadas.first.id : null;
+  // A LINHA DO TEMPO ABRE NA PILHA. Estes testes cobram o modo
+  // DETALHADO, entao ele e escolhido de proposito.
+  container.read(modoDaLinhaDoTempoProvider.notifier).state =
+      ModoDaLinhaDoTempo.detalhado;
 
   final playback = PlaybackController(
     vsync: _Vsync(),
@@ -48,11 +52,26 @@ Future<({ProviderContainer c, PlaybackController p})> _montar(
       container: container,
       child: MaterialApp(
         home: Scaffold(
-          body: Column(
+          // A TELA MONTA AS DUAS PECAS: a faixa no rodape e o painel
+          // sobreposto por cima dela. O espaco do painel e RESERVADO no
+          // arranjo, e nao tomado da linha do tempo — por isso o Column
+          // guarda a altura maxima dele.
+          body: Stack(
             children: [
-              const Spacer(),
-              LinhaDoTempo(playback: playback),
-              PainelDaCamada(playback: playback),
+              Column(
+                children: [
+                  const Spacer(),
+                  LinhaDoTempo(playback: playback),
+                  const SizedBox(height: PainelDaCamada.alturaMaxima),
+                ],
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: FaixaDoPainel(playback: playback),
+              ),
+              PainelSobreposto(playback: playback),
             ],
           ),
         ),
@@ -173,12 +192,20 @@ void main() {
       tester,
     ) async {
       await _montar(tester);
-      final antes = tester.getSize(find.byType(PainelDaCamada)).height;
+      // FECHADO ELE E SO A FAIXA; ABERTO, SOBREPOE.
+      expect(find.byType(PainelSobreposto), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(FaixaDoPainel)).height,
+        FaixaDoPainel.altura,
+      );
       await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
       await tester.pump();
       expect(
-        tester.getSize(find.byType(PainelDaCamada)).height,
-        greaterThan(antes),
+        tester.getSize(find.byType(FaixaDoPainel)).height,
+        FaixaDoPainel.altura,
+        reason:
+            'abrir o painel nao pode mexer na faixa: ele sobe POR CIMA, '
+            'e nao empurrando a tela',
       );
     });
   });
@@ -236,17 +263,47 @@ void main() {
       expect(ids, containsAll(['transformar', 'opacidade']));
     });
 
-    testWidgets('efeitos NAO aparecem nesta etapa', (tester) async {
+    testWidgets('o que ainda nao existe aparece DESABILITADO, com motivo', (
+      tester,
+    ) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container
           .read(editorControllerProvider.notifier)
           .addTextLayer(Duration.zero, text: 'Um');
       final camada = container.read(editorControllerProvider).layers.single;
+      final futuras = categoriasDaCamada(
+        camada,
+      ).where((x) => !x.disponivel);
+
       expect(
-        categoriasDaCamada(camada).map((x) => x.id),
-        isNot(contains('efeitos')),
-        reason: 'efeitos tem etapa propria; anunciar aqui seria promessa',
+        futuras.map((x) => x.id),
+        containsAll(['cor', 'borda', 'efeitos']),
+        reason:
+            'a estrutura do painel fica completa: da para ver o editor '
+            'inteiro de uma vez',
+      );
+      for (final f in futuras) {
+        expect(
+          f.porQueNao,
+          isNotNull,
+          reason:
+              'um cartao apagado sem explicacao vira suspeita de '
+              'defeito: "${f.rotulo}" nao diz por que',
+        );
+      }
+    });
+
+    testWidgets('cartao desabilitado NAO abre', (tester) async {
+      final m = await _montar(tester);
+      await tester.tap(find.bySemanticsLabel('Ferramentas da camada'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('cartao-efeitos')));
+      await tester.pump();
+      expect(
+        m.c.read(estadoDoPainelProvider),
+        EstadoDoPainel.categorias,
+        reason: 'um cartao aceso que abre o nada e pior que um apagado',
       );
     });
   });
@@ -389,7 +446,7 @@ void main() {
   group('o interruptor de validacao', () {
     testWidgets('desligado, volta a interface anterior', (tester) async {
       final m = await _montar(tester);
-      expect(find.byType(PainelDaCamada), findsOneWidget);
+      expect(find.byType(FaixaDoPainel), findsOneWidget);
       expect(find.bySemanticsLabel('Ferramentas da camada'), findsOneWidget);
 
       m.c.read(painelDaCamadaLigadoProvider.notifier).state = false;
@@ -401,7 +458,7 @@ void main() {
         reason: 'desligar tem de devolver a interface anterior por inteiro',
       );
       expect(
-        tester.getSize(find.byType(PainelDaCamada)).height,
+        tester.getSize(find.byType(FaixaDoPainel)).height,
         0,
         reason: 'e sem deixar altura sobrando',
       );
@@ -630,10 +687,10 @@ void main() {
       final altura = tester.getSize(find.byType(LinhaDoTempo)).height;
       expect(
         altura,
-        LinhaDoTempo.altura,
+        greaterThanOrEqualTo(LinhaDoTempo.alturaMinima),
         reason:
-            'a timeline tem altura reservada; quem cede espaco e o '
-            'preview, e nao ela',
+            'a timeline tem um CHAO: quem cede espaco e o preview, e '
+            'nunca ela',
       );
     });
 

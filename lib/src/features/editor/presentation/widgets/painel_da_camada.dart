@@ -103,8 +103,11 @@ class CategoriaDaCamada {
 /// de audio nao ganha o cartao de volume, apesar de ter o campo. Anunciar
 /// um controle que o comando ignora seria pior que nao ter o cartao.
 ///
-/// Efeitos, bordas, sombras, mascaras e modos de mistura ficam de fora
-/// desta etapa por decisao, e nao por esquecimento.
+/// AS CATEGORIAS QUE AINDA NAO EXISTEM APARECEM DESABILITADAS, e dizem
+/// por que. Elas estao aqui a pedido: a estrutura do painel fica
+/// completa e da para ver o editor inteiro de uma vez. O que nao pode e
+/// um cartao acesso abrir o nada — entao eles nao respondem ao toque, e
+/// o motivo esta escrito no proprio cartao.
 List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
   const CategoriaDaCamada(
     id: 'transformar',
@@ -140,6 +143,27 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Informacoes da midia',
       icone: Icons.info_outline_rounded,
     ),
+  const CategoriaDaCamada(
+    id: 'cor',
+    rotulo: 'Cor e preenchimento',
+    icone: Icons.palette_rounded,
+    disponivel: false,
+    porQueNao: 'Chega numa proxima entrega',
+  ),
+  const CategoriaDaCamada(
+    id: 'borda',
+    rotulo: 'Borda e sombra',
+    icone: Icons.blur_on_rounded,
+    disponivel: false,
+    porQueNao: 'Chega numa proxima entrega',
+  ),
+  const CategoriaDaCamada(
+    id: 'efeitos',
+    rotulo: 'Efeitos',
+    icone: Icons.auto_awesome_rounded,
+    disponivel: false,
+    porQueNao: 'Tem etapa propria',
+  ),
 ];
 
 /// COMO A CAMADA SE CHAMA POR TIPO, para o cabecalho.
@@ -163,40 +187,74 @@ String tipoDaCamadaEmPalavras(Layer camada) => switch (camada) {
   AdjustmentLayer() => 'Ajuste',
 };
 
-/// O painel inferior. Ver [EstadoDoPainel] para os tres estados.
-class PainelDaCamada extends ConsumerWidget {
-  const PainelDaCamada({super.key, required this.playback});
-
-  /// O relogio. O painel precisa dele por um motivo so: registrar em que
-  /// instante o conteudo novo entra, e pausar antes de criar.
-  final PlaybackController playback;
-
+/// Medidas do painel, usadas pela tela para dividir o espaco.
+abstract final class PainelDaCamada {
   /// A faixa recolhida. Alta o bastante para o dedo, baixa o bastante
-  /// para nao roubar o preview.
+  /// para nao roubar a linha do tempo.
   static const alturaRecolhido = 52.0;
 
-  /// O TETO do painel aberto. Nao muda proporcao nem resolucao do
-  /// projeto: a composicao apenas se ajusta ao espaco que sobra.
-  static const alturaMaxima = 232.0;
+  /// O TETO do painel aberto. Ele SOBREPOE, entao esta altura sai da
+  /// tela e nao do espaco dos outros.
+  static const alturaMaxima = 260.0;
 
   static const _alturaDoCabecalho = 44.0;
   static const _alturaDoCartao = 56.0;
   static const _folgaDaGrade = 24.0;
 
-  /// O PAINEL PEDE SO O QUE PRECISA, ate o teto.
-  ///
-  /// Com altura fixa, tres cartoes deixavam quase cem pixels de vazio
-  /// embaixo — e cada pixel ali sai do preview, que e o que a pessoa
-  /// esta olhando. Acima do teto o conteudo rola, em vez de empurrar a
-  /// composicao para fora da tela.
-  static double alturaDoEstado(EstadoDoPainel estado, {int categorias = 0}) {
-    if (estado == EstadoDoPainel.recolhido) return alturaRecolhido;
-    if (estado == EstadoDoPainel.categoria) return alturaMaxima;
-    final linhas = (categorias / 2).ceil();
+  /// O PAINEL PEDE SO O QUE PRECISA, ate o teto. Com altura fixa, tres
+  /// cartoes deixavam quase cem pixels de vazio — e vazio sobreposto
+  /// tapa a linha do tempo sem motivo.
+  static double alturaAberta(int itens) {
+    final linhas = (itens / 2).ceil();
     final pedida =
         _alturaDoCabecalho + linhas * (_alturaDoCartao + 8) + _folgaDaGrade;
     return pedida < alturaMaxima ? pedida : alturaMaxima;
   }
+}
+
+/// A FAIXA FIXA, sempre no rodape.
+///
+/// Fechada, o painel e SO isto: uma barra de 52 px com o titulo e o `+`.
+/// Ela nao cresce, nao empurra e nao tira altura da linha do tempo — que
+/// e a area de trabalho e precisa do espaco.
+class FaixaDoPainel extends ConsumerWidget {
+  const FaixaDoPainel({super.key, required this.playback});
+
+  final PlaybackController playback;
+
+  static const altura = PainelDaCamada.alturaRecolhido;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(painelDaCamadaLigadoProvider)) {
+      return const SizedBox.shrink();
+    }
+    final project = ref.watch(editorControllerProvider);
+    final id = ref.watch(selectedLayerProvider);
+    final camada = project.layers.where((l) => l.id == id).firstOrNull;
+    return SizedBox(
+      height: altura,
+      child: ColoredBox(
+        color: AmColors.panelHigh,
+        child: _FaixaRecolhida(
+          camada: camada,
+          projetoVazio: project.layers.isEmpty,
+          playback: playback,
+        ),
+      ),
+    );
+  }
+}
+
+/// O PAINEL ABERTO, sobreposto ao rodape.
+///
+/// Ele sobe por cima em vez de empurrar a tela: reflowar preview e
+/// timeline a cada abertura mudaria de lugar o que estava debaixo do
+/// dedo, no meio da edicao.
+class PainelSobreposto extends ConsumerWidget {
+  const PainelSobreposto({super.key, required this.playback});
+
+  final PlaybackController playback;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -204,61 +262,46 @@ class PainelDaCamada extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     final estado = ref.watch(estadoDoPainelProvider);
+    if (estado == EstadoDoPainel.recolhido) return const SizedBox.shrink();
+
     final project = ref.watch(editorControllerProvider);
     final id = ref.watch(selectedLayerProvider);
-
-    // A SELECAO E POR IDENTIDADE, e nao por posicao na lista. Se a
-    // camada sumiu (exclusao, desfazer), o painel se recolhe sozinho em
-    // vez de ficar segurando uma referencia morta.
     final camada = project.layers.where((l) => l.id == id).firstOrNull;
-    // ADICIONAR NAO DEPENDE DE CAMADA, e por isso escapa desta guarda.
-    // Sem a excecao, abrir o menu num projeto vazio o fechava no quadro
-    // seguinte — justamente no unico estado em que ele e indispensavel.
-    if (camada == null &&
-        estado != EstadoDoPainel.recolhido &&
-        estado != EstadoDoPainel.adicionar) {
+
+    // A SELECAO E POR IDENTIDADE. Se a camada sumiu (exclusao,
+    // desfazer), o painel se recolhe em vez de segurar uma referencia
+    // morta. Adicionar escapa disto: ele nao depende de camada.
+    if (camada == null && estado != EstadoDoPainel.adicionar) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!ref.context.mounted) return;
         ref.read(estadoDoPainelProvider.notifier).state =
             EstadoDoPainel.recolhido;
         ref.read(categoriaAbertaProvider.notifier).state = null;
       });
+      return const SizedBox.shrink();
     }
 
-    // O PROJETO VAZIO E OUTRO ESTADO, e nao "sem selecao".
-    //
-    // Nao ter camada SELECIONADA e nao ter camada NENHUMA sao coisas
-    // diferentes, e a saida de cada uma e diferente: numa se escolhe,
-    // noutra se cria. Pedir para selecionar quando nao ha o que
-    // selecionar deixa a pessoa sem proxima acao.
-    //
-    // E quem responde isso e o PROJETO, nunca o que esta desenhado: o
-    // preview pode estar preto porque as camadas estao escondidas, ou
-    // porque o cabecote esta fora delas.
-    final vazio = project.layers.isEmpty;
-    final n = camada == null ? 0 : categoriasDaCamada(camada).length;
+    final itens = estado == EstadoDoPainel.adicionar
+        ? tiposDeConteudo.length
+        : camada == null
+        ? 0
+        : categoriasDaCamada(camada).length;
 
-    return SizedBox(
-      height: alturaDoEstado(
-        camada == null && estado != EstadoDoPainel.adicionar
-            ? EstadoDoPainel.recolhido
-            : estado,
-        categorias: estado == EstadoDoPainel.adicionar
-            ? tiposDeConteudo.length
-            : n,
-      ),
-      child: ColoredBox(
-        color: AmColors.panelHigh,
-        child: switch (estado) {
-          EstadoDoPainel.adicionar => _Adicionar(),
-          _ when camada == null || estado == EstadoDoPainel.recolhido =>
-            _FaixaRecolhida(
-              camada: camada,
-              projetoVazio: vazio,
-              playback: playback,
-            ),
-          _ => _Aberto(camada: camada, estado: estado),
-        },
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: estado == EstadoDoPainel.categoria
+          ? PainelDaCamada.alturaMaxima
+          : PainelDaCamada.alturaAberta(itens),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AmColors.panelHigh,
+          border: Border(top: BorderSide(color: AmColors.hairline)),
+        ),
+        child: estado == EstadoDoPainel.adicionar
+            ? _Adicionar()
+            : _Aberto(camada: camada!, estado: estado),
       ),
     );
   }
@@ -724,18 +767,37 @@ class _Cartao extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                categoria.rotulo,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                  color: categoria.disponivel
-                      ? AmColors.text
-                      : AmColors.muted.withValues(alpha: .6),
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    categoria.rotulo,
+                    maxLines: categoria.disponivel ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      color: categoria.disponivel
+                          ? AmColors.text
+                          : AmColors.muted.withValues(alpha: .7),
+                    ),
+                  ),
+                  // O MOTIVO FICA NO CARTAO. Um controle apagado sem
+                  // explicacao vira suspeita de defeito.
+                  if (!categoria.disponivel && categoria.porQueNao != null)
+                    Text(
+                      categoria.porQueNao!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.3,
+                        color: AmColors.muted.withValues(alpha: .5),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
