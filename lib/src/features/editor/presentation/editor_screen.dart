@@ -8,6 +8,7 @@ import '../application/video_layer_manager.dart';
 import '../../export/presentation/export_video_screen.dart';
 import 'widgets/linha_do_tempo.dart';
 import 'widgets/adicionar_conteudo.dart';
+import 'widgets/editor_de_curva.dart';
 import 'widgets/painel_da_camada.dart';
 import 'widgets/palco_de_previa.dart';
 import 'widgets/visao_geral_das_camadas.dart';
@@ -213,6 +214,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 // O PAINEL DO MEIO, com a tela desfocada atras. Fica por
                 // cima de tudo porque enquanto ele esta aberto nao ha o
                 // que fazer atras dele.
+                // A CURVA fica acima do painel de adicao porque ela e
+                // chamada DE DENTRO das ferramentas: abrir uma coisa por
+                // cima de outra so funciona se a de cima ficar por cima.
+                const EditorDeCurva(),
                 PainelCentralDeAdicao(
                   instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
                   aoAdicionar: (_, _) {

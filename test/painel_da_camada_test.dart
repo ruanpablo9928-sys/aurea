@@ -304,10 +304,15 @@ void main() {
 
       expect(
         futuras.map((x) => x.id),
-        containsAll(['cor', 'borda', 'efeitos']),
+        containsAll(['cor', 'borda']),
         reason:
             'a estrutura do painel fica completa: da para ver o editor '
             'inteiro de uma vez',
+      );
+      expect(
+        futuras.map((x) => x.id),
+        isNot(contains('efeitos')),
+        reason: 'efeitos deixou de ser promessa: a ficha e gerada da tabela',
       );
       for (final f in futuras) {
         expect(
@@ -323,12 +328,26 @@ void main() {
     testWidgets('cartao desabilitado NAO abre', (tester) async {
       final m = await _montar(tester);
       await abrirFerramentas(tester, m.c);
-      await tester.tap(find.byKey(const ValueKey('cartao-efeitos')));
+      await tester.tap(find.byKey(const ValueKey('cartao-cor')));
       await tester.pump();
       expect(
         m.c.read(estadoDoPainelProvider),
         EstadoDoPainel.categorias,
         reason: 'um cartao aceso que abre o nada e pior que um apagado',
+      );
+    });
+
+    testWidgets('efeitos abre, e lista o que a camada tem', (tester) async {
+      final m = await _montar(tester);
+      await abrirFerramentas(tester, m.c);
+      await tester.tap(find.byKey(const ValueKey('cartao-efeitos')));
+      await tester.pump();
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categoria);
+      expect(m.c.read(categoriaAbertaProvider), 'efeitos');
+      expect(
+        find.bySemanticsLabel('Adicionar efeito'),
+        findsOneWidget,
+        reason: 'sem caminho para adicionar, a lista vazia e um beco',
       );
     });
   });

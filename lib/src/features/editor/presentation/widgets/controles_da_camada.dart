@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../domain/effect.dart';
+import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import '../../domain/shape.dart';
+import 'editor_de_curva.dart';
 
 /// OS CONTROLES DE VERDADE.
 ///
@@ -27,6 +30,28 @@ import '../../domain/shape.dart';
 ///      automatico ligado, editar crava a marca no cabecote; desligado,
 ///      muda o valor base. O controle nao sabe a diferenca, e nem
 ///      precisa.
+/// O RELOGIO, disponivel para quem esta fundo na arvore.
+///
+/// Os controles precisam dele para navegar entre marcas, e passa-lo a
+/// mao por cinco niveis de widget so para chegar num deslizante era
+/// ruido em toda assinatura do caminho.
+class ProvedorDoRelogio extends InheritedWidget {
+  const ProvedorDoRelogio({
+    super.key,
+    required this.playback,
+    required super.child,
+  });
+
+  final PlaybackController playback;
+
+  static PlaybackController of(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<ProvedorDoRelogio>()!
+      .playback;
+
+  @override
+  bool updateShouldNotify(ProvedorDoRelogio o) => o.playback != playback;
+}
+
 class ControlesDaCategoria extends ConsumerWidget {
   const ControlesDaCategoria({
     super.key,
@@ -43,18 +68,22 @@ class ControlesDaCategoria extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) =>
       ValueListenableBuilder<Duration>(
         valueListenable: playback.time,
-        builder: (context, tempo, _) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(14, 2, 14, 16),
-          child: switch (categoriaId) {
-            'transformar' => _Transformar(camada: camada, tempo: tempo),
-            'opacidade' => _Opacidade(camada: camada, tempo: tempo),
-            'texto' => _Texto(camada: camada),
-            'forma' => _Forma(camada: camada, tempo: tempo),
-            'volume' => _Volume(camada: camada),
-            'midia' => _Midia(camada: camada),
-            'camada' => _AcoesDaCamada(camada: camada, playback: playback),
-            _ => const _AindaNao(),
-          },
+        builder: (context, tempo, _) => ProvedorDoRelogio(
+          playback: playback,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 16),
+            child: switch (categoriaId) {
+              'transformar' => _Transformar(camada: camada, tempo: tempo),
+              'opacidade' => _Opacidade(camada: camada, tempo: tempo),
+              'texto' => _Texto(camada: camada),
+              'forma' => _Forma(camada: camada, tempo: tempo),
+              'volume' => _Volume(camada: camada),
+              'efeitos' => _Efeitos(camada: camada, tempo: tempo),
+              'midia' => _Midia(camada: camada),
+              'camada' => _AcoesDaCamada(camada: camada, playback: playback),
+              _ => const _AindaNao(),
+            },
+          ),
         ),
       );
 }
@@ -108,6 +137,77 @@ class _AutoKeyframe extends ConsumerWidget {
   }
 }
 
+/// O QUE UMA PROPRIEDADE ANIMADA OFERECE ALEM DO VALOR.
+///
+/// Sao tres coisas que so existem quando ha marca: pular para a marca
+/// anterior, pular para a proxima, e abrir a curva do trecho em que o
+/// cabecote esta. Montadas juntas porque as tres saem da MESMA lista de
+/// instantes — separadas, cada uma percorreria a lista de novo.
+({VoidCallback? anterior, VoidCallback? proximo, VoidCallback? curva})
+navegacaoDaPropriedade(
+  WidgetRef ref,
+  Layer camada,
+  LayerProp prop,
+  String titulo,
+  Duration tempo,
+  PlaybackController playback,
+) {
+  final c = ref.read(editorControllerProvider.notifier);
+  final locais = c.propKeyframeTimes(camada, prop);
+  if (locais.isEmpty) {
+    return (anterior: null, proximo: null, curva: null);
+  }
+  final local = camada.localTime(tempo);
+  Duration? antes;
+  Duration? depois;
+  for (final t in locais) {
+    if (t < local) antes = t;
+    if (t > local && depois == null) depois = t;
+  }
+
+  // O TRECHO E O QUE COMECA NA MARCA ANTERIOR (ou na propria, se o
+  // cabecote esta em cima dela). Curva pertence ao trecho, e nao ao
+  // ponto: e o caminho ENTRE duas marcas que acelera ou freia.
+  Duration? inicioDoTrecho;
+  for (final t in locais) {
+    if (t <= local) inicioDoTrecho = t;
+  }
+  final temTrecho = inicioDoTrecho != null && depois != null;
+  // Promovido a nao-nulo para o fecho abaixo: o Dart nao carrega a
+  // promocao de um campo local para dentro de uma lambda.
+  final trechoComeca = inicioDoTrecho ?? Duration.zero;
+
+  final trilha = switch (prop) {
+    LayerProp.position => camada.position.easeAt(inicioDoTrecho ?? local),
+    LayerProp.scale => camada.scaleX.easeAt(inicioDoTrecho ?? local),
+    LayerProp.rotation => camada.rotation.easeAt(inicioDoTrecho ?? local),
+    LayerProp.opacity => camada.opacity.easeAt(inicioDoTrecho ?? local),
+    LayerProp.skew => camada.skewX.easeAt(inicioDoTrecho ?? local),
+    LayerProp.pivot => camada.pivot.easeAt(inicioDoTrecho ?? local),
+    LayerProp.parent => Easing.linear,
+  };
+
+  return (
+    anterior: antes == null
+        ? null
+        : () => playback.seek(camada.startTime + antes!),
+    proximo: depois == null
+        ? null
+        : () => playback.seek(camada.startTime + depois!),
+    curva: !temTrecho
+        ? null
+        : () => ref.read(curvaEmEdicaoProvider.notifier).state = CurvaEmEdicao(
+            titulo: titulo,
+            atual: trilha,
+            aoAplicar: (e) =>
+                c.setSegmentEase(camada.id, prop, trechoComeca, e),
+            aoAplicarEmTodos: locais.length > 2
+                ? (e) => c.applyEaseToAllSegments(camada.id, prop, e)
+                : null,
+          ),
+  );
+}
+
 /// UM PARAMETRO: nome, valor, deslizante e o losango do keyframe.
 class ParametroDeslizante extends ConsumerStatefulWidget {
   const ParametroDeslizante({
@@ -121,6 +221,9 @@ class ParametroDeslizante extends ConsumerStatefulWidget {
     this.aoAlternarKeyframe,
     this.temKeyframeAqui = false,
     this.animado = false,
+    this.aoIrParaAnterior,
+    this.aoIrParaProximo,
+    this.aoAbrirCurva,
   });
 
   final String rotulo;
@@ -134,6 +237,13 @@ class ParametroDeslizante extends ConsumerStatefulWidget {
   final VoidCallback? aoAlternarKeyframe;
   final bool temKeyframeAqui;
   final bool animado;
+
+  /// SO EXISTEM QUANDO HA MARCA. Um controle aceso que nao leva a lugar
+  /// nenhum ensina errado, e numa propriedade sem keyframe nao ha marca
+  /// anterior, proxima nem trecho para curvar.
+  final VoidCallback? aoIrParaAnterior;
+  final VoidCallback? aoIrParaProximo;
+  final VoidCallback? aoAbrirCurva;
 
   @override
   ConsumerState<ParametroDeslizante> createState() =>
@@ -209,6 +319,23 @@ class _ParametroDeslizanteState extends ConsumerState<ParametroDeslizante> {
                   fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
+              if (widget.animado) ...[
+                _MiniBotao(
+                  icone: Icons.keyboard_arrow_left_rounded,
+                  rotulo: 'Marca anterior de ${widget.rotulo}',
+                  aoTocar: widget.aoIrParaAnterior,
+                ),
+                _MiniBotao(
+                  icone: Icons.keyboard_arrow_right_rounded,
+                  rotulo: 'Proxima marca de ${widget.rotulo}',
+                  aoTocar: widget.aoIrParaProximo,
+                ),
+                _MiniBotao(
+                  icone: Icons.timeline_rounded,
+                  rotulo: 'Curva de ${widget.rotulo}',
+                  aoTocar: widget.aoAbrirCurva,
+                ),
+              ],
             ],
           ),
           SliderTheme(
@@ -247,6 +374,55 @@ class _ParametroDeslizanteState extends ConsumerState<ParametroDeslizante> {
   }
 }
 
+/// Um alvo pequeno de 28 px, para os controles que acompanham o valor.
+///
+/// Vinte e oito e menos que o piso de 48, e aqui isso e aceitavel: sao
+/// controles SECUNDARIOS, ao lado de um deslizante que ocupa a largura
+/// inteira e e o alvo de verdade. Errar um deles custa um toque, e nao
+/// uma edicao.
+class _MiniBotao extends StatelessWidget {
+  const _MiniBotao({
+    required this.icone,
+    required this.rotulo,
+    required this.aoTocar,
+  });
+
+  final IconData icone;
+  final String rotulo;
+  final VoidCallback? aoTocar;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    excludeSemantics: true,
+    button: aoTocar != null,
+    enabled: aoTocar != null,
+    label: rotulo,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: aoTocar,
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: Icon(
+          icone,
+          size: 17,
+          color: aoTocar == null
+              ? AmColors.muted.withValues(alpha: .3)
+              : AmColors.muted,
+        ),
+      ),
+    ),
+  );
+}
+
+/// A ESCALA ESTA TRAVADA em X e Y?
+///
+/// Travada e o padrao porque e o que quase toda edicao quer: aumentar
+/// sem esticar. Destravar e a excecao, e por isso e um interruptor e nao
+/// dois deslizantes sempre a vista.
+final escalaUniformeProvider = StateProvider<bool>((ref) => true);
+
 class _Transformar extends ConsumerWidget {
   const _Transformar({required this.camada, required this.tempo});
 
@@ -259,8 +435,47 @@ class _Transformar extends ConsumerWidget {
     final projeto = ref.watch(editorControllerProvider);
     final local = camada.localTime(tempo);
     final pos = camada.position.valueAt(local);
+    final piv = camada.pivot.valueAt(local);
     final w = projeto.outputWidth.toDouble();
     final h = projeto.outputHeight.toDouble();
+    final uniforme = ref.watch(escalaUniformeProvider);
+    final playback = ProvedorDoRelogio.of(context);
+
+    /// Monta um deslizante ja com navegacao entre marcas e curva.
+    ParametroDeslizante campo({
+      required String rotulo,
+      required double valor,
+      required double minimo,
+      required double maximo,
+      required void Function(double) aoMudar,
+      required LayerProp prop,
+      required bool temAqui,
+      required bool animado,
+      String Function(double)? formatar,
+    }) {
+      final nav = navegacaoDaPropriedade(
+        ref,
+        camada,
+        prop,
+        rotulo,
+        tempo,
+        playback,
+      );
+      return ParametroDeslizante(
+        rotulo: rotulo,
+        valor: valor,
+        minimo: minimo,
+        maximo: maximo,
+        formatar: formatar,
+        aoMudar: aoMudar,
+        aoAlternarKeyframe: () => c.toggleKeyframe(camada.id, tempo, prop),
+        temKeyframeAqui: temAqui,
+        animado: animado,
+        aoIrParaAnterior: nav.anterior,
+        aoIrParaProximo: nav.proximo,
+        aoAbrirCurva: nav.curva,
+      );
+    }
 
     // A FAIXA PASSA DA COMPOSICAO de proposito: entrar e sair de quadro
     // e animacao, e nao erro. Meia tela para cada lado da o espaco de
@@ -269,55 +484,214 @@ class _Transformar extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _AutoKeyframe(),
-        ParametroDeslizante(
+        campo(
           rotulo: 'Posicao X',
           valor: pos.dx,
           minimo: -w * .5,
           maximo: w * 1.5,
           aoMudar: (x) => c.editPosition(camada.id, tempo, Offset(x, pos.dy)),
-          aoAlternarKeyframe: () =>
-              c.toggleKeyframe(camada.id, tempo, LayerProp.position),
-          temKeyframeAqui: camada.position.hasKeyframeAt(local),
+          prop: LayerProp.position,
+          temAqui: camada.position.hasKeyframeAt(local),
           animado: camada.position.isAnimated,
         ),
-        ParametroDeslizante(
+        campo(
           rotulo: 'Posicao Y',
           valor: pos.dy,
           minimo: -h * .5,
           maximo: h * 1.5,
           aoMudar: (y) => c.editPosition(camada.id, tempo, Offset(pos.dx, y)),
-          aoAlternarKeyframe: () =>
-              c.toggleKeyframe(camada.id, tempo, LayerProp.position),
-          temKeyframeAqui: camada.position.hasKeyframeAt(local),
+          prop: LayerProp.position,
+          temAqui: camada.position.hasKeyframeAt(local),
           animado: camada.position.isAnimated,
         ),
-        ParametroDeslizante(
-          rotulo: 'Escala',
-          valor: camada.scaleX.valueAt(local) * 100,
-          minimo: 1,
-          maximo: 400,
-          formatar: (x) => '${x.toStringAsFixed(0)}%',
-          aoMudar: (x) => c.editScaleUniform(camada.id, tempo, x / 100),
-          aoAlternarKeyframe: () =>
-              c.toggleKeyframe(camada.id, tempo, LayerProp.scale),
-          temKeyframeAqui: camada.scaleX.hasKeyframeAt(local),
-          animado: camada.scaleX.isAnimated,
+        if (camada.is3D)
+          campo(
+            rotulo: 'Posicao Z',
+            valor: camada.positionZ.valueAt(local),
+            minimo: -2000,
+            maximo: 2000,
+            aoMudar: (z) => c.editPositionZ(camada.id, tempo, z),
+            prop: LayerProp.position,
+            temAqui: camada.positionZ.hasKeyframeAt(local),
+            animado: camada.positionZ.isAnimated,
+          ),
+        _Travinha(
+          rotulo: 'Escala travada em X e Y',
+          ligado: uniforme,
+          aoTocar: () =>
+              ref.read(escalaUniformeProvider.notifier).state = !uniforme,
         ),
-        ParametroDeslizante(
+        if (uniforme)
+          campo(
+            rotulo: 'Escala',
+            valor: camada.scaleX.valueAt(local) * 100,
+            minimo: 1,
+            maximo: 400,
+            formatar: (x) => '${x.toStringAsFixed(0)}%',
+            aoMudar: (x) => c.editScaleUniform(camada.id, tempo, x / 100),
+            prop: LayerProp.scale,
+            temAqui: camada.scaleX.hasKeyframeAt(local),
+            animado: camada.scaleX.isAnimated,
+          )
+        else ...[
+          campo(
+            rotulo: 'Escala X',
+            valor: camada.scaleX.valueAt(local) * 100,
+            minimo: 1,
+            maximo: 400,
+            formatar: (x) => '${x.toStringAsFixed(0)}%',
+            aoMudar: (x) => c.editScaleX(camada.id, tempo, x / 100),
+            prop: LayerProp.scale,
+            temAqui: camada.scaleX.hasKeyframeAt(local),
+            animado: camada.scaleX.isAnimated,
+          ),
+          campo(
+            rotulo: 'Escala Y',
+            valor: camada.scaleY.valueAt(local) * 100,
+            minimo: 1,
+            maximo: 400,
+            formatar: (x) => '${x.toStringAsFixed(0)}%',
+            aoMudar: (x) => c.editScaleY(camada.id, tempo, x / 100),
+            prop: LayerProp.scale,
+            temAqui: camada.scaleY.hasKeyframeAt(local),
+            animado: camada.scaleY.isAnimated,
+          ),
+        ],
+        campo(
           rotulo: 'Rotacao',
           valor: camada.rotation.valueAt(local),
           minimo: -180,
           maximo: 180,
           formatar: (x) => '${x.toStringAsFixed(0)}°',
           aoMudar: (x) => c.editRotation(camada.id, tempo, x),
-          aoAlternarKeyframe: () =>
-              c.toggleKeyframe(camada.id, tempo, LayerProp.rotation),
-          temKeyframeAqui: camada.rotation.hasKeyframeAt(local),
+          prop: LayerProp.rotation,
+          temAqui: camada.rotation.hasKeyframeAt(local),
           animado: camada.rotation.isAnimated,
+        ),
+        if (camada.is3D) ...[
+          campo(
+            rotulo: 'Rotacao X',
+            valor: camada.rotationX.valueAt(local),
+            minimo: -180,
+            maximo: 180,
+            formatar: (x) => '${x.toStringAsFixed(0)}°',
+            aoMudar: (x) => c.editRotationX(camada.id, tempo, x),
+            prop: LayerProp.rotation,
+            temAqui: camada.rotationX.hasKeyframeAt(local),
+            animado: camada.rotationX.isAnimated,
+          ),
+          campo(
+            rotulo: 'Rotacao Y',
+            valor: camada.rotationY.valueAt(local),
+            minimo: -180,
+            maximo: 180,
+            formatar: (x) => '${x.toStringAsFixed(0)}°',
+            aoMudar: (x) => c.editRotationY(camada.id, tempo, x),
+            prop: LayerProp.rotation,
+            temAqui: camada.rotationY.hasKeyframeAt(local),
+            animado: camada.rotationY.isAnimated,
+          ),
+        ],
+        // A ANCORAGEM E O PONTO EM TORNO DO QUAL TUDO GIRA E ESCALA.
+        // Ela vem depois da rotacao de proposito: quem procura ancoragem
+        // ja tentou girar e nao gostou de onde o giro aconteceu.
+        campo(
+          rotulo: 'Ancoragem X',
+          valor: piv.dx,
+          minimo: -w * .5,
+          maximo: w * .5,
+          aoMudar: (x) => c.editPivot(camada.id, tempo, Offset(x, piv.dy)),
+          prop: LayerProp.pivot,
+          temAqui: camada.pivot.hasKeyframeAt(local),
+          animado: camada.pivot.isAnimated,
+        ),
+        campo(
+          rotulo: 'Ancoragem Y',
+          valor: piv.dy,
+          minimo: -h * .5,
+          maximo: h * .5,
+          aoMudar: (y) => c.editPivot(camada.id, tempo, Offset(piv.dx, y)),
+          prop: LayerProp.pivot,
+          temAqui: camada.pivot.hasKeyframeAt(local),
+          animado: camada.pivot.isAnimated,
+        ),
+        campo(
+          rotulo: 'Inclinacao X',
+          valor: camada.skewX.valueAt(local),
+          minimo: -60,
+          maximo: 60,
+          formatar: (x) => '${x.toStringAsFixed(0)}°',
+          aoMudar: (x) => c.editSkewX(camada.id, tempo, x),
+          prop: LayerProp.skew,
+          temAqui: camada.skewX.hasKeyframeAt(local),
+          animado: camada.skewX.isAnimated,
+        ),
+        campo(
+          rotulo: 'Inclinacao Y',
+          valor: camada.skewY.valueAt(local),
+          minimo: -60,
+          maximo: 60,
+          formatar: (x) => '${x.toStringAsFixed(0)}°',
+          aoMudar: (y) => c.editSkewY(camada.id, tempo, y),
+          prop: LayerProp.skew,
+          temAqui: camada.skewY.hasKeyframeAt(local),
+          animado: camada.skewY.isAnimated,
         ),
       ],
     );
   }
+}
+
+/// Um interruptor de linha, para o que liga e desliga sem ser valor.
+class _Travinha extends StatelessWidget {
+  const _Travinha({
+    required this.rotulo,
+    required this.ligado,
+    required this.aoTocar,
+  });
+
+  final String rotulo;
+  final bool ligado;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    excludeSemantics: true,
+    button: true,
+    toggled: ligado,
+    label: rotulo,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: aoTocar,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            const SizedBox(width: 4),
+            Icon(
+              ligado ? Icons.link_rounded : Icons.link_off_rounded,
+              size: 17,
+              color: ligado ? AmColors.accent : AmColors.muted,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                rotulo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: ligado ? AmColors.text : AmColors.muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _Opacidade extends ConsumerWidget {
@@ -330,6 +704,14 @@ class _Opacidade extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.read(editorControllerProvider.notifier);
     final local = camada.localTime(tempo);
+    final nav = navegacaoDaPropriedade(
+      ref,
+      camada,
+      LayerProp.opacity,
+      'Opacidade',
+      tempo,
+      ProvedorDoRelogio.of(context),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -345,6 +727,9 @@ class _Opacidade extends ConsumerWidget {
               c.toggleKeyframe(camada.id, tempo, LayerProp.opacity),
           temKeyframeAqui: camada.opacity.hasKeyframeAt(local),
           animado: camada.opacity.isAnimated,
+          aoIrParaAnterior: nav.anterior,
+          aoIrParaProximo: nav.proximo,
+          aoAbrirCurva: nav.curva,
         ),
       ],
     );
@@ -506,6 +891,439 @@ class _Forma extends ConsumerWidget {
         par('outerRadius', 'Raio externo', 1000),
         par('innerRadius', 'Raio interno', 1000),
         par('sweep', 'Abertura', 360),
+      ],
+    );
+  }
+}
+
+/// QUAL EFEITO ESTA ABERTO na lista, e o catalogo.
+final efeitoAbertoProvider = StateProvider<String?>((ref) => null);
+final catalogoDeEfeitosProvider = StateProvider<bool>((ref) => false);
+
+/// OS EFEITOS DA CAMADA.
+///
+/// A ficha de cada efeito e GERADA da tabela `effectSpecs`, e nao
+/// escrita a mao. Sao mais de cinquenta efeitos com parametros
+/// proprios; uma tela por efeito seria cinquenta telas para manter em
+/// dia, e a primeira que alguem esquecesse viraria um controle que nao
+/// bate com o que o motor faz.
+///
+/// O que a tabela nao sabe desenhar aparece dito, e nao escondido: cor e
+/// ponto tem tipo proprio e chegam noutra entrega. Um parametro invisivel
+/// e um efeito que a pessoa acha quebrado.
+class _Efeitos extends ConsumerWidget {
+  const _Efeitos({required this.camada, required this.tempo});
+
+  final Layer camada;
+  final Duration tempo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(catalogoDeEfeitosProvider)) {
+      return _CatalogoDeEfeitos(camada: camada);
+    }
+    final c = ref.read(editorControllerProvider.notifier);
+    final aberto = ref.watch(efeitoAbertoProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (camada.effects.isEmpty)
+          const _Aviso('Esta camada ainda nao tem efeito nenhum.'),
+        for (final e in camada.effects) ...[
+          _LinhaDoEfeito(
+            efeito: e,
+            aberto: e.id == aberto,
+            aoAbrir: () =>
+                ref.read(efeitoAbertoProvider.notifier).state =
+                    e.id == aberto ? null : e.id,
+            aoAlternar: () => c.toggleEffectEnabled(camada.id, e.id),
+            aoRemover: () {
+              ref.read(efeitoAbertoProvider.notifier).state = null;
+              c.removeEffect(camada.id, e.id);
+            },
+          ),
+          if (e.id == aberto)
+            _ParametrosDoEfeito(camada: camada, efeito: e, tempo: tempo),
+        ],
+        _Acao(
+          icone: Icons.add_rounded,
+          rotulo: 'Adicionar efeito',
+          aoTocar: () =>
+              ref.read(catalogoDeEfeitosProvider.notifier).state = true,
+        ),
+      ],
+    );
+  }
+}
+
+class _LinhaDoEfeito extends StatelessWidget {
+  const _LinhaDoEfeito({
+    required this.efeito,
+    required this.aberto,
+    required this.aoAbrir,
+    required this.aoAlternar,
+    required this.aoRemover,
+  });
+
+  final EffectInstance efeito;
+  final bool aberto;
+  final VoidCallback aoAbrir;
+  final VoidCallback aoAlternar;
+  final VoidCallback aoRemover;
+
+  @override
+  Widget build(BuildContext context) {
+    final nome = effectSpecs[efeito.type]?.name ?? efeito.type.name;
+    return Row(
+      children: [
+        Semantics(
+          container: true,
+          excludeSemantics: true,
+          button: true,
+          toggled: efeito.enabled,
+          label: efeito.enabled ? 'Desligar $nome' : 'Ligar $nome',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: aoAlternar,
+            child: SizedBox(
+              width: 34,
+              height: 40,
+              child: Icon(
+                efeito.enabled
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+                size: 17,
+                color: efeito.enabled ? AmColors.text : AmColors.muted,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Semantics(
+            container: true,
+            excludeSemantics: true,
+            button: true,
+            label: nome,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: aoAbrir,
+              child: SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        nome,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: efeito.enabled
+                              ? AmColors.text
+                              : AmColors.muted,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      aberto
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: AmColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Semantics(
+          container: true,
+          excludeSemantics: true,
+          button: true,
+          label: 'Tirar $nome',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: aoRemover,
+            child: const SizedBox(
+              width: 34,
+              height: 40,
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: AmColors.muted,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ParametrosDoEfeito extends ConsumerWidget {
+  const _ParametrosDoEfeito({
+    required this.camada,
+    required this.efeito,
+    required this.tempo,
+  });
+
+  final Layer camada;
+  final EffectInstance efeito;
+  final Duration tempo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.read(editorControllerProvider.notifier);
+    final spec = effectSpecs[efeito.type];
+    if (spec == null) return const SizedBox.shrink();
+    final local = camada.localTime(tempo);
+    final semDesenho = <String>[];
+
+    final campos = <Widget>[];
+    for (final entrada in spec.params.entries) {
+      final chave = entrada.key;
+      final def = entrada.value;
+      final trilha = efeito.params[chave];
+      if (trilha == null) continue;
+      switch (def.kind) {
+        case ParamKind.number:
+        case ParamKind.seed:
+          campos.add(
+            ParametroDeslizante(
+              rotulo: def.label,
+              valor: trilha.valueAt(local),
+              minimo: def.min,
+              maximo: def.max,
+              aoMudar: (v) =>
+                  c.editEffectParam(camada.id, efeito.id, chave, tempo, v),
+              aoAlternarKeyframe: () => c.toggleEffectParamKeyframe(
+                camada.id,
+                efeito.id,
+                chave,
+                tempo,
+              ),
+              temKeyframeAqui: trilha.hasKeyframeAt(local),
+              animado: trilha.isAnimated,
+            ),
+          );
+        case ParamKind.toggle:
+          campos.add(
+            _Travinha(
+              rotulo: def.label,
+              ligado: trilha.valueAt(local) >= .5,
+              aoTocar: () => c.editEffectParam(
+                camada.id,
+                efeito.id,
+                chave,
+                tempo,
+                trilha.valueAt(local) >= .5 ? 0 : 1,
+              ),
+            ),
+          );
+        case ParamKind.choice:
+          campos.add(
+            _Escolha(
+              rotulo: def.label,
+              opcoes: def.options,
+              escolhido: trilha.valueAt(local).round(),
+              aoEscolher: (i) => c.editEffectParam(
+                camada.id,
+                efeito.id,
+                chave,
+                tempo,
+                i.toDouble(),
+              ),
+            ),
+          );
+        case ParamKind.color:
+        case ParamKind.point:
+          semDesenho.add(def.label);
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 10, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...campos,
+          // O QUE ESTA FICHA AINDA NAO DESENHA, DITO. Um parametro que
+          // some sem explicacao faz o efeito inteiro parecer quebrado.
+          if (semDesenho.isNotEmpty)
+            _Aviso(
+              '${semDesenho.join(", ")}: ajuste chega numa proxima entrega.',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Um parametro de lista: as opcoes viram chips.
+class _Escolha extends StatelessWidget {
+  const _Escolha({
+    required this.rotulo,
+    required this.opcoes,
+    required this.escolhido,
+    required this.aoEscolher,
+  });
+
+  final String rotulo;
+  final List<String> opcoes;
+  final int escolhido;
+  final void Function(int) aoEscolher;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          rotulo,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AmColors.text,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (var i = 0; i < opcoes.length; i++)
+              Semantics(
+                container: true,
+                excludeSemantics: true,
+                button: true,
+                selected: i == escolhido,
+                label: opcoes[i],
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => aoEscolher(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: i == escolhido
+                          ? AmColors.accentDim
+                          : AmColors.chip,
+                      borderRadius: BorderRadius.circular(8),
+                      border: i == escolhido
+                          ? Border.all(color: AmColors.accent)
+                          : null,
+                    ),
+                    child: Text(
+                      opcoes[i],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: i == escolhido
+                            ? AmColors.accent
+                            : AmColors.text,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+/// O CATALOGO, agrupado pela categoria que a propria tabela declara.
+class _CatalogoDeEfeitos extends ConsumerWidget {
+  const _CatalogoDeEfeitos({required this.camada});
+
+  final Layer camada;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.read(editorControllerProvider.notifier);
+    final porCategoria = <String, List<EffectType>>{};
+    for (final e in effectSpecs.entries) {
+      porCategoria.putIfAbsent(e.value.category, () => []).add(e.key);
+    }
+    final categorias = porCategoria.keys.toList()..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Acao(
+          icone: Icons.arrow_back_ios_new_rounded,
+          rotulo: 'Voltar aos efeitos da camada',
+          aoTocar: () =>
+              ref.read(catalogoDeEfeitosProvider.notifier).state = false,
+        ),
+        for (final cat in categorias) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 10, 0, 6),
+            child: Text(
+              cat,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AmColors.muted,
+              ),
+            ),
+          ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final t in porCategoria[cat]!)
+                Semantics(
+                  container: true,
+                  excludeSemantics: true,
+                  button: true,
+                  label: effectSpecs[t]!.name,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      c.addEffect(camada.id, t);
+                      ref.read(catalogoDeEfeitosProvider.notifier).state =
+                          false;
+                      // O EFEITO NOVO ABRE JA COM A FICHA A VISTA: quem
+                      // acabou de escolher quer ajustar, e nao procurar
+                      // de novo o que acabou de adicionar.
+                      final novo = ref
+                          .read(editorControllerProvider)
+                          .layers
+                          .firstWhere((l) => l.id == camada.id)
+                          .effects
+                          .last;
+                      ref.read(efeitoAbertoProvider.notifier).state = novo.id;
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AmColors.chip,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        effectSpecs[t]!.name,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AmColors.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }

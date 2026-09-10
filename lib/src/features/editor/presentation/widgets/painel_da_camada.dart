@@ -169,8 +169,6 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
     id: 'efeitos',
     rotulo: 'Efeitos',
     icone: Icons.auto_awesome_rounded,
-    disponivel: false,
-    porQueNao: 'Tem etapa propria',
   ),
 ];
 

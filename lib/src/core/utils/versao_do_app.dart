@@ -9,10 +9,20 @@
 /// Agora e uma constante so, e `test/versao_bate_com_pubspec_test.dart`
 /// falha se ela sair de sincronia com o `pubspec.yaml`. Esquecer de
 /// atualizar deixou de ser possivel em silencio.
-const versaoDoApp = '1.6.9';
+/// A NUMERACAO VOLTOU PARA TRAS DE PROPOSITO: 1.6.9 -> 1.0.0-beta.1.
+///
+/// Os 1.6.x eram versoes de desenvolvimento, e nunca houve um 1.0. A
+/// interface de edicao foi refeita do zero contra a referencia medida, o
+/// painel deixou de ser estrutura e virou controle, e efeitos, curva e
+/// keyframes voltaram ligados — e o primeiro beta do 1.0 de verdade.
+///
+/// O NUMERO DA COMPILACAO NAO VOLTA. Ele so cresce, sempre: e por ele
+/// que a loja e o aparelho decidem o que e mais novo, e um `versionCode`
+/// menor faz a instalacao ser recusada sem explicacao util.
+const versaoDoApp = '1.0.0-beta.1';
 
 /// O numero da compilacao — o que muda a cada IPA/APK entregue.
-const buildDoApp = 70;
+const buildDoApp = 71;
 
-/// Como aparece para quem le: `1.6.7 (68)`.
+/// Como aparece para quem le: `1.0.0-beta.1 (71)`.
 const versaoCompleta = '$versaoDoApp ($buildDoApp)';
