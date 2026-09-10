@@ -3,18 +3,20 @@ import 'keyframe.dart';
 import 'scene3d.dart';
 
 /// First animation edit away from zero preserves the initial pose.
+/// EDITAR UM VALOR NUNCA CRIA KEYFRAME.
+///
+/// Esta funcao era o keyframe automatico da cena 3D, e a ancora dela em
+/// tempo zero era o pior caso do defeito: um unico arrasto num instante
+/// qualquer deixava DOIS keyframes, um deles num tempo que a pessoa
+/// nunca visitou. Ver `docs/keyframe-explicito.md`.
+///
+/// Ela continua existindo como ponto unico de edicao de trilha da cena,
+/// mas agora so repassa a regra de [AnimatedDouble.edited].
 AnimatedDouble editMotionValue(
   AnimatedDouble track,
   Duration time,
-  double value, {
-  bool autoKey = true,
-}) {
-  if (!autoKey) return track.edited(time, value);
-  final anchored = !track.isAnimated && time > Duration.zero
-      ? track.withKeyframe(Duration.zero, track.base)
-      : track;
-  return anchored.withKeyframe(time, value, track.easeAt(time));
-}
+  double value,
+) => track.edited(time, value);
 
 List<AnimatedDouble> nodeMotionTracks(SceneNode n) => [
   n.x,
@@ -79,9 +81,8 @@ Camera3D mapCameraMotion(
 Camera3D editCameraMotion(
   Camera3D camera,
   Duration time,
-  Camera3D Function(Camera3D) edit, {
-  bool autoKey = true,
-}) {
+  Camera3D Function(Camera3D) edit,
+) {
   final sampled = mapCameraMotion(
     camera,
     (v) => AnimatedDouble(v.valueAt(time)),
@@ -91,6 +92,6 @@ Camera3D editCameraMotion(
   return mapCameraMotion(camera, (track) {
     final value = next[index++].base;
     if ((track.valueAt(time) - value).abs() < 1e-9) return track;
-    return editMotionValue(track, time, value, autoKey: autoKey);
+    return editMotionValue(track, time, value);
   });
 }

@@ -617,9 +617,40 @@ class AnimatedDouble {
     return AnimatedDouble(base, rest, loop, expression);
   }
 
-  /// Editar = keyframe automatico se a propriedade ja anima (comportamento AE).
-  AnimatedDouble edited(Duration t, double v) =>
-      isAnimated ? withKeyframe(t, v, easeAt(t)) : withBase(v);
+  /// EDITAR UM VALOR NUNCA CRIA KEYFRAME.
+  ///
+  /// Regra do produto, acima da convencao do After Effects
+  /// (`docs/keyframe-explicito.md`). Aqui estava a raiz do defeito:
+  ///
+  ///     isAnimated ? withKeyframe(t, v, easeAt(t)) : withBase(v)
+  ///
+  /// Toda propriedade JA ANIMADA cravava um keyframe sozinha a cada
+  /// mudanca de valor, em qualquer instante, sem depender de
+  /// interruptor nenhum e sem nenhum sinal na tela. Pior: o keyframe
+  /// recem-nascido entrava LINEAR (`easeAt` devolve linear quando nao
+  /// ha marca ali), achatando a curva do trecho ao redor.
+  ///
+  /// Agora sao tres casos, e so tres:
+  ///
+  ///   estatica ............ muda a base
+  ///   animada, SOBRE marca  atualiza AQUELA marca, com a curva dela
+  ///   animada, FORA de marca  NAO MEXE — quem crava e o losango
+  ///
+  /// O terceiro caso devolve `this` de proposito: quem chama decide o
+  /// que fazer com a edicao recusada (ver a edicao pendente no
+  /// controller). Silencio aqui seria um controle inerte; e por isso
+  /// que existe [aceitaEdicaoEm].
+  AnimatedDouble edited(Duration t, double v) {
+    if (!isAnimated) return withBase(v);
+    if (hasKeyframeAt(t)) return withKeyframe(t, v, easeAt(t));
+    return this;
+  }
+
+  /// A edicao em [t] chega ao projeto, ou precisa do losango antes?
+  ///
+  /// Falso quer dizer "animada e fora de uma marca": [edited] devolve a
+  /// trilha intacta, e quem chama tem de tratar a recusa.
+  bool aceitaEdicaoEm(Duration t) => !isAnimated || hasKeyframeAt(t);
 
   /// Easing do keyframe em [t] (ou o padrao, se nao houver).
   Easing easeAt(Duration t) {
@@ -756,8 +787,15 @@ class AnimatedOffset {
     return AnimatedOffset(base, rest, loop);
   }
 
-  AnimatedOffset edited(Duration t, Offset v) =>
-      isAnimated ? withKeyframe(t, v, easeAt(t)) : withBase(v);
+  /// A mesma regra de [AnimatedDouble.edited]: editar valor nunca cria
+  /// keyframe.
+  AnimatedOffset edited(Duration t, Offset v) {
+    if (!isAnimated) return withBase(v);
+    if (hasKeyframeAt(t)) return withKeyframe(t, v, easeAt(t));
+    return this;
+  }
+
+  bool aceitaEdicaoEm(Duration t) => !isAnimated || hasKeyframeAt(t);
 
   Easing easeAt(Duration t) {
     for (final k in keyframes) {

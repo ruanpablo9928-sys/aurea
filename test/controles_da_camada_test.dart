@@ -7,8 +7,8 @@
 //
 //   1. UM GESTO, UM DESFAZER;
 //   2. o valor mostrado e o do CABECOTE;
-//   3. quem decide se a edicao vira keyframe e o motor, pelo losango do
-//      rail e pelo interruptor do keyframe automatico.
+//   3. quem decide se ha keyframe e SO o losango do rail — editar valor
+//      nunca crava marca (`docs/keyframe-explicito.md`).
 //
 // E cobram tambem a regra da reforma: NAO PODE HAVER `Slider` NENHUM.
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
@@ -60,8 +60,10 @@ Future<({ProviderContainer c, PlaybackController p, String id})> _montar(
         home: Scaffold(
           body: Consumer(
             builder: (context, ref, _) {
+              // O MESMO QUE `PainelDaCamada` LE: o projeto VISIVEL,
+              // para os controles mostrarem tambem a edicao pendente.
               final atual = ref
-                  .watch(editorControllerProvider)
+                  .watch(projetoVisivelProvider)
                   .layers
                   .where((l) => l.id == camada.id)
                   .firstOrNull;
@@ -147,11 +149,8 @@ void main() {
   });
 
   group('o keyframe', () {
-    testWidgets('desligado, editar muda o valor base e nao cria marca', (
-      tester,
-    ) async {
+    testWidgets('editar muda o valor base e nao cria marca', (tester) async {
       final m = await _montar(tester, 'opacidade');
-      expect(m.c.read(autoKeyframeProvider), isFalse);
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
 
@@ -161,28 +160,36 @@ void main() {
       expect(
         _camada(m.c, m.id).opacity.isAnimated,
         isFalse,
-        reason: 'sem keyframe automatico, editar nao anima nada',
+        reason: 'editar valor nunca anima nada',
       );
     });
 
-    testWidgets('ligado, editar crava a marca no cabecote', (tester) async {
+    testWidgets('o interruptor de keyframe automatico nao existe mais', (
+      tester,
+    ) async {
+      await _montar(tester, 'opacidade');
+      // Ele nao protegia nada: com ele desligado — o padrao — a
+      // propriedade JA ANIMADA continuava cravando marca a cada
+      // mudanca de valor, porque quem fazia isso era `edited()`.
+      expect(find.bySemanticsLabel('Keyframe automatico'), findsNothing);
+    });
+
+    testWidgets('animada e FORA da marca, arrastar nao crava nada', (
+      tester,
+    ) async {
       final m = await _montar(tester, 'opacidade');
+      final c = m.c.read(editorControllerProvider.notifier);
+      c.toggleKeyframe(m.id, Duration.zero, LayerProp.opacity);
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
-
-      await tester.tap(find.bySemanticsLabel('Keyframe automatico'));
-      await tester.pump();
-      expect(m.c.read(autoKeyframeProvider), isTrue);
 
       await _arrastarFita(tester, 'Opacidade', -150);
       await tester.pump();
 
-      final l = _camada(m.c, m.id);
-      expect(l.opacity.isAnimated, isTrue);
       expect(
-        l.opacity.hasKeyframeAt(const Duration(seconds: 1)),
-        isTrue,
-        reason: 'a marca tem de nascer EM CIMA do cabecote',
+        _camada(m.c, m.id).opacity.keyframes,
+        hasLength(1),
+        reason: 'so o losango crava; a fita nao',
       );
     });
 
@@ -215,8 +222,11 @@ void main() {
     testWidgets('o valor mostrado e o do CABECOTE', (tester) async {
       final m = await _montar(tester, 'opacidade');
       final c = m.c.read(editorControllerProvider.notifier);
-      // Uma animacao de 100% a 0% ao longo de dois segundos.
+      // Uma animacao de 100% a 0% ao longo de dois segundos, montada
+      // do jeito explicito: cravar a marca ANTES de escrever o valor.
+      // Editar num instante sem marca nao escreve nada.
       c.toggleKeyframe(m.id, Duration.zero, LayerProp.opacity);
+      c.toggleKeyframe(m.id, const Duration(seconds: 2), LayerProp.opacity);
       c.editOpacity(m.id, const Duration(seconds: 2), 0);
       m.p.seek(Duration.zero);
       await tester.pump();
@@ -385,6 +395,78 @@ void main() {
         isNot(antes),
         reason: 'o deslizante da largura nao chegou no desenho',
       );
+    });
+  });
+
+  group('a edicao pendente', () {
+    // Propriedade animada, cabecote FORA da marca: o painel mostra, a
+    // linha do tempo nao muda, e o losango crava
+    // (`docs/keyframe-explicito.md`).
+    Future<
+      ({ProviderContainer c, PlaybackController p, String id})
+    > animadaEFora(WidgetTester tester) async {
+      final m = await _montar(tester, 'opacidade');
+      final e = m.c.read(editorControllerProvider.notifier);
+      e.toggleKeyframe(m.id, Duration.zero, LayerProp.opacity);
+      e.editOpacity(m.id, Duration.zero, 1);
+      e.toggleKeyframe(m.id, const Duration(seconds: 2), LayerProp.opacity);
+      e.editOpacity(m.id, const Duration(seconds: 2), 0);
+      m.p.seek(const Duration(seconds: 1));
+      await tester.pump();
+      return m;
+    }
+
+    testWidgets('arrastar mostra na tela sem cravar marca', (tester) async {
+      final m = await animadaEFora(tester);
+      final marcasAntes = _camada(m.c, m.id).opacity.keyframes.length;
+
+      await _arrastarFita(tester, 'Opacidade', -120);
+      await tester.pump();
+
+      // O projeto de verdade nao mudou...
+      expect(_camada(m.c, m.id).opacity.keyframes, hasLength(marcasAntes));
+      expect(_camada(m.c, m.id).opacity.valueAt(const Duration(seconds: 1)), .5);
+      // ...e a tela ja mostra o valor novo.
+      final pendente = m.c.read(projetoVisivelProvider).layerById(m.id)!;
+      expect(
+        pendente.opacity.valueAt(const Duration(seconds: 1)),
+        lessThan(.5),
+      );
+    });
+
+    testWidgets('o losango continua dizendo "marcar", e nao "tirar"', (
+      tester,
+    ) async {
+      await animadaEFora(tester);
+      await _arrastarFita(tester, 'Opacidade', -120);
+      await tester.pump();
+
+      // O RAIL NAO PODE MENTIR: se ele lesse a camada da pendencia,
+      // ficaria cheio antes de a pessoa gravar, e o toque seguinte
+      // APAGARIA uma marca que nunca existiu.
+      expect(find.bySemanticsLabel('Marcar keyframe aqui'), findsOneWidget);
+      expect(find.bySemanticsLabel('Tirar o keyframe daqui'), findsNothing);
+    });
+
+    testWidgets('tocar no losango crava o valor que esta na tela', (
+      tester,
+    ) async {
+      final m = await animadaEFora(tester);
+      await _arrastarFita(tester, 'Opacidade', -120);
+      await tester.pump();
+      final naTela = m.c
+          .read(projetoVisivelProvider)
+          .layerById(m.id)!
+          .opacity
+          .valueAt(const Duration(seconds: 1));
+
+      await tester.tap(find.bySemanticsLabel('Marcar keyframe aqui'));
+      await tester.pump();
+
+      final o = _camada(m.c, m.id).opacity;
+      expect(o.keyframes, hasLength(3));
+      expect(o.valueAt(const Duration(seconds: 1)), closeTo(naTela, 1e-9));
+      expect(find.bySemanticsLabel('Tirar o keyframe daqui'), findsOneWidget);
     });
   });
 

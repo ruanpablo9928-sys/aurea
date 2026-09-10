@@ -30,10 +30,15 @@ void main() {
     expect(sem.hasAnimation, isFalse);
   });
 
-  test('marca no inicio, mexe no fim: um keyframe com tudo dentro', () {
+  test('marca nos dois instantes, mexe no fim: um keyframe com tudo', () {
+    // O NOME ANTIGO ERA "marca no inicio, mexe no fim", e o teste
+    // provava justamente o defeito: editar no fim CRIAVA a marca la.
+    // O keyframe universal continua — um losango, todos os parametros
+    // dentro —, mas quem o cria e o losango
+    // (`docs/keyframe-explicito.md`).
     var e = glow().withKeyframeToggled(t0);
     final expoInicio = e.paramAt('exposure', t0);
-    e = e.withParamEdited('radius', t1, 0.9);
+    e = e.withKeyframeToggled(t1).withParamEdited('radius', t1, 0.9);
     // O instante editado tem keyframe em todos os parametros.
     expect(e.hasKeyframeAt(t1), isTrue);
     for (final k in e.spec.params.keys) {
@@ -46,8 +51,20 @@ void main() {
     expect(e.paramAt('exposure', t1), closeTo(expoInicio, 1e-9));
   });
 
+  test('efeito que ja anima: editar FORA de marca nao muda nada', () {
+    final marcado = glow().withKeyframeToggled(t0);
+    final e = marcado.withParamEdited('radius', t1, 0.9);
+    expect(e.keyframeTimes.toSet(), {t0});
+    expect(e.paramAt('radius', t1), closeTo(marcado.paramAt('radius', t1), 1e-9));
+    expect(marcado.aceitaEdicaoEm(t1), isFalse);
+    expect(marcado.aceitaEdicaoEm(t0), isTrue);
+  });
+
   test('editar de novo no mesmo instante so troca o valor do keyframe', () {
-    var e = glow().withKeyframeToggled(t0).withParamEdited('radius', t1, 0.9);
+    var e = glow()
+        .withKeyframeToggled(t0)
+        .withKeyframeToggled(t1)
+        .withParamEdited('radius', t1, 0.9);
     e = e.withParamEdited('radius', t1, 0.4);
     expect(e.track('radius').keyframes.length, 2);
     expect(e.paramAt('radius', t1), closeTo(0.4, 1e-9));
@@ -55,7 +72,10 @@ void main() {
 
   test('os tempos de keyframe do efeito sao a uniao, sem repetir o instante',
       () {
-    final e = glow().withKeyframeToggled(t0).withParamEdited('radius', t1, 0.9);
+    final e = glow()
+        .withKeyframeToggled(t0)
+        .withKeyframeToggled(t1)
+        .withParamEdited('radius', t1, 0.9);
     final tempos = e.keyframeTimes.toSet();
     expect(tempos, {t0, t1});
   });

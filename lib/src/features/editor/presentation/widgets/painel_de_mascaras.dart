@@ -21,9 +21,11 @@ final parametroDaMascaraProvider = StateProvider<String?>((ref) => null);
 /// editor aqui daria uma curva sem onde escrever.
 AlvoDoRail alvoDoParametroDaMascara(
   WidgetRef ref,
-  Layer camada,
+  Layer camadaNaTela,
   Duration tempo,
 ) {
+  // O rail diz o que ESTA GRAVADO, e nao o que a previa mostra.
+  final camada = camadaReal(ref, camadaNaTela);
   final idMascara = ref.watch(mascaraAbertaProvider);
   final chave = ref.watch(parametroDaMascaraProvider);
   if (idMascara == null || chave == null) return const AlvoDoRail();

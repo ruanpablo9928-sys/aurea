@@ -251,9 +251,12 @@ void main() {
     container.read(modoDaLinhaDoTempoProvider.notifier).state =
         ModoDaLinhaDoTempo.detalhado;
     container.read(zoomDaLinhaDoTempoProvider.notifier).state = _escala;
-    container.read(autoKeyframeProvider.notifier).state = true;
+    // Marca primeiro, valor depois: editar num instante sem marca nao
+    // escreve nada (`docs/keyframe-explicito.md`).
     for (final m in ms) {
-      c.editOpacity(id, Duration(milliseconds: m), m / 10000);
+      final t = Duration(milliseconds: m);
+      c.toggleKeyframe(id, t, LayerProp.opacity);
+      c.editOpacity(id, t, m / 10000);
     }
     final playback = PlaybackController(
       vsync: _Vsync(),

@@ -20,6 +20,7 @@ void main() {
   test('preset vai e volta do JSON com efeito, keyframes e nome', () {
     final efeito = EffectInstance(type: EffectType.glowVol)
         .withKeyframeToggled(Duration.zero)
+        .withKeyframeToggled(const Duration(seconds: 1))
         .withParamEdited('radius', const Duration(seconds: 1), 0.9);
     final preset = EffectPreset(
       name: 'Meu glow',
@@ -66,6 +67,7 @@ void main() {
           effects: [
             EffectInstance(id: 'fx', type: EffectType.glowVol)
                 .withKeyframeToggled(Duration.zero)
+                .withKeyframeToggled(const Duration(seconds: 2))
                 .withParamEdited('radius', const Duration(seconds: 2), 0.9),
           ],
         ),

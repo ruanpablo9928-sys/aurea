@@ -82,15 +82,17 @@ Layer _camada(ProviderContainer c, String id) =>
 
 /// Anima a opacidade entre dois instantes, para haver trecho e curva.
 ///
-/// Pelo caminho de verdade: keyframe automatico ligado e duas edicoes.
-/// Cravar marca a mao tambem funciona, mas testar pelo caminho que a
-/// pessoa usa e o que pega o defeito onde ele mora.
+/// Pelo caminho de verdade, que agora e o EXPLICITO: cravar a marca no
+/// instante, depois escrever o valor nela
+/// (`docs/keyframe-explicito.md`). O caminho antigo — ligar o keyframe
+/// automatico e so editar — nao existe mais, e nem devia ter existido:
+/// era ele que fazia marca aparecer sozinha.
 void _animar(ProviderContainer container, String id) {
   final c = container.read(editorControllerProvider.notifier);
-  container.read(autoKeyframeProvider.notifier).state = true;
+  c.toggleKeyframe(id, Duration.zero, LayerProp.opacity);
   c.editOpacity(id, Duration.zero, 1);
+  c.toggleKeyframe(id, const Duration(seconds: 2), LayerProp.opacity);
   c.editOpacity(id, const Duration(seconds: 2), 0);
-  container.read(autoKeyframeProvider.notifier).state = false;
 }
 
 void main() {

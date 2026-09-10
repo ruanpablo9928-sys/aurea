@@ -2543,12 +2543,26 @@ class EffectInstance {
   /// o editado com o valor novo, os outros com o valor que tinham. E o
   /// que faz "marco no inicio, vou ao fim e mexo" funcionar sem pensar
   /// em qual parametro tem diamante.
-  EffectInstance withParamEdited(String key, Duration local, double value) {
+  ///
+  /// EDITAR VALOR NUNCA CRIA KEYFRAME, e este era um dos piores casos:
+  /// num efeito que ja animava, mexer num parametro em QUALQUER
+  /// instante cravava a marca universal ali — todos os parametros de
+  /// uma vez, num tempo que ninguem escolheu. Agora so escreve sobre
+  /// marca que ja existe; fora dela quem crava e o losango
+  /// (`docs/keyframe-explicito.md`). [forcar] e o caminho do losango,
+  /// e da edicao pendente que ele grava.
+  EffectInstance withParamEdited(
+    String key,
+    Duration local,
+    double value, {
+    bool forcar = false,
+  }) {
     if (!hasAnimation) {
       return copyWith(
         params: {...params, key: track(key).edited(local, value)},
       );
     }
+    if (!forcar && !hasKeyframeAt(local)) return this;
     final novos = <String, AnimatedDouble>{...params};
     for (final k in {...spec.params.keys, ...params.keys}) {
       final t = track(k);
@@ -2560,6 +2574,9 @@ class EffectInstance {
     }
     return copyWith(params: novos);
   }
+
+  /// A edicao em [local] chega ao projeto, ou precisa do losango antes?
+  bool aceitaEdicaoEm(Duration local) => !hasAnimation || hasKeyframeAt(local);
 
   /// Ha keyframe do EFEITO neste instante: qualquer parametro basta.
   bool hasKeyframeAt(Duration local) =>

@@ -449,10 +449,9 @@ void main() {
     ) async {
       final m = await _montar(tester);
       final id = m.c.read(selectedLayerProvider)!;
-      m.c.read(autoKeyframeProvider.notifier).state = true;
       m.c
           .read(editorControllerProvider.notifier)
-          .editOpacity(id, const Duration(milliseconds: 400), .5);
+          .toggleKeyframe(id, const Duration(milliseconds: 400), LayerProp.opacity);
       final antes = m.c
           .read(editorControllerProvider)
           .layers

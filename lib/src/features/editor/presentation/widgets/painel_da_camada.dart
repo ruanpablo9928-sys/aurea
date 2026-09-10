@@ -391,7 +391,11 @@ class PainelSobreposto extends ConsumerWidget {
       );
     }
 
-    final project = ref.watch(editorControllerProvider);
+    // OS CONTROLES MOSTRAM O QUE ESTA NA TELA, inclusive a edicao
+    // pendente: o numero que a pessoa acabou de mexer nao pode voltar
+    // sozinho ao valor interpolado. O rail le o projeto de VERDADE —
+    // ver `camadaReal` em `controles_da_camada.dart`.
+    final project = ref.watch(projetoVisivelProvider);
     final id = ref.watch(selectedLayerProvider);
     final camada = project.layers.where((l) => l.id == id).firstOrNull;
 

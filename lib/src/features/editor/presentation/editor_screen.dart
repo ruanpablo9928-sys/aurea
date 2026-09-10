@@ -8,10 +8,14 @@ import '../application/video_layer_manager.dart';
 import '../domain/video_project.dart';
 import '../../export/presentation/export_video_screen.dart';
 import '../../projects/application/projects_controller.dart';
+import 'widgets/controles_da_camada.dart';
 import 'widgets/linha_do_tempo.dart';
 import 'widgets/adicionar_conteudo.dart';
 import 'widgets/editor_de_curva.dart';
 import 'widgets/painel_da_camada.dart';
+import 'widgets/painel_de_cor.dart';
+import 'widgets/painel_de_transformacao.dart';
+import 'widgets/painel_de_mascaras.dart';
 import 'widgets/palco_de_previa.dart';
 import 'widgets/visao_geral_das_camadas.dart';
 
@@ -70,11 +74,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _playback.compositionFps = ref.read(editorControllerProvider).fps;
     _playback.time.addListener(_syncVideos);
     _playback.playing.addListener(_syncVideos);
+    // O CABECOTE ANDOU: a edicao pendente morre aqui.
+    //
+    // Ela e um valor que so faz sentido NAQUELE instante — a previa
+    // mostra, a linha do tempo nao, e o losango crava. Noutro tempo
+    // seria o retrato de um projeto que nao existe
+    // (`docs/keyframe-explicito.md`).
+    _playback.time.addListener(_descartarPendencia);
     // ABRIR UM PROJETO precisa montar os tocadores AGORA: o relogio esta
     // parado no zero e o sync so aconteceria quando ele andasse.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncVideos();
     });
+  }
+
+  void _descartarPendencia() {
+    if (!mounted) return;
+    ref.read(editorControllerProvider.notifier).descartarPendencia();
   }
 
   void _syncVideos() {
@@ -124,6 +140,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           .read(projectsControllerProvider.notifier)
           .upsert(ref.read(editorControllerProvider.notifier).projetoCompleto);
     });
+    // MEXEU NOUTRA PROPRIEDADE: a pendencia tambem morre.
+    //
+    // Ela pertence a UM controle, num instante. Trocar de camada, de
+    // ferramenta, de efeito, de mascara ou de parametro muda o que o
+    // losango mira — e um losango nunca pode cravar o valor de outra
+    // coisa.
+    for (final foco in <ProviderListenable<Object?>>[
+      selectedLayerProvider,
+      estadoDoPainelProvider,
+      categoriaAbertaProvider,
+      modoDeTransformacaoProvider,
+      efeitoAbertoProvider,
+      parametroAbertoProvider,
+      mascaraAbertaProvider,
+      parametroDaMascaraProvider,
+      itemDaCorProvider,
+      parametroDaCorProvider,
+    ]) {
+      ref.listen(foco, (_, _) => _descartarPendencia());
+    }
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
     final controlador = ref.read(editorControllerProvider.notifier);

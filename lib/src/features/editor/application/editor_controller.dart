@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show immutable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
@@ -32,7 +33,6 @@ import '../domain/tracker2d.dart';
 import '../domain/fx.dart';
 import '../domain/grid_rig.dart';
 import '../domain/keyframe.dart';
-import '../domain/scene_motion.dart';
 import '../domain/loudness.dart';
 import '../domain/layer.dart';
 import '../domain/layer_meta.dart';
@@ -57,7 +57,111 @@ export '../domain/video_project.dart' show LayerProp, PropertyLink;
 
 /// Camada selecionada no editor (null = nada).
 final selectedLayerProvider = StateProvider<String?>((ref) => null);
-final autoKeyframeProvider = StateProvider<bool>((ref) => false);
+// O KEYFRAME AUTOMATICO SAIU.
+//
+// `autoKeyframeProvider` vivia aqui e ja nascia desligado — e nao era
+// ele que criava os keyframes misteriosos. A raiz era `edited()`, que
+// cravava marca em toda propriedade JA animada, com o interruptor
+// desligado ou nao. Ver `docs/keyframe-explicito.md`.
+//
+// Se um dia voltar como recurso, volta desligado, anunciado enquanto
+// estiver ligado, e sai com um toque.
+
+/// A EDICAO PENDENTE: o valor que ja esta na tela e ainda nao esta gravado.
+///
+/// Propriedade animada, cabecote FORA de uma marca, e a pessoa mexe no
+/// numero. Gravar criaria uma marca que ninguem pediu; ignorar deixaria
+/// o controle inerte. Entao o valor fica PENDENTE: a previa mostra, a
+/// linha do tempo nao muda, e o losango crava
+/// (`docs/keyframe-explicito.md`).
+///
+/// Guarda o projeto DERIVADO — o que o projeto seria se a marca
+/// tivesse sido cravada. Ele nunca passa pelo `_mutate`, entao nao vai
+/// para o desfazer, nem para o arquivo, nem para a exportacao.
+@immutable
+class EdicaoPendente {
+  const EdicaoPendente({
+    required this.projeto,
+    required this.camadaId,
+    required this.tempoLocal,
+  });
+
+  final VideoProject projeto;
+
+  /// Nula quando a edicao nao passou por uma camada (raro: precomp,
+  /// cena). O losango so crava o que e da camada dele.
+  final String? camadaId;
+
+  /// O instante, no tempo da CAMADA, em que a recusa aconteceu.
+  final Duration tempoLocal;
+}
+
+final edicaoPendenteProvider = StateProvider<EdicaoPendente?>((ref) => null);
+
+/// O PROJETO QUE SE VE: a pendencia quando ha uma, o de verdade quando
+/// nao ha.
+///
+/// Quem desenha le daqui. Quem diz a VERDADE sobre o que esta gravado —
+/// o rail, a linha do tempo, o editor de curva, a exportacao — le
+/// `editorControllerProvider`. Sao duas perguntas diferentes, e
+/// confundi-las e o que faz o losango mentir.
+final projetoVisivelProvider = Provider<VideoProject>((ref) {
+  final real = ref.watch(editorControllerProvider);
+  return ref.watch(edicaoPendenteProvider)?.projeto ?? real;
+});
+
+/// A RECUSA ACABADA DE ACONTECER, esperando o `_mutate` que vem a
+/// seguir.
+///
+/// `edited()` devolve a trilha intacta quando a edicao cai fora de uma
+/// marca, e quem chamou nao tem como distinguir isso de "editei para o
+/// mesmo valor". A diferenca decide entre gravar e deixar pendente.
+///
+/// Fica no arquivo, e nao no controlador, porque quem produz a recusa
+/// sao as TRILHAS — e uma trilha nao alcanca o controlador. A derivacao
+/// e sincrona de ponta a ponta: `editada` escreve aqui, o `_mutate`
+/// seguinte le e limpa, e nada roda entre as duas coisas.
+Duration? _recusaLocal;
+String? _recusaCamada;
+
+/// EDITAR VALOR, sabendo o que aconteceu.
+///
+/// Devolve o resultado como se houvesse marca — e anota a recusa. Quem
+/// grava decide: sem anotacao vai para o projeto, com anotacao vira
+/// edicao pendente.
+extension _ValorEditado on AnimatedDouble {
+  AnimatedDouble editada(Duration t, double v) {
+    if (aceitaEdicaoEm(t)) return edited(t, v);
+    _recusaLocal = t;
+    return withKeyframe(t, v, easeAt(t));
+  }
+}
+
+extension _ValorEditadoOffset on AnimatedOffset {
+  AnimatedOffset editada(Duration t, Offset v) {
+    if (aceitaEdicaoEm(t)) return edited(t, v);
+    _recusaLocal = t;
+    return withKeyframe(t, v, easeAt(t));
+  }
+}
+
+/// O efeito tem UM losango para todos os parametros, entao a recusa
+/// tambem e do efeito inteiro.
+extension _ValorEditadoEfeito on EffectInstance {
+  EffectInstance editada(String key, Duration t, double v) {
+    if (aceitaEdicaoEm(t)) return withParamEdited(key, t, v);
+    _recusaLocal = t;
+    return withParamEdited(key, t, v, forcar: true);
+  }
+}
+
+extension _ValorEditadoPath on AnimatedPath {
+  AnimatedPath editada(Duration t, BezierPath v) {
+    if (aceitaEdicaoEm(t)) return edited(t, v);
+    _recusaLocal = t;
+    return withKeyframe(t, v, easeAt(t));
+  }
+}
 
 /// Selecao MULTIPLA (toque longo nas barras): a barra de acoes opera no
 /// conjunto — agrupar, duplicar e excluir em lote.
@@ -88,6 +192,27 @@ class EditorController extends Notifier<VideoProject> {
   DateTime? _gestoAberto;
 
   void _mutate(VideoProject next) {
+    // A EDICAO FOI RECUSADA: nada disto vai para o projeto.
+    //
+    // O resultado ja veio derivado — com a marca que o losango cravaria
+    // — e fica esperando o losango. Ver `docs/keyframe-explicito.md`.
+    final recusa = _recusaLocal;
+    final camadaDaRecusa = _recusaCamada;
+    _recusaLocal = null;
+    _recusaCamada = null;
+    if (recusa != null) {
+      ref.read(edicaoPendenteProvider.notifier).state = EdicaoPendente(
+        projeto: next,
+        camadaId: camadaDaRecusa,
+        tempoLocal: recusa,
+      );
+      return;
+    }
+    // QUALQUER EDICAO DE VERDADE DESCARTA A PENDENCIA: ela e um retrato
+    // de um projeto que acabou de deixar de existir.
+    if (ref.read(edicaoPendenteProvider) != null) {
+      ref.read(edicaoPendenteProvider.notifier).state = null;
+    }
     final now = DateTime.now();
     // Um gesto que nunca fechou (o widget saiu da arvore no meio do
     // arrasto) nao pode desligar o desfazer para sempre.
@@ -269,6 +394,9 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void _replace(Layer layer) {
+    // De quem era a trilha que recusou a edicao. O losango de outra
+    // camada nao crava esta pendencia.
+    if (_recusaLocal != null) _recusaCamada = layer.id;
     _mutate(
       state.copyWith(
         layers: [for (final l in state.layers) l.id == layer.id ? layer : l],
@@ -1177,7 +1305,7 @@ class EditorController extends Notifier<VideoProject> {
       layers = [
         for (final l in layers)
           if (l.id == e.key)
-            l.copyLayer(position: l.position.edited(l.localTime(t), e.value))
+            l.copyLayer(position: l.position.editada(l.localTime(t), e.value))
           else
             l,
       ];
@@ -3107,7 +3235,7 @@ class EditorController extends Notifier<VideoProject> {
         updated.copyLayer(
           effects: replaceTimeRemap(
             updated,
-            track.edited(localTime, sourceSeconds),
+            track.editada(localTime, sourceSeconds),
           ),
         ),
       );
@@ -3117,7 +3245,7 @@ class EditorController extends Notifier<VideoProject> {
       layer.copyLayer(
         effects: replaceTimeRemap(
           layer,
-          track.edited(localTime, sourceSeconds),
+          track.editada(localTime, sourceSeconds),
         ),
       ),
     );
@@ -4119,15 +4247,10 @@ class EditorController extends Notifier<VideoProject> {
 
   // -------------------------------------------------- transform + keyframes
 
-  /// [autoKey] forca (ou nega) o keyframe automatico nesta edicao — o
-  /// palco no Simples anima ao mover, mesmo com o auto-key global
-  /// desligado (secao 2 do plano).
-  void editPosition(
-    String id,
-    Duration globalTime,
-    Offset value, {
-    bool? autoKey,
-  }) {
+  /// O `autoKey` saiu daqui junto com o keyframe automatico. Ele nunca
+  /// teve um chamador que o passasse: o comentario prometia um palco
+  /// que anima ao mover, e esse palco nao existe.
+  void editPosition(String id, Duration globalTime, Offset value) {
     final layer = _layer(id);
     if (layer == null) return;
     _replace(
@@ -4136,37 +4259,28 @@ class EditorController extends Notifier<VideoProject> {
           layer.position,
           layer.localTime(globalTime),
           value,
-          autoKey: autoKey,
         ),
       ),
     );
   }
 
+  /// EDITAR UM VALOR NUNCA CRIA KEYFRAME.
+  ///
+  /// `docs/keyframe-explicito.md`. A ancora saiu junto com o keyframe
+  /// automatico: ela cravava um SEGUNDO keyframe em tempo zero quando a
+  /// trilha ainda era estatica — dois de uma vez, um deles num instante
+  /// que a pessoa nunca visitou.
   AnimatedDouble _editDouble(
     AnimatedDouble track,
     Duration time,
     double value,
-  ) => editMotionValue(
-    track,
-    time,
-    value,
-    autoKey: ref.read(autoKeyframeProvider),
-  );
+  ) => track.editada(time, value);
 
   AnimatedOffset _editOffset(
     AnimatedOffset track,
     Duration time,
-    Offset value, {
-    bool? autoKey,
-  }) {
-    if (!(autoKey ?? ref.read(autoKeyframeProvider))) {
-      return track.edited(time, value);
-    }
-    final anchored = !track.isAnimated && time > Duration.zero
-        ? track.withKeyframe(Duration.zero, track.base)
-        : track;
-    return anchored.withKeyframe(time, value, track.easeAt(time));
-  }
+    Offset value,
+  ) => track.editada(time, value);
 
   /// CRAVA UMA TRILHA DE ESCALA INTEIRA de uma vez.
   ///
@@ -4237,7 +4351,7 @@ class EditorController extends Notifier<VideoProject> {
         layer.rotation.isAnimated ||
         layer.rotationX.isAnimated ||
         layer.rotationY.isAnimated;
-    if (!anyAnimated && !ref.read(autoKeyframeProvider)) {
+    if (!anyAnimated) {
       _replace(
         layer.copyLayer(
           rotation: z == null ? null : layer.rotation.withBase(z),
@@ -4247,10 +4361,18 @@ class EditorController extends Notifier<VideoProject> {
       );
       return;
     }
+    // ANIMADA: so escreve na marca que JA existe neste instante. Fora
+    // dela a trilha volta intacta, e a edicao vira pendente (quem
+    // decide isso e `editRotation`/`editRotationX`/`editRotationY`, que
+    // chamam por aqui).
+    //
+    // Os tres eixos andam juntos porque a rotacao e UMA propriedade de
+    // tres eixos no motor: marcar num marca nos tres, e a curva vale
+    // para os tres.
     AnimatedDouble key(AnimatedDouble track, double? v) =>
-        ref.read(autoKeyframeProvider)
-        ? _editDouble(track, t, v ?? track.valueAt(t))
-        : track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t));
+        track.hasKeyframeAt(t)
+        ? track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t))
+        : track;
     _replace(
       layer.copyLayer(
         rotation: key(layer.rotation, z),
@@ -4479,7 +4601,45 @@ class EditorController extends Notifier<VideoProject> {
     );
   }
 
+  /// O LOSANGO CRAVA O QUE ESTA NA TELA.
+  ///
+  /// Se ha uma edicao pendente desta camada, neste instante, o toque no
+  /// losango grava o projeto DERIVADO — com o valor que a previa ja
+  /// mostra — em vez de cravar o valor interpolado. E o que fecha o
+  /// ciclo "mudo o numero, olho, gravo" (`docs/keyframe-explicito.md`).
+  ///
+  /// Devolve verdadeiro quando gravou: quem chamou nao tem mais nada a
+  /// fazer, porque a marca ja esta la.
+  bool _cravarPendencia(String layerId, Duration globalTime) {
+    final p = ref.read(edicaoPendenteProvider);
+    if (p == null) return false;
+    if (p.camadaId != null && p.camadaId != layerId) return false;
+    final camada = _layer(layerId);
+    if (camada == null) return false;
+    if (camada.localTime(globalTime) != p.tempoLocal) return false;
+    ref.read(edicaoPendenteProvider.notifier).state = null;
+    // UM PASSO DE DESFAZER SO PARA ISTO.
+    //
+    // A janela de 450 ms junta ajustes continuos, e cravar nao e um
+    // ajuste continuo: o arrasto que veio antes nao gerou mutacao
+    // nenhuma (ficou pendente), entao juntar o losango ao que houver
+    // antes dele engoliria acoes que a pessoa fez separadas.
+    runAsOneUndo(() => _mutate(p.projeto));
+    return true;
+  }
+
+  /// JOGA A PENDENCIA FORA.
+  ///
+  /// Chamado quando o cabecote anda e quando a pessoa muda de
+  /// propriedade: fora daquele instante e daquele controle, a pendencia
+  /// e um retrato de um projeto que nao existe.
+  void descartarPendencia() {
+    if (ref.read(edicaoPendenteProvider) == null) return;
+    ref.read(edicaoPendenteProvider.notifier).state = null;
+  }
+
   void toggleKeyframe(String id, Duration globalTime, LayerProp prop) {
+    if (_cravarPendencia(id, globalTime)) return;
     final layer = _layer(id);
     if (layer == null) return;
     final t = layer.localTime(globalTime);
@@ -4749,7 +4909,7 @@ class EditorController extends Notifier<VideoProject> {
       layer.copyLayer(
         effects: [
           for (final e in layer.effects)
-            e.id == effectId ? e.withParamEdited(key, local, value) : e,
+            e.id == effectId ? e.editada(key, local, value) : e,
         ],
       ),
     );
@@ -4761,6 +4921,7 @@ class EditorController extends Notifier<VideoProject> {
     String effectId,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(layerId, globalTime)) return;
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -4835,6 +4996,7 @@ class EditorController extends Notifier<VideoProject> {
     String key,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(layerId, globalTime)) return;
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -4954,8 +5116,9 @@ class EditorController extends Notifier<VideoProject> {
     _ => g,
   };
 
-  /// Edita um parametro da grade com AUTO-KEYFRAME quando ja anima —
-  /// cada parametro tem sua propria trilha.
+  /// Edita um parametro da grade. Cada parametro tem sua propria
+  /// trilha, e vale a regra de sempre: editar valor nao cria keyframe
+  /// (`docs/keyframe-explicito.md`).
   void editGridParam(
     String nullId,
     String key,
@@ -4968,12 +5131,13 @@ class EditorController extends Notifier<VideoProject> {
     final track = _gridTrack(layer.grid!, key);
     if (track == null) return;
     _replace(
-      layer.withGrid(_gridWith(layer.grid!, key, track.edited(local, value))),
+      layer.withGrid(_gridWith(layer.grid!, key, track.editada(local, value))),
     );
   }
 
   /// Diamante do parametro da grade: liga/desliga keyframe no playhead.
   void toggleGridParamKeyframe(String nullId, String key, Duration globalTime) {
+    if (_cravarPendencia(nullId, globalTime)) return;
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
     final local = layer.localTime(globalTime);
@@ -5001,13 +5165,14 @@ class EditorController extends Notifier<VideoProject> {
     _replace(
       layer.withGrid(
         layer.grid!.copyWith(
-          transition: layer.grid!.transition.edited(local, v),
+          transition: layer.grid!.transition.editada(local, v),
         ),
       ),
     );
   }
 
   void toggleGridTransitionKeyframe(String nullId, Duration globalTime) {
+    if (_cravarPendencia(nullId, globalTime)) return;
     final layer = _layer(nullId);
     if (layer is! NullLayer || layer.grid == null) return;
     final local = layer.localTime(globalTime);
@@ -5122,12 +5287,12 @@ class EditorController extends Notifier<VideoProject> {
     final local = layer.localTime(globalTime);
     updateMask(layerId, maskId, (m) {
       return switch (param) {
-        'feather' => m.copyWith(feather: m.feather.edited(local, value)),
+        'feather' => m.copyWith(feather: m.feather.editada(local, value)),
         'featherY' => m.copyWith(
-          featherY: m.featherVertical.edited(local, value),
+          featherY: m.featherVertical.editada(local, value),
         ),
-        'expansion' => m.copyWith(expansion: m.expansion.edited(local, value)),
-        'opacity' => m.copyWith(opacity: m.opacity.edited(local, value)),
+        'expansion' => m.copyWith(expansion: m.expansion.editada(local, value)),
+        'opacity' => m.copyWith(opacity: m.opacity.editada(local, value)),
         _ => m,
       };
     });
@@ -5156,7 +5321,7 @@ class EditorController extends Notifier<VideoProject> {
     updateMask(
       layerId,
       maskId,
-      (m) => m.copyWith(path: m.path.edited(local, fn(m.path.valueAt(local)))),
+      (m) => m.copyWith(path: m.path.editada(local, fn(m.path.valueAt(local)))),
     );
   }
 
@@ -5222,6 +5387,7 @@ class EditorController extends Notifier<VideoProject> {
     String param,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(layerId, globalTime)) return;
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -5244,6 +5410,7 @@ class EditorController extends Notifier<VideoProject> {
     String maskId,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(layerId, globalTime)) return;
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -5486,7 +5653,7 @@ class EditorController extends Notifier<VideoProject> {
     if (layer is! GroupLayer) return;
     final r = layer.timeRemap ?? AnimatedDouble(0);
     final v = seconds < 0 ? 0.0 : seconds;
-    updatePrecomp(id, timeRemap: r.edited(layer.localTime(globalTime), v));
+    updatePrecomp(id, timeRemap: r.editada(layer.localTime(globalTime), v));
   }
 
   /// Congela a precomp no instante que esta aparecendo agora.
@@ -5631,7 +5798,7 @@ class EditorController extends Notifier<VideoProject> {
         properties: [
           for (final p in a.properties)
             p.id == propId
-                ? p.copyWith(value: p.value.edited(local, value))
+                ? p.copyWith(value: p.value.editada(local, value))
                 : p,
         ],
       );
@@ -5644,6 +5811,7 @@ class EditorController extends Notifier<VideoProject> {
     String propId,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(id, globalTime)) return;
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -5742,23 +5910,23 @@ class EditorController extends Notifier<VideoProject> {
     _updateSelector(id, animatorId, selectorId, (s) {
       if (s is RangeSelector) {
         return switch (param) {
-          'start' => s.copyWith(start: s.start.edited(local, value)),
-          'end' => s.copyWith(end: s.end.edited(local, value)),
-          'offset' => s.copyWith(offset: s.offset.edited(local, value)),
-          'amount' => s.copyWith(amount: s.amount.edited(local, value)),
+          'start' => s.copyWith(start: s.start.editada(local, value)),
+          'end' => s.copyWith(end: s.end.editada(local, value)),
+          'offset' => s.copyWith(offset: s.offset.editada(local, value)),
+          'amount' => s.copyWith(amount: s.amount.editada(local, value)),
           _ => s,
         };
       }
       if (s is WigglySelector) {
         return switch (param) {
           'freq' => s.copyWith(
-            wigglesPerSecond: s.wigglesPerSecond.edited(local, value),
+            wigglesPerSecond: s.wigglesPerSecond.editada(local, value),
           ),
           'correlation' => s.copyWith(
-            correlation: s.correlation.edited(local, value),
+            correlation: s.correlation.editada(local, value),
           ),
-          'min' => s.copyWith(minAmount: s.minAmount.edited(local, value)),
-          'max' => s.copyWith(maxAmount: s.maxAmount.edited(local, value)),
+          'min' => s.copyWith(minAmount: s.minAmount.editada(local, value)),
+          'max' => s.copyWith(maxAmount: s.maxAmount.editada(local, value)),
           _ => s,
         };
       }
@@ -5862,11 +6030,12 @@ class EditorController extends Notifier<VideoProject> {
     _updateParametric(id, (s) {
       final track = shapeParamTrackOf(s, key);
       if (track == null) return s;
-      return shapeParamWithTrack(s, key, track.edited(local, value));
+      return shapeParamWithTrack(s, key, track.editada(local, value));
     });
   }
 
   void toggleShapeParamKeyframe(String id, String key, Duration globalTime) {
+    if (_cravarPendencia(id, globalTime)) return;
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -6106,22 +6275,22 @@ class EditorController extends Notifier<VideoProject> {
           else
             switch (i) {
               OffsetPathOperator o => o.copyWith(
-                amount: o.amount.edited(local, value),
+                amount: o.amount.editada(local, value),
               ),
               RoundCornersOperator r => r.copyWith(
-                radius: r.radius.edited(local, value),
+                radius: r.radius.editada(local, value),
               ),
               ZigZagOperator z => z.copyWith(
-                amplitude: z.amplitude.edited(local, value),
+                amplitude: z.amplitude.editada(local, value),
               ),
               PuckerBloatOperator pb => pb.copyWith(
-                amount: pb.amount.edited(local, value),
+                amount: pb.amount.editada(local, value),
               ),
               TwistOperator tw => tw.copyWith(
-                angle: tw.angle.edited(local, value),
+                angle: tw.angle.editada(local, value),
               ),
               WigglePathOperator w => w.copyWith(
-                amount: w.amount.edited(local, value),
+                amount: w.amount.editada(local, value),
               ),
               _ => i,
             },
@@ -6235,7 +6404,7 @@ class EditorController extends Notifier<VideoProject> {
       (items) => [
         for (final i in items)
           if (i.id == itemId && i is ShapeBezier)
-            i.copyWith(path: i.path.edited(local, fn(i.path.valueAt(local))))
+            i.copyWith(path: i.path.editada(local, fn(i.path.valueAt(local))))
           else
             i,
       ],
@@ -6248,6 +6417,7 @@ class EditorController extends Notifier<VideoProject> {
     String itemId,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(layerId, globalTime)) return;
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -6292,7 +6462,7 @@ class EditorController extends Notifier<VideoProject> {
       (items) => [
         for (final i in items)
           if (i.id == itemId && i is ShapeMorph)
-            i.copyWith(progress: i.progress.edited(local, value))
+            i.copyWith(progress: i.progress.editada(local, value))
           else
             i,
       ],
@@ -6300,6 +6470,7 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void toggleMorphKeyframe(String id, String itemId, Duration globalTime) {
+    if (_cravarPendencia(id, globalTime)) return;
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -6395,7 +6566,7 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    _updateShapeItemTrack(id, itemId, key, (t) => t.edited(local, value));
+    _updateShapeItemTrack(id, itemId, key, (t) => t.editada(local, value));
   }
 
   void toggleShapeItemTrackKeyframe(
@@ -6404,6 +6575,7 @@ class EditorController extends Notifier<VideoProject> {
     String key,
     Duration globalTime,
   ) {
+    if (_cravarPendencia(id, globalTime)) return;
     final layer = _layer(id);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
@@ -6558,9 +6730,9 @@ class EditorController extends Notifier<VideoProject> {
         for (final i in items)
           if (i.id == itemId && i is TrimOperator)
             switch (param) {
-              'start' => i.copyWith(start: i.start.edited(local, value)),
-              'end' => i.copyWith(end: i.end.edited(local, value)),
-              'offset' => i.copyWith(offset: i.offset.edited(local, value)),
+              'start' => i.copyWith(start: i.start.editada(local, value)),
+              'end' => i.copyWith(end: i.end.editada(local, value)),
+              'offset' => i.copyWith(offset: i.offset.editada(local, value)),
               _ => i,
             }
           else
@@ -6592,7 +6764,7 @@ class EditorController extends Notifier<VideoProject> {
               dy: dy,
               rotation: rotationDeg == null
                   ? null
-                  : i.rotation.edited(local, rotationDeg),
+                  : i.rotation.editada(local, rotationDeg),
             )
           else
             i,

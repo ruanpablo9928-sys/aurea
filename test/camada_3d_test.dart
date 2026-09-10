@@ -7,7 +7,9 @@
 // apesar de o palco ja desenhar a inclinacao com perspectiva.
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
+import 'package:aurea/src/features/editor/domain/keyframe.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
+import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/controles_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/painel_de_transformacao.dart';
 import 'package:flutter/material.dart' hide Easing;
@@ -216,30 +218,22 @@ void main() {
       );
     });
 
-    testWidgets('o z respeita o keyframe automatico, como as irmas', (
+    testWidgets('o z segue a mesma regra das irmas: editar nao crava', (
       tester,
     ) async {
       final m = await _montar(tester, 'transformar');
       final c = m.c.read(editorControllerProvider.notifier);
       c.toggle3D(m.id);
-      m.c.read(autoKeyframeProvider.notifier).state = true;
       await tester.pump();
 
-      // Era o unico edit* de transformacao que usava `.edited` direto e
-      // ignorava o interruptor: com o automatico ligado, arrastar a
-      // profundidade reescrevia a BASE em vez de marcar.
       c.editPositionZ(m.id, const Duration(milliseconds: 500), -300);
 
       final l = _camada(m.c, m.id);
-      expect(l.positionZ.isAnimated, isTrue);
+      expect(l.positionZ.isAnimated, isFalse);
       expect(
-        l.positionZ.valueAt(Duration.zero),
-        closeTo(0, .01),
-        reason: 'a marca de ancoragem no zero guarda o valor de antes',
-      );
-      expect(
-        l.positionZ.valueAt(const Duration(milliseconds: 500)),
+        l.positionZ.base,
         closeTo(-300, .01),
+        reason: 'estatica: a profundidade muda a base, sem marca',
       );
     });
 
@@ -255,8 +249,25 @@ void main() {
       // Marca so na profundidade: o motor apaga quando QUALQUER uma das
       // duas trilhas tem marca ali, e o rail so olhava X/Y — dizia
       // "marcar aqui" e o toque APAGAVA.
-      m.c.read(autoKeyframeProvider.notifier).state = true;
-      c.editPositionZ(m.id, const Duration(milliseconds: 300), -100);
+      c.toggleKeyframe(
+        m.id,
+        const Duration(milliseconds: 300),
+        LayerProp.position,
+      );
+      // A marca de posicao nasce em X/Y e no Z (a camada e 3D); tirar a
+      // de X/Y a mao deixa SO a profundidade marcada, que e o caso.
+      final l = _camada(m.c, m.id);
+      c.openProject(
+        m.c.read(editorControllerProvider).copyWith(
+          layers: [
+            for (final x in m.c.read(editorControllerProvider).layers)
+              if (x.id == m.id)
+                x.copyLayer(position: AnimatedOffset(l.position.base))
+              else
+                x,
+          ],
+        ),
+      );
       await tester.pump();
 
       expect(find.bySemanticsLabel('Tirar o keyframe daqui'), findsOneWidget);

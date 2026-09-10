@@ -43,8 +43,9 @@ import 'rails_do_painel.dart';
 ///      todos os valores entre o toque e o solte.
 ///   2. O VALOR E LIDO NO CABECOTE, porque uma propriedade animada vale
 ///      coisas diferentes em instantes diferentes.
-///   3. QUEM DECIDE SE VIRA KEYFRAME E O MOTOR, pelo losango do rail e
-///      pelo interruptor do keyframe automatico.
+///   3. QUEM DECIDE SE VIRA KEYFRAME E SO O LOSANGO DO RAIL. Editar
+///      valor nunca crava marca; fora de uma marca, o valor fica
+///      PENDENTE ate o losango (`docs/keyframe-explicito.md`).
 class ControlesDaCategoria extends ConsumerWidget {
   const ControlesDaCategoria({
     super.key,
@@ -60,8 +61,17 @@ class ControlesDaCategoria extends ConsumerWidget {
   final VoidCallback aoVoltar;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) =>
-      ValueListenableBuilder<Duration>(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // O RAIL PRECISA ACORDAR QUANDO O PROJETO DE VERDADE MUDA.
+    //
+    // Ele le o projeto real (`camadaReal`), e nao a camada que chega
+    // por parametro — essa vem do projeto VISIVEL, que inclui a edicao
+    // pendente. No instante em que o losango crava, o visivel sai da
+    // pendencia e cai no real com o mesmo conteudo: para quem escuta so
+    // o visivel, NADA mudou, e o losango ficaria vazado com a marca ja
+    // gravada embaixo dele.
+    ref.watch(editorControllerProvider);
+    return ValueListenableBuilder<Duration>(
         valueListenable: playback.time,
         builder: (context, tempo, _) => ProvedorDoRelogio(
           playback: playback,
@@ -90,6 +100,7 @@ class ControlesDaCategoria extends ConsumerWidget {
                 ),
         ),
       );
+  }
 
   Widget _conteudo(Duration tempo) => switch (categoriaId) {
     'opacidade' => _Opacidade(camada: camada, tempo: tempo),
@@ -213,12 +224,14 @@ class ProvedorDoRelogio extends InheritedWidget {
 /// cada uma percorreria a lista de novo.
 AlvoDoRail alvoDaPropriedade(
   WidgetRef ref,
-  Layer camada,
+  Layer camadaNaTela,
   LayerProp prop,
   String titulo,
   Duration tempo,
   PlaybackController playback,
 ) {
+  // O rail diz o que ESTA GRAVADO, e nao o que a previa mostra.
+  final camada = camadaReal(ref, camadaNaTela);
   final c = ref.read(editorControllerProvider.notifier);
   final locais = c.propKeyframeTimes(camada, prop);
   final local = camada.localTime(tempo);
@@ -297,9 +310,11 @@ final catalogoDeEfeitosProvider = StateProvider<bool>((ref) => false);
 /// O ALVO DO RAIL quando a ferramenta aberta e a de efeitos.
 AlvoDoRail alvoDoParametroDeEfeito(
   WidgetRef ref,
-  Layer camada,
+  Layer camadaNaTela,
   Duration tempo,
 ) {
+  // O rail diz o que ESTA GRAVADO, e nao o que a previa mostra.
+  final camada = camadaReal(ref, camadaNaTela);
   final idEfeito = ref.watch(efeitoAbertoProvider);
   final chave = ref.watch(parametroAbertoProvider);
   if (idEfeito == null || chave == null) return const AlvoDoRail();
@@ -330,9 +345,11 @@ AlvoDoRail alvoDoParametroDeEfeito(
 /// tambem.
 AlvoDoRail alvoDoParametroDaForma(
   WidgetRef ref,
-  Layer camada,
+  Layer camadaNaTela,
   Duration tempo,
 ) {
+  // O rail diz o que ESTA GRAVADO, e nao o que a previa mostra.
+  final camada = camadaReal(ref, camadaNaTela);
   if (camada is! ShapeLayer) return const AlvoDoRail();
   final chave = ref.watch(parametroAbertoProvider);
   if (chave == null) return const AlvoDoRail();
@@ -379,35 +396,21 @@ class _Opacidade extends ConsumerWidget {
           aoTerminar: c.endGesture,
           aoDigitar: (v) => c.editOpacity(camada.id, tempo, v / 100),
         ),
-        const _AutoKeyframe(),
       ],
     );
   }
 }
 
-/// O INTERRUPTOR DO KEYFRAME AUTOMATICO.
-///
-/// A referencia nao tem: la o losango do rail e o unico caminho, e cada
-/// marca e cravada a mao. O Aurea ja tinha o automatico antes desta
-/// reforma, e tirar seria tirar funcao — entao ele fica, mas EMBAIXO do
-/// controle, e nao em cima: quem edita quer mexer no valor primeiro.
-class _AutoKeyframe extends ConsumerWidget {
-  const _AutoKeyframe();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ligado = ref.watch(autoKeyframeProvider);
-    return _Interruptor(
-      rotulo: 'Keyframe automatico',
-      icone: ligado
-          ? Icons.check_box_rounded
-          : Icons.check_box_outline_blank_rounded,
-      ligado: ligado,
-      aoTocar: () => ref.read(autoKeyframeProvider.notifier).state = !ligado,
-    );
-  }
-}
-
+// O INTERRUPTOR DO KEYFRAME AUTOMATICO SAIU DAQUI.
+//
+// O comentario antigo dizia que tirar seria tirar funcao. Era o
+// contrario: com ele desligado — o padrao — a propriedade JA ANIMADA
+// continuava cravando marca a cada mudanca de valor, porque quem fazia
+// isso era `edited()` e nao o interruptor. Ele nao protegia nada; so
+// escolhia entre nascer UM keyframe ou DOIS.
+//
+// Agora o losango do rail e o unico caminho, como na referencia.
+// Ver `docs/keyframe-explicito.md`.
 class _Texto extends ConsumerStatefulWidget {
   const _Texto({required this.camada});
 

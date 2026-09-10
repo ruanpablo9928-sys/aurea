@@ -298,7 +298,17 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
   );
 
   Widget _construir(BuildContext context) {
-    final project = ref.watch(editorControllerProvider);
+    // O PALCO MOSTRA A EDICAO PENDENTE.
+    //
+    // Propriedade animada, cabecote fora de uma marca, e a pessoa mexeu
+    // no numero: o valor ainda nao esta gravado, mas a previa TEM de
+    // mostrar — senao o controle parece inerte e ninguem descobre que
+    // basta tocar no losango (`docs/keyframe-explicito.md`).
+    //
+    // Exportando, nunca: o arquivo sai do projeto de verdade.
+    final project = exporting
+        ? ref.watch(editorControllerProvider)
+        : ref.watch(projetoVisivelProvider);
 
     // O RASCUNHO PRECISA DE QUEM O ESCUTE. Sem este ouvinte, a
     // qualidade cheia so voltaria no proximo quadro — e ao pausar nao ha

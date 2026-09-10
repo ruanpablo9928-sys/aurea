@@ -21,7 +21,13 @@ final parametroDaCorProvider = StateProvider<String?>((ref) => null);
 /// com keyframe (`colorFrames` do gradiente) nao tem comando que o
 /// escreva. Entao so o CONTORNO acende o losango, e so nas duas
 /// grandezas que sao numero: espessura e opacidade.
-AlvoDoRail alvoDaCorDaForma(WidgetRef ref, Layer camada, Duration tempo) {
+AlvoDoRail alvoDaCorDaForma(
+  WidgetRef ref,
+  Layer camadaNaTela,
+  Duration tempo,
+) {
+  // O rail diz o que ESTA GRAVADO, e nao o que a previa mostra.
+  final camada = camadaReal(ref, camadaNaTela);
   if (camada is! ShapeLayer) return const AlvoDoRail();
   final itemId = ref.watch(itemDaCorProvider);
   final chave = ref.watch(parametroDaCorProvider);

@@ -484,8 +484,15 @@ class AnimatedPath {
     return Easing.linear;
   }
 
-  AnimatedPath edited(Duration t, BezierPath v) =>
-      isAnimated ? withKeyframe(t, v, easeAt(t)) : AnimatedPath(v, keyframes);
+  /// A mesma regra de [AnimatedDouble.edited]: editar valor nunca cria
+  /// keyframe (`docs/keyframe-explicito.md`).
+  AnimatedPath edited(Duration t, BezierPath v) {
+    if (!isAnimated) return AnimatedPath(v, keyframes);
+    if (hasKeyframeAt(t)) return withKeyframe(t, v, easeAt(t));
+    return this;
+  }
+
+  bool aceitaEdicaoEm(Duration t) => !isAnimated || hasKeyframeAt(t);
 }
 
 /// -------------------------------------------------------------- mascara

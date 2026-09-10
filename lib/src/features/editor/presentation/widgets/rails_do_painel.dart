@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui/am_colors.dart';
+import '../../application/editor_controller.dart';
+import '../../domain/layer.dart';
+
+/// O RAIL LE O PROJETO DE VERDADE.
+///
+/// Os controles mostram a EDICAO PENDENTE — e o losango tem de dizer o
+/// contrario: que ali ainda NAO ha marca. Se ele lesse a mesma camada
+/// que a linha do numero, ficaria cheio antes de a pessoa gravar, diria
+/// "tirar o keyframe daqui" e o toque apagaria uma marca que nunca
+/// existiu (`docs/keyframe-explicito.md`).
+Layer camadaReal(WidgetRef ref, Layer camada) =>
+    ref.read(editorControllerProvider).layerById(camada.id) ?? camada;
 
 /// A PROPRIEDADE QUE O RAIL ESQUERDO ESTA MIRANDO.
 ///
