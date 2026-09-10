@@ -221,10 +221,21 @@ AlvoDoRail alvoDaPropriedade(
   // milissegundos de uma marca, o rail mostrava "marcar aqui" e o toque
   // APAGAVA a marca existente. Perguntar a mesma trilha que vai
   // responder acaba com a discordancia.
+  //
+  // POSICAO INCLUI O Z, e rotacao inclui os tres eixos. O motor apaga a
+  // marca quando QUALQUER uma das trilhas tem uma ali
+  // (`toggleKeyframe`, caso `position`), e o rail so olhava X/Y: com
+  // marca so na profundidade, o losango dizia "marcar aqui" e o toque
+  // APAGAVA. E o mesmo defeito da tolerancia, num eixo diferente.
   final temAqui = switch (prop) {
-    LayerProp.position => camada.position.hasKeyframeAt(local),
+    LayerProp.position =>
+      camada.position.hasKeyframeAt(local) ||
+          camada.positionZ.hasKeyframeAt(local),
     LayerProp.scale => camada.scaleX.hasKeyframeAt(local),
-    LayerProp.rotation => camada.rotation.hasKeyframeAt(local),
+    LayerProp.rotation =>
+      camada.rotation.hasKeyframeAt(local) ||
+          camada.rotationX.hasKeyframeAt(local) ||
+          camada.rotationY.hasKeyframeAt(local),
     LayerProp.opacity => camada.opacity.hasKeyframeAt(local),
     LayerProp.skew => camada.skewX.hasKeyframeAt(local),
     LayerProp.pivot => camada.pivot.hasKeyframeAt(local),
@@ -1149,6 +1160,48 @@ class _AcoesDaCamada extends ConsumerWidget {
           ligado: meta.locked,
           aoTocar: () => c.toggleLocked(camada.id),
         ),
+        // O 3D DA CAMADA. `toggle3D` existia desde sempre e o unico
+        // chamador era um teste — o campo z do painel de transformacao
+        // ficava permanentemente apagado, e girar em X e Y nao tinha
+        // superficie nenhuma.
+        //
+        // ELE E UM HABILITADOR, e nao um efeito: sozinho, com z=0, nao
+        // muda um pixel (a perspectiva vale 1). O que ele acende e o
+        // campo de profundidade e os tres dials de giro — e e por isso
+        // que a espessura vem logo abaixo dele, para o toque ter
+        // resposta na mesma tela.
+        _Interruptor(
+          rotulo: camada.is3D
+              ? 'Desligar o 3D da camada'
+              : 'Ligar o 3D da camada',
+          icone: camada.is3D
+              ? Icons.view_in_ar_rounded
+              : Icons.crop_square_rounded,
+          ligado: camada.is3D,
+          aoTocar: () => c.toggle3D(camada.id),
+        ),
+        // ESPESSURA SO COM INCLINACAO, E SO EM QUEM O RENDER ACEITA.
+        //
+        // O desenho da espessura vive DENTRO do ramo de inclinacao: com
+        // giro X e Y em zero, digitar 200 px nao produz um pixel. E
+        // video, particulas e elemento 3D sao excluidos pelo proprio
+        // render — oferecer ali seria um numero que nao faz nada.
+        if (camada.is3D &&
+            camada is! VideoLayer &&
+            camada is! ParticlesLayer &&
+            camada is! Element3DLayer)
+          LinhaDeParametro(
+            rotulo: 'Espessura',
+            nome: 'Espessura 3D',
+            valor: meta.extrude,
+            casas: 0,
+            sufixo: ' px',
+            porPixel: 400 / 300,
+            aoComecar: c.beginGesture,
+            aoMudar: (v) => c.setLayerExtrude(camada.id, v),
+            aoTerminar: c.endGesture,
+            aoDigitar: (v) => c.setLayerExtrude(camada.id, v),
+          ),
         _Acao(
           icone: Icons.content_cut_rounded,
           rotulo: 'Dividir no cabecote',

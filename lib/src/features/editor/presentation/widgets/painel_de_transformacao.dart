@@ -146,7 +146,42 @@ class _PainelDeTransformacaoState
       case ModoDeTransformacao.girar:
         // O ANGULO MORA NO CENTRO DO DIAL, e nao aqui em cima: e para la
         // que o olho vai enquanto o dedo gira.
-        return const SizedBox.shrink();
+        //
+        // COM O 3D LIGADO, NAO. Sao tres dials lado a lado, e o numero
+        // de cada um encolhe junto com o botao — a fileira de cima
+        // volta a carregar os valores exatos, como no modo mover.
+        if (!l.is3D) return const SizedBox.shrink();
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CampoDeValor(
+              rotulo: 'x',
+              nome: 'Giro em X',
+              valor: l.rotationX.valueAt(_local),
+              casas: 1,
+              sufixo: '°',
+              aoDigitar: (v) => _c.editRotationX(l.id, widget.tempo, v),
+            ),
+            const SizedBox(width: 6),
+            CampoDeValor(
+              rotulo: 'y',
+              nome: 'Giro em Y',
+              valor: l.rotationY.valueAt(_local),
+              casas: 1,
+              sufixo: '°',
+              aoDigitar: (v) => _c.editRotationY(l.id, widget.tempo, v),
+            ),
+            const SizedBox(width: 6),
+            CampoDeValor(
+              rotulo: 'z',
+              nome: 'Giro em Z',
+              valor: l.rotation.valueAt(_local),
+              casas: 1,
+              sufixo: '°',
+              aoDigitar: (v) => _c.editRotation(l.id, widget.tempo, v),
+            ),
+          ],
+        );
       case ModoDeTransformacao.escalar:
         final travada = ref.watch(escalaTravadaProvider);
         return Row(
@@ -228,11 +263,46 @@ class _PainelDeTransformacaoState
           aoTerminar: _fecharLote,
         );
       case ModoDeTransformacao.girar:
-        return DialDeAngulo(
-          angulo: l.rotation.valueAt(_local),
-          aoComecar: _abrirLote,
-          aoMudar: (g) => _c.editRotation(l.id, widget.tempo, g),
-          aoTerminar: _fecharLote,
+        if (!l.is3D) {
+          return DialDeAngulo(
+            angulo: l.rotation.valueAt(_local),
+            aoComecar: _abrirLote,
+            aoMudar: (g) => _c.editRotation(l.id, widget.tempo, g),
+            aoTerminar: _fecharLote,
+          );
+        }
+        // TRES EIXOS, TRES DIAIS. Um dial por eixo em vez de um seletor
+        // de eixo com um dial so: girar em 3D e ajustar a RELACAO entre
+        // os tres, e com um dial de cada vez essa relacao vira memoria.
+        //
+        // UM LOSANGO PARA OS TRES, e isso esta certo: no motor a
+        // rotacao e uma propriedade de tres eixos, nao tres
+        // propriedades — `toggleKeyframe` marca X, Y e Z no mesmo
+        // instante, e a curva vale para os tres.
+        return Center(
+          child: SizedBox(
+            height: 96,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _dial(
+                  'Girar em X',
+                  l.rotationX.valueAt(_local),
+                  (g) => _c.editRotationX(l.id, widget.tempo, g),
+                ),
+                _dial(
+                  'Girar em Y',
+                  l.rotationY.valueAt(_local),
+                  (g) => _c.editRotationY(l.id, widget.tempo, g),
+                ),
+                _dial(
+                  'Girar em Z',
+                  l.rotation.valueAt(_local),
+                  (g) => _c.editRotation(l.id, widget.tempo, g),
+                ),
+              ],
+            ),
+          ),
         );
       case ModoDeTransformacao.escalar:
         return Center(
@@ -279,6 +349,21 @@ class _PainelDeTransformacaoState
         );
     }
   }
+
+  /// Um dos tres dials do giro em 3D.
+  Widget _dial(String rotulo, double angulo, void Function(double) aoMudar) =>
+      SizedBox(
+        width: 90,
+        height: 90,
+        child: DialDeAngulo(
+          compacto: true,
+          rotulo: rotulo,
+          angulo: angulo,
+          aoComecar: _abrirLote,
+          aoMudar: aoMudar,
+          aoTerminar: _fecharLote,
+        ),
+      );
 
   /// Escreve a escala. Travada, [valor] vale para os dois eixos; solta,
   /// vale so para o eixo que [eixoY] escolhe.

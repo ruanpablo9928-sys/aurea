@@ -18,7 +18,10 @@ const _raioDoBotao = 15.0;
 /// 2 px de sobra sao a borda antisserrilhada, que passa do raio
 /// geometrico. Escrito como conta para os dois numeros nao poderem
 /// discordar depois.
-const _folgaDoBotao = _raioDoBotao * 2 + 2;
+/// A conta agora vive em [DialDeAngulo._folga], porque o raio do botao
+/// depende do modo compacto — mas ela continua sendo A MESMA conta, e
+/// nao dois numeros soltos que podem discordar.
+double folgaParaBotao(double raioDoBotao) => raioDoBotao * 2 + 2;
 
 /// O MIOLO NAO TEM ANGULO. Perto do centro, um pixel de tremor do dedo
 /// vira dezenas de graus; ignorar esse disco e o que impede o valor de
@@ -59,6 +62,7 @@ class DialDeAngulo extends StatefulWidget {
     this.aoComecar,
     this.aoTerminar,
     this.rotulo = 'Girar a camada',
+    this.compacto = false,
     super.key,
   });
 
@@ -80,6 +84,22 @@ class DialDeAngulo extends StatefulWidget {
 
   /// O que a acessibilidade e os testes leem no alvo.
   final String rotulo;
+
+  /// TRES DIAIS LADO A LADO, e nao um sozinho.
+  ///
+  /// Nao e enfeite. Num painel de 360 px cada dial de uma fileira de
+  /// tres recebe uns 87 px: descontada a folga do botao (32), sobra um
+  /// raio de 27 — e o miolo surdo de 22 engoliria quase todo o anel,
+  /// deixando o gesto morto. Compacto encolhe o botao, o miolo e o
+  /// numero na mesma medida, e o dial volta a ter onde girar.
+  ///
+  /// Os padroes ficam intactos: o dial unico do modo 2D nao muda um
+  /// pixel.
+  final bool compacto;
+
+  double get _raio => compacto ? 10 : _raioDoBotao;
+  double get _folga => folgaParaBotao(_raio);
+  double get _miolo => compacto ? 12 : _mioloSurdo;
 
   @override
   State<DialDeAngulo> createState() => _DialDeAnguloState();
@@ -146,7 +166,7 @@ class _DialDeAnguloState extends State<DialDeAngulo> {
   }
 
   bool _foraDoMiolo(Offset toque, Offset centro) =>
-      (toque - centro).distance >= _mioloSurdo;
+      (toque - centro).distance >= widget._miolo;
 
   /// SEM CONVERSAO DE EIXO: no canvas o y cresce para baixo, entao o
   /// `atan2` ja nasce com o zero as 3 horas e crescendo no sentido
@@ -185,7 +205,7 @@ class _DialDeAnguloState extends State<DialDeAngulo> {
       final centro = Offset(largura / 2, altura / 2);
       final raio = math.max(
         0.0,
-        (math.min(largura, altura) - _folgaDoBotao) / 2,
+        (math.min(largura, altura) - widget._folga) / 2,
       );
       final texto = _texto(widget.angulo);
       return Semantics(
@@ -211,10 +231,11 @@ class _DialDeAnguloState extends State<DialDeAngulo> {
                     painter: _PinturaDoDial(
                       graus: widget.angulo.isFinite ? widget.angulo : 0,
                       raio: raio,
+                      raioDoBotao: widget._raio,
                     ),
                   ),
                 ),
-                _CaixaDoAngulo(texto: texto),
+                _CaixaDoAngulo(texto: texto, compacto: widget.compacto),
               ],
             ),
           ),
@@ -228,13 +249,16 @@ class _DialDeAnguloState extends State<DialDeAngulo> {
 /// tem rotulo escrito, entao a caixa e o que diz que aquilo ali e um
 /// valor e nao um enfeite do desenho.
 class _CaixaDoAngulo extends StatelessWidget {
-  const _CaixaDoAngulo({required this.texto});
+  const _CaixaDoAngulo({required this.texto, this.compacto = false});
 
   final String texto;
+  final bool compacto;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    padding: compacto
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
+        : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
     decoration: BoxDecoration(
       // [AmColors.campo], e nao [AmColors.chip]: sao dois tons quase
       // iguais medidos em telas diferentes, e a caixa de valor e
@@ -248,14 +272,14 @@ class _CaixaDoAngulo extends StatelessWidget {
     child: Text(
       texto,
       textAlign: TextAlign.center,
-      style: const TextStyle(
+      style: TextStyle(
         color: AmColors.accent,
-        fontSize: 20,
+        fontSize: compacto ? 13 : 20,
         fontWeight: FontWeight.w700,
         // ALGARISMO DE LARGURA FIXA: este numero troca a cada quadro
         // do arrasto, e com digitos de larguras diferentes a caixa
         // inteira pulsaria embaixo do dedo enquanto o dial gira.
-        fontFeatures: [FontFeature.tabularFigures()],
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     ),
   );
@@ -267,10 +291,15 @@ class _CaixaDoAngulo extends StatelessWidget {
 /// para poder ser achado e medido como texto, e nao um desenho que os
 /// testes teriam de adivinhar.
 class _PinturaDoDial extends CustomPainter {
-  const _PinturaDoDial({required this.graus, required this.raio});
+  const _PinturaDoDial({
+    required this.graus,
+    required this.raio,
+    this.raioDoBotao = _raioDoBotao,
+  });
 
   final double graus;
   final double raio;
+  final double raioDoBotao;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -292,10 +321,12 @@ class _PinturaDoDial extends CustomPainter {
         centro + Offset(math.cos(radianos), math.sin(radianos)) * raio;
     // BRANCO, como o cabecote: a unica peca movel do desenho usa a cor
     // que no editor inteiro significa "isto e o que voce esta pegando".
-    canvas.drawCircle(botao, _raioDoBotao, Paint()..color = AmColors.cabecote);
+    canvas.drawCircle(botao, raioDoBotao, Paint()..color = AmColors.cabecote);
   }
 
   @override
   bool shouldRepaint(_PinturaDoDial anterior) =>
-      anterior.graus != graus || anterior.raio != raio;
+      anterior.graus != graus ||
+      anterior.raio != raio ||
+      anterior.raioDoBotao != raioDoBotao;
 }

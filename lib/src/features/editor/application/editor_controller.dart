@@ -6732,12 +6732,24 @@ class EditorController extends Notifier<VideoProject> {
     _replace(layer.copyLayer(is3D: !layer.is3D));
   }
 
+  /// A PROFUNDIDADE, com a MESMA regra de keyframe das irmas.
+  ///
+  /// Este era o unico `edit*` de transformacao que usava `.edited`
+  /// direto em vez de `_editDouble` — ou seja, o unico que IGNORAVA o
+  /// interruptor de keyframe automatico. Com o automatico ligado e o Z
+  /// ainda sem marcas, arrastar a profundidade reescrevia a BASE em
+  /// todo instante em vez de marcar: o painel prometia uma coisa e o Z
+  /// fazia outra, e a animacao de profundidade nascia quebrada.
   void editPositionZ(String id, Duration globalTime, double value) {
     final layer = _layer(id);
     if (layer == null) return;
     _replace(
       layer.copyLayer(
-        positionZ: layer.positionZ.edited(layer.localTime(globalTime), value),
+        positionZ: _editDouble(
+          layer.positionZ,
+          layer.localTime(globalTime),
+          value,
+        ),
       ),
     );
   }
