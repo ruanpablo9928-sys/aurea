@@ -8,6 +8,7 @@ import '../../domain/layer.dart';
 import 'controles_da_camada.dart';
 import 'editor_de_curva.dart';
 import 'painel_da_selecao.dart';
+import 'painel_de_cor.dart';
 
 /// AS FERRAMENTAS DA CAMADA SELECIONADA.
 ///
@@ -34,6 +35,13 @@ enum EstadoDoPainel {
 
   /// Uma categoria aberta, ocupando o painel.
   categoria,
+
+  /// OS AJUSTES DA COMPOSICAO — o que nao pertence a camada nenhuma.
+  ///
+  /// Estado proprio pelo mesmo motivo da selecao: o fundo e da
+  /// composicao, e num cartao de camada ele se repetiria em cada tipo,
+  /// com cada controle tendo de explicar sobre quem age.
+  composicao,
 
   /// AS ACOES DE VARIAS CAMADAS DE UMA VEZ.
   ///
@@ -194,13 +202,21 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
     rotulo: 'Camada',
     icone: Icons.layers_rounded,
   ),
-  const CategoriaDaCamada(
-    id: 'cor',
-    rotulo: 'Cor e preenchimento',
-    icone: Icons.palette_rounded,
-    disponivel: false,
-    porQueNao: 'Chega numa proxima entrega',
-  ),
+  // COR SO EM QUEM TEM COMANDO QUE MUDA PIXEL.
+  //
+  // O cartao existia reservado e desligado desde o comeco. Fica de fora
+  // de imagem, video, audio, grupo, nulo, ajuste e cena 3D — nenhum
+  // deles tem cor propria — e da LEGENDA, que tem cor no render e
+  // NENHUM comando que a escreva: abriria num painel vazio.
+  if (camada is TextLayer ||
+      camada is ShapeLayer ||
+      camada is ParticlesLayer ||
+      camada is Element3DLayer)
+    const CategoriaDaCamada(
+      id: 'cor',
+      rotulo: 'Cor e preenchimento',
+      icone: Icons.palette_rounded,
+    ),
   const CategoriaDaCamada(
     id: 'borda',
     rotulo: 'Borda e sombra',
@@ -322,6 +338,24 @@ class PainelSobreposto extends ConsumerWidget {
     final estado = ref.watch(estadoDoPainelProvider);
     if (estado == EstadoDoPainel.recolhido) return const SizedBox.shrink();
 
+    // A COMPOSICAO ganha o painel inteiro e nao passa por camada
+    // nenhuma — ela existe mesmo num projeto vazio.
+    if (estado == EstadoDoPainel.composicao) {
+      return const Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: PainelDaCamada.alturaMaxima,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AmColors.panelHigh,
+            border: Border(top: BorderSide(color: AmColors.hairline)),
+          ),
+          child: PainelDaComposicao(),
+        ),
+      );
+    }
+
     // AS ACOES DO CONJUNTO ganham o painel inteiro. Elas nao pertencem
     // a camada nenhuma, entao nao passam pela ficha da selecionada.
     if (estado == EstadoDoPainel.selecao) {
@@ -401,6 +435,13 @@ void abrirFerramentasDaCamada(WidgetRef ref) {
 /// deixaria o gesto sem resposta.
 void abrirAcoesDaSelecao(WidgetRef ref) {
   ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.selecao;
+  ref.read(categoriaAbertaProvider.notifier).state = null;
+}
+
+/// ABRE OS AJUSTES DA COMPOSICAO. O gesto e o toque no nome do projeto,
+/// no cabecalho da tela.
+void abrirAjustesDaComposicao(WidgetRef ref) {
+  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.composicao;
   ref.read(categoriaAbertaProvider.notifier).state = null;
 }
 
@@ -504,6 +545,7 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'efeitos' => 'Efeitos',
   'midia' => 'Informacoes da midia',
   'camada' => 'Camada',
+  'cor' => 'Cor e preenchimento',
   'mascara' => 'Mascara',
   'mistura' => 'Mistura e recorte',
   _ => 'Ferramentas',
@@ -524,7 +566,8 @@ double alturaDaFerramentaAberta(WidgetRef ref) {
   final estado = ref.watch(estadoDoPainelProvider);
   if (estado == EstadoDoPainel.recolhido) return 0;
   if (estado == EstadoDoPainel.categoria ||
-      estado == EstadoDoPainel.selecao) {
+      estado == EstadoDoPainel.selecao ||
+      estado == EstadoDoPainel.composicao) {
     return PainelDaCamada.alturaMaxima;
   }
   final project = ref.watch(editorControllerProvider);

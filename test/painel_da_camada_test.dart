@@ -326,15 +326,24 @@ void main() {
 
       expect(
         futuras.map((x) => x.id),
-        containsAll(['cor', 'borda']),
+        contains('borda'),
         reason:
             'a estrutura do painel fica completa: da para ver o editor '
             'inteiro de uma vez',
       );
+      // A LISTA DE PROMESSAS SO ENCOLHE. Efeitos saiu quando a ficha
+      // passou a ser gerada da tabela; cor saiu quando o seletor
+      // chegou. Deixar um cartao apagado depois de o recurso existir e
+      // tao ruim quanto acender um que abre o nada.
       expect(
         futuras.map((x) => x.id),
         isNot(contains('efeitos')),
         reason: 'efeitos deixou de ser promessa: a ficha e gerada da tabela',
+      );
+      expect(
+        futuras.map((x) => x.id),
+        isNot(contains('cor')),
+        reason: 'cor deixou de ser promessa: o seletor existe e pinta',
       );
       for (final f in futuras) {
         expect(
@@ -350,7 +359,7 @@ void main() {
     testWidgets('cartao desabilitado NAO abre', (tester) async {
       final m = await _montar(tester);
       await abrirFerramentas(tester, m.c);
-      await tester.tap(find.byKey(const ValueKey('cartao-cor')));
+      await tester.tap(find.byKey(const ValueKey('cartao-borda')));
       await tester.pump();
       expect(
         m.c.read(estadoDoPainelProvider),

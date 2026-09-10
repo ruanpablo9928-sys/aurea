@@ -87,9 +87,14 @@ class EscolhaDeCor extends StatelessWidget {
               for (final p in prontas)
                 _Pronta(
                   cor: p,
+                  // O DONO NO NOME. Um gradiente tem tres seletores na
+                  // mesma ficha, e sem o prefixo quem ouve a tela
+                  // escuta "Cor 30 214 177" tres vezes sem saber qual
+                  // delas esta tocando. Com `rotulo` igual a 'Cor', o
+                  // nome fica identico ao de antes.
+                  dono: rotulo,
                   aceso: p.toARGB32() == cor.withValues(alpha: 1).toARGB32(),
-                  aoTocar: () =>
-                      aoMudar(p.withValues(alpha: cor.a)),
+                  aoTocar: () => aoMudar(p.withValues(alpha: cor.a)),
                 ),
             ],
           ),
@@ -180,11 +185,13 @@ class _Cabecalho extends StatelessWidget {
 class _Pronta extends StatelessWidget {
   const _Pronta({
     required this.cor,
+    required this.dono,
     required this.aceso,
     required this.aoTocar,
   });
 
   final Color cor;
+  final String dono;
   final bool aceso;
   final VoidCallback aoTocar;
 
@@ -195,7 +202,7 @@ class _Pronta extends StatelessWidget {
     button: true,
     selected: aceso,
     label:
-        'Cor '
+        '$dono '
         '${(cor.r * 255).round()} '
         '${(cor.g * 255).round()} '
         '${(cor.b * 255).round()}',

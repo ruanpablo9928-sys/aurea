@@ -262,6 +262,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                           child: AspectRatio(
                             aspectRatio: proporcao,
                             child: DecoratedBox(
+                              key: const ValueKey('moldura-da-previa'),
                               // OS LIMITES DA COMPOSICAO, visiveis. O
                               // quadro do projeto e o fundo do editor
                               // eram a mesma coisa preta. Este contorno e
@@ -269,9 +270,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               // que a `CompositionView` desenha, entao
                               // nao vira camada e nao entra na
                               // exportacao.
+                              // O FUNDO E O DA COMPOSICAO, e nao um
+                              // preto cravado.
+                              //
+                              // A exportacao SEMPRE pintou
+                              // `project.backgroundColor` atras do
+                              // quadro; aqui havia um `0xFF000000` fixo.
+                              // Enquanto ninguem podia escolher a cor,
+                              // os dois coincidiam; com o controle
+                              // aberto, escolher amarelo mudaria o
+                              // arquivo e nao mudaria um pixel da tela
+                              // em que a pessoa esta olhando.
                               decoration: BoxDecoration(
                                 border: Border.all(color: AmColors.hairline),
-                                color: const Color(0xFF000000),
+                                color: project.backgroundColor,
                               ),
                               child: ClipRect(
                                 child: FittedBox(
@@ -382,6 +394,9 @@ class _Cabecalho extends ConsumerWidget {
     // dizendo o nome do projeto esconderia isso. Sair daqui desfaz a
     // juncao, que e o unico caminho de volta que faz sentido: um
     // conjunto invisivel agindo por tras seria pior que nenhum.
+    if (estado == EstadoDoPainel.composicao) {
+      return _CabecalhoDaFerramenta(titulo: 'Composicao');
+    }
     final juntas = ref.watch(multiSelectProvider).length;
     if (estado == EstadoDoPainel.selecao && juntas >= 2) {
       return _CabecalhoDaFerramenta(
@@ -425,15 +440,38 @@ class _Cabecalho extends ConsumerWidget {
               ),
             ),
           ),
+          // O NOME DO PROJETO E A COMPOSICAO.
+          //
+          // Ele estava ali sem fazer nada, e e o unico ponto da tela
+          // que ja fala em nome dela — o fundo, que nao pertence a
+          // camada nenhuma, nao teria outro lugar honesto: num cartao
+          // de camada ele se repetiria em quatro tipos e cada controle
+          // teria de explicar sobre quem age.
           Expanded(
-            child: Text(
-              nome,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AmColors.text,
+            child: Semantics(
+              container: true,
+              excludeSemantics: true,
+              button: true,
+              label: 'Ajustes da composicao',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => abrirAjustesDaComposicao(ref),
+                child: SizedBox(
+                  height: altura,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      nome,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AmColors.text,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

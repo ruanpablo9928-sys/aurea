@@ -12,6 +12,7 @@ import 'editor_de_curva.dart';
 import 'escolha_de_cor.dart';
 import 'linha_de_parametro.dart';
 import 'painel_da_cena.dart';
+import 'painel_de_cor.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_rastreio.dart';
 import 'painel_de_mistura.dart';
@@ -100,6 +101,7 @@ class ControlesDaCategoria extends ConsumerWidget {
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),
     'mascara' => PainelDeMascaras(camada: camada, tempo: tempo),
+    'cor' => PainelDeCor(camada: camada, tempo: tempo),
     'mistura' => PainelDeMistura(camada: camada),
     _ => const _AindaNao(),
   };
@@ -129,6 +131,9 @@ class ControlesDaCategoria extends ConsumerWidget {
     }
     if (categoriaId == 'mascara') {
       return alvoDoParametroDaMascara(ref, camada, tempo);
+    }
+    if (categoriaId == 'cor') {
+      return alvoDaCorDaForma(ref, camada, tempo);
     }
     return const AlvoDoRail();
   }
