@@ -151,7 +151,7 @@ void main() {
   });
 
   group('abrir as ferramentas', () {
-    testWidgets('o primeiro toque escolhe, o segundo abre', (tester) async {
+    testWidgets('um toque escolhe E abre', (tester) async {
       final m = await _montar(tester, textos: 2);
       m.c.read(modoDaLinhaDoTempoProvider.notifier).state =
           ModoDaLinhaDoTempo.geral;
@@ -160,17 +160,11 @@ void main() {
 
       final camadas = m.c.read(editorControllerProvider).layers;
       final alvo = camadas.first;
+      // O CONTRATO DO AM (V 00:40): selecionar e entrar sao o mesmo
+      // gesto. Eram dois toques, e o primeiro nao mudava nada na tela.
       await tester.tap(find.bySemanticsLabel(alvo.name));
       await tester.pump();
       expect(m.c.read(selectedLayerProvider), alvo.id);
-      expect(
-        m.c.read(estadoDoPainelProvider),
-        EstadoDoPainel.recolhido,
-        reason: 'escolher uma camada nao abre painel nenhum',
-      );
-
-      await tester.tap(find.bySemanticsLabel(alvo.name));
-      await tester.pump();
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
     });
   });

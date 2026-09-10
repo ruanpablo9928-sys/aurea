@@ -5,6 +5,7 @@ import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import '../contexto_do_editor.dart';
 import 'controles_da_camada.dart';
 import 'editor_de_curva.dart';
 import 'painel_da_selecao.dart';
@@ -328,7 +329,12 @@ class PainelSobreposto extends ConsumerWidget {
     // escondia a previa — que e o unico lugar onde da para ver se a
     // curva ficou boa. Aqui ela ocupa a MESMA faixa das outras
     // ferramentas, e a previa continua a vista.
-    if (ref.watch(curvaEmEdicaoProvider) != null) {
+    //
+    // QUEM ESTA NA FRENTE E QUEM MANDA — e a ordem esta em
+    // `contexto_do_editor.dart`, nao aqui. Esta era a segunda das tres
+    // copias da cadeia de prioridade.
+    final contexto = ref.watch(contextoDoEditorProvider);
+    if (contexto == ContextoDoEditor.curva) {
       return Positioned(
         left: 0,
         right: 0,
@@ -345,11 +351,14 @@ class PainelSobreposto extends ConsumerWidget {
     }
 
     final estado = ref.watch(estadoDoPainelProvider);
-    if (estado == EstadoDoPainel.recolhido) return const SizedBox.shrink();
+    if (contexto == ContextoDoEditor.projeto &&
+        estado != EstadoDoPainel.categorias) {
+      return const SizedBox.shrink();
+    }
 
     // A COMPOSICAO ganha o painel inteiro e nao passa por camada
     // nenhuma — ela existe mesmo num projeto vazio.
-    if (estado == EstadoDoPainel.composicao) {
+    if (contexto == ContextoDoEditor.composicao) {
       return const Positioned(
         left: 0,
         right: 0,
@@ -367,7 +376,8 @@ class PainelSobreposto extends ConsumerWidget {
 
     // AS ACOES DO CONJUNTO ganham o painel inteiro. Elas nao pertencem
     // a camada nenhuma, entao nao passam pela ficha da selecionada.
-    if (estado == EstadoDoPainel.selecao) {
+    if (contexto == ContextoDoEditor.selecao ||
+        estado == EstadoDoPainel.selecao) {
       if (ref.watch(multiSelectProvider).length < 2) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!ref.context.mounted) return;
@@ -574,21 +584,23 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
 /// menor.
 double alturaDaFerramentaAberta(WidgetRef ref) {
   if (!ref.watch(painelDaCamadaLigadoProvider)) return 0;
-  if (ref.watch(curvaEmEdicaoProvider) != null) {
-    return PainelDaCamada.alturaMaxima;
+  // A TERCEIRA COPIA DA CADEIA MORAVA AQUI. Agora e a mesma leitura do
+  // cabecalho e do painel: um contexto, uma altura.
+  switch (ref.watch(contextoDoEditorProvider)) {
+    case ContextoDoEditor.curva:
+    case ContextoDoEditor.familia:
+    case ContextoDoEditor.selecao:
+    case ContextoDoEditor.composicao:
+      return PainelDaCamada.alturaMaxima;
+    case ContextoDoEditor.camada:
+      final project = ref.watch(editorControllerProvider);
+      final id = ref.watch(selectedLayerProvider);
+      final camada = project.layers.where((l) => l.id == id).firstOrNull;
+      if (camada == null) return 0;
+      return PainelDaCamada.alturaAberta(categoriasDaCamada(camada).length);
+    case ContextoDoEditor.projeto:
+      return 0;
   }
-  final estado = ref.watch(estadoDoPainelProvider);
-  if (estado == EstadoDoPainel.recolhido) return 0;
-  if (estado == EstadoDoPainel.categoria ||
-      estado == EstadoDoPainel.selecao ||
-      estado == EstadoDoPainel.composicao) {
-    return PainelDaCamada.alturaMaxima;
-  }
-  final project = ref.watch(editorControllerProvider);
-  final id = ref.watch(selectedLayerProvider);
-  final camada = project.layers.where((l) => l.id == id).firstOrNull;
-  if (camada == null) return 0;
-  return PainelDaCamada.alturaAberta(categoriasDaCamada(camada).length);
 }
 
 /// FECHA A FERRAMENTA e devolve a tela ao projeto.

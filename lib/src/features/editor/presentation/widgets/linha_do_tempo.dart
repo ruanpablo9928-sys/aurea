@@ -7,6 +7,7 @@ import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import '../../domain/video_project.dart';
 import 'adicionar_conteudo.dart';
+import '../contexto_do_editor.dart';
 import 'mapa_do_tempo.dart';
 import 'painel_da_camada.dart';
 import 'pilula_de_navegacao.dart';
@@ -123,7 +124,7 @@ class LinhaDoTempo extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
-    final modo = ref.watch(modoDaLinhaDoTempoProvider);
+    final modo = ref.watch(modoEfetivoProvider);
     final camadas = project.layers;
     final atual = camadas.where((l) => l.id == selecionada).firstOrNull;
     // QUEM MANDA NA ALTURA E A TELA.
@@ -306,11 +307,13 @@ class LinhaDoTempo extends ConsumerWidget {
           ref.read(editorControllerProvider.notifier).beginGesture(),
       aoTerminarLote: () =>
           ref.read(editorControllerProvider.notifier).endGesture(),
+      // AS SETAS DA PILULA SAO O OUTRO CAMINHO DE TROCA DE CAMADA, e
+      // por isso passam pela MESMA porta que o toque na pilha: escrever
+      // `selectedLayerProvider` na mao aqui deixava a familia aberta
+      // apontando para a camada anterior.
       aoTrocar: (passo) {
         final v = _vizinha(camadas, atual, passo);
-        if (v != null) {
-          ref.read(selectedLayerProvider.notifier).state = v.id;
-        }
+        if (v != null) selecionarCamada(ref, v.id);
       },
       aoAlternarOlho: () =>
           ref.read(editorControllerProvider.notifier).toggleHidden(atual.id),

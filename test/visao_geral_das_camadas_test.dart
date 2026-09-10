@@ -6,6 +6,7 @@
 // sao as que dizem que o modo detalhado continua exatamente como estava.
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
+import 'package:aurea/src/features/editor/presentation/contexto_do_editor.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/painel_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
@@ -178,48 +179,66 @@ void main() {
       );
     });
 
-    testWidgets('tocar na camada JA selecionada abre as ferramentas', (
+    testWidgets('UM toque na camada entra no contexto dela', (tester) async {
+      final m = await _montar(tester, camadas: 3);
+      await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
+      await tester.pump();
+
+      // V 00:40 do video de referencia: tocar numa camada troca o
+      // cabecalho, a area inferior e o painel de uma vez. Eram DOIS
+      // toques aqui, e entre um e outro a tela nao mudava um pixel.
+      await tester.tap(find.bySemanticsLabel('Camada 3'));
+      await tester.pump();
+
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
+      final camadas = m.c.read(editorControllerProvider).layers;
+      expect(
+        m.c.read(selectedLayerProvider),
+        camadas.firstWhere((l) => l.name == 'Camada 3').id,
+      );
+      // O INTERRUPTOR MANUAL nao e tocado: quem manda na area inferior
+      // agora e o contexto, e o interruptor so decide no de projeto.
+      expect(
+        m.c.read(modoDaLinhaDoTempoProvider),
+        ModoDaLinhaDoTempo.geral,
+        reason: 'entrar no contexto nao pode reescrever a preferencia',
+      );
+      expect(
+        m.c.read(modoEfetivoProvider),
+        ModoDaLinhaDoTempo.detalhado,
+        reason: 'no contexto de camada a area inferior e a faixa dela',
+      );
+    });
+
+    testWidgets('trocar de camada com uma familia aberta nao reabre a grade', (
       tester,
     ) async {
       final m = await _montar(tester, camadas: 3);
       await tester.tap(find.bySemanticsLabel('Ver todas as camadas'));
       await tester.pump();
-
-      final alvo = find.bySemanticsLabel('Camada 3');
-      // O PRIMEIRO toque so escolhe, e nada mais se abre.
-      await tester.tap(alvo);
+      await tester.tap(find.bySemanticsLabel('Camada 3'));
       await tester.pump();
-      expect(
-        m.c.read(estadoDoPainelProvider),
-        EstadoDoPainel.recolhido,
-        reason: 'escolher uma camada nao abre painel nenhum',
-      );
-      expect(
-        m.c.read(modoDaLinhaDoTempoProvider),
-        ModoDaLinhaDoTempo.geral,
-        reason: 'escolher nao pode arrastar a pessoa para outra vista',
-      );
-
-      // O SEGUNDO abre as ferramentas DAQUELA camada.
-      //
-      // Antes ele levava ao modo detalhado; o modo ganhou botao proprio
-      // no cabecalho, e quem ficou sem caminho foi as ferramentas,
-      // depois de a faixa do rodape ser removida. Entao e ele que herda
-      // o gesto — como no Alight, onde tocar na camada mostra o que da
-      // para fazer com ela.
-      await tester.tap(alvo);
+      m.c.read(estadoDoPainelProvider.notifier).state =
+          EstadoDoPainel.categoria;
+      m.c.read(categoriaAbertaProvider.notifier).state = 'opacidade';
       await tester.pump();
 
-      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
-      expect(
-        m.c.read(modoDaLinhaDoTempoProvider),
-        ModoDaLinhaDoTempo.geral,
-        reason: 'abrir as ferramentas nao troca a vista debaixo do dedo',
-      );
+      // NO CONTEXTO DE CAMADA a area inferior e a faixa daquela camada
+      // — a pilha some, e quem troca de camada e a pilula.
+      await tester.tap(find.bySemanticsLabel('Proxima camada'));
+      await tester.pump();
+
+      // A INVARIANTE: nunca reabrir um painel do objeto anterior, e
+      // nunca fechar a familia que a camada nova tambem tem. Opacidade
+      // existe em toda camada, entao ela segue aberta — agora sobre a
+      // Camada 2.
+      expect(m.c.read(categoriaAbertaProvider), 'opacidade');
+      expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categoria);
       final camadas = m.c.read(editorControllerProvider).layers;
       expect(
         m.c.read(selectedLayerProvider),
-        camadas.firstWhere((l) => l.name == 'Camada 3').id,
+        isNot(camadas.firstWhere((l) => l.name == 'Camada 3').id),
+        reason: 'a seta trocou mesmo de camada',
       );
     });
 

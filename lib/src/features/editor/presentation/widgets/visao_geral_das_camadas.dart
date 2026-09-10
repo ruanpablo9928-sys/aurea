@@ -11,6 +11,7 @@ import '../../domain/imantacao.dart';
 import '../../domain/layer.dart';
 import 'linha_do_tempo.dart';
 import 'mapa_do_tempo.dart';
+import '../contexto_do_editor.dart';
 import 'painel_da_camada.dart';
 
 /// COMO A LINHA DO TEMPO ESTA SENDO MOSTRADA.
@@ -502,22 +503,19 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                           // toque simples e o gesto mais comum desta
                           // vista.
                           //
-                          // O PRIMEIRO TOQUE ESCOLHE, O SEGUNDO ABRE AS
-                          // FERRAMENTAS daquela camada. Antes o segundo
-                          // toque levava ao modo detalhado, mas o modo
-                          // ja tem botao proprio no cabecalho — e o que
-                          // some com a faixa do rodape e o caminho para
-                          // as ferramentas, entao e ele que herda o
-                          // gesto. E o mesmo do Alight: tocar na camada
-                          // mostra o que da para fazer com ela.
-                          onTap: () {
-                            if (l.id == selecionada) {
-                              abrirFerramentasDaCamada(ref);
-                              return;
-                            }
-                            ref.read(selectedLayerProvider.notifier).state =
-                                l.id;
-                          },
+                          // UM TOQUE ENTRA NO CONTEXTO DA CAMADA.
+                          //
+                          // Eram DOIS: o primeiro so escrevia a selecao
+                          // e a tela nao mudava um pixel; o segundo
+                          // abria o painel. Entre um e outro nao havia
+                          // sinal nenhum de que existia um contexto para
+                          // entrar — quem selecionava e nao tocava de
+                          // novo simplesmente nao via. No Alight
+                          // (V 00:40) o toque troca cabecalho, area
+                          // inferior e painel de uma vez, e
+                          // `selecionarCamada` faz as tres coisas juntas
+                          // sem reabrir a familia do objeto anterior.
+                          onTap: () => selecionarCamada(ref, l.id),
                         ),
                       ),
                     ),

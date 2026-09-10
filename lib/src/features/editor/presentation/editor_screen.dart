@@ -8,14 +8,11 @@ import '../application/video_layer_manager.dart';
 import '../domain/video_project.dart';
 import '../../export/presentation/export_video_screen.dart';
 import '../../projects/application/projects_controller.dart';
-import 'widgets/controles_da_camada.dart';
+import 'contexto_do_editor.dart';
+import 'widgets/cabecalho_da_camada.dart';
 import 'widgets/linha_do_tempo.dart';
 import 'widgets/adicionar_conteudo.dart';
-import 'widgets/editor_de_curva.dart';
 import 'widgets/painel_da_camada.dart';
-import 'widgets/painel_de_cor.dart';
-import 'widgets/painel_de_transformacao.dart';
-import 'widgets/painel_de_mascaras.dart';
 import 'widgets/palco_de_previa.dart';
 import 'widgets/visao_geral_das_camadas.dart';
 
@@ -146,20 +143,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     // ferramenta, de efeito, de mascara ou de parametro muda o que o
     // losango mira — e um losango nunca pode cravar o valor de outra
     // coisa.
-    for (final foco in <ProviderListenable<Object?>>[
-      selectedLayerProvider,
-      estadoDoPainelProvider,
-      categoriaAbertaProvider,
-      modoDeTransformacaoProvider,
-      efeitoAbertoProvider,
-      parametroAbertoProvider,
-      mascaraAbertaProvider,
-      parametroDaMascaraProvider,
-      itemDaCorProvider,
-      parametroDaCorProvider,
-    ]) {
-      ref.listen(foco, (_, _) => _descartarPendencia());
-    }
+    //
+    // Isto era uma LISTA de dez providers escrita a mao, e uma lista
+    // escrita a mao esquece: cada painel novo tinha de lembrar de se
+    // inscrever aqui. Virou um valor — `FocoDoEditor` — e a regra passou
+    // a ser "se o foco mudou, a pendencia morre".
+    ref.listen(focoDoEditorProvider, (_, _) => _descartarPendencia());
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
     final controlador = ref.read(editorControllerProvider.notifier);
@@ -265,7 +254,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             // fechada ela usa o que sobrou; com a ferramenta aberta ela
             // desce ate o chao e nao abaixo.
             final pedidaPelaTimeline = LinhaDoTempo.alturaDoModo(
-              ref.watch(modoDaLinhaDoTempoProvider),
+              ref.watch(modoEfetivoProvider),
               project.layers.length,
             );
             final chao = ferramenta > 0 ? chaoComFerramenta : pedidaPelaTimeline;
@@ -366,6 +355,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 // O PAINEL DO MEIO, com a tela desfocada atras. Fica por
                 // cima de tudo porque enquanto ele esta aberto nao ha o
                 // que fazer atras dele.
+                // O `...` DO CABECALHO DA CAMADA, por cima de tudo:
+                // enquanto ele esta aberto nao ha o que fazer atras dele.
+                MenuDaCamada(playback: _playback),
                 PainelCentralDeAdicao(
                   instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
                   aoAdicionar: (_, _) {
@@ -408,38 +400,44 @@ class _Cabecalho extends ConsumerWidget {
   final String nome;
   final VoidCallback aoExportar;
 
-  static const altura = 52.0;
+  static const altura = alturaDaFaixaDeCima;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // A CURVA TOMA A BARRA IGUAL AS OUTRAS FERRAMENTAS, e antes delas:
-    // ela abre POR DENTRO de uma, e quem esta na frente e quem nomeia.
-    if (ref.watch(curvaEmEdicaoProvider) != null) {
-      return const _CabecalhoDaFerramenta(titulo: 'Curva de gradacao');
-    }
-    final estado = ref.watch(estadoDoPainelProvider);
-    final aberta = estado == EstadoDoPainel.categoria
-        ? ref.watch(categoriaAbertaProvider)
-        : null;
-    if (aberta != null) {
-      return _CabecalhoDaFerramenta(titulo: tituloDaFerramenta(aberta));
-    }
-    // QUANTAS CAMADAS ESTAO JUNTAS, no lugar do nome do projeto.
-    //
-    // O conjunto muda o que TODO gesto faz, e uma barra que continuasse
-    // dizendo o nome do projeto esconderia isso. Sair daqui desfaz a
-    // juncao, que e o unico caminho de volta que faz sentido: um
-    // conjunto invisivel agindo por tras seria pior que nenhum.
-    if (estado == EstadoDoPainel.composicao) {
-      return _CabecalhoDaFerramenta(titulo: 'Composicao');
-    }
-    final juntas = ref.watch(multiSelectProvider).length;
-    if (estado == EstadoDoPainel.selecao && juntas >= 2) {
-      return _CabecalhoDaFerramenta(
-        titulo: '$juntas camadas',
-        aoSair: () => limparSelecao(ref),
-        rotuloDeSair: 'Desfazer a juncao',
-      );
+    // UM contexto, UMA barra. A cadeia de prioridade nao mora mais aqui
+    // — mora em `contexto_do_editor.dart`, e este `switch` so escolhe a
+    // barra de cada contexto. Era esta cadeia, copiada em tres arquivos,
+    // que deixava o titulo da familia antiga no cabecalho depois de
+    // trocar de camada.
+    switch (ref.watch(contextoDoEditorProvider)) {
+      case ContextoDoEditor.curva:
+        // A CURVA TOMA A BARRA IGUAL AS OUTRAS FERRAMENTAS, e antes
+        // delas: ela abre POR DENTRO de uma, e quem esta na frente e
+        // quem nomeia.
+        return const _CabecalhoDaFerramenta(titulo: 'Curva de gradacao');
+      case ContextoDoEditor.familia:
+        return _CabecalhoDaFerramenta(
+          titulo: tituloDaFerramenta(ref.watch(categoriaAbertaProvider)!),
+        );
+      case ContextoDoEditor.composicao:
+        return const _CabecalhoDaFerramenta(titulo: 'Composicao');
+      case ContextoDoEditor.selecao:
+        // QUANTAS CAMADAS ESTAO JUNTAS, no lugar do nome do projeto.
+        //
+        // O conjunto muda o que TODO gesto faz, e uma barra que
+        // continuasse dizendo o nome do projeto esconderia isso. Sair
+        // daqui desfaz a juncao, que e o unico caminho de volta que faz
+        // sentido: um conjunto invisivel agindo por tras seria pior que
+        // nenhum.
+        return _CabecalhoDaFerramenta(
+          titulo: '${ref.watch(multiSelectProvider).length} camadas',
+          aoSair: () => limparSelecao(ref),
+          rotuloDeSair: 'Desfazer a juncao',
+        );
+      case ContextoDoEditor.camada:
+        return const CabecalhoDaCamada();
+      case ContextoDoEditor.projeto:
+        break;
     }
     // DENTRO DE UM GRUPO, "VOLTAR" QUER DIZER SAIR DO GRUPO.
     //
