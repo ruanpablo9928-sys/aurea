@@ -117,6 +117,26 @@ escrito abaixo de tres camadas), escalonar no tempo, subir e descer na
 pilha, agrupar, duplicar e apagar. Duplicar e apagar em lote usam
 `runAsOneUndo`: apagar cinco e uma acao, e nao cinco.
 
+**Exportacao (lote 9).** `ExportSettings` estava escrito, testado e
+completo, e era INALCANCAVEL: o unico construtor real era
+`const ExportVideoScreen()`, sem ajuste nenhum, e a tela comecava a
+renderizar no `initState` — nao havia momento em que desse para
+escolher. Toda exportacao saia no tamanho do projeto, em H.264, na
+qualidade media.
+
+Entrou a fase `_Fase.ajustes`, antes de comecar: formato, tamanho, fps,
+codec e qualidade, com a previsao de tamanho de arquivo. Codec e
+qualidade somem na sequencia PNG, que nao passa por codificador nenhum.
+O erro ganhou "Mudar os ajustes e tentar de novo" — quase todo erro
+daqui se resolve mudando um ajuste, e repetir igual daria o mesmo erro.
+
+Junto saiu o item **QUEBRADO** `EXPORT — Quality / Bitrate`: havia DUAS
+fontes de verdade para o mesmo botao (`ExportVideoScreen.quality` e
+`ExportSettings.quality`), e `taxaDeBits` so olhava os ajustes quando
+havia taxa na mao, HEVC ou tamanho diferente do original. No caminho
+comum, escolher "alta" era silenciosamente ignorado. A `String quality`
+da tela morreu, e a formula duplicada de `PlatformEncoder` tambem.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo

@@ -136,18 +136,11 @@ class PlatformEncoder {
     }
   }
 
-  /// Taxa de bits sugerida para [w]x[h] a [fps], pela qualidade pedida.
-  ///
-  /// A conta e bits por pixel por quadro: e o que mantem a mesma
-  /// aparencia quando muda a resolucao, em vez de um numero fixo que fica
-  /// generoso em 720p e pobre em 4K.
-  static int bitrateFor(int w, int h, int fps, String quality) {
-    final bpp = switch (quality) {
-      'alta' => 0.20,
-      'baixa' => 0.07,
-      _ => 0.12,
-    };
-    final v = (w * h * fps * bpp).round();
-    return v.clamp(1000000, 120000000);
-  }
+  // A CONTA DE TAXA DE BITS SAIU DAQUI.
+  //
+  // Havia duas, iguais menos por um detalhe: esta ignorava o codec, e a
+  // de `ExportSettings.bitrateFor` desconta os 35% que o HEVC pede a
+  // menos. Duas contas para a mesma pergunta e uma delas ser escolhida
+  // por um `if` era o que fazia "alta" ser silenciosamente ignorado.
+  // Agora so existe a dos ajustes.
 }

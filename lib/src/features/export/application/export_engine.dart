@@ -830,9 +830,9 @@ class ExportEngine {
   /// trinta gigabytes so de quadros intermediarios, e era assim que uma
   /// exportacao longa "simplesmente nao terminava": o disco enchia no
   /// meio e a gravacao falhava sem dizer por que.
-  int espacoNecessario({required bool emFluxo, required String quality}) {
+  int espacoNecessario({required bool emFluxo}) {
     final segundos = _total;
-    final video = (taxaDeBits(quality) / 8 * segundos).round();
+    final video = (taxaDeBits() / 8 * segundos).round();
     // Audio AAC a 192 kbps, e uma folga de 20% para o contêiner e o
     // arquivo mudo que existe antes da juntada.
     final base = ((video + 192000 / 8 * segundos) * 1.2).round();
@@ -844,14 +844,11 @@ class ExportEngine {
 
   /// Confere o espaco ANTES de comecar. Uma exportacao de meia hora nao
   /// pode descobrir no fim que nao cabia.
-  Future<void> conferirEspaco({
-    required bool emFluxo,
-    required String quality,
-  }) async {
+  Future<void> conferirEspaco({required bool emFluxo}) async {
     final dir = await workDir();
     final livre = await PlatformEncoder.espacoLivre(dir.path);
     if (livre <= 0) return; // sistema nao respondeu: nao bloqueia
-    final preciso = espacoNecessario(emFluxo: emFluxo, quality: quality);
+    final preciso = espacoNecessario(emFluxo: emFluxo);
     if (livre >= preciso) return;
     String gb(int b) => (b / (1024 * 1024 * 1024)).toStringAsFixed(1);
     throw ExportException(
@@ -862,12 +859,14 @@ class ExportEngine {
   }
 
   /// A TAXA DE BITS escolhida para esta exportacao.
-  int taxaDeBits(String quality) =>
-      settings.bitrateMbps != null ||
-          settings.codec == ExportCodec.hevc ||
-          settings.size != ExportSize.original
-      ? settings.bitrateFor(width, height, fps)
-      : PlatformEncoder.bitrateFor(width, height, fps, quality);
+  ///
+  /// SO OS AJUSTES MANDAM. Havia DUAS fontes de verdade para o mesmo
+  /// botao: a tela carregava uma `String quality` propria e os ajustes
+  /// carregavam outra, e esta conta so olhava os ajustes quando havia
+  /// taxa na mao, HEVC ou tamanho diferente do original. Fora disso,
+  /// escolher "alta" nos ajustes era silenciosamente ignorado — o botao
+  /// aceitava a escolha e exportava na media.
+  int taxaDeBits() => settings.bitrateFor(width, height, fps);
 
   Future<void> _prepareAudioEffects() async {
     for (final layer in audioSources) {
@@ -925,7 +924,6 @@ class ExportEngine {
 
   Future<File> encode({
     required Directory framesDir,
-    required String quality,
     void Function(double p)? onProgress,
   }) async {
     final file = await _outputFile();
@@ -941,7 +939,7 @@ class ExportEngine {
       throw ExportException('Nenhum quadro foi desenhado.');
     }
 
-    final bitrate = taxaDeBits(quality);
+    final bitrate = taxaDeBits();
     final silent = File('${framesDir.parent.path}/mudo.mp4');
 
     if (await PlatformEncoder.available) {

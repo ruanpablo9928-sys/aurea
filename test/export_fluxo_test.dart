@@ -113,9 +113,16 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(home: ExportVideoScreen(quality: 'media')),
+        child: const MaterialApp(home: ExportVideoScreen()),
       ),
     );
+    // A TELA ABRE PERGUNTANDO, e nao renderizando. Antes ela comecava
+    // sozinha no `initState`, e por isso resolucao, fps, formato e
+    // codec eram inalcancaveis: nao havia momento em que dava para
+    // escolher.
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Exportar'));
+    await tester.pump();
     // O laco de quadros e assincrono e espera `endOfFrame` a cada passo.
     for (var i = 0; i < 240; i++) {
       await tester.pump(const Duration(milliseconds: 16));

@@ -33,20 +33,33 @@ import '../../settings/application/settings_controller.dart';
 /// "gravar a tela": cada quadro sai na resolucao do projeto, mesmo que
 /// o aparelho mostre bem menor.
 class ExportVideoScreen extends ConsumerStatefulWidget {
-  const ExportVideoScreen({
-    super.key,
-    this.quality = 'media',
-    this.settings = const ExportSettings(),
-  });
+  const ExportVideoScreen({super.key, this.settings = const ExportSettings()});
 
-  final String quality;
+  /// COM O QUE A TELA ABRE. Quem manda depois e o que a pessoa escolher
+  /// na fase de ajustes — antes nao havia fase nenhuma, e este valor,
+  /// que nenhum chamador passava, decidia a exportacao inteira.
   final ExportSettings settings;
 
   @override
   ConsumerState<ExportVideoScreen> createState() => _ExportVideoScreenState();
 }
 
-enum _Fase { preparando, lendoVideos, desenhando, codificando, pronto, erro }
+enum _Fase {
+  /// ANTES DE COMECAR: o que vai sair. Esta fase nao existia, e por
+  /// isso resolucao, fps, formato, codec e qualidade — todos escritos,
+  /// testados e prontos em `ExportSettings` — eram inalcancaveis: o
+  /// unico construtor real era `const ExportVideoScreen()`, sem ajuste
+  /// nenhum, e a exportacao saia sempre no tamanho do projeto, em
+  /// H.264, na qualidade media.
+  ajustes,
+
+  preparando,
+  lendoVideos,
+  desenhando,
+  codificando,
+  pronto,
+  erro,
+}
 
 class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   final GlobalKey _boundary = GlobalKey();
@@ -54,7 +67,10 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   final VideoLayerManager _videos = VideoLayerManager();
 
   ExportEngine? _engine;
-  _Fase _fase = _Fase.preparando;
+  _Fase _fase = _Fase.ajustes;
+
+  /// O que a pessoa escolheu nesta tela.
+  late ExportSettings _ajustes = widget.settings;
   double _progresso = 0;
   String _detalhe = '';
   String? _erro;
@@ -77,12 +93,17 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
   @override
   void initState() {
     super.initState();
-    // O shader precisa estar carregado antes do primeiro quadro.
-    Future.wait([DitherLayer.warmUp(), PixelEffectEngine.warmUp()]).then((_) {
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _rodar());
-      }
-    });
+    // O shader precisa estar carregado antes do primeiro quadro. Ele
+    // aquece agora, enquanto a pessoa escolhe os ajustes — quando ela
+    // tocar em "Exportar" ja vai estar pronto.
+    // O ERRO DO AQUECIMENTO NAO PODE ESTOURAR AQUI. Ele agora e
+    // esperado la na frente, quando a pessoa manda exportar; um shader
+    // que nao carrega vira erro DAQUELA fase, com a mensagem certa, e
+    // nao uma excecao solta enquanto ela escolhe o tamanho.
+    _aquecendo = Future.wait([
+      DitherLayer.warmUp(),
+      PixelEffectEngine.warmUp(),
+    ]).catchError((Object _) => const <void>[]);
   }
 
   @override
@@ -105,7 +126,12 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     });
   }
 
+  Future<void>? _aquecendo;
+
   Future<void> _rodar() async {
+    await _aquecendo;
+    if (!mounted) return;
+    _passo(_Fase.preparando, 0, 'Preparando...');
     // O projeto completo (dobrando o que esta aberto dentro de grupos) e
     // sem as camadas de olho fechado.
     final project = ref
@@ -115,7 +141,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     // o abaixamento que a pessoa acabou de ouvir, nao com um recalculado.
     final engine = ExportEngine(
       project,
-      widget.settings,
+      _ajustes,
       buildProjectDuckEnvelopes(
         project.layers,
         MediaPreviewService.instance.peaksOf,
@@ -138,11 +164,11 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       // O atalho de copiar so vale quando a saida e igual a entrada:
       // pedir 720p, HEVC ou sequencia PNG e pedir para RENDERIZAR.
       final podeCopiar =
-          widget.settings.format == ExportFormat.mp4 &&
-          widget.settings.size == ExportSize.original &&
-          widget.settings.codec == ExportCodec.h264 &&
-          widget.settings.fps == null &&
-          widget.settings.bitrateMbps == null;
+          _ajustes.format == ExportFormat.mp4 &&
+          _ajustes.size == ExportSize.original &&
+          _ajustes.codec == ExportCodec.h264 &&
+          _ajustes.fps == null &&
+          _ajustes.bitrateMbps == null;
       _passo(_Fase.preparando, 0.1, 'Verificando se da para copiar...');
       final atalho = podeCopiar ? await engine.tryPureCut() : null;
       if (atalho != null) {
@@ -196,7 +222,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       // Em arquivos so quando nao ha escolha: a sequencia PNG, que E
       // arquivos por definicao, e o aparelho sem codificador de
       // hardware, onde quem codifica e o FFmpeg lendo do disco.
-      final sequencia = widget.settings.format == ExportFormat.pngSequence;
+      final sequencia = _ajustes.format == ExportFormat.pngSequence;
       final emFluxo = !sequencia && await PlatformEncoder.available;
 
       // A composicao e desenhada no tamanho dela; a saida pode ser
@@ -208,7 +234,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
 
       // ESPACO ANTES DE COMECAR, nao no fim.
       _passo(_Fase.preparando, .2, 'Conferindo o espaco em disco...');
-      await engine.conferirEspaco(emFluxo: emFluxo, quality: widget.quality);
+      await engine.conferirEspaco(emFluxo: emFluxo);
 
       File? mudo;
       if (emFluxo) {
@@ -218,8 +244,8 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
           width: engine.width,
           height: engine.height,
           fps: engine.fps,
-          bitrate: engine.taxaDeBits(widget.quality),
-          hevc: widget.settings.codec == ExportCodec.hevc,
+          bitrate: engine.taxaDeBits(),
+          hevc: _ajustes.codec == ExportCodec.hevc,
         );
       }
 
@@ -284,7 +310,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
 
       // 4. Sequencia PNG para quando termina aqui: nao ha o que
       // codificar, so onde guardar.
-      if (widget.settings.format == ExportFormat.pngSequence) {
+      if (_ajustes.format == ExportFormat.pngSequence) {
         _passo(_Fase.codificando, 0.5, 'Salvando a sequencia...');
         final pasta = await engine.saveSequence(framesDir);
         await engine.cleanup();
@@ -305,7 +331,6 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       );
       final file = await engine.encode(
         framesDir: framesDir,
-        quality: widget.quality,
         onProgress: (p) => _passo(
           _Fase.codificando,
           p,
@@ -626,7 +651,115 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     ),
   );
 
+  /// A FICHA DOS AJUSTES, antes de comecar.
+  Widget _ajustesDaExportacao(int w, int h, Duration duracao, int fpsProjeto) {
+    final (sw, sh) = _ajustes.resolve(w, h);
+    final fps = _ajustes.resolveFps(fpsProjeto);
+    final mb = _ajustes.estimatedMegabytes(sw, sh, fps, duracao);
+    final sequencia = _ajustes.format == ExportFormat.pngSequence;
+
+    return Container(
+      width: double.infinity,
+      color: AmColors.panel,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Escolhas<ExportFormat>(
+              titulo: 'Formato',
+              itens: [
+                for (final f in ExportFormat.values) (exportFormatLabel(f), f),
+              ],
+              atual: _ajustes.format,
+              aoEscolher: (f) => setState(() {
+                _ajustes = _ajustes.copyWith(format: f);
+              }),
+            ),
+            _Escolhas<ExportSize>(
+              titulo: 'Tamanho',
+              itens: [
+                for (final t in ExportSize.values) (exportSizeLabel(t), t),
+              ],
+              atual: _ajustes.size,
+              aoEscolher: (t) => setState(() {
+                _ajustes = _ajustes.copyWith(size: t);
+              }),
+            ),
+            _Escolhas<int?>(
+              titulo: 'Quadros por segundo',
+              itens: [('Do projeto ($fpsProjeto)', null), ...const [
+                ('24', 24),
+                ('30', 30),
+                ('60', 60),
+              ]],
+              atual: _ajustes.fps,
+              aoEscolher: (f) => setState(() {
+                _ajustes = f == null
+                    ? _ajustes.copyWith(clearFps: true)
+                    : _ajustes.copyWith(fps: f);
+              }),
+            ),
+            // O CODEC E A QUALIDADE SO VALEM NO MP4. Sequencia PNG nao
+            // passa por codificador nenhum — mostrar os dois botoes ali
+            // seria oferecer escolha que o arquivo ignora.
+            if (!sequencia) ...[
+              _Escolhas<ExportCodec>(
+                titulo: 'Codec',
+                itens: [
+                  for (final c in ExportCodec.values) (exportCodecLabel(c), c),
+                ],
+                atual: _ajustes.codec,
+                aoEscolher: (c) => setState(() {
+                  _ajustes = _ajustes.copyWith(codec: c);
+                }),
+              ),
+              _Escolhas<String>(
+                titulo: 'Qualidade',
+                itens: const [
+                  ('Baixa', 'baixa'),
+                  ('Media', 'media'),
+                  ('Alta', 'alta'),
+                ],
+                atual: _ajustes.quality,
+                aoEscolher: (q) => setState(() {
+                  _ajustes = _ajustes.copyWith(quality: q);
+                }),
+              ),
+            ],
+            const SizedBox(height: 4),
+            Text(
+              sequencia
+                  ? '$sw x $sh · $fps qps · guarda transparencia'
+                  : '$sw x $sh · $fps qps · cerca de '
+                        '${mb < 1000 ? '${mb.round()} MB' : '${(mb / 1024).toStringAsFixed(1)} GB'}',
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.4,
+                color: AmColors.muted,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _BotaoGrande(
+              rotulo: 'Exportar',
+              aoTocar: _rodar,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _rodape() {
+    if (_fase == _Fase.ajustes) {
+      final p = ref.read(editorControllerProvider);
+      return _ajustesDaExportacao(
+        p.outputWidth,
+        p.outputHeight,
+        p.duration,
+        p.fps,
+      );
+    }
     if (_fase == _Fase.erro) {
       return Container(
         width: double.infinity,
@@ -661,6 +794,19 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                 height: 1.4,
                 color: AmColors.muted,
               ),
+            ),
+            const SizedBox(height: 12),
+            // TENTAR DE NOVO VOLTA AOS AJUSTES, e nao repete a mesma
+            // tentativa. Quase todo erro daqui — espaco, tamanho, codec
+            // que o aparelho recusou — se resolve mudando um ajuste, e
+            // repetir igual daria o mesmo erro.
+            _BotaoGrande(
+              rotulo: 'Mudar os ajustes e tentar de novo',
+              aoTocar: () => setState(() {
+                _erro = null;
+                _fase = _Fase.ajustes;
+                _progresso = 0;
+              }),
             ),
           ],
         ),
@@ -822,4 +968,120 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
       ),
     );
   }
+}
+
+/// UMA FILEIRA DE ESCOLHAS, com a vigente acesa.
+///
+/// Sem `Slider` e sem menu suspenso: as listas daqui tem tres a seis
+/// itens e cabem todas na tela. Um menu esconderia atras de um toque a
+/// unica informacao que importa aqui — o que esta escolhido.
+class _Escolhas<T> extends StatelessWidget {
+  const _Escolhas({
+    required this.titulo,
+    required this.itens,
+    required this.atual,
+    required this.aoEscolher,
+  });
+
+  final String titulo;
+  final List<(String, T)> itens;
+  final T atual;
+  final void Function(T) aoEscolher;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            titulo,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AmColors.muted,
+            ),
+          ),
+        ),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final (nome, valor) in itens)
+              Semantics(
+                container: true,
+                excludeSemantics: true,
+                button: true,
+                selected: valor == atual,
+                label: '$titulo $nome',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => aoEscolher(valor),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: valor == atual ? AmColors.chip : null,
+                      borderRadius: BorderRadius.circular(8),
+                      border: valor == atual
+                          ? null
+                          : Border.all(color: AmColors.hairline),
+                    ),
+                    child: Text(
+                      nome,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: valor == atual
+                            ? AmColors.accent
+                            : AmColors.text,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _BotaoGrande extends StatelessWidget {
+  const _BotaoGrande({required this.rotulo, required this.aoTocar});
+
+  final String rotulo;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    excludeSemantics: true,
+    button: true,
+    label: rotulo,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: aoTocar,
+      child: Container(
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AmColors.action,
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Text(
+          rotulo,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AmColors.onAction,
+          ),
+        ),
+      ),
+    ),
+  );
 }
