@@ -6,6 +6,7 @@ import '../application/editor_controller.dart';
 import '../application/playback_controller.dart';
 import '../application/video_layer_manager.dart';
 import '../../export/presentation/export_video_screen.dart';
+import '../../projects/application/projects_controller.dart';
 import 'widgets/linha_do_tempo.dart';
 import 'widgets/adicionar_conteudo.dart';
 import 'widgets/editor_de_curva.dart';
@@ -37,9 +38,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   late final PlaybackController _playback;
   final VideoLayerManager _videos = VideoLayerManager();
 
+  /// ESCREVE O QUE ESTA PENDENTE ANTES DE IR PARA O FUNDO.
+  ///
+  /// A gravacao e adiada em 900 ms de proposito — arrastar um numero
+  /// manda dezenas de mutacoes por segundo, e gravar cada uma seria
+  /// reescrever o projeto inteiro dezenas de vezes por segundo. Mas o
+  /// sistema mata um app em segundo plano sem avisar, e esses 900 ms
+  /// seriam exatamente os ultimos ajustes de quem saiu do app logo
+  /// depois de mexer em alguma coisa. Ir para o fundo fecha a conta.
+  late final AppLifecycleListener _ciclo;
+
   @override
   void initState() {
     super.initState();
+    _ciclo = AppLifecycleListener(
+      onPause: _gravarAgora,
+      onDetach: _gravarAgora,
+    );
     _playback = PlaybackController(
       vsync: this,
       durationOf: () => ref.read(editorControllerProvider).duration,
@@ -66,8 +81,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (master != null) _playback.anchorToMedia(master);
   }
 
+  void _gravarAgora() {
+    if (!mounted) return;
+    ref.read(projectsControllerProvider.notifier).flush();
+  }
+
   @override
   void dispose() {
+    _ciclo.dispose();
     _playback.dispose();
     _videos.dispose();
     super.dispose();
@@ -75,6 +96,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   @override
   Widget build(BuildContext context) {
+    // O EDITOR NAO ESTAVA GRAVANDO NADA.
+    //
+    // A ponte que levava cada mutacao para a lista de projetos — e dali,
+    // com atraso, para o disco — morava na tela de edicao ANTIGA, e foi
+    // apagada junto com ela. A tela nova nunca a refez: dava para
+    // montar uma composicao inteira, sair do app e voltar para o
+    // projeto exatamente como estava antes de comecar.
+    //
+    // Nao havia aviso, nem botao de salvar que tivesse sido esquecido:
+    // este app nunca teve um, porque sempre salvou sozinho. O trabalho
+    // simplesmente nao voltava.
+    //
+    // `projetoCompleto` e nao `state`: dentro de um grupo o estado E o
+    // grupo, e gravar isso trocaria o projeto pelos filhos dele.
+    ref.listen(editorControllerProvider, (antes, agora) {
+      ref
+          .read(projectsControllerProvider.notifier)
+          .upsert(ref.read(editorControllerProvider.notifier).projetoCompleto);
+    });
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
     return Scaffold(
