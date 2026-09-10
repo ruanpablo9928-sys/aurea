@@ -105,7 +105,7 @@ class _AnimatedTextPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final t = localTime;
     final animators = [
-      for (final a in layer.effectiveAnimators(units.length))
+      for (final a in layer.effectiveAnimators(units.length, units: units))
         if (a.enabled && a.properties.isNotEmpty) a,
     ];
 

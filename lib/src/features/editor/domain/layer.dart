@@ -821,8 +821,24 @@ class TextLayer extends Layer {
 
   /// O que o render usa: as animacoes do catalogo compiladas, e por cima
   /// delas os animadores montados a mao.
-  List<TextAnimator> effectiveAnimators(int unitCount) => [
-    ...compileTextAnims(anims, layerDuration: duration, unitCount: unitCount),
+  /// [units] deixa cada animacao contar na PROPRIA base (palavras,
+  /// linhas, tudo junto). Sem ele, todas usam [unitCount] — que e o
+  /// numero de caracteres, e so vale quando a base e essa.
+  List<TextAnimator> effectiveAnimators(int unitCount, {TextUnits? units}) => [
+    ...compileTextAnims(
+      anims,
+      layerDuration: duration,
+      unitCount: unitCount,
+      contar: units == null
+          ? null
+          : (u) => switch (u) {
+              TextAnimUnit.character => units.charCount,
+              TextAnimUnit.charactersNoSpaces => units.charNoSpaceCount,
+              TextAnimUnit.word => units.wordCount,
+              TextAnimUnit.line => units.lineCount,
+              TextAnimUnit.all => 1,
+            },
+    ),
     ...animators,
   ];
 

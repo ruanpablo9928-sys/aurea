@@ -583,7 +583,11 @@ final List<TextAnimSpec> textAnimCatalog = [
   ),
   TextAnimSpec(
     id: 'blink',
-    label: 'Blink',
+    // O UNICO ROTULO EM INGLES DO CATALOGO, num app em portugues.
+    // 'Piscar' ja estava tomado pelo `flicker`, que e o tremeluzir de
+    // neon; este e o pisca-pisca certinho do letreiro, e a palavra que
+    // separa os dois e o RITMO.
+    label: 'Piscar no ritmo',
     slots: const [TextAnimSlot.enfase],
     loop: true,
     loopShape: LoopShape.pulse,
@@ -781,10 +785,21 @@ TextAnimator compileTextAnim(
 }
 
 /// Compila a lista inteira, na ordem entrada -> enfase -> saida.
+/// CADA ANIMACAO CONTA AS PROPRIAS UNIDADES.
+///
+/// Antes entrava UM numero para todas, e o pintor mandava o total de
+/// CARACTERES. Numa saida por palavra sobre "Ola mundo" — nove
+/// caracteres, duas palavras — a conta de recuo do fim usava nove, e o
+/// texto sumia quase um segundo antes do fim da camada e ficava sumido.
+/// Vale para palavra, linha e "tudo junto".
+///
+/// [contar] responde quantas unidades ha em cada base; sem ele, o
+/// comportamento antigo (util em teste, onde a base e uma so).
 List<TextAnimator> compileTextAnims(
   List<TextAnim> anims, {
   required Duration layerDuration,
   int unitCount = 1,
+  int Function(TextAnimUnit)? contar,
 }) {
   const rank = {
     TextAnimSlot.entrada: 0,
@@ -795,6 +810,10 @@ List<TextAnimator> compileTextAnims(
     ..sort((a, b) => rank[a.slot]!.compareTo(rank[b.slot]!));
   return [
     for (final a in sorted)
-      compileTextAnim(a, layerDuration: layerDuration, unitCount: unitCount),
+      compileTextAnim(
+        a,
+        layerDuration: layerDuration,
+        unitCount: contar?.call(a.unit) ?? unitCount,
+      ),
   ];
 }

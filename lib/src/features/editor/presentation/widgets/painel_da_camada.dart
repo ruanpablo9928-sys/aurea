@@ -143,6 +143,15 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Texto',
       icone: Icons.text_fields_rounded,
     ),
+  // A ANIMACAO DE TEXTO E CARTAO PROPRIO, e nao uma secao do de Texto:
+  // sao 35 animacoes em tres posicoes, e enfia-las embaixo do tamanho
+  // da fonte esconderia a metade mais cara do subsistema.
+  if (camada is TextLayer)
+    const CategoriaDaCamada(
+      id: 'animacao',
+      rotulo: 'Animacao do texto',
+      icone: Icons.auto_awesome_motion_rounded,
+    ),
   if (camada is ShapeLayer)
     const CategoriaDaCamada(
       id: 'forma',
@@ -537,6 +546,7 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'transformar' => 'Movimentacao e transformacao',
   'opacidade' => 'Opacidade',
   'texto' => 'Texto',
+  'animacao' => 'Animacao do texto',
   'forma' => 'Forma',
   'som' => 'Som',
   'velocidade' => 'Velocidade',

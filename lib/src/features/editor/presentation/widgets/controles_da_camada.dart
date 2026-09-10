@@ -13,6 +13,7 @@ import 'escolha_de_cor.dart';
 import 'escolha_de_fonte.dart';
 import 'linha_de_parametro.dart';
 import 'painel_da_cena.dart';
+import 'painel_de_animacao_de_texto.dart';
 import 'painel_de_cor.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_rastreio.dart';
@@ -93,6 +94,7 @@ class ControlesDaCategoria extends ConsumerWidget {
   Widget _conteudo(Duration tempo) => switch (categoriaId) {
     'opacidade' => _Opacidade(camada: camada, tempo: tempo),
     'texto' => _Texto(camada: camada),
+    'animacao' => PainelDeAnimacaoDeTexto(camada: camada),
     'forma' => _Forma(camada: camada, tempo: tempo),
     'som' => PainelDeSom(camada: camada),
     'velocidade' => PainelDeVelocidade(camada: camada),
