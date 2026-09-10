@@ -192,9 +192,15 @@ void main() {
       await tester.pump();
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categoria);
       expect(m.c.read(categoriaAbertaProvider), 'opacidade');
-      expect(find.bySemanticsLabel('Voltar'), findsOneWidget);
+      // O VOLTAR MUDOU DE LUGAR: saiu do cabecalho do painel, que virou
+      // repeticao quando a barra da TELA passou a ser tomada pela
+      // ferramenta aberta, e foi para o rail esquerdo.
+      expect(
+        find.bySemanticsLabel('Voltar as ferramentas'),
+        findsOneWidget,
+      );
 
-      await tester.tap(find.bySemanticsLabel('Voltar'));
+      await tester.tap(find.bySemanticsLabel('Voltar as ferramentas'));
       await tester.pump();
       expect(m.c.read(estadoDoPainelProvider), EstadoDoPainel.categorias);
       expect(m.c.read(categoriaAbertaProvider), isNull);
@@ -361,9 +367,15 @@ void main() {
       await abrirFerramentas(tester, m.c);
       await tester.tap(find.byKey(const ValueKey('cartao-opacidade')));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Voltar'));
+      await tester.tap(find.bySemanticsLabel('Voltar as ferramentas'));
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('cartao-transformar')));
+      await tester.pump();
+      // RECOLHER SO EXISTE NA GRADE. Dentro de uma ferramenta quem fecha
+      // e o `‹` da barra da TELA — e este teste monta o painel sozinho,
+      // sem barra. Voltar para a grade primeiro e o caminho que existe
+      // aqui, e exercita um passo a mais do que o teste ja cobria.
+      await tester.tap(find.bySemanticsLabel('Voltar as ferramentas'));
       await tester.pump();
       await tester.tap(find.bySemanticsLabel('Recolher painel'));
       await tester.pump();
@@ -427,7 +439,7 @@ void main() {
       await tester.pump();
       m.p.seek(const Duration(milliseconds: 800));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Voltar'));
+      await tester.tap(find.bySemanticsLabel('Voltar as ferramentas'));
       await tester.pump();
 
       expect(

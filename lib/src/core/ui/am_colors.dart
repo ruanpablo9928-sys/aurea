@@ -31,6 +31,17 @@ abstract final class AmColors {
   /// A PILULA DA CAMADA: o olho e a cor, flutuando sobre a trilha.
   static const Color pilula = Color(0xFF242436);
 
+  /// A CAIXA DE VALOR e os chips do painel de transformacao. Medido em
+  /// #242436 (`docs/painel-de-transformacao-alight.md`, secao "Cores").
+  ///
+  /// SEIS PONTOS DE AZUL ACIMA DE [chip], e nao um descuido de copiar e
+  /// colar: [chip] foi medido na capsula do tempo, noutra tela e noutra
+  /// gravacao. Sao dois tons quase iguais porque a referencia tem dois
+  /// tons quase iguais — fundi-los num so pouparia uma constante hoje e
+  /// faria a proxima medida discordar do codigo sem ninguem saber qual
+  /// das duas telas estava errada.
+  static const Color campo = Color(0xFF242436);
+
   /// Keyframe, curva e realce de contexto (teal).
   static const Color accent = Color(0xFF1ED6B1);
   static const Color accentDim = Color(0xFF183F3C);

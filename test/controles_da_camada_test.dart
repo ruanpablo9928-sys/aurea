@@ -1,17 +1,22 @@
-// OS CONTROLES DE VERDADE: o painel deixou de ser so estrutura.
+// OS CONTROLES DE VERDADE, e nenhum deslizante.
 //
-// Ate a entrega anterior as categorias abriam e nao faziam nada. Estes
-// testes cobram as tres regras que valem para todo controle:
+// A UI foi refeita contra a referencia medida: no lugar do `Slider`
+// entraram a fita (relativa e infinita), a almofada (2D), o dial
+// (circular) e o campo (o numero exato). Estes testes cobram as tres
+// regras que valem para todo controle:
 //
 //   1. UM GESTO, UM DESFAZER;
 //   2. o valor mostrado e o do CABECOTE;
-//   3. quem decide se a edicao vira keyframe e o motor, pelo
-//      interruptor do keyframe automatico.
+//   3. quem decide se a edicao vira keyframe e o motor, pelo losango do
+//      rail e pelo interruptor do keyframe automatico.
+//
+// E cobram tambem a regra da reforma: NAO PODE HAVER `Slider` NENHUM.
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/playback_controller.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/shape.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/controles_da_camada.dart';
+import 'package:aurea/src/features/editor/presentation/widgets/painel_de_transformacao.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -67,6 +72,7 @@ Future<({ProviderContainer c, PlaybackController p, String id})> _montar(
                 categoriaId: categoria,
                 camada: atual,
                 playback: playback,
+                aoVoltar: () {},
               );
             },
           ),
@@ -80,6 +86,27 @@ Future<({ProviderContainer c, PlaybackController p, String id})> _montar(
 Layer _camada(ProviderContainer c, String id) =>
     c.read(editorControllerProvider).layers.firstWhere((l) => l.id == id);
 
+/// Arrasta a fita de [rotulo] por [dx] pixels.
+///
+/// O primeiro passo e gasto no reconhecimento do arrasto — so depois de
+/// uns dezoito pixels o Flutter decide que aquilo e horizontal, e a
+/// conta parte DESSE ponto. No aparelho a zona morta some no gesto; aqui
+/// ela precisa ser pedida.
+Future<void> _arrastarFita(
+  WidgetTester tester,
+  String rotulo,
+  double dx,
+) async {
+  final alvo = find.bySemanticsLabel('Ajustar $rotulo');
+  final gesto = await tester.startGesture(tester.getCenter(alvo));
+  await gesto.moveBy(const Offset(20, 0));
+  await tester.pump();
+  await gesto.moveBy(Offset(dx, 0));
+  await tester.pump();
+  await gesto.up();
+  await tester.pump();
+}
+
 void main() {
   group('opacidade', () {
     testWidgets('arrastar o deslizante muda a opacidade da camada', (
@@ -88,7 +115,7 @@ void main() {
       final m = await _montar(tester, 'opacidade');
       expect(_camada(m.c, m.id).opacity.valueAt(Duration.zero), 1);
 
-      await tester.drag(find.byType(Slider), const Offset(-200, 0));
+      await _arrastarFita(tester, 'Opacidade', -200);
       await tester.pump();
 
       expect(
@@ -102,7 +129,7 @@ void main() {
       final m = await _montar(tester, 'opacidade');
       final antes = _camada(m.c, m.id).opacity.valueAt(Duration.zero);
 
-      await tester.drag(find.byType(Slider), const Offset(-150, 0));
+      await _arrastarFita(tester, 'Opacidade', -150);
       await tester.pump();
       expect(_camada(m.c, m.id).opacity.valueAt(Duration.zero), isNot(antes));
 
@@ -128,7 +155,7 @@ void main() {
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
 
-      await tester.drag(find.byType(Slider), const Offset(-150, 0));
+      await _arrastarFita(tester, 'Opacidade', -150);
       await tester.pump();
 
       expect(
@@ -147,7 +174,7 @@ void main() {
       await tester.pump();
       expect(m.c.read(autoKeyframeProvider), isTrue);
 
-      await tester.drag(find.byType(Slider), const Offset(-150, 0));
+      await _arrastarFita(tester, 'Opacidade', -150);
       await tester.pump();
 
       final l = _camada(m.c, m.id);
@@ -159,12 +186,14 @@ void main() {
       );
     });
 
-    testWidgets('o losango marca e desmarca no cabecote', (tester) async {
+    testWidgets('o losango do rail marca e desmarca no cabecote', (
+      tester,
+    ) async {
       final m = await _montar(tester, 'opacidade');
       m.p.seek(const Duration(milliseconds: 800));
       await tester.pump();
 
-      await tester.tap(find.bySemanticsLabel('Marcar keyframe de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Marcar keyframe aqui'));
       await tester.pump();
       expect(
         _camada(m.c, m.id).opacity.hasKeyframeAt(
@@ -173,7 +202,7 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(find.bySemanticsLabel('Tirar keyframe de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Tirar o keyframe daqui'));
       await tester.pump();
       expect(
         _camada(m.c, m.id).opacity.hasKeyframeAt(
@@ -192,17 +221,19 @@ void main() {
       m.p.seek(Duration.zero);
       await tester.pump();
 
-      double valorNaTela() {
-        final t = tester.widget<Slider>(find.byType(Slider));
-        return t.value;
-      }
+      // O CAMPO E QUEM MOSTRA O NUMERO agora. Ele leva o valor no
+      // `Semantics.value`, que e por onde um leitor de tela — e este
+      // teste — descobre o que esta escrito.
+      String valorNaTela() => tester
+          .getSemantics(find.bySemanticsLabel('Valor de Opacidade'))
+          .value;
 
       final noZero = valorNaTela();
       m.p.seek(const Duration(seconds: 2));
       await tester.pump();
       expect(
         valorNaTela(),
-        lessThan(noZero),
+        isNot(noZero),
         reason:
             'a propriedade e animada: o controle tem de mostrar o que a '
             'previa mostra NAQUELE instante',
@@ -211,26 +242,106 @@ void main() {
   });
 
   group('transformar', () {
-    testWidgets('os quatro parametros estao la e mexem na camada', (
+    testWidgets('os quatro modos estao no rail direito', (tester) async {
+      await _montar(tester, 'transformar');
+      for (final rotulo in ['Mover', 'Girar', 'Escalar', 'Inclinar']) {
+        expect(
+          find.bySemanticsLabel(rotulo),
+          findsOneWidget,
+          reason: 'o rail perdeu o modo "$rotulo"',
+        );
+      }
+    });
+
+    testWidgets('mover abre a almofada, e o arrasto chega na camada', (
       tester,
     ) async {
       final m = await _montar(tester, 'transformar');
-      for (final rotulo in ['Posicao X', 'Posicao Y', 'Escala', 'Rotacao']) {
-        expect(
-          find.text(rotulo),
-          findsOneWidget,
-          reason: 'transformar perdeu "$rotulo"',
-        );
-      }
+      final antes = _camada(m.c, m.id).position.valueAt(Duration.zero);
+      expect(find.bySemanticsLabel('Mover a camada'), findsOneWidget);
 
-      final antes = _camada(m.c, m.id);
-      await tester.drag(find.byType(Slider).at(3), const Offset(120, 0));
+      final alvo = find.bySemanticsLabel('Mover a camada');
+      final gesto = await tester.startGesture(tester.getCenter(alvo));
+      await gesto.moveBy(const Offset(30, 20));
       await tester.pump();
+      await gesto.moveBy(const Offset(30, 20));
+      await tester.pump();
+      await gesto.up();
+      await tester.pump();
+
+      expect(
+        _camada(m.c, m.id).position.valueAt(Duration.zero),
+        isNot(antes),
+        reason: 'a almofada nao chegou no comando de posicao',
+      );
+    });
+
+    testWidgets('girar abre o dial, e o dial chega na rotacao', (
+      tester,
+    ) async {
+      final m = await _montar(tester, 'transformar');
+      await tester.tap(find.bySemanticsLabel('Girar'));
+      await tester.pump();
+      expect(find.bySemanticsLabel('Girar a camada'), findsOneWidget);
+
+      final alvo = find.bySemanticsLabel('Girar a camada');
+      final centro = tester.getCenter(alvo);
+      final gesto = await tester.startGesture(centro + const Offset(60, 0));
+      await gesto.moveBy(const Offset(-20, -40));
+      await tester.pump();
+      await gesto.moveBy(const Offset(-30, -30));
+      await tester.pump();
+      await gesto.up();
+      await tester.pump();
+
       expect(
         _camada(m.c, m.id).rotation.valueAt(Duration.zero),
-        isNot(antes.rotation.valueAt(Duration.zero)),
-        reason: 'o quarto deslizante e a rotacao',
+        isNot(0),
+        reason: 'o dial nao chegou no comando de rotacao',
       );
+    });
+
+    testWidgets('escalar tem a corrente, e destravar solta os dois', (
+      tester,
+    ) async {
+      final m = await _montar(tester, 'transformar');
+      await tester.tap(find.bySemanticsLabel('Escalar'));
+      await tester.pump();
+      expect(m.c.read(escalaTravadaProvider), isTrue);
+      expect(find.bySemanticsLabel('Soltar largura e altura'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Soltar largura e altura'));
+      await tester.pump();
+      expect(m.c.read(escalaTravadaProvider), isFalse);
+    });
+
+    testWidgets('inclinar mostra as DUAS fitas', (tester) async {
+      await _montar(tester, 'transformar');
+      await tester.tap(find.bySemanticsLabel('Inclinar'));
+      await tester.pump();
+      expect(find.bySemanticsLabel('Ajustar Inclinacao X'), findsOneWidget);
+      expect(find.bySemanticsLabel('Ajustar Inclinacao Y'), findsOneWidget);
+    });
+  });
+
+  group('a reforma', () {
+    testWidgets('nao ha deslizante em ferramenta nenhuma', (tester) async {
+      for (final categoria in [
+        'transformar',
+        'opacidade',
+        'texto',
+        'camada',
+      ]) {
+        await _montar(tester, categoria);
+        expect(
+          find.byType(Slider),
+          findsNothing,
+          reason:
+              'a categoria "$categoria" ainda tem deslizante — a reforma '
+              'inteira foi para tirar o `Slider`, que desenha "onde no '
+              'intervalo" para grandezas que nao tem intervalo',
+        );
+      }
     });
   });
 
@@ -245,7 +356,7 @@ void main() {
     testWidgets('o tamanho da fonte e um deslizante', (tester) async {
       final m = await _montar(tester, 'texto');
       final antes = (_camada(m.c, m.id) as TextLayer).fontSize;
-      await tester.drag(find.byType(Slider), const Offset(120, 0));
+      await _arrastarFita(tester, 'Tamanho', 120);
       await tester.pump();
       expect((_camada(m.c, m.id) as TextLayer).fontSize, greaterThan(antes));
     });
@@ -267,7 +378,7 @@ void main() {
       // O DESLIZANTE PULA PARA ONDE O DEDO POUSA — e comportamento do
       // proprio `Slider`, e nao do controle. Entao o que o teste cobra e
       // que o valor CHEGOU no desenho, e nao para que lado ele foi.
-      await tester.drag(find.byType(Slider).first, const Offset(-100, 0));
+      await _arrastarFita(tester, 'Largura', -100);
       await tester.pump();
       expect(
         largura(),

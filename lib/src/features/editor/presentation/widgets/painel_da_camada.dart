@@ -6,6 +6,7 @@ import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
 import 'controles_da_camada.dart';
+import 'editor_de_curva.dart';
 
 /// AS FERRAMENTAS DA CAMADA SELECIONADA.
 ///
@@ -234,6 +235,28 @@ class PainelSobreposto extends ConsumerWidget {
     if (!ref.watch(painelDaCamadaLigadoProvider)) {
       return const SizedBox.shrink();
     }
+    // A CURVA E UMA FERRAMENTA, e nao um modal por cima de outra.
+    //
+    // Ela era um painel flutuante com a tela desfocada atras, e isso
+    // escondia a previa — que e o unico lugar onde da para ver se a
+    // curva ficou boa. Aqui ela ocupa a MESMA faixa das outras
+    // ferramentas, e a previa continua a vista.
+    if (ref.watch(curvaEmEdicaoProvider) != null) {
+      return Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: PainelDaCamada.alturaMaxima,
+        child: const DecoratedBox(
+          decoration: BoxDecoration(
+            color: AmColors.panelHigh,
+            border: Border(top: BorderSide(color: AmColors.hairline)),
+          ),
+          child: EditorDeCurva(),
+        ),
+      );
+    }
+
     final estado = ref.watch(estadoDoPainelProvider);
     if (estado == EstadoDoPainel.recolhido) return const SizedBox.shrink();
 
@@ -331,19 +354,83 @@ class _Aberto extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Cabecalho(camada: camada, categoria: naCategoria ? atual : null),
+        // DENTRO DE UMA FERRAMENTA NAO HA CABECALHO AQUI.
+        //
+        // Ele existia e dizia "‹ Opacidade · Titulo principal". Virou
+        // repeticao quando a barra da TELA passou a ser tomada pela
+        // ferramenta aberta: o nome ja esta la em cima, e o `‹` ja esta
+        // no rail. Duas linhas de 44 px dizendo a mesma coisa, num
+        // painel de 300, e espaco tirado do controle.
+        if (!naCategoria)
+          _Cabecalho(camada: camada, categoria: null),
         Expanded(
           child: naCategoria
               ? ControlesDaCategoria(
                   categoriaId: atual.id,
                   camada: camada,
                   playback: playback,
+                  aoVoltar: () {
+                    ref.read(estadoDoPainelProvider.notifier).state =
+                        EstadoDoPainel.categorias;
+                    ref.read(categoriaAbertaProvider.notifier).state = null;
+                  },
                 )
               : _GradeDeCategorias(categorias: categorias),
         ),
       ],
     );
   }
+}
+
+/// O TITULO QUE A FERRAMENTA ABERTA DA AO CABECALHO DA TELA.
+///
+/// Na referencia, abrir uma ferramenta TOMA a barra de cima: o nome do
+/// projeto sai e entra "Movimentacao e...", "Efeitos", "Curva de
+/// gradacao". Nao e enfeite — e o que responde "onde eu estou" sem
+/// gastar uma linha dentro do painel, que e onde falta espaco.
+String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
+  'transformar' => 'Movimentacao e transformacao',
+  'opacidade' => 'Opacidade',
+  'texto' => 'Texto',
+  'forma' => 'Forma',
+  'volume' => 'Volume',
+  'efeitos' => 'Efeitos',
+  'midia' => 'Informacoes da midia',
+  'camada' => 'Camada',
+  _ => 'Ferramentas',
+};
+
+/// A ALTURA QUE A FERRAMENTA ABERTA OCUPA, para a tela descontar.
+///
+/// Ela SOBREPOE o rodape, e o espaco dela sai do PREVIEW — nunca da
+/// linha do tempo. Cobrir a linha do tempo esconderia o cabecote e o
+/// clipe que se esta editando, que e justamente o que a pessoa olha
+/// enquanto mexe no controle. Quem cede e a composicao, que so fica
+/// menor.
+double alturaDaFerramentaAberta(WidgetRef ref) {
+  if (!ref.watch(painelDaCamadaLigadoProvider)) return 0;
+  if (ref.watch(curvaEmEdicaoProvider) != null) {
+    return PainelDaCamada.alturaMaxima;
+  }
+  final estado = ref.watch(estadoDoPainelProvider);
+  if (estado == EstadoDoPainel.recolhido) return 0;
+  if (estado == EstadoDoPainel.categoria) return PainelDaCamada.alturaMaxima;
+  final project = ref.watch(editorControllerProvider);
+  final id = ref.watch(selectedLayerProvider);
+  final camada = project.layers.where((l) => l.id == id).firstOrNull;
+  if (camada == null) return 0;
+  return PainelDaCamada.alturaAberta(categoriasDaCamada(camada).length);
+}
+
+/// FECHA A FERRAMENTA e devolve a tela ao projeto.
+///
+/// E o que o `‹` do CABECALHO faz. O `‹` do rail esquerdo, dentro do
+/// painel, e outro: aquele volta um nivel, para a grade de categorias.
+/// Dois caminhos de volta porque sao duas perguntas diferentes — "sair
+/// daqui" e "voltar um passo".
+void fecharFerramenta(WidgetRef ref) {
+  ref.read(estadoDoPainelProvider.notifier).state = EstadoDoPainel.recolhido;
+  ref.read(categoriaAbertaProvider.notifier).state = null;
 }
 
 /// O CABECALHO diz onde se esta, e como sair.

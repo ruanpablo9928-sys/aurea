@@ -10,6 +10,7 @@ import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.da
 import 'package:aurea/src/features/editor/presentation/widgets/painel_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -426,7 +427,14 @@ void main() {
       m.c.read(selectedLayerProvider.notifier).state = camadas.first.id;
       await tester.pump();
 
-      expect(find.bySemanticsLabel('Camada anterior'), findsNothing);
+      // NA PONTA DA PILHA A SETA FICA APAGADA, e nao some: a pilula de
+      // navegacao nao pode mudar de largura a cada troca de camada.
+      expect(
+        tester
+            .getSemantics(find.bySemanticsLabel('Camada anterior'))
+            .hasFlag(SemanticsFlag.isEnabled),
+        isFalse,
+      );
       await tester.tap(find.bySemanticsLabel('Proxima camada'));
       await tester.pump();
       expect(m.c.read(selectedLayerProvider), camadas[1].id);

@@ -11,6 +11,7 @@ import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/controles_da_camada.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/editor_de_curva.dart';
 import 'package:flutter/material.dart' hide Easing;
+import 'package:flutter/semantics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +63,7 @@ Future<({ProviderContainer c, PlaybackController p, String id})> _montar(
                     categoriaId: categoria,
                     camada: atual,
                     playback: playback,
+                    aoVoltar: () {},
                   );
                 },
               ),
@@ -142,7 +144,15 @@ void main() {
         m.c,
         m.id,
       ).effects.single.params[primeira]!.valueAt(Duration.zero);
-      await tester.drag(find.byType(Slider).first, const Offset(80, 0));
+      final alvo = find.bySemanticsLabel(
+        'Ajustar ${spec.params[primeira]!.label}',
+      );
+      final gesto = await tester.startGesture(tester.getCenter(alvo));
+      await gesto.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesto.moveBy(const Offset(80, 0));
+      await tester.pump();
+      await gesto.up();
       await tester.pump();
       expect(
         _camada(
@@ -180,23 +190,35 @@ void main() {
   group('navegar entre marcas', () {
     testWidgets('sem marca nenhuma, nao ha para onde ir', (tester) async {
       await _montar(tester, 'opacidade');
-      expect(find.bySemanticsLabel('Marca anterior de Opacidade'), findsNothing);
-      expect(find.bySemanticsLabel('Curva de Opacidade'), findsNothing);
+      // SEM MARCA, O RAIL NAO ABRE CURVA. O botao continua desenhado —
+      // some-lo mudaria o rail de tamanho — mas apagado, e apagado nao
+      // age.
+      final curva = tester.getSemantics(
+        find.bySemanticsLabel('Abrir a curva'),
+      );
+      expect(curva.hasFlag(SemanticsFlag.isEnabled), isFalse);
     });
 
-    testWidgets('as setas pulam o cabecote de marca em marca', (tester) async {
+    // NAVEGAR ENTRE MARCAS E DA LINHA DO TEMPO agora, e nao do painel.
+    //
+    // As setas viviam ao lado do valor e nao existem na referencia: la o
+    // losango na barra da camada e o alvo, e tocar nele leva o cabecote.
+    // `linha_do_tempo_test.dart` cobra esse caminho — repetir aqui seria
+    // testar duas vezes o mesmo gesto.
+    testWidgets('o rail acende quando a propriedade anima', (tester) async {
       final m = await _montar(tester, 'opacidade');
       _animar(m.c, m.id);
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
 
-      await tester.tap(find.bySemanticsLabel('Proxima marca de Opacidade'));
-      await tester.pump();
-      expect(m.p.time.value, const Duration(seconds: 2));
-
-      await tester.tap(find.bySemanticsLabel('Marca anterior de Opacidade'));
-      await tester.pump();
-      expect(m.p.time.value, Duration.zero);
+      final curva = tester.getSemantics(
+        find.bySemanticsLabel('Abrir a curva'),
+      );
+      expect(
+        curva.hasFlag(SemanticsFlag.isEnabled),
+        isTrue,
+        reason: 'com marca antes e depois, ha trecho para curvar',
+      );
     });
   });
 
@@ -211,7 +233,7 @@ void main() {
       m.p.seek(const Duration(seconds: 3));
       await tester.pump();
       expect(m.c.read(curvaEmEdicaoProvider), isNull);
-      await tester.tap(find.bySemanticsLabel('Curva de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Abrir a curva'));
       await tester.pump();
       expect(
         m.c.read(curvaEmEdicaoProvider),
@@ -221,7 +243,7 @@ void main() {
 
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Curva de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Abrir a curva'));
       await tester.pump();
       expect(m.c.read(curvaEmEdicaoProvider), isNotNull);
     });
@@ -233,7 +255,7 @@ void main() {
       _animar(m.c, m.id);
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Curva de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Abrir a curva'));
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('Suave'));
@@ -251,7 +273,7 @@ void main() {
       _animar(m.c, m.id);
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Curva de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Abrir a curva'));
       await tester.pump();
 
       final antes = _camada(m.c, m.id).opacity.easeAt(Duration.zero);
@@ -276,7 +298,7 @@ void main() {
       _animar(m.c, m.id);
       m.p.seek(const Duration(seconds: 1));
       await tester.pump();
-      await tester.tap(find.bySemanticsLabel('Curva de Opacidade'));
+      await tester.tap(find.bySemanticsLabel('Abrir a curva'));
       await tester.pump();
       // Os primeiros presets, que cabem na largura sem rolar — a lista
       // e horizontal e nao adianta mirar num chip que esta fora dela.
@@ -294,28 +316,21 @@ void main() {
   });
 
   group('transformar por inteiro', () {
-    testWidgets('ancoragem e inclinacao entraram', (tester) async {
+    testWidgets('os quatro modos, e cada um com a sua superficie', (
+      tester,
+    ) async {
       await _montar(tester, 'transformar');
-      for (final rotulo in [
-        'Ancoragem X',
-        'Ancoragem Y',
-        'Inclinacao X',
-        'Inclinacao Y',
-      ]) {
-        expect(find.text(rotulo), findsOneWidget, reason: 'falta "$rotulo"');
-      }
-    });
+      expect(find.bySemanticsLabel('Mover a camada'), findsOneWidget);
 
-    testWidgets('destravar a escala abre X e Y separados', (tester) async {
-      final m = await _montar(tester, 'transformar');
-      expect(find.text('Escala'), findsOneWidget);
-      expect(find.text('Escala X'), findsNothing);
-
-      await tester.tap(find.bySemanticsLabel('Escala travada em X e Y'));
+      await tester.tap(find.bySemanticsLabel('Inclinar'));
       await tester.pump();
-      expect(m.c.read(escalaUniformeProvider), isFalse);
-      expect(find.text('Escala X'), findsOneWidget);
-      expect(find.text('Escala Y'), findsOneWidget);
+      expect(find.bySemanticsLabel('Ajustar Inclinacao X'), findsOneWidget);
+      expect(find.bySemanticsLabel('Ajustar Inclinacao Y'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Mover a camada'),
+        findsNothing,
+        reason: 'os modos SUBSTITUEM a superficie, e nao se empilham',
+      );
     });
   });
 }

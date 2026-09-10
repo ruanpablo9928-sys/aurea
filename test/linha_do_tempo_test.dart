@@ -13,6 +13,7 @@ import 'package:aurea/src/features/editor/presentation/widgets/linha_do_tempo.da
 import 'package:aurea/src/features/editor/presentation/widgets/mapa_do_tempo.dart';
 import 'package:aurea/src/features/editor/presentation/widgets/visao_geral_das_camadas.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +24,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// camada de 5 s ocupa de 400 a 700 — tudo a vista, e cada instante cai
 /// num pixel que da para calcular de cabeca.
 const _escala = 60.0;
+
+/// A seta da pilula de navegacao esta acesa?
+bool _setaAtiva(WidgetTester tester, String rotulo) => tester
+    .getSemantics(find.bySemanticsLabel(rotulo))
+    .hasFlag(SemanticsFlag.isEnabled);
 
 class _Vsync extends TickerProvider {
   @override
@@ -115,8 +121,12 @@ void main() {
         projeto.layers.single.id;
     await tester.pump();
 
-    expect(find.bySemanticsLabel('Camada anterior'), findsNothing);
-    expect(find.bySemanticsLabel('Proxima camada'), findsNothing);
+    // A PILULA NAO PERDE AS SETAS na ponta da pilha: elas ficam
+    // APAGADAS. Some-las mudaria a largura da pilula a cada troca de
+    // camada, e a pilula e a peca que diz onde se esta — ela nao pode
+    // mudar de tamanho debaixo do olho.
+    expect(_setaAtiva(tester, 'Camada anterior'), isFalse);
+    expect(_setaAtiva(tester, 'Proxima camada'), isFalse);
   });
 
   testWidgets('a seta troca a camada selecionada, e some na ponta', (
@@ -130,19 +140,19 @@ void main() {
     container.read(selectedLayerProvider.notifier).state = camadas.first.id;
     await tester.pump();
     expect(
-      find.bySemanticsLabel('Camada anterior'),
-      findsNothing,
+      _setaAtiva(tester, 'Camada anterior'),
+      isFalse,
       reason: 'na primeira camada nao existe anterior',
     );
-    expect(find.bySemanticsLabel('Proxima camada'), findsOneWidget);
+    expect(_setaAtiva(tester, 'Proxima camada'), isTrue);
 
     await tester.tap(find.bySemanticsLabel('Proxima camada'));
     await tester.pump();
     expect(container.read(selectedLayerProvider), camadas[1].id);
 
     // No meio, os dois lados existem.
-    expect(find.bySemanticsLabel('Camada anterior'), findsOneWidget);
-    expect(find.bySemanticsLabel('Proxima camada'), findsOneWidget);
+    expect(_setaAtiva(tester, 'Camada anterior'), isTrue);
+    expect(_setaAtiva(tester, 'Proxima camada'), isTrue);
 
     await tester.tap(find.bySemanticsLabel('Camada anterior'));
     await tester.pump();

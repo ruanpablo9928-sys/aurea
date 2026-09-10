@@ -114,7 +114,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             // a vista sem rolar.
             final util = limites.maxHeight;
             final proporcao = project.outputWidth / project.outputHeight;
-            final disponivel = util - _Cabecalho.altura;
+            // A FERRAMENTA ABERTA SAI DO PREVIEW, e nunca da linha do
+            // tempo. Ela sobrepoe o rodape; se o espaco viesse da linha
+            // do tempo, o cabecote e o clipe sendo editados ficariam
+            // escondidos justamente enquanto o dedo mexe no controle.
+            final ferramenta = alturaDaFerramentaAberta(ref);
+            final disponivel = util - _Cabecalho.altura - ferramenta;
 
             final pedidaPelaComposicao = (limites.maxWidth - 24) / proporcao;
             var preview = pedidaPelaComposicao;
@@ -202,6 +207,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     // TRANSPORTE, REGUA E TRILHAS SAO UM BLOCO SO. Eles
                     // encostam de proposito: sao a mesma ferramenta.
                     LinhaDoTempo(playback: _playback, altura: tempo),
+                    // O ESPACO DA FERRAMENTA, ja descontado do preview
+                    // acima. Reservado no arranjo para a linha do tempo
+                    // ficar inteira e visivel por cima dela.
+                    SizedBox(height: ferramenta),
                   ],
                 ),
                 // AS FERRAMENTAS DA CAMADA, sobrepostas ao rodape.
@@ -214,10 +223,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 // O PAINEL DO MEIO, com a tela desfocada atras. Fica por
                 // cima de tudo porque enquanto ele esta aberto nao ha o
                 // que fazer atras dele.
-                // A CURVA fica acima do painel de adicao porque ela e
-                // chamada DE DENTRO das ferramentas: abrir uma coisa por
-                // cima de outra so funciona se a de cima ficar por cima.
-                const EditorDeCurva(),
                 PainelCentralDeAdicao(
                   instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
                   aoAdicionar: (_, _) {
@@ -239,15 +244,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 }
 
-/// A FAIXA DE CIMA: sair, saber em que projeto se esta, e EXPORTAR.
+/// A FAIXA DE CIMA, em dois estados.
 ///
-/// O botao de exportar mudou de lugar. Ele morava no transporte, entre
-/// controles de tempo, e nao e um controle de tempo: e a saida do
-/// trabalho. Na referencia ele e a unica coisa colorida do cabecalho, na
-/// ponta oposta ao voltar — o comeco e o fim do caminho, um em cada
-/// lado. Aqui ele usa o lima da Aurea, e nao o verde de la: a estrutura
-/// se copia, a identidade nao.
-class _Cabecalho extends StatelessWidget {
+/// EM REPOUSO: voltar, nome do projeto, trocar de vista, exportar. O
+/// botao de exportar mudou de lugar uma vez e ficou: ele morava no
+/// transporte, entre controles de tempo, e nao e um controle de tempo —
+/// e a saida do trabalho. Na referencia ele e a unica coisa colorida do
+/// cabecalho, na ponta oposta ao voltar. Aqui usa o lima da Aurea, e nao
+/// o verde de la: a estrutura se copia, a identidade nao.
+///
+/// COM FERRAMENTA ABERTA: a barra e TOMADA pela ferramenta — `‹` e o
+/// nome dela, centrado, e mais nada. E o que a referencia faz, e o
+/// motivo aparece na conta de espaco: o painel tem 260 px para caber
+/// campos, superficie de arrasto e dois rails; gastar 44 deles repetindo
+/// "voce esta em Opacidade" seria tirar do que se usa para dizer onde se
+/// esta. O cabecalho ja e o lugar onde o olho procura isso.
+class _Cabecalho extends ConsumerWidget {
   const _Cabecalho({required this.nome, required this.aoExportar});
 
   final String nome;
@@ -256,21 +268,108 @@ class _Cabecalho extends StatelessWidget {
   static const altura = 52.0;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: altura,
+  Widget build(BuildContext context, WidgetRef ref) {
+    // A CURVA TOMA A BARRA IGUAL AS OUTRAS FERRAMENTAS, e antes delas:
+    // ela abre POR DENTRO de uma, e quem esta na frente e quem nomeia.
+    if (ref.watch(curvaEmEdicaoProvider) != null) {
+      return const _CabecalhoDaFerramenta(titulo: 'Curva de gradacao');
+    }
+    final aberta = ref.watch(estadoDoPainelProvider) == EstadoDoPainel.categoria
+        ? ref.watch(categoriaAbertaProvider)
+        : null;
+    if (aberta != null) {
+      return _CabecalhoDaFerramenta(titulo: tituloDaFerramenta(aberta));
+    }
+    return SizedBox(
+      height: altura,
+      child: Row(
+        children: [
+          Semantics(
+            container: true,
+            excludeSemantics: true,
+            button: true,
+            label: 'Voltar',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).maybePop(),
+              child: const SizedBox(
+                width: 48,
+                height: altura,
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 19,
+                  color: AmColors.text,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              nome,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AmColors.text,
+              ),
+            ),
+          ),
+          // O ALTERNADOR DE VISTA ocupa o lugar que a referencia da a
+          // engrenagem: ultimo antes do botao colorido.
+          const AlternadorDeVista(altura: altura),
+          Semantics(
+            container: true,
+            excludeSemantics: true,
+            button: true,
+            label: 'Exportar',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: aoExportar,
+              child: Container(
+                width: 38,
+                height: 34,
+                margin: const EdgeInsets.only(left: 8, right: 10),
+                decoration: BoxDecoration(
+                  color: AmColors.action,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.ios_share_rounded,
+                  size: 19,
+                  color: AmColors.onAction,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A BARRA TOMADA PELA FERRAMENTA: so o `‹` e o nome, centrado.
+class _CabecalhoDaFerramenta extends ConsumerWidget {
+  const _CabecalhoDaFerramenta({required this.titulo});
+
+  final String titulo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SizedBox(
+    height: _Cabecalho.altura,
     child: Row(
       children: [
         Semantics(
           container: true,
           excludeSemantics: true,
           button: true,
-          label: 'Voltar',
+          label: 'Fechar a ferramenta',
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => Navigator.of(context).maybePop(),
+            onTap: () => fecharFerramenta(ref),
             child: const SizedBox(
               width: 48,
-              height: altura,
+              height: _Cabecalho.altura,
               child: Icon(
                 Icons.arrow_back_ios_new_rounded,
                 size: 19,
@@ -281,43 +380,20 @@ class _Cabecalho extends StatelessWidget {
         ),
         Expanded(
           child: Text(
-            nome,
+            titulo,
             maxLines: 1,
+            textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.w700,
               color: AmColors.text,
             ),
           ),
         ),
-        // O ALTERNADOR DE VISTA ocupa o lugar que a referencia da a
-        // engrenagem: ultimo antes do botao colorido.
-        const AlternadorDeVista(altura: altura),
-        Semantics(
-          container: true,
-          excludeSemantics: true,
-          button: true,
-          label: 'Exportar',
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: aoExportar,
-            child: Container(
-              width: 38,
-              height: 34,
-              margin: const EdgeInsets.only(left: 8, right: 10),
-              decoration: BoxDecoration(
-                color: AmColors.action,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Icon(
-                Icons.ios_share_rounded,
-                size: 19,
-                color: AmColors.onAction,
-              ),
-            ),
-          ),
-        ),
+        // O MESMO ESPACO DA ESQUERDA, para o titulo cair no meio de
+        // verdade. Centrar sem isto joga o texto para a direita.
+        const SizedBox(width: 48),
       ],
     ),
   );

@@ -8,6 +8,7 @@ import '../../domain/layer.dart';
 import 'adicionar_conteudo.dart';
 import 'mapa_do_tempo.dart';
 import 'painel_da_camada.dart';
+import 'pilula_de_navegacao.dart';
 import 'visao_geral_das_camadas.dart';
 
 /// A COR DIZ O TIPO DA CAMADA.
@@ -963,24 +964,32 @@ class _FaixaState extends State<_Faixa> {
                       ),
                     ),
                   ),
-                // AS SETAS MORAM COLADAS NA PILULA, e nao na ponta da
-                // faixa.
+                // O NAVEGADOR DE CAMADA: uma pilula BRANCA por cima
+                // da trilha, com o nome no meio e as setas nas pontas.
                 //
-                // Na ponta direita elas brigavam com o `+` redondo — e
-                // perdiam, porque ele fica por cima. Coladas na pilula
-                // faz mais sentido de qualquer forma: elas dizem QUAL
-                // camada esta na tela, e a pilula e a identidade dela.
-                if (widget.camada != null &&
-                    (widget.temAnterior || widget.temProxima))
+                // Eram duas setas cinzas nas bordas da faixa, e elas
+                // brigavam com tudo: com o `+` redondo, com a pilula do
+                // olho, com o proprio clipe. A referencia resolve
+                // juntando as tres coisas numa peca so, no meio, onde
+                // nada mais mora — e de quebra o nome da camada aberta
+                // fica visivel, que era o que faltava para saber onde se
+                // esta sem olhar o cabecalho.
+                if (widget.camada != null)
                   Positioned(
-                    left: LinhaDoTempo.larguraDaPilula,
-                    top: _Faixa.topoDaTrilhaEm(altura),
-                    height: _Faixa.alturaDaTrilha,
-                    width: 26,
-                    child: _SetasDeCamada(
-                      temAnterior: widget.temAnterior,
-                      temProxima: widget.temProxima,
-                      aoTrocar: widget.aoTrocar,
+                    left: 0,
+                    right: 0,
+                    top: _Faixa.topoDaTrilhaEm(altura) - 40,
+                    child: Center(
+                      child: PilulaDeNavegacao(
+                        nome: widget.camada!.name,
+                        cor: corDaCamada(widget.camada!),
+                        aoAnterior: widget.temAnterior
+                            ? () => widget.aoTrocar(-1)
+                            : null,
+                        aoProxima: widget.temProxima
+                            ? () => widget.aoTrocar(1)
+                            : null,
+                      ),
                     ),
                   ),
               ],
@@ -992,80 +1001,6 @@ class _FaixaState extends State<_Faixa> {
   );
 }
 
-/// AS SETAS que trocam de camada, encostadas na pilula.
-///
-/// Sao o unico caminho para mudar de camada no modo detalhado — a
-/// trilha e uma so. Apontam para CIMA e para BAIXO porque e assim que a
-/// pilha esta arrumada: a camada anterior e a de cima.
-class _SetasDeCamada extends StatelessWidget {
-  const _SetasDeCamada({
-    required this.temAnterior,
-    required this.temProxima,
-    required this.aoTrocar,
-  });
-
-  final bool temAnterior;
-  final bool temProxima;
-  final void Function(int passo) aoTrocar;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Expanded(
-        child: _Meia(
-          rotulo: 'Camada anterior',
-          icone: Icons.keyboard_arrow_up_rounded,
-          ativa: temAnterior,
-          aoTocar: () => aoTrocar(-1),
-        ),
-      ),
-      Expanded(
-        child: _Meia(
-          rotulo: 'Proxima camada',
-          icone: Icons.keyboard_arrow_down_rounded,
-          ativa: temProxima,
-          aoTocar: () => aoTrocar(1),
-        ),
-      ),
-    ],
-  );
-}
-
-class _Meia extends StatelessWidget {
-  const _Meia({
-    required this.rotulo,
-    required this.icone,
-    required this.ativa,
-    required this.aoTocar,
-  });
-
-  final String rotulo;
-  final IconData icone;
-  final bool ativa;
-  final VoidCallback aoTocar;
-
-  @override
-  Widget build(BuildContext context) {
-    // NA PONTA DA PILHA A SETA SOME. Um controle aceso que nao leva a
-    // lugar nenhum ensina errado.
-    if (!ativa) return const SizedBox.expand();
-    return Semantics(
-      container: true,
-      excludeSemantics: true,
-      button: true,
-      label: rotulo,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: aoTocar,
-        child: Container(
-          alignment: Alignment.center,
-          color: AmColors.panel.withValues(alpha: .92),
-          child: Icon(icone, size: 18, color: AmColors.text),
-        ),
-      ),
-    );
-  }
-}
 
 /// A PILULA: o olho e a cor da camada, flutuando sobre a trilha.
 ///
