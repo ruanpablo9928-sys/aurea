@@ -114,34 +114,59 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             // a vista sem rolar.
             final util = limites.maxHeight;
             final proporcao = project.outputWidth / project.outputHeight;
-            // A FERRAMENTA ABERTA SAI DO PREVIEW, e nunca da linha do
-            // tempo. Ela sobrepoe o rodape; se o espaco viesse da linha
-            // do tempo, o cabecote e o clipe sendo editados ficariam
-            // escondidos justamente enquanto o dedo mexe no controle.
+            // A PREVIA NAO ENCOLHE QUANDO UMA FERRAMENTA ABRE.
+            //
+            // Ela encolhia, e estava errado: no Alight a composicao fica
+            // do MESMO tamanho com a aba de transformacao, de efeito ou
+            // de curva aberta. Faz sentido — a previa e o que se olha
+            // enquanto o dedo mexe no controle; muda-la de tamanho no
+            // exato momento em que a atencao vai para ela e o pior
+            // momento possivel.
+            //
+            // A conta que garante isso: a previa e limitada pelo espaco
+            // que sobraria COM A FERRAMENTA ABERTA, sempre — aberta ou
+            // nao. Assim ela ja nasce no tamanho em que vai ficar, e
+            // abrir a ferramenta nao mexe num pixel dela.
+            //
+            // Quem cede e a LINHA DO TEMPO, que encolhe ate o chao dela
+            // (transporte, regua e uma trilha) e volta a crescer quando
+            // a ferramenta fecha. E o que a referencia faz: com uma aba
+            // aberta, la aparece uma trilha so.
             final ferramenta = alturaDaFerramentaAberta(ref);
-            final disponivel = util - _Cabecalho.altura - ferramenta;
+            final disponivel = util - _Cabecalho.altura;
+
+            // O CHAO DA LINHA DO TEMPO COM FERRAMENTA ABERTA: transporte,
+            // regua e uma trilha. Menos que isso e nao dava mais para ver
+            // onde o cabecote esta enquanto se edita.
+            final chaoComFerramenta =
+                LinhaDoTempo.alturaDoTransporte +
+                LinhaDoTempo.alturaDaRegua +
+                VisaoGeralDasCamadas.alturaDaTrilha;
 
             final pedidaPelaComposicao = (limites.maxWidth - 24) / proporcao;
-            var preview = pedidaPelaComposicao;
-            var tempo = disponivel - preview;
+            // O TETO NAO DEPENDE DE A FERRAMENTA ESTAR ABERTA. E o que
+            // faz a previa ficar parada.
+            final tetoDoPreview =
+                disponivel - PainelDaCamada.alturaMaxima - chaoComFerramenta;
+            var preview = pedidaPelaComposicao < tetoDoPreview
+                ? pedidaPelaComposicao
+                : tetoDoPreview;
+            if (preview < 140) preview = 140;
 
-            // O QUE A LINHA DO TEMPO PEDE vem antes do conforto do
-            // preview. O pedido depende do modo e de quantas camadas ha:
-            // sem transporte, regua e as trilhas que existem, ela deixa
-            // de ser ferramenta e vira enfeite.
+            var tempo = disponivel - preview - ferramenta;
+
+            // O QUE A LINHA DO TEMPO PEDE vem depois: com a ferramenta
+            // fechada ela usa o que sobrou; com a ferramenta aberta ela
+            // desce ate o chao e nao abaixo.
             final pedidaPelaTimeline = LinhaDoTempo.alturaDoModo(
               ref.watch(modoDaLinhaDoTempoProvider),
               project.layers.length,
             );
-            if (tempo < pedidaPelaTimeline) {
-              tempo = pedidaPelaTimeline;
-              preview = disponivel - tempo;
-            }
-            // E o chao do preview vem antes de tudo: sem ele nao da para
-            // ver o que se esta editando.
-            if (preview < 140) {
-              preview = 140;
-              tempo = disponivel - preview;
+            final chao = ferramenta > 0 ? chaoComFerramenta : pedidaPelaTimeline;
+            if (tempo < chao) {
+              tempo = chao;
+              preview = disponivel - tempo - ferramenta;
+              if (preview < 140) preview = 140;
             }
 
             return Stack(
