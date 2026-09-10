@@ -5,6 +5,7 @@ import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/layer.dart';
+import '../../domain/video_project.dart';
 import 'adicionar_conteudo.dart';
 import 'mapa_do_tempo.dart';
 import 'painel_da_camada.dart';
@@ -160,12 +161,20 @@ class LinhaDoTempo extends ConsumerWidget {
                       playback: playback,
                       duracao: project.duration,
                       camadaSelecionada: selecionada,
-                      aoEnquadrar: () =>
-                          ref.read(zoomDaLinhaDoTempoProvider.notifier).state =
-                              MapaDoTempo.zoomQueCabe(
-                                largura,
-                                project.duration,
-                              ),
+                      // ENQUADRAR MEXE NO ZOOM **E** NO CABECOTE.
+                      //
+                      // So o zoom nao enquadra nada: com o cabecote
+                      // preso no meio, a composicao inteira so cabe na
+                      // tela quando ele esta no MEIO DELA. Estando no
+                      // zero, metade da regua vira tempo negativo e a
+                      // segunda metade do projeto fica de fora — o botao
+                      // dizia "enquadrar" e mostrava metade.
+                      aoEnquadrar: () {
+                        ref.read(zoomDaLinhaDoTempoProvider.notifier).state =
+                            MapaDoTempo.zoomQueCabe(largura, project.duration);
+                        playback.pause();
+                        playback.seek(project.duration * .5);
+                      },
                     ),
                     // A REGUA E UMA SO, e serve os dois modos.
                     //
@@ -179,6 +188,10 @@ class LinhaDoTempo extends ConsumerWidget {
                       duracao: project.duration,
                       fps: project.fps,
                       mapa: mapa,
+                      marcadores: project.markers,
+                      aoAlternarMarcador: () => ref
+                          .read(editorControllerProvider.notifier)
+                          .toggleMarker(playback.time.value),
                       aoAmpliar: (fator) {
                         final n = ref.read(zoomDaLinhaDoTempoProvider) ?? zoom;
                         ref.read(zoomDaLinhaDoTempoProvider.notifier).state =
@@ -476,6 +489,8 @@ class _Regua extends StatefulWidget {
     required this.fps,
     required this.mapa,
     required this.aoAmpliar,
+    required this.marcadores,
+    required this.aoAlternarMarcador,
   });
 
   final PlaybackController playback;
@@ -483,6 +498,17 @@ class _Regua extends StatefulWidget {
   final int fps;
   final MapaDoTempo Function(Duration) mapa;
   final void Function(double fator) aoAmpliar;
+
+  /// OS MARCADORES DO PROJETO, desenhados na regua.
+  ///
+  /// O motor cria, renomeia, move, corta por eles e os SALVA no arquivo
+  /// — e os modelos prontos ja vinham com marcador dentro. A regua nunca
+  /// mostrou nenhum: o app guardava uma decisao que ninguem conseguia
+  /// ver.
+  final List<Marker> marcadores;
+
+  /// Toque longo na regua crava ou tira um marcador no cabecote.
+  final VoidCallback aoAlternarMarcador;
 
   @override
   State<_Regua> createState() => _ReguaState();
@@ -532,6 +558,11 @@ class _ReguaState extends State<_Regua> {
         widget.playback.pause();
         _levar(mapa.tempoEm(d.localPosition.dx));
       },
+      // TOQUE LONGO NA REGUA CRAVA UM MARCADOR no cabecote, e tira se ja
+      // houver um perto. E o gesto que sobra: o toque leva o cabecote e
+      // o arrasto desliza o tempo, e marcador e coisa da regua — nao da
+      // trilha, que pertence a uma camada so.
+      onLongPress: widget.aoAlternarMarcador,
       child: ValueListenableBuilder<Duration>(
         valueListenable: widget.playback.time,
         builder: (context, t, _) => CustomPaint(
@@ -540,6 +571,7 @@ class _ReguaState extends State<_Regua> {
             duracao: widget.duracao,
             fps: widget.fps,
             familia: familiaDoApp(context),
+            marcadores: widget.marcadores,
           ),
           size: Size.infinite,
         ),
@@ -559,12 +591,14 @@ class _PintorDaRegua extends CustomPainter {
     required this.duracao,
     required this.fps,
     required this.familia,
+    required this.marcadores,
   });
 
   final MapaDoTempo mapa;
   final Duration duracao;
   final int fps;
   final TextStyle familia;
+  final List<Marker> marcadores;
 
   /// A barra de rolagem no topo, as marcas embaixo dela, e a capsula
   /// sobreposta ao pe das marcas. Medidas da referencia.
@@ -588,7 +622,35 @@ class _PintorDaRegua extends CustomPainter {
     if (size.width <= 0) return;
     _pintarMarcas(canvas, size);
     _pintarBarra(canvas, size);
+    _pintarMarcadores(canvas, size);
     _pintarCapsula(canvas, size);
+  }
+
+  /// OS MARCADORES: um triangulinho pendurado no alto da regua.
+  ///
+  /// Na cor que o proprio marcador guarda, porque a cor e como se
+  /// separa "aqui vira a cena" de "aqui entra a legenda" sem caber
+  /// texto nenhum numa regua de 44 px.
+  void _pintarMarcadores(Canvas canvas, Size size) {
+    for (final m in marcadores) {
+      final x = mapa.xDe(m.time);
+      if (x < -8 || x > size.width + 8) continue;
+      final tinta = Paint()..color = m.color;
+      canvas.drawPath(
+        Path()
+          ..moveTo(x - 5, _topoDasMarcas - 2)
+          ..lineTo(x + 5, _topoDasMarcas - 2)
+          ..lineTo(x, _topoDasMarcas + 7)
+          ..close(),
+        tinta,
+      );
+      // O RISCO DESCE ATE O PE DA REGUA, senao o triangulo sozinho nao
+      // diz em que instante exato ele esta.
+      canvas.drawRect(
+        Rect.fromLTWH(x - .5, _topoDasMarcas, 1, size.height - _topoDasMarcas),
+        Paint()..color = m.color.withValues(alpha: .45),
+      );
+    }
   }
 
   /// AS MARCAS SAO A ESCALA. Elas nao levam numero: a referencia nao
@@ -719,6 +781,7 @@ class _PintorDaRegua extends CustomPainter {
   @override
   bool shouldRepaint(_PintorDaRegua o) =>
       o.familia != familia ||
+      o.marcadores.length != marcadores.length ||
       o.mapa.tempo != mapa.tempo ||
       o.mapa.pxPorSegundo != mapa.pxPorSegundo ||
       o.mapa.largura != mapa.largura ||
@@ -739,7 +802,14 @@ String relogioDeQuadros(Duration d, int fps) {
       .floor()
       .toString()
       .padLeft(2, '0');
-  return '$m:$s:$q';
+  // A HORA SO APARECE QUANDO EXISTE.
+  //
+  // Sem ela, um projeto de uma hora e um minuto mostrava `01:xx` — o
+  // mesmo que um de um minuto. Mostrar `00:` sempre gastaria tres
+  // caracteres da capsula em todo projeto curto, que e a maioria; a
+  // hora entra so quando ha hora para contar.
+  if (d.inHours <= 0) return '$m:$s:$q';
+  return '${d.inHours.toString().padLeft(2, '0')}:$m:$s:$q';
 }
 
 /// A TRILHA DA CAMADA SELECIONADA, no modo detalhado.

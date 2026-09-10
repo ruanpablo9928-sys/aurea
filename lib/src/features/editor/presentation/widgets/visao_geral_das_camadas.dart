@@ -182,6 +182,13 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
     if (i < 0 || i >= camadas.length) return;
     final l = camadas[i];
     if (l.id != selecionada) return;
+    // CAMADA TRAVADA NAO SE MOVE NEM SE APARA.
+    //
+    // A trava existia so como um bit no arquivo: dava para ligar e o
+    // editor continuava deixando arrastar. Uma trava que nao trava e
+    // pior que trava nenhuma — ela promete e falha justamente quando
+    // alguem confiou nela para nao estragar o trabalho.
+    if (ref.read(editorControllerProvider).metaOf(l.id).locked) return;
 
     final mapa = widget.mapa(widget.playback.time.value);
     final inicio = mapa.xDe(l.startTime);
@@ -310,6 +317,10 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
                       escondidas: {
                         for (final l in camadas)
                           if (project.metaOf(l.id).hidden) l.id,
+                      },
+                      travadas: {
+                        for (final l in camadas)
+                          if (project.metaOf(l.id).locked) l.id,
                       },
                       segurando: _segurando,
                       degraus: _segurando == null ? 0 : _degraus,
@@ -493,6 +504,7 @@ class _PintorDasTrilhas extends CustomPainter {
     required this.mapa,
     required this.selecionada,
     required this.escondidas,
+    required this.travadas,
     required this.segurando,
     required this.degraus,
     required this.familia,
@@ -502,6 +514,9 @@ class _PintorDasTrilhas extends CustomPainter {
   final MapaDoTempo mapa;
   final String? selecionada;
   final Set<String> escondidas;
+
+  /// Quem esta travada. O clipe leva um cadeado e o gesto nao pega.
+  final Set<String> travadas;
 
   /// A camada presa pela alca, e quantos degraus ela vai andar se o dedo
   /// soltar agora.
@@ -540,6 +555,7 @@ class _PintorDasTrilhas extends CustomPainter {
       _pintarKeyframes(canvas, l, barra, cor);
       canvas.restore();
 
+      if (travadas.contains(l.id)) _pintarCadeado(canvas, barra);
       if (l.id == selecionada) {
         canvas.drawRRect(
           rr.inflate(1.5),
@@ -552,6 +568,33 @@ class _PintorDasTrilhas extends CustomPainter {
       }
     }
     _pintarDestinoDaOrdem(canvas, size);
+  }
+
+  /// O CADEADO no canto do clipe travado.
+  ///
+  /// Pequeno e no canto: ele nao e um controle, e um aviso. Quem quiser
+  /// destravar vai as ferramentas da camada, onde a linha inteira e
+  /// alvo.
+  void _pintarCadeado(Canvas canvas, Rect barra) {
+    final centro = Offset(barra.right - 9, barra.center.dy);
+    final tinta = Paint()..color = const Color(0xCC0B0E12);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: centro, width: 7, height: 6),
+        const Radius.circular(1.5),
+      ),
+      tinta,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(center: centro.translate(0, -4), width: 6, height: 7),
+      3.14159,
+      3.14159,
+      false,
+      Paint()
+        ..color = const Color(0xCC0B0E12)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
   }
 
   /// AS ALCAS DE APARAR, nas duas pontas do clipe escolhido.
@@ -674,7 +717,8 @@ class _PintorDasTrilhas extends CustomPainter {
       o.segurando != segurando ||
       o.degraus != degraus ||
       !identical(o.camadas, camadas) ||
-      o.escondidas.length != escondidas.length;
+      o.escondidas.length != escondidas.length ||
+      o.travadas.length != travadas.length;
 }
 
 /// ESTADO VAZIO: projeto sem camada nenhuma.

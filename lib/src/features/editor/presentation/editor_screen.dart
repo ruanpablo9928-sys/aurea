@@ -55,6 +55,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   void _syncVideos() {
     final project = ref.read(editorControllerProvider);
+    // O OLHO VALE PARA O SOM TAMBEM. Ver `VideoLayerManager.soaAgora`.
+    _videos.soaAgora = project.rendersInPreview;
     final master = _videos.sync(
       project.layers,
       _playback.time.value,

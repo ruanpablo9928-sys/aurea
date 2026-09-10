@@ -1134,9 +1134,31 @@ class _AcoesDaCamada extends ConsumerWidget {
     // nao ha o que cortar, e um corte na borda produziria uma camada de
     // duracao zero.
     final podeDividir = agora > camada.startTime && agora < camada.endTime;
+    final meta = ref.watch(editorControllerProvider).metaOf(camada.id);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // SOLO E TRAVA ESTAVAM PRONTOS NO MOTOR E SEM PORTA NENHUMA.
+        //
+        // `toggleSolo` e `toggleLocked` existem, sao salvos no arquivo e
+        // o `rendersInPreview` ja respeita o solo — mas nenhum widget
+        // chamava. Ficam aqui, e nao na pilula: a pilula tem 62 px e
+        // dois alvos; um terceiro e um quarto la dentro seriam alvos que
+        // o dedo erra. Aqui sao linhas inteiras.
+        _Interruptor(
+          rotulo: meta.solo ? 'So esta camada (solo ligado)' : 'Ouvir e ver so esta',
+          icone: meta.solo
+              ? Icons.headphones_rounded
+              : Icons.headphones_outlined,
+          ligado: meta.solo,
+          aoTocar: () => c.toggleSolo(camada.id),
+        ),
+        _Interruptor(
+          rotulo: meta.locked ? 'Destravar a camada' : 'Travar a camada',
+          icone: meta.locked ? Icons.lock_rounded : Icons.lock_open_rounded,
+          ligado: meta.locked,
+          aoTocar: () => c.toggleLocked(camada.id),
+        ),
         _Acao(
           icone: Icons.content_cut_rounded,
           rotulo: 'Dividir no cabecote',

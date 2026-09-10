@@ -208,6 +208,40 @@ void main() {
     });
   });
 
+  group('solo e trava sairam do arquivo e viraram controle', () {
+    testWidgets('a categoria Camada liga os dois', (tester) async {
+      final m = await _montar(tester, 'camada');
+      expect(m.c.read(editorControllerProvider).metaOf(m.id).solo, isFalse);
+      expect(m.c.read(editorControllerProvider).metaOf(m.id).locked, isFalse);
+
+      await tester.tap(find.bySemanticsLabel('Ouvir e ver so esta'));
+      await tester.pump();
+      expect(m.c.read(editorControllerProvider).metaOf(m.id).solo, isTrue);
+
+      await tester.tap(find.bySemanticsLabel('Travar a camada'));
+      await tester.pump();
+      expect(m.c.read(editorControllerProvider).metaOf(m.id).locked, isTrue);
+    });
+
+    test('o solo tira as outras do preview, e isso ja era do motor', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final c = container.read(editorControllerProvider.notifier);
+      c.addTextLayer(Duration.zero, text: 'Um');
+      c.addTextLayer(Duration.zero, text: 'Dois');
+      final camadas = container.read(editorControllerProvider).layers;
+
+      c.toggleSolo(camadas.first.id);
+      final p = container.read(editorControllerProvider);
+      expect(p.rendersInPreview(camadas.first.id), isTrue);
+      expect(
+        p.rendersInPreview(camadas.last.id),
+        isFalse,
+        reason: 'o motor ja sabia fazer isto; faltava quem chamasse',
+      );
+    });
+  });
+
   group('as casas decimais seguem a faixa', () {
     test('a escada cobre o meio, que era onde a regra velha mentia', () {
       // A regra era "faixa <= 4 ? 3 casas : 0". Exposicao vai de -3 a

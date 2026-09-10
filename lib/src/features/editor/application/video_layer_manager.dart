@@ -253,6 +253,15 @@ class VideoLayerManager {
 
   /// Chamado a cada mudanca relevante do clock. Camadas de AUDIO usam o
   /// mesmo pipeline (ExoPlayer/AVPlayer tocam audio puro sem textura).
+  /// QUEM AINDA TOCA SOM, por id.
+  ///
+  /// O olho da timeline tirava a IMAGEM e deixava o SOM tocando: esconder
+  /// uma camada de video continuava com a voz no ar, e numa camada de
+  /// audio o olho nao fazia absolutamente nada. Quem sabe quem esta
+  /// escondido (ou fora do solo) e o projeto, e nao a lista de camadas —
+  /// por isso a resposta vem de fora.
+  bool Function(String id)? soaAgora;
+
   Duration? sync(
     List<Layer> layers,
     Duration t,
@@ -397,11 +406,15 @@ class VideoLayerManager {
       // mudo, fade e o envelope de ducking ja calculado. Ate aqui o
       // preview tocava so o volume da camada, e o arquivo saia com fade e
       // abaixamento que ninguem tinha ouvido antes de exportar.
-      var effectiveVolume = layerAudioGainAt(
-        layer,
-        t,
-        duck: duckEnvelopes[layer.id] ?? DuckEnvelope.neutro,
-      );
+      var effectiveVolume = (soaAgora?.call(layer.id) ?? true)
+          ? layerAudioGainAt(
+              layer,
+              t,
+              duck: duckEnvelopes[layer.id] ?? DuckEnvelope.neutro,
+            )
+          // ESCONDIDA NAO SOA. O olho promete tirar do preview, e som e
+          // preview tanto quanto imagem.
+          : 0.0;
       if (layer is VideoLayer &&
           m.id == layer.id &&
           audioService.ready(layer) != null) {
