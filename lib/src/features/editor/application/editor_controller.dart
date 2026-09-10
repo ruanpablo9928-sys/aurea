@@ -382,12 +382,14 @@ class EditorController extends Notifier<VideoProject> {
     Duration at,
     String path,
     String name,
-    Duration duration,
-  ) {
+    Duration duration, {
+    Duration? fonte,
+  }) {
     final layer = VideoLayer(
       name: name,
       startTime: at,
       duration: duration,
+      sourceDuration: fonte,
       sourcePath: path,
       position: AnimatedOffset(_center),
     );
@@ -408,12 +410,39 @@ class EditorController extends Notifier<VideoProject> {
       file.name,
       const Duration(seconds: 4),
     );
-    _probeDuration(file.path).then((d) {
-      final layer = _layer(id);
-      if (layer is VideoLayer && d > Duration.zero) {
-        _replace(layer.copyLayer(duration: d));
-      }
-    });
+    _probeDuration(file.path).then((d) => _chegouADuracao(id, d));
+  }
+
+  /// O PROBE VOLTOU: a camada aprende quanto o arquivo tem.
+  ///
+  /// Dois cuidados que faltavam:
+  ///
+  ///   1. ISTO NAO E UMA EDICAO, e nao pode virar um passo de desfazer.
+  ///      Como o probe demora mais que a janela de 450 ms, a correcao
+  ///      entrava na pilha sozinha — e o primeiro "desfazer" depois de
+  ///      importar devolvia o clipe a duracao provisoria de 4 s em vez
+  ///      de remove-lo.
+  ///   2. QUEM JA MEXEU NA BARRA MANDA. A correcao sobrescrevia a
+  ///      duracao sem olhar, entao aparar o clipe nesse meio-tempo era
+  ///      trabalho perdido: o probe chegava depois e desfazia a
+  ///      aparagem. Agora so estica o que ainda esta no provisorio.
+  void _chegouADuracao(String id, Duration d) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer || d <= Duration.zero) return;
+    final intocada =
+        layer.duration == const Duration(seconds: 4) &&
+        layer.sourceOffset == Duration.zero &&
+        layer.speed == 1.0;
+    final novo = layer.copyLayer(
+      sourceDuration: d,
+      duration: intocada ? d : null,
+    );
+    state = state.copyWith(
+      layers: [
+        for (final l in state.layers)
+          if (l.id == id) novo else l,
+      ],
+    );
   }
 
   /// IMPORTA UM VIDEO JA ESCOLHIDO e so devolve quando a duracao real
@@ -429,11 +458,7 @@ class EditorController extends Notifier<VideoProject> {
     String name,
   ) async {
     final id = addVideoLayer(at, path, name, const Duration(seconds: 4));
-    final d = await _probeDuration(path);
-    final layer = _layer(id);
-    if (layer is VideoLayer && d > Duration.zero) {
-      _replace(layer.copyLayer(duration: d));
-    }
+    _chegouADuracao(id, await _probeDuration(path));
     return id;
   }
 
@@ -441,12 +466,14 @@ class EditorController extends Notifier<VideoProject> {
     Duration at,
     String path,
     String name,
-    Duration duration,
-  ) {
+    Duration duration, {
+    Duration? fonte,
+  }) {
     final layer = AudioLayer(
       name: name,
       startTime: at,
       duration: duration,
+      sourceDuration: fonte,
       sourcePath: path,
       position: AnimatedOffset(_center),
     );
@@ -464,7 +491,12 @@ class EditorController extends Notifier<VideoProject> {
     if (file == null) return;
     final duration = await service.audioDuration(file.path);
     if (_disposed || state.id != projectId) return;
-    addAudioLayer(at, file.path, file.name, duration);
+    // A DURACAO DO ARQUIVO E GUARDADA, e nao so usada.
+    //
+    // O import ja a conhecia e jogava fora: a camada nascia com ela
+    // como duracao de clipe e ninguem mais sabia quanto o arquivo
+    // tinha. Sem isso, `trimLayerEnd` nao tem contra o que travar.
+    addAudioLayer(at, file.path, file.name, duration, fonte: duration);
   }
 
   // ------------------------------------------ oficio: meta da camada
@@ -3796,6 +3828,17 @@ class EditorController extends Notifier<VideoProject> {
     var start = newStart < Duration.zero ? Duration.zero : newStart;
     final maxStart = layer.endTime - const Duration(milliseconds: 100);
     if (start > maxStart) start = maxStart;
+    // A ALCA ESQUERDA NAO VAI ALEM DO COMECO DO ARQUIVO.
+    //
+    // O `sourceOffset` ja era travado em zero, mas a DURACAO continuava
+    // crescendo: puxar a ponta esquerda depois de o recuo ter chegado
+    // ao zero esticava o clipe para tras da midia. O piso e o instante
+    // que faz o recuo dar exatamente zero.
+    final recuoAtras = _recuoDaFonte(layer);
+    if (recuoAtras != null && !_passeiaPelaFonte(layer)) {
+      final piso = layer.startTime - recuoAtras;
+      if (start < piso) start = piso;
+    }
     final delta = start - layer.startTime;
     if (layer is VideoLayer) {
       if (hasTimeRemap(layer) || layer.reverse) {
@@ -3844,12 +3887,70 @@ class EditorController extends Notifier<VideoProject> {
     }
   }
 
+  /// QUANTO DE LINHA DO TEMPO HA ANTES do que o clipe mostra hoje.
+  ///
+  /// E o `sourceOffset` traduzido para tempo de barra. Nulo quando a
+  /// camada nao vem de arquivo.
+  Duration? _recuoDaFonte(Layer layer) {
+    final (recuo, ritmo) = switch (layer) {
+      VideoLayer l => (l.sourceOffset, l.speed),
+      AudioLayer l => (l.sourceOffset, l.speed),
+      _ => (null, 1.0),
+    };
+    if (recuo == null || ritmo <= 0) return null;
+    return Duration(microseconds: (recuo.inMicroseconds / ritmo).round());
+  }
+
+  /// O clipe anda pela fonte por conta propria (reverse ou time remap)?
+  ///
+  /// Nesse caso a sobra a partir do `sourceOffset` deixa de descrever o
+  /// que ele usa, e travar por ela cortaria uma edicao legitima.
+  bool _passeiaPelaFonte(Layer layer) =>
+      layer is VideoLayer && (layer.reverse || hasTimeRemap(layer));
+
+  /// QUANTO DE LINHA DO TEMPO AINDA HA NA FONTE desta camada.
+  ///
+  /// Nulo quando a camada nao vem de arquivo, quando o projeto e antigo
+  /// (nao guardava a medida) ou quando o probe falhou — nesses casos
+  /// nao ha teto, que e o comportamento de sempre.
+  ///
+  /// O numero e em tempo de LINHA, e nao de arquivo: dois segundos de
+  /// fonte a 2x sao um segundo de barra. Sem esta divisao, acelerar um
+  /// clipe faria o teto parecer o dobro do que e.
+  Duration? _sobraDaFonte(Layer layer) {
+    final (fonte, recuo, ritmo) = switch (layer) {
+      VideoLayer l => (l.sourceDuration, l.sourceOffset, l.speed),
+      AudioLayer l => (l.sourceDuration, l.sourceOffset, l.speed),
+      _ => (null, Duration.zero, 1.0),
+    };
+    if (fonte == null || ritmo <= 0) return null;
+    final resta = fonte - recuo;
+    if (resta <= Duration.zero) return Duration.zero;
+    return Duration(microseconds: (resta.inMicroseconds / ritmo).round());
+  }
+
   void trimLayerEnd(String id, Duration newEnd) {
     final layer = _layer(id);
     if (layer == null) return;
     var duration = newEnd - layer.startTime;
     if (duration < const Duration(milliseconds: 100)) {
       duration = const Duration(milliseconds: 100);
+    }
+    // A ALCA DIREITA NAO PASSA DO FIM DO ARQUIVO.
+    //
+    // So havia piso de 100 ms; teto nenhum. Arrastar a ponta direita
+    // esticava o clipe para alem da midia e o resultado era quadro
+    // parado (ou silencio) ate o fim da barra, sem nada na tela
+    // dizendo que aquilo tinha acabado. Encurtar sempre esteve certo.
+    //
+    // Time remap e reverse ficam de fora: os dois passeiam pela fonte
+    // por conta propria, e a sobra a partir do `sourceOffset` deixa de
+    // descrever o que o clipe usa.
+    final sobra = _sobraDaFonte(layer);
+    if (sobra != null && !_passeiaPelaFonte(layer) && duration > sobra) {
+      duration = sobra < const Duration(milliseconds: 100)
+          ? const Duration(milliseconds: 100)
+          : sobra;
     }
     if (layer is VideoLayer &&
         duration < layer.duration &&

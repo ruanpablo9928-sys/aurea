@@ -41,6 +41,14 @@ import 'lod3d.dart';
 int _dur(Duration d) => d.inMicroseconds;
 Duration _asDur(dynamic v) => Duration(microseconds: (v as num).toInt());
 
+/// A MESMA COISA, mas aceitando ausencia.
+///
+/// Campo que so existe em projeto novo precisa disto: `_asDur` estoura
+/// em nulo, e um projeto antigo nao tem por que deixar de abrir por
+/// causa de uma medida que ninguem tinha guardado ainda.
+Duration? _asDurOuNulo(dynamic v) =>
+    v is num ? Duration(microseconds: v.toInt()) : null;
+
 int _col(Color c) => c.toARGB32();
 Color _asCol(dynamic v) => Color((v as num).toInt());
 
@@ -1166,6 +1174,12 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'video';
       base['src'] = v.sourcePath;
       base['srcOffset'] = _dur(v.sourceOffset);
+      // QUANTO O ARQUIVO TEM. So aparece quando ha o numero: projeto
+      // antigo continua legivel, e um projeto novo cujo probe falhou
+      // nao inventa um teto.
+      if (v.sourceDuration != null) {
+        base['srcDur'] = v.sourceDuration!.inMicroseconds;
+      }
       if (v.speed != 1.0) base['speed'] = v.speed;
       if (v.reverse) base['reverse'] = true;
       if (v.speedBlur) base['speedBlur'] = true;
@@ -1212,6 +1226,9 @@ Map<String, dynamic> layerToJson(Layer l) {
       base['kind'] = 'audio';
       base['src'] = a.sourcePath;
       base['srcOffset'] = _dur(a.sourceOffset);
+      if (a.sourceDuration != null) {
+        base['srcDur'] = a.sourceDuration!.inMicroseconds;
+      }
       if (a.speed != 1.0) base['speed'] = a.speed;
       base['volume'] = a.volume;
       final aa = _audioSpec(a.audio);
@@ -1966,6 +1983,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         duration: dur,
         sourcePath: m['src'] as String,
         sourceOffset: _asDur(m['srcOffset']),
+        sourceDuration: _asDurOuNulo(m['srcDur']),
         speed: (m['speed'] as num?)?.toDouble() ?? 1.0,
         reverse: m['reverse'] as bool? ?? false,
         speedBlur: m['speedBlur'] as bool? ?? false,
@@ -2168,6 +2186,7 @@ Layer layerFromJson(Map<String, dynamic> m) {
         duration: dur,
         sourcePath: m['src'] as String,
         sourceOffset: _asDur(m['srcOffset']),
+        sourceDuration: _asDurOuNulo(m['srcDur']),
         speed: (m['speed'] as num?)?.toDouble() ?? 1.0,
         volume: (m['volume'] as num).toDouble(),
         audio: _asAudioSpec(m['audio']),

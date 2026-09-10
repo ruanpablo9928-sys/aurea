@@ -13,6 +13,7 @@ import 'linha_de_parametro.dart';
 import 'painel_de_mascaras.dart';
 import 'painel_de_mistura.dart';
 import 'painel_de_som.dart';
+import 'painel_de_velocidade.dart';
 import 'painel_da_camada.dart';
 import 'painel_de_transformacao.dart';
 import 'rails_do_painel.dart';
@@ -89,6 +90,7 @@ class ControlesDaCategoria extends ConsumerWidget {
     'texto' => _Texto(camada: camada),
     'forma' => _Forma(camada: camada, tempo: tempo),
     'som' => PainelDeSom(camada: camada),
+    'velocidade' => PainelDeVelocidade(camada: camada),
     'efeitos' => _Efeitos(camada: camada, tempo: tempo),
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),

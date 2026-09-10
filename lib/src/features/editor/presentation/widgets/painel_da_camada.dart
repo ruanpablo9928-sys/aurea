@@ -144,6 +144,12 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
       rotulo: 'Som',
       icone: Icons.volume_up_rounded,
     ),
+  if (camada is VideoLayer || camada is AudioLayer)
+    const CategoriaDaCamada(
+      id: 'velocidade',
+      rotulo: 'Velocidade',
+      icone: Icons.speed_rounded,
+    ),
   if (camada is ImageLayer || camada is VideoLayer || camada is AudioLayer)
     const CategoriaDaCamada(
       id: 'midia',
@@ -420,6 +426,7 @@ String tituloDaFerramenta(String categoriaId) => switch (categoriaId) {
   'texto' => 'Texto',
   'forma' => 'Forma',
   'som' => 'Som',
+  'velocidade' => 'Velocidade',
   'efeitos' => 'Efeitos',
   'midia' => 'Informacoes da midia',
   'camada' => 'Camada',

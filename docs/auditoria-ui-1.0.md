@@ -63,6 +63,27 @@ Duas coisas ganharam DESENHO, e nao so comando:
   nenhum: achar as batidas era uma acao sem resposta na tela, e nao
   havia como conferir a grade antes de mandar cortar.
 
+**Video: velocidade e a alca que passava do fim (lote 6).** Fecha os
+dois itens marcados **QUEBRADO** na Frente 6 (`VIDEO — Trim` e
+`AUDIO — Trim`) e abre a porta de `setClipSpeed`, `setClipReverse`,
+`setClipSpeedBlur`, `setClipInterpolacao`, `setClipPreservePitch` e as
+quatro rampas de `applySpeedRamp`, no cartao "Velocidade".
+
+A raiz dos dois defeitos era a mesma: **a camada nao guardava quanto o
+ARQUIVO tem**. A duracao real chegava do probe no import e era jogada
+fora; sobrava so quanto do arquivo estava em uso. `VideoLayer` e
+`AudioLayer` passaram a ter `sourceDuration` (persistida como `srcDur`,
+opcional — projeto antigo abre igual e, sem a medida, nao ha teto), e
+as duas alcas travam nela.
+
+O terceiro defeito da mesma linha do resumo tambem saiu: importar video
+custava **dois passos de desfazer**, porque o probe chegava depois da
+janela de 450 ms e entrava na pilha sozinho — o primeiro "desfazer"
+devolvia o clipe aos 4 s provisorios em vez de remove-lo. E a mesma
+correcao sobrescrevia qualquer aparagem feita nesse meio-tempo. Agora a
+chegada do probe nao e uma edicao (nao empilha) e so estica o que ainda
+esta no provisorio.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo

@@ -457,6 +457,7 @@ class VideoLayer extends Layer {
     required super.duration,
     required this.sourcePath,
     this.sourceOffset = Duration.zero,
+    this.sourceDuration,
     this.speed = 1.0,
     this.reverse = false,
     this.speedBlur = false,
@@ -486,6 +487,18 @@ class VideoLayer extends Layer {
 
   final String sourcePath;
   final Duration sourceOffset;
+
+  /// QUANTO O ARQUIVO TEM, do primeiro ao ultimo quadro.
+  ///
+  /// A duracao real chegava do probe no import e era JOGADA FORA: a
+  /// camada guardava so quanto do arquivo estava EM USO. Sem a medida
+  /// da fonte, `trimLayerEnd` nao tinha contra o que travar, e arrastar
+  /// a ponta direita esticava o clipe para alem do fim da midia — sem
+  /// aviso, mostrando quadro parado ou silencio.
+  ///
+  /// Nulo em projeto antigo, que nao guardava isto. Todo uso e
+  /// opcional: sem o numero nao ha teto, e o comportamento e o de antes.
+  final Duration? sourceDuration;
 
   /// VELOCIDADE do clipe. 2 = o dobro; 0,5 = camera lenta.
   ///
@@ -543,6 +556,7 @@ class VideoLayer extends Layer {
     String? matteSourceId,
     bool clearMatteSource = false,
     Duration? sourceOffset,
+    Duration? sourceDuration,
     double? speed,
     bool? reverse,
     bool? speedBlur,
@@ -559,6 +573,7 @@ class VideoLayer extends Layer {
       duration: duration ?? this.duration,
       sourcePath: sourcePath,
       sourceOffset: sourceOffset ?? this.sourceOffset,
+      sourceDuration: sourceDuration ?? this.sourceDuration,
       speed: speed ?? this.speed,
       reverse: reverse ?? this.reverse,
       speedBlur: speedBlur ?? this.speedBlur,
@@ -598,6 +613,7 @@ class VideoLayer extends Layer {
     duration: duration,
     sourcePath: sourcePath,
     sourceOffset: sourceOffset,
+    sourceDuration: sourceDuration,
     speed: speed,
     reverse: reverse,
     speedBlur: speedBlur,
@@ -1427,6 +1443,7 @@ class AudioLayer extends Layer {
     required super.duration,
     required this.sourcePath,
     this.sourceOffset = Duration.zero,
+    this.sourceDuration,
     this.speed = 1.0,
     this.volume = 1.0,
     this.audio = const AudioSpec(),
@@ -1457,6 +1474,18 @@ class AudioLayer extends Layer {
   /// locucao move o inicio da fonte do pedaco de tras — sem isso o
   /// pedaco repete o mesmo audio em vez de continuar de onde parou.
   final Duration sourceOffset;
+
+  /// QUANTO O ARQUIVO TEM, do primeiro ao ultimo quadro.
+  ///
+  /// A duracao real chegava do probe no import e era JOGADA FORA: a
+  /// camada guardava so quanto do arquivo estava EM USO. Sem a medida
+  /// da fonte, `trimLayerEnd` nao tinha contra o que travar, e arrastar
+  /// a ponta direita esticava o clipe para alem do fim da midia — sem
+  /// aviso, mostrando quadro parado ou silencio.
+  ///
+  /// Nulo em projeto antigo, que nao guardava isto. Todo uso e
+  /// opcional: sem o numero nao ha teto, e o comportamento e o de antes.
+  final Duration? sourceDuration;
 
   /// VELOCIDADE da faixa. Acelerar audio tambem sobe o tom — e por isso
   /// que o controle avisa em vez de fingir que nao acontece.
@@ -1498,6 +1527,7 @@ class AudioLayer extends Layer {
     double? volume,
     AudioSpec? audio,
     Duration? sourceOffset,
+    Duration? sourceDuration,
     double? speed,
     ClipTransition? transitionIn,
     bool clearTransitionIn = false,
@@ -1512,6 +1542,7 @@ class AudioLayer extends Layer {
       duration: duration ?? this.duration,
       sourcePath: sourcePath,
       sourceOffset: sourceOffset ?? this.sourceOffset,
+      sourceDuration: sourceDuration ?? this.sourceDuration,
       speed: speed ?? this.speed,
       volume: volume ?? this.volume,
       audio: audio ?? this.audio,
@@ -1545,6 +1576,7 @@ class AudioLayer extends Layer {
     duration: duration,
     sourcePath: sourcePath,
     sourceOffset: sourceOffset,
+    sourceDuration: sourceDuration,
     speed: speed,
     volume: volume,
     audio: audio,
