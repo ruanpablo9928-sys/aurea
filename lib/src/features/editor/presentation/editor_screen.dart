@@ -60,6 +60,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       vsync: this,
       durationOf: () => ref.read(editorControllerProvider).duration,
     );
+    // A GRADE DO RELOGIO E A DO PROJETO.
+    //
+    // `compositionFps` nascia em 30 e NUNCA era atribuido: a capsula
+    // mostrava o quadro contado pelo fps do projeto e o cabecote se
+    // encaixava numa grade fixa de 30. Num projeto a 24 ou a 60, o
+    // numero que a pessoa le e o quadro que a exportacao grava eram
+    // coisas diferentes.
+    _playback.compositionFps = ref.read(editorControllerProvider).fps;
     _playback.time.addListener(_syncVideos);
     _playback.playing.addListener(_syncVideos);
     // ABRIR UM PROJETO precisa montar os tocadores AGORA: o relogio esta
@@ -119,6 +127,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     final project = ref.watch(editorControllerProvider);
     final selecionada = ref.watch(selectedLayerProvider);
     final controlador = ref.read(editorControllerProvider.notifier);
+    // Trocar o fps do projeto tem de trocar a grade do relogio junto.
+    _playback.compositionFps = project.fps;
     return PopScope(
       // O BOTAO DE VOLTAR DO SISTEMA TAMBEM SAI DO GRUPO PRIMEIRO.
       //

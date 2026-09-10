@@ -137,6 +137,31 @@ havia taxa na mao, HEVC ou tamanho diferente do original. No caminho
 comum, escolher "alta" era silenciosamente ignorado. A `String quality`
 da tela morreu, e a formula duplicada de `PlatformEncoder` tambem.
 
+**Linha do tempo: precisao (lote 10).** Quatro itens da mesma familia:
+
+- **`PREVIEW — Current Time` (QUEBRADO)**: `compositionFps` nascia em 30
+  e nunca era atribuido. A capsula contava os quadros pelo fps do
+  PROJETO e o cabecote encaixava numa grade fixa de 30 — num projeto a
+  24 ou a 60, o numero lido e o quadro exportado eram coisas
+  diferentes. A tela agora alimenta a grade a cada build.
+- **`PREVIEW — Frame Forward/Back` (FALTA)**: `stepFrame` novo, e duas
+  setas coladas na capsula. A capsula deixou de ser desenho e virou
+  widget porque ganhou controle. O passo anda pelo INDICE do quadro,
+  e o instante de um quadro e o TETO da divisao — truncar (ou
+  arredondar) fazia a ida e a volta nao fecharem, e o passo ficava
+  preso repetindo o mesmo instante.
+- **`PREVIEW — Loop` (ESCONDIDO)**: o motor lacava e o unico lugar do
+  app que ligava era a tela de estresse 3D. Agora ha um interruptor na
+  ponta da barra de rolagem da regua — a unica peca da regua que fala
+  da extensao do projeto.
+- **imantacao (FALTA, citada no resumo do audio)**: `domain/imantacao.dart`.
+  O clipe cola no cabecote, nas duas pontas de cada outro clipe, no
+  comeco e no fim do projeto, nos marcadores e nas batidas. Cola pelas
+  DUAS pontas — arrastar para encostar o FIM no comeco do proximo e o
+  caso mais comum de todos. A tolerancia e em PIXELS: fixa em
+  milissegundos seria generosa demais com o zoom fechado e inutil com
+  ele aberto.
+
 **A gravacao do projeto (fora da auditoria, achado no caminho).** A
 ponte `ref.listen(editorControllerProvider) -> upsert(projetoCompleto)`
 morava na tela de edicao antiga e foi apagada com ela: o editor novo

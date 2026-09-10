@@ -574,7 +574,30 @@ class _ReguaState extends State<_Regua> {
       // o arrasto desliza o tempo, e marcador e coisa da regua — nao da
       // trilha, que pertence a uma camada so.
       onLongPress: widget.aoAlternarMarcador,
-      child: ValueListenableBuilder<Duration>(
+      child: Stack(
+        children: [
+          Positioned.fill(child: _desenho(context)),
+          // AS SETAS FICAM POR CIMA do detector da regua: elas sao os
+          // unicos alvos daqui que nao sao "levar o cabecote".
+          _CapsulaDoTempo(playback: widget.playback, fps: widget.fps),
+          // O LACO MORA NA PONTA DA BARRA DE ROLAGEM.
+          //
+          // A barra e a unica peca da regua que fala da EXTENSAO do
+          // projeto, e laco e exatamente isso: o que acontece quando o
+          // cabecote chega ao fim. O motor ja sabia laçar
+          // (`PlaybackController.loop`) e o unico lugar do app que
+          // ligava era a tela de estresse 3D — no editor, zero.
+          Positioned(
+            right: 2,
+            top: 0,
+            child: _Laco(playback: widget.playback),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _desenho(BuildContext context) => ValueListenableBuilder<Duration>(
         valueListenable: widget.playback.time,
         builder: (context, t, _) => CustomPaint(
           painter: _PintorDaRegua(
@@ -587,9 +610,7 @@ class _ReguaState extends State<_Regua> {
           ),
           size: Size.infinite,
         ),
-      ),
-    ),
-  );
+      );
 
   /// O CABECOTE NAO SAI DA COMPOSICAO — quem garante isso e o proprio
   /// `seek`, que ja prende nas duas pontas. Repetir a conta aqui so
@@ -621,8 +642,8 @@ class _PintorDaRegua extends CustomPainter {
   static const _topoDasMarcas = 10.0;
   static const _marcaCurta = 5.0;
   static const _marcaLonga = 9.0;
-  static const _topoDaCapsula = 21.0;
-  static const _alturaDaCapsula = 16.0;
+  // A capsula saiu daqui: virou widget quando ganhou as duas setas de
+  // quadro. Ver `_CapsulaDoTempo`.
 
   /// A ESCADA DE PASSOS. So estes valores aparecem como marca, para o
   /// espacamento nunca virar um numero quebrado que nao ajuda ninguem a
@@ -638,7 +659,6 @@ class _PintorDaRegua extends CustomPainter {
     _pintarBarra(canvas, size);
     _pintarBatidas(canvas, size);
     _pintarMarcadores(canvas, size);
-    _pintarCapsula(canvas, size);
   }
 
   /// AS BATIDAS: risquinhos no pe da regua.
@@ -777,42 +797,6 @@ class _PintorDaRegua extends CustomPainter {
   /// O TEMPO ANDA COM O CABECOTE, numa capsula colada nele. Ler o tempo
   /// num canto fixo obriga o olho a ir e voltar; colado, a informacao
   /// esta onde a atencao ja esta.
-  void _pintarCapsula(Canvas canvas, Size size) {
-    final texto = TextPainter(
-      text: TextSpan(
-        text: relogioDeQuadros(mapa.tempo, fps),
-        style: familia.copyWith(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: AmColors.text,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    final largura = texto.width + 16;
-    var esquerda = mapa.ancora - largura / 2;
-    if (esquerda < 2) esquerda = 2;
-    if (esquerda + largura > size.width - 2) {
-      esquerda = size.width - 2 - largura;
-    }
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(esquerda, _topoDaCapsula, largura, _alturaDaCapsula),
-        const Radius.circular(5),
-      ),
-      Paint()..color = AmColors.chip,
-    );
-    texto.paint(
-      canvas,
-      Offset(
-        esquerda + 8,
-        _topoDaCapsula + (_alturaDaCapsula - texto.height) / 2,
-      ),
-    );
-  }
-
   @override
   bool shouldRepaint(_PintorDaRegua o) =>
       o.familia != familia ||
@@ -823,6 +807,135 @@ class _PintorDaRegua extends CustomPainter {
       o.mapa.largura != mapa.largura ||
       o.duracao != duracao ||
       o.fps != fps;
+}
+
+/// A CAPSULA DO TEMPO, com as duas setas de quadro.
+///
+/// Ela era desenhada pelo pintor da regua, e por isso era so decoracao.
+/// Virou widget porque ganhou CONTROLE: nao existia passo de quadro em
+/// lugar nenhum do app — o cabecote so andava por arrasto e por toque,
+/// e as duas coisas param onde o dedo para. Sem isto nao ha como cravar
+/// uma marca no quadro exato, que e a diferenca entre uma animacao que
+/// bate com o corte e uma que chega um quadro atrasada.
+///
+/// As setas moram COLADAS no numero de proposito: e o numero que elas
+/// mudam, e o transporte ja esta fechado nos sete alvos da referencia.
+class _CapsulaDoTempo extends StatelessWidget {
+  const _CapsulaDoTempo({required this.playback, required this.fps});
+
+  final PlaybackController playback;
+  final int fps;
+
+  static const _topo = 21.0;
+  static const _altura = 16.0;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: 0,
+    right: 0,
+    top: _topo - 6,
+    height: _altura + 12,
+    child: Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Seta(
+            icone: Icons.chevron_left_rounded,
+            rotulo: 'Um quadro para tras',
+            aoTocar: () => playback.stepFrame(-1),
+          ),
+          Container(
+            height: _altura,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AmColors.chip,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: ValueListenableBuilder<Duration>(
+              valueListenable: playback.time,
+              builder: (context, t, _) => Text(
+                relogioDeQuadros(t, fps),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AmColors.text,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          _Seta(
+            icone: Icons.chevron_right_rounded,
+            rotulo: 'Um quadro para a frente',
+            aoTocar: () => playback.stepFrame(1),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _Laco extends StatelessWidget {
+  const _Laco({required this.playback});
+
+  final PlaybackController playback;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: playback.loop,
+    builder: (context, ligado, _) => Semantics(
+      container: true,
+      excludeSemantics: true,
+      button: true,
+      toggled: ligado,
+      label: ligado ? 'Parar de repetir' : 'Repetir sem parar',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => playback.loop.value = !ligado,
+        child: SizedBox(
+          width: 30,
+          height: 20,
+          child: Icon(
+            Icons.repeat_rounded,
+            size: 14,
+            color: ligado ? AmColors.accent : AmColors.muted,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _Seta extends StatelessWidget {
+  const _Seta({
+    required this.icone,
+    required this.rotulo,
+    required this.aoTocar,
+  });
+
+  final IconData icone;
+  final String rotulo;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    excludeSemantics: true,
+    button: true,
+    label: rotulo,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: aoTocar,
+      child: SizedBox(
+        // O ALVO E MAIOR QUE O DESENHO. A seta desenhada tem 16 px e a
+        // area que responde tem 26 por 28 — o dedo nao acerta 16.
+        width: 26,
+        height: 28,
+        child: Icon(icone, size: 16, color: AmColors.text),
+      ),
+    ),
+  );
 }
 
 /// O RELOGIO DA REFERENCIA: minuto, segundo e QUADRO.

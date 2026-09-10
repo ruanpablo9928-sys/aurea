@@ -122,6 +122,28 @@ class PlaybackController {
 
   void toggle() => playing.value ? pause() : play();
 
+  /// UM QUADRO PARA A FRENTE OU PARA TRAS.
+  ///
+  /// Nao existia passo de quadro em lugar nenhum do app: o cabecote so
+  /// andava por arrasto e por toque, e as duas coisas param onde o dedo
+  /// para. Sem isto nao ha como cravar uma marca no quadro exato — que
+  /// e a diferenca entre uma animacao que bate com o corte e uma que
+  /// chega um quadro atrasada.
+  ///
+  /// Anda pelo INDICE do quadro, e nao somando o passo em
+  /// microssegundos: a 30 fps o passo nao e inteiro (33333,33 us), e
+  /// somar arredondado erra 50 us a cada 150 quadros — o suficiente
+  /// para dez passos para a frente e dez para tras nao voltarem ao
+  /// mesmo lugar.
+  void stepFrame(int passos) {
+    if (passos == 0) return;
+    pause();
+    final f = compositionFps < 1 ? 30 : compositionFps;
+    final atual = (time.value.inMicroseconds * f) ~/ 1000000;
+    final alvo = atual + passos;
+    seek(_instanteDoQuadro(alvo < 0 ? 0 : alvo, f));
+  }
+
   /// Encaixa na grade de quadros da composicao.
   ///
   /// O tick ja fazia isso, e so ele — entao um seek caia entre dois
@@ -136,8 +158,21 @@ class PlaybackController {
     // segundos — pequeno demais para ver, grande o bastante para o
     // relogio nao bater com o quadro exportado.
     final quadro = (t.inMicroseconds * f) ~/ 1000000;
-    return Duration(microseconds: (quadro * 1000000) ~/ f);
+    return _instanteDoQuadro(quadro, f);
   }
+
+  /// O INSTANTE DO QUADRO [quadro], SEMPRE PARA CIMA.
+  ///
+  /// A conta de volta (`_naGrade`) usa o CHAO, entao o instante de um
+  /// quadro tem de ser o primeiro microssegundo que ja pertence a ele —
+  /// senao a ida e a volta nao fecham. O quadro 25 a 24 fps cai em
+  /// 1.041.666,67 us: truncar da 1.041.666, que pelo chao ainda e o
+  /// quadro 24, e arredondar da o mesmo problema sempre que a fracao
+  /// fica abaixo da metade (quadro 55 a 30 fps). Nos dois casos o passo
+  /// de quadro ficava preso — pedir "um para a frente" devolvia o mesmo
+  /// instante, ou dez passos de ida e dez de volta paravam noutro lugar.
+  static Duration _instanteDoQuadro(int quadro, int f) =>
+      Duration(microseconds: (quadro * 1000000 / f).ceil());
 
   void seek(Duration t) {
     seekRevision++;

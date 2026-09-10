@@ -6,6 +6,8 @@ import '../../application/editor_controller.dart';
 import '../../application/media_preview_service.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/peak_pyramid.dart';
+import '../../domain/video_project.dart';
+import '../../domain/imantacao.dart';
 import '../../domain/layer.dart';
 import 'linha_do_tempo.dart';
 import 'mapa_do_tempo.dart';
@@ -174,6 +176,31 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
   Duration _inicioAoComecar = Duration.zero;
   Duration _fimAoComecar = Duration.zero;
 
+  /// A QUE DISTANCIA O IMA PEGA, em pixels.
+  ///
+  /// Em PIXELS, e nao em milissegundos: uma tolerancia fixa em tempo
+  /// seria generosa demais com o zoom fechado — colando coisas a meio
+  /// segundo de distancia — e inutil com ele aberto. Nove e o que o
+  /// dedo entende como "encostei" sem atrapalhar quem quer parar a um
+  /// quadro do vizinho.
+  static const _pixelsDoIma = 9.0;
+
+  /// ONDE O CLIPE PODE COLAR.
+  ///
+  /// Tudo que ja e um instante com significado nesta composicao: o
+  /// cabecote, as duas pontas de cada OUTRO clipe, o comeco e o fim do
+  /// projeto, os marcadores e as batidas. O proprio clipe fica de fora
+  /// — ele nao pode colar em si mesmo, senao nao sai do lugar.
+  List<Duration> _ancoras(String id, List<Layer> camadas, VideoProject p) => [
+    widget.playback.time.value,
+    Duration.zero,
+    p.duration,
+    for (final l in camadas)
+      if (l.id != id) ...[l.startTime, l.endTime],
+    for (final m in p.markers) m.time,
+    ...p.beats,
+  ];
+
   /// O dedo pousou: so ESCOLHE o que o arrasto vai fazer. Se o gesto
   /// acabar sendo um toque, nada aconteceu.
   void _pousar(Offset ponto, List<Layer> camadas, String? selecionada) {
@@ -325,15 +352,48 @@ class _VisaoGeralDasCamadasState extends ConsumerState<VisaoGeralDasCamadas> {
         final andou = mapa.tempoDe(d.localPosition.dx - _xAoComecar);
         final id = _clipe;
         final c = ref.read(editorControllerProvider.notifier);
+        // O IMA VALE PARA O CLIPE, e nao para o cabecote: navegar tem
+        // de chegar em qualquer instante, inclusive no meio de um
+        // quadro, porque e assim que se procura uma coisa no video.
+        final tolerancia = mapa.tempoDe(_pixelsDoIma);
         switch (_oQueFazer) {
           case _Arrasto.navegar:
             widget.playback.seek(_tempoAoComecar - andou);
           case _Arrasto.mover:
-            if (id != null) c.moveLayer(id, _inicioAoComecar + andou);
+            if (id != null) {
+              final l = camadas.firstWhere((x) => x.id == id);
+              c.moveLayer(
+                id,
+                imantarClipe(
+                  _inicioAoComecar + andou,
+                  l.duration,
+                  _ancoras(id, camadas, project),
+                  tolerancia,
+                ),
+              );
+            }
           case _Arrasto.apararInicio:
-            if (id != null) c.trimLayerStart(id, _inicioAoComecar + andou);
+            if (id != null) {
+              c.trimLayerStart(
+                id,
+                imantar(
+                  _inicioAoComecar + andou,
+                  _ancoras(id, camadas, project),
+                  tolerancia,
+                ),
+              );
+            }
           case _Arrasto.apararFim:
-            if (id != null) c.trimLayerEnd(id, _fimAoComecar + andou);
+            if (id != null) {
+              c.trimLayerEnd(
+                id,
+                imantar(
+                  _fimAoComecar + andou,
+                  _ancoras(id, camadas, project),
+                  tolerancia,
+                ),
+              );
+            }
         }
       },
       onHorizontalDragEnd: (_) => _fecharArrasto(),
