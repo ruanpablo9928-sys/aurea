@@ -10,6 +10,7 @@
 // (`docs/keyframe-explicito.md`).
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
+import 'package:aurea/src/features/editor/domain/layout_ops.dart';
 import 'package:aurea/src/features/editor/domain/video_project.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -187,6 +188,40 @@ void main() {
       closeTo(.5, 1e-9),
       reason: 'em 1 s continua o interpolado: nada foi cravado ali',
     );
+  });
+
+  test('LOTE de camadas nao vira pendencia: alinhar usa a regra estrita', () {
+    // Um lote nao tem losango. A pendencia e de UMA propriedade, numa
+    // camada, num instante — cravar cinco de uma vez com um toque so
+    // seria inventar um gesto que nao existe.
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final c = container.read(editorControllerProvider.notifier);
+    c.addShapeLayer(t0);
+    c.addShapeLayer(t0);
+    final ids = container
+        .read(editorControllerProvider)
+        .layers
+        .map((l) => l.id)
+        .toList();
+    // A primeira anima e esta fora de marca em 1 s; a segunda e estatica.
+    c.toggleKeyframe(ids.first, t0, LayerProp.position);
+    c.toggleKeyframe(ids.first, t2, LayerProp.position);
+    final presaEm = container
+        .read(editorControllerProvider)
+        .layerById(ids.first)!
+        .position
+        .valueAt(t1);
+
+    c.alignSelection(ids, AlignEdge.left, t1);
+
+    expect(container.read(edicaoPendenteProvider), isNull);
+    final animada = container
+        .read(editorControllerProvider)
+        .layerById(ids.first)!
+        .position;
+    expect(animada.keyframes, hasLength(2), reason: 'nada nasceu no lote');
+    expect(animada.valueAt(t1), presaEm);
   });
 
   test('propriedade ESTATICA nunca fica pendente: muda a base e pronto', () {

@@ -1298,6 +1298,14 @@ class EditorController extends Notifier<VideoProject> {
         ),
   ];
 
+  /// ALINHAR E DISTRIBUIR mexem em VARIAS camadas de uma vez, e por isso
+  /// usam a regra ESTRITA (`edited`) em vez da que deixa pendente.
+  ///
+  /// A edicao pendente e de uma propriedade, numa camada, num instante:
+  /// e o losango daquela linha que a crava. Um lote de cinco camadas
+  /// nao tem losango. Entao aqui vale o terceiro caso puro: quem tem
+  /// marca no cabecote e alinhado; quem anima e esta fora de uma marca
+  /// fica onde esta, ate ganhar a marca.
   void _applyCenters(Map<String, Offset> centers, Duration t) {
     if (centers.isEmpty) return;
     var layers = state.layers;
@@ -1305,7 +1313,7 @@ class EditorController extends Notifier<VideoProject> {
       layers = [
         for (final l in layers)
           if (l.id == e.key)
-            l.copyLayer(position: l.position.editada(l.localTime(t), e.value))
+            l.copyLayer(position: l.position.edited(l.localTime(t), e.value))
           else
             l,
       ];
