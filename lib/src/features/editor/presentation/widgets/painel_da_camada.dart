@@ -171,6 +171,17 @@ List<CategoriaDaCamada> categoriasDaCamada(Layer camada) => [
     rotulo: 'Efeitos',
     icone: Icons.auto_awesome_rounded,
   ),
+  // MASCARA SO EM QUEM TEM IMAGEM.
+  //
+  // Audio nao desenha nada e nulo existe justamente para nao desenhar:
+  // recortar qualquer um dos dois nao muda um pixel. O cartao ficaria
+  // aceso prometendo um efeito que nunca apareceria.
+  if (camada is! AudioLayer && camada is! NullLayer)
+    const CategoriaDaCamada(
+      id: 'mascara',
+      rotulo: 'Mascara',
+      icone: Icons.crop_free_rounded,
+    ),
 ];
 
 /// COMO A CAMADA SE CHAMA POR TIPO, para o cabecalho.

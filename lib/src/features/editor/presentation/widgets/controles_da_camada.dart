@@ -10,6 +10,7 @@ import '../../domain/layer.dart';
 import '../../domain/shape.dart';
 import 'editor_de_curva.dart';
 import 'linha_de_parametro.dart';
+import 'painel_de_mascaras.dart';
 import 'painel_de_transformacao.dart';
 import 'rails_do_painel.dart';
 
@@ -88,6 +89,7 @@ class ControlesDaCategoria extends ConsumerWidget {
     'efeitos' => _Efeitos(camada: camada, tempo: tempo),
     'midia' => _Midia(camada: camada),
     'camada' => _AcoesDaCamada(camada: camada, playback: playback),
+    'mascara' => PainelDeMascaras(camada: camada, tempo: tempo),
     _ => const _AindaNao(),
   };
 
@@ -113,6 +115,9 @@ class ControlesDaCategoria extends ConsumerWidget {
     }
     if (categoriaId == 'forma') {
       return alvoDoParametroDaForma(ref, camada, tempo);
+    }
+    if (categoriaId == 'mascara') {
+      return alvoDoParametroDaMascara(ref, camada, tempo);
     }
     return const AlvoDoRail();
   }

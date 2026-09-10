@@ -41,8 +41,34 @@ barata de perder a confiança de quem usa.
 
 ### O que ficou fora nesta etapa
 
-Efeitos, bordas, sombras, máscaras e modos de mistura. Por decisão, não
-por esquecimento — cada um tem etapa própria.
+Bordas, sombras e modos de mistura. Por decisão, não por esquecimento —
+cada um tem etapa própria. Efeitos e **máscara** já entraram.
+
+### Máscara: o recurso que já existia e não tinha porta
+
+O motor sabia fazer máscara desde muito antes desta interface: criar,
+apagar, reordenar, trocar o modo, inverter, animar suavidade, expansão e
+opacidade, e sete revelações prontas (`applyMaskReveal`). O palco
+desenhava. O arquivo salvava. **Nenhum widget chamava.**
+
+Recurso pronto sem porta é o mesmo que recurso ausente, com o agravante
+de já ter sido pago. O cartão "Máscara" é a porta, e ele não inventou
+nada: cada botão dele é um comando que já estava lá.
+
+A ficha usa a mesma linha das outras — chip, fita e campo. Duas escolhas
+merecem registro:
+
+- **O modo cicla num chip só.** São sete modos; sete chips lado a lado
+  não cabem nos 300 px do painel, e a lista inteira quase nunca é usada
+  (somar e subtrair respondem por quase tudo). O chip mostra o vigente e
+  avança ao toque — cabe, e não esconde nenhuma opção.
+- **A máscara nasce do tamanho da camada** (`maskBox`), medida com a
+  escala neutralizada porque a máscara vive *antes* do transform. Medir
+  com a escala ligada aplicaria a escala duas vezes, e toda camada
+  aumentada ganharia uma máscara maior que ela.
+
+O cartão não aparece em camada de áudio nem em nulo: nenhum dos dois
+desenha um pixel, e recortá-los não mudaria nada na tela.
 
 ## Os três estados
 

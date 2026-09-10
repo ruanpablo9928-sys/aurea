@@ -7,6 +7,27 @@ pontas — o comando no controller e o widget que chama.
 Este documento e o resultado bruto. O que foi corrigido esta marcado nos
 commits que o citam.
 
+## O que ja ganhou porta
+
+**Mascara (lote 3).** Dos treze comandos listados como ESCONDIDO em
+`COMP — Masks` e nas linhas de MASKS da Frente 3, oito viraram controle
+no cartao "Mascara" de `categoriasDaCamada`: `addMask`, `removeMask`,
+`reorderMask`, `cycleMaskMode`, `toggleMaskInverted`, `editMaskParam`
+(as quatro chaves), `toggleMaskFeatherAxes` e `applyMaskReveal` (os
+sete presets). O rail esquerdo mira o parametro escolhido por
+`toggleMaskParamKeyframe`, que teve de ser escrito: existia toggle so
+para o CAMINHO (`toggleMaskPathKeyframe`), nao para os numeros — dava
+para arrastar o valor e nunca para cravar o instante.
+
+Continuam sem porta, e de proposito, os tres que dependem de gesto no
+palco (`palco_de_previa.dart` ainda nao tem `GestureDetector`):
+`editMaskPath`, `replaceMaskPath` e `toggleMaskPathKeyframe`.
+`setMaskFromOwnShape` e o rastreio de mascara seguem na fila.
+
+Com isto, quem abrir os modelos de fabrica que ja criavam mascaras
+(`dnyx_remix_template.dart`, `reference_rebuild_template.dart`) passa a
+**ver, editar e remover** o que antes so podia sofrer.
+
 
 
 ---

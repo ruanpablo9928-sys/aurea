@@ -4916,18 +4916,26 @@ class EditorController extends Notifier<VideoProject> {
     final layer = _layer(layerId);
     if (layer == null) return;
     final local = layer.localTime(globalTime);
-    // A mascara vive antes do transform da camada. Neutralizar a escala
-    // evita aplicar scale duas vezes ao tamanho usado pelo caminho local.
-    final localLayer = layer.copyLayer(
-      scaleX: AnimatedDouble(1),
-      scaleY: AnimatedDouble(1),
+    addMask(
+      layerId,
+      createRevealMask(preset, maskBox(layerId, globalTime), local),
     );
-    final size = measureLayerBox(
-      localLayer,
-      local,
+  }
+
+  /// A CAIXA que uma mascara nova precisa ter para cobrir esta camada.
+  ///
+  /// Mesma conta do preset de revelacao, e por isso o preset agora
+  /// chama daqui: a mascara vive ANTES do transform, entao medir com a
+  /// escala ligada aplicaria a escala duas vezes e a mascara nasceria
+  /// maior que a camada em toda camada aumentada.
+  Size maskBox(String layerId, Duration globalTime) {
+    final layer = _layer(layerId);
+    if (layer == null) return Size(state.outputWidth.toDouble(), 100);
+    return measureLayerBox(
+      layer.copyLayer(scaleX: AnimatedDouble(1), scaleY: AnimatedDouble(1)),
+      layer.localTime(globalTime),
       fallbackWidth: state.outputWidth.toDouble(),
     );
-    addMask(layerId, createRevealMask(preset, size, local));
   }
 
   void removeMask(String layerId, String maskId) {
@@ -5076,6 +5084,36 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   /// Keyframe do CAMINHO da mascara no tempo atual (PR-M1 aplicado).
+  /// MARCA OU TIRA um keyframe de feather/expansao/opacidade.
+  ///
+  /// O caminho ja tinha o seu ([toggleMaskPathKeyframe]); os numeros
+  /// nao tinham nenhum. Sem isto, o losango do rail no painel de
+  /// mascara nao teria o que chamar — daria para ARRASTAR o valor e
+  /// nunca para CRAVAR o instante, que e o que transforma um ajuste em
+  /// animacao.
+  void toggleMaskParamKeyframe(
+    String layerId,
+    String maskId,
+    String param,
+    Duration globalTime,
+  ) {
+    final layer = _layer(layerId);
+    if (layer == null) return;
+    final local = layer.localTime(globalTime);
+    AnimatedDouble virar(AnimatedDouble t) => t.hasKeyframeAt(local)
+        ? t.withoutKeyframe(local)
+        : t.withKeyframe(local, t.valueAt(local));
+    updateMask(layerId, maskId, (m) {
+      return switch (param) {
+        'feather' => m.copyWith(feather: virar(m.feather)),
+        'featherY' => m.copyWith(featherY: virar(m.featherVertical)),
+        'expansion' => m.copyWith(expansion: virar(m.expansion)),
+        'opacity' => m.copyWith(opacity: virar(m.opacity)),
+        _ => m,
+      };
+    });
+  }
+
   void toggleMaskPathKeyframe(
     String layerId,
     String maskId,
