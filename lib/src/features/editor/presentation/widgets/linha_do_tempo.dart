@@ -1311,25 +1311,19 @@ class _FaixaState extends State<_Faixa> {
                       ),
                     ),
                   ),
-                // O NAVEGADOR DE CAMADA: uma pilula BRANCA por cima
-                // da trilha, com o nome no meio e as setas nas pontas.
-                //
-                // Eram duas setas cinzas nas bordas da faixa, e elas
-                // brigavam com tudo: com o `+` redondo, com a pilula do
-                // olho, com o proprio clipe. A referencia resolve
-                // juntando as tres coisas numa peca so, no meio, onde
-                // nada mais mora — e de quebra o nome da camada aberta
-                // fica visivel, que era o que faltava para saber onde se
-                // esta sem olhar o cabecalho.
+                // O NAVEGADOR DE CAMADA: as setas de troca de camada ficam
+                // alinhadas à faixa da camada, logo ao lado da pílula do olho,
+                // sem flutuar sobre o clipe nem sobrepor a régua (V 00:40).
                 if (widget.camada != null)
                   Positioned(
-                    left: 0,
-                    right: 0,
-                    top: _Faixa.topoDaTrilhaEm(altura) - 40,
+                    left: LinhaDoTempo.larguraDaPilula + 4,
+                    top: _Faixa.topoDaTrilhaEm(altura),
+                    height: _Faixa.alturaDaTrilha,
                     child: Center(
                       child: PilulaDeNavegacao(
                         nome: widget.camada!.name,
                         cor: corDaCamada(widget.camada!),
+                        mostrarNome: false,
                         aoAnterior: widget.temAnterior
                             ? () => widget.aoTrocar(-1)
                             : null,
@@ -1590,6 +1584,16 @@ class _BotaoRedondoDeAdicao extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(painelDaCamadaLigadoProvider)) {
+      return const SizedBox.shrink();
+    }
+    // No AM (páginas 6, 7 e 30 do PDF; V 00:00 vs 00:40): O '+' existe
+    // estritamente no contexto de projeto sem nenhuma camada selecionada.
+    // Com camada selecionada ou ferramenta/curva aberta, o '+' se recolhe.
+    if (ref.watch(selectedLayerProvider) != null) {
+      return const SizedBox.shrink();
+    }
+    final contexto = ref.watch(contextoDoEditorProvider);
+    if (contexto != ContextoDoEditor.projeto) {
       return const SizedBox.shrink();
     }
     final aberta = ref.watch(barraDeAdicaoAbertaProvider);

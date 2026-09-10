@@ -706,7 +706,8 @@ class _QuadroState extends State<_Quadro> {
 
       void mover(Offset p) {
         final i = _preso;
-        if (i == null) return;
+        if (i == null || tamanho.width <= 0 || tamanho.height <= 0) return;
+        if (!p.dx.isFinite || !p.dy.isFinite) return;
         final x = (p.dx / tamanho.width).clamp(0.0, 1.0);
         // O VALOR PASSA DE 0..1 DE PROPOSITO: e assim que se faz um
         // exagero, aquele passar do ponto e voltar. Meio quadro para
@@ -717,32 +718,34 @@ class _QuadroState extends State<_Quadro> {
         );
       }
 
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanStart: (d) {
-          if (!bezier) return;
-          // O BOTAO MAIS PERTO DO DEDO. Sem isso, pegar o de baixo num
-          // canto onde os dois se encostam viraria loteria.
-          final p = d.localPosition;
-          final d0 = (_Quadro.pontoDoBotao(curva, 0, tamanho) - p).distance;
-          final d1 = (_Quadro.pontoDoBotao(curva, 1, tamanho) - p).distance;
-          _preso = d0 <= d1 ? 0 : 1;
-          widget.aoComecar();
-          mover(p);
-        },
-        onPanUpdate: (d) => mover(d.localPosition),
-        onPanEnd: (_) {
-          _preso = null;
-          widget.aoTerminar();
-        },
-        onPanCancel: () {
-          _preso = null;
-          widget.aoTerminar();
-        },
-        child: CustomPaint(
-          key: const ValueKey('quadro-da-curva'),
-          painter: _PintorDaCurva(curva: curva, comBotoes: bezier),
-          size: Size.infinite,
+      return ClipRect(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (d) {
+            if (!bezier || tamanho.width <= 0 || tamanho.height <= 0) return;
+            // O BOTAO MAIS PERTO DO DEDO. Sem isso, pegar o de baixo num
+            // canto onde os dois se encostam viraria loteria.
+            final p = d.localPosition;
+            final d0 = (_Quadro.pontoDoBotao(curva, 0, tamanho) - p).distance;
+            final d1 = (_Quadro.pontoDoBotao(curva, 1, tamanho) - p).distance;
+            _preso = d0 <= d1 ? 0 : 1;
+            widget.aoComecar();
+            mover(p);
+          },
+          onPanUpdate: (d) => mover(d.localPosition),
+          onPanEnd: (_) {
+            _preso = null;
+            widget.aoTerminar();
+          },
+          onPanCancel: () {
+            _preso = null;
+            widget.aoTerminar();
+          },
+          child: CustomPaint(
+            key: const ValueKey('quadro-da-curva'),
+            painter: _PintorDaCurva(curva: curva, comBotoes: bezier),
+            size: Size.infinite,
+          ),
         ),
       );
     },
@@ -776,6 +779,8 @@ class _PintorDaCurva extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     final grade = Paint()
       ..color = AmColors.muted.withValues(alpha: .25)
       ..strokeWidth = 1;
@@ -796,8 +801,6 @@ class _PintorDaCurva extends CustomPainter {
       final p = Offset(t * size.width, (1 - v) * size.height);
       i == 0 ? caminho.moveTo(p.dx, p.dy) : caminho.lineTo(p.dx, p.dy);
     }
-    canvas.save();
-    canvas.clipRect(Offset.zero & size);
     canvas.drawPath(
       caminho,
       Paint()
@@ -806,7 +809,6 @@ class _PintorDaCurva extends CustomPainter {
         ..strokeWidth = 3
         ..strokeJoin = StrokeJoin.round,
     );
-    canvas.restore();
 
     final inicio = Offset(0, size.height);
     final fim = Offset(size.width, 0);
@@ -816,21 +818,23 @@ class _PintorDaCurva extends CustomPainter {
     canvas.drawCircle(inicio, 5, verde);
     canvas.drawCircle(fim, 5, verde);
 
-    if (!comBotoes) return;
-    for (var i = 0; i < 2; i++) {
-      final p = _Quadro.pontoDoBotao(curva, i, size);
-      canvas.drawLine(
-        i == 0 ? inicio : fim,
-        p,
-        Paint()
-          ..color = AmColors.text.withValues(alpha: .5)
-          ..strokeWidth = 2,
-      );
-      // BOTOES GRANDES: dezoito de raio, medido na referencia. E um
-      // gesto de precisao feito com o dedo, e o dedo cobre o proprio
-      // alvo — um ponto pequeno seria mira as cegas.
-      canvas.drawCircle(p, 18, Paint()..color = Colors.white);
+    if (comBotoes) {
+      for (var i = 0; i < 2; i++) {
+        final p = _Quadro.pontoDoBotao(curva, i, size);
+        canvas.drawLine(
+          i == 0 ? inicio : fim,
+          p,
+          Paint()
+            ..color = AmColors.text.withValues(alpha: .5)
+            ..strokeWidth = 2,
+        );
+        // BOTOES GRANDES: dezoito de raio, medido na referencia. E um
+        // gesto de precisao feito com o dedo, e o dedo cobre o proprio
+        // alvo — um ponto pequeno seria mira as cegas.
+        canvas.drawCircle(p, 18, Paint()..color = Colors.white);
+      }
     }
+    canvas.restore();
   }
 
   @override

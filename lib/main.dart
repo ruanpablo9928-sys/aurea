@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,18 @@ Future<void> main() async {
   // Sem ela, o registro de travadas confundiria tela parada com tela
   // travada. Ver [RegistroDeTravadas].
   LigacaoQueMedeOQuadro();
+
+  // BLINDAGEM CONTRA FECHAMENTOS INESPERADOS (crashes):
+  // Exceções assíncronas não-tratadas (de isolates, timers, canais de plataforma)
+  // são interceptadas aqui em vez de derrubar o processo no Android e iOS.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError interceptado: ${details.exceptionAsString()}');
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('PlatformDispatcher erro interceptado: $error\n$stack');
+    return true; // Retornar true marca o erro como tratado e impede o encerramento do app
+  };
   TextureCache.instance.observeMemoryPressure(WidgetsBinding.instance);
   final prefs = await SharedPreferences.getInstance();
   // Resolve a migalha do motor 3D antes de qualquer cena desenhar:

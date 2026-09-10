@@ -4164,9 +4164,11 @@ class _LayerContent extends StatelessWidget {
                 ),
               );
             }
+            final rawRatio = controller.value.aspectRatio;
+            final ratio = rawRatio > 0 && rawRatio.isFinite ? rawRatio : (16 / 9);
             return SizedBox(
               width: compWidth,
-              height: compWidth / controller.value.aspectRatio,
+              height: compWidth / ratio,
               child: VideoPlayer(controller),
             );
           },

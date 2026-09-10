@@ -420,12 +420,14 @@ class PainelSobreposto extends ConsumerWidget {
         right: 0,
         bottom: 0,
         height: PainelDaCamada.alturaMaxima,
-        child: const DecoratedBox(
-          decoration: BoxDecoration(
-            color: AmColors.panelHigh,
-            border: Border(top: BorderSide(color: AmColors.hairline)),
+        child: const ClipRect(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AmColors.panelHigh,
+              border: Border(top: BorderSide(color: AmColors.hairline)),
+            ),
+            child: EditorDeCurva(),
           ),
-          child: EditorDeCurva(),
         ),
       );
     }

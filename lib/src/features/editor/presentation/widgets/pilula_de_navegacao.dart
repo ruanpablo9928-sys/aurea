@@ -25,6 +25,7 @@ class PilulaDeNavegacao extends StatelessWidget {
     this.aoAnterior,
     this.aoProxima,
     this.largura,
+    this.mostrarNome = true,
   });
 
   /// O nome da camada aberta, como ele aparece na trilha.
@@ -48,6 +49,9 @@ class PilulaDeNavegacao extends StatelessWidget {
   /// ela deve ter o tamanho do nome; largura fixa so serve quando ela
   /// divide uma linha com outra coisa e precisa acompanhar o vizinho.
   final double? largura;
+
+  /// Controla se exibe o chip com o nome no meio ou apenas as setas de navegação.
+  final bool mostrarNome;
 
   /// O BRANCO PINTADO TEM 32 PX, e nao cresce com o nome.
   ///
@@ -119,10 +123,12 @@ class PilulaDeNavegacao extends StatelessWidget {
             // Row de largura livre a restricao chega infinita, e filho
             // com flex sob largura infinita e erro de layout, nao
             // encolhimento.
-            if (largura == null)
-              _ChipDoNome(nome: nome, cor: cor)
-            else
-              Flexible(child: _ChipDoNome(nome: nome, cor: cor)),
+            if (mostrarNome) ...[
+              if (largura == null)
+                _ChipDoNome(nome: nome, cor: cor)
+              else
+                Flexible(child: _ChipDoNome(nome: nome, cor: cor)),
+            ],
             _Seta(
               icone: Icons.chevron_right_rounded,
               rotulo: 'Proxima camada',
