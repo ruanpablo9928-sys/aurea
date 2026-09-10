@@ -19,10 +19,10 @@
 /// O NUMERO DA COMPILACAO NAO VOLTA. Ele so cresce, sempre: e por ele
 /// que a loja e o aparelho decidem o que e mais novo, e um `versionCode`
 /// menor faz a instalacao ser recusada sem explicacao util.
-const versaoDoApp = '1.0.0-beta.2';
+const versaoDoApp = '1.0.0-beta.3';
 
 /// O numero da compilacao — o que muda a cada IPA/APK entregue.
-const buildDoApp = 72;
+const buildDoApp = 73;
 
 /// Como aparece para quem le: `1.0.0-beta.1 (71)`.
 const versaoCompleta = '$versaoDoApp ($buildDoApp)';
