@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
+import 'package:aurea/src/features/editor/application/ui/editor_layout.dart';
 import 'package:aurea/src/features/editor/domain/effect.dart';
 import 'package:aurea/src/features/editor/presentation/am/am_timeline.dart';
 import 'package:aurea/src/features/editor/presentation/am/layer_menu.dart';
@@ -127,10 +128,13 @@ void main() {
         isNull,
       );
       await shot('camada');
-      await tester.tap(find.text('Mover e\ntransf.'));
+      await tester.tap(find.text('Movimentação e transformação'));
       await tester.pumpAndSettle();
       expect(find.byType(TransformPanel), findsOneWidget);
-      expect(tester.getRect(find.byType(PreviewStage)), preview);
+      expect(
+        tester.getRect(find.byType(PreviewStage)).height,
+        greaterThanOrEqualTo(EditorLayoutMetrics.previewMin),
+      );
       expect(
         find.byKey(const ValueKey('painel-voltar')).hitTestable(),
         findsOneWidget,
@@ -179,7 +183,10 @@ void main() {
       await tester.tap(find.byTooltip('Editar curva da propriedade'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('curve-edit-area')), findsOneWidget);
-      expect(tester.getRect(find.byType(PreviewStage)), preview);
+      expect(
+        tester.getRect(find.byType(PreviewStage)).height,
+        greaterThanOrEqualTo(EditorLayoutMetrics.previewMin),
+      );
       await shot('curva');
       await tester.tap(find.byKey(const ValueKey('editor-back')));
       await tester.pumpAndSettle();

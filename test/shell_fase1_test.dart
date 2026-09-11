@@ -5,6 +5,7 @@ import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
 import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/presentation/shell/transport_bar.dart';
+import 'package:aurea/src/features/editor/presentation/am/transform_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,6 +118,22 @@ void main() {
         sheetFraction: 0.22,
       );
       expect(alto.preview, closeTo(932 * 0.60, 0.01));
+    });
+
+    test('focusedLayer garante piso generoso de pelo menos 270px para o painel', () {
+      for (final h in [667.0, 750.0, 844.0, 932.0]) {
+        final m = EditorLayoutMetrics.solve(
+          totalHeight: h,
+          previewFraction: 0.42,
+          sheetFraction: 0.46,
+          focusedLayer: true,
+          sheetVisible: true,
+        );
+        expect(m.total, closeTo(h, 0.01), reason: 'soma total para h=$h');
+        expect(m.sheet, greaterThanOrEqualTo(270.0), reason: 'sheet >= 270 para h=$h');
+        expect(m.timeline, greaterThanOrEqualTo(56.0), reason: 'timeline >= 56 para h=$h');
+        expect(m.preview, greaterThanOrEqualTo(EditorLayoutMetrics.previewMin), reason: 'preview vivo');
+      }
     });
   });
 
@@ -234,16 +251,16 @@ void main() {
     await tester.pumpAndSettle();
     barra('com selecao');
     expect(
-      find.byKey(const ValueKey('camada-mais')),
+      find.text('Movimentação e transformação'),
       findsOneWidget,
-      reason: 'E2 com selecao',
+      reason: 'E2 com selecao (dock AM)',
     );
     expect(find.byKey(const ValueKey('editor-project-name')), findsOneWidget);
 
-    await tester.tap(find.text('Mover e\ntransf.'));
+    await tester.tap(find.text('Movimentação e transformação'));
     await tester.pumpAndSettle();
     barra('com painel aberto');
-    expect(find.text('Transformar · Posição'), findsOneWidget);
+    expect(find.byType(TransformPanel), findsOneWidget);
   });
 
   testWidgets('segurar o fim permite digitar o tempo exato', (tester) async {
@@ -268,24 +285,24 @@ void main() {
       final id = c.read(editorControllerProvider).layers.first.id;
       c.read(selectedLayerProvider.notifier).state = id;
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Mover e\ntransf.'));
+      await tester.tap(find.text('Movimentação e transformação'));
       await tester.pumpAndSettle();
 
       Layer camada() => c.read(editorControllerProvider).layerById(id)!;
       expect(camada().keyframeTimes, isEmpty);
 
-      final losango = find.byTooltip('Adicionar keyframe neste instante');
+      final losango = find.bySemanticsLabel('Marcar keyframe aqui');
       expect(losango, findsOneWidget);
       await tester.tap(losango);
       await tester.pumpAndSettle();
       expect(camada().keyframeTimes, isNotEmpty, reason: 'um keyframe em 0 s');
-      expect(find.byTooltip('Remover keyframe neste instante'), findsOneWidget);
+      expect(find.bySemanticsLabel('Tirar o keyframe daqui'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Remover keyframe neste instante'));
+      await tester.tap(find.bySemanticsLabel('Tirar o keyframe daqui'));
       await tester.pumpAndSettle();
       expect(camada().keyframeTimes, isEmpty, reason: 'o mesmo toque tira');
       expect(
-        find.byTooltip('Adicionar keyframe neste instante'),
+        find.bySemanticsLabel('Marcar keyframe aqui'),
         findsOneWidget,
       );
     },
@@ -304,13 +321,13 @@ void main() {
         .first
         .id;
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
+    expect(find.text('Movimentação e transformação'), findsOneWidget);
     expect(find.byKey(const ValueKey('editor-pro')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('editor-settings')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('editor-pro')), findsNothing);
     expect(c.read(proModeProvider), isTrue);
-    expect(find.byKey(const ValueKey('camada-mais')), findsOneWidget);
+    expect(find.text('Movimentação e transformação'), findsOneWidget);
   });
 
   testWidgets(

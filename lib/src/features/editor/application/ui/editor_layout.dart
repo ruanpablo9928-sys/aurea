@@ -94,11 +94,22 @@ class EditorLayoutMetrics {
       sheet += timeline;
       timeline = 0;
     }
-    // A ferramenta mostra uma única camada. O espaço das outras linhas
-    // pertence ao controle, como na referência, sem reduzir a prévia.
-    if (focusedLayer && sheetVisible && !timelineExpanded && timeline > 88) {
-      sheet += timeline - 88;
-      timeline = 88;
+    // A ferramenta mostra uma única camada com painel ativo (Transformar, Cor, Efeitos, etc.).
+    // O painel tem prioridade de espaço (mínimo 270px), a timeline opera em modo compacto (56px)
+    // e o preview cede altura, mantendo o enquadramento perfeito via BoxFit.contain.
+    if (focusedLayer && sheetVisible && !timelineExpanded) {
+      final timelinePiso = math.min(56.0, ws * 0.15);
+      final sheetAlvo = math.min(
+        math.max(0.0, ws - timelinePiso - previewMin),
+        math.max(270.0, ws * (sheetFraction > 0.40 ? sheetFraction : 0.46)),
+      );
+      sheet = sheetAlvo;
+      timeline = timelinePiso;
+      preview = math.max(previewMin, ws - sheet - timeline);
+      final sobra = ws - preview - sheet - timeline;
+      if (sobra > 0) {
+        timeline += sobra;
+      }
     }
     return EditorLayoutMetrics(
       topBar: AureaTokens.topBar,

@@ -373,7 +373,7 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
 
   @override
   Widget build(BuildContext context) {
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
     if (layer is! ShapeLayer || id == null) {

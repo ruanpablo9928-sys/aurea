@@ -862,13 +862,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             ws
                       : (mostrandoDicas && ws > 0
                             ? (ContextSheet.handleHeight + 108) / ws
-                            : (s.adding ? 0.48 : EditorSession.alturaDaFolha)),
+                            : (s.adding
+                                  ? 0.48
+                                  : (s.panel != EditorPanel.none
+                                        ? 0.46
+                                        : EditorSession.alturaDaFolha))),
                   previewExpanded: s.previewExpanded,
                   timelineExpanded: s.timelineExpanded,
                   sheetVisible: conteudo != null,
                   timelineFloor: layer != null && s.panel == EditorPanel.none
                       ? 126
-                      : 88,
+                      : (s.panel != EditorPanel.none ? 56 : 88),
                   sheetMayCoverTimeline: s.adding,
                   focusedLayer:
                       layer != null && s.panel != EditorPanel.none && !s.adding,

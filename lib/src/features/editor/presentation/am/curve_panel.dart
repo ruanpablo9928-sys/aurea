@@ -401,17 +401,19 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                               ),
                             ),
                             const SizedBox(width: 4),
-                            Text(
-                              foraDoTrecho
-                                  ? 'Efeito Ease (${times.indexOf(segment.$1) + 1} \u2192 ${times.indexOf(segment.$1) + 2})'
-                                  : 'Efeito Ease de Cúbico-Bezier',
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                            Flexible(
+                              child: Text(
+                                foraDoTrecho
+                                    ? 'Efeito Ease (${times.indexOf(segment.$1) + 1} \u2192 ${times.indexOf(segment.$1) + 2})'
+                                    : 'Efeito Ease de Cúbico-Bezier',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 4),

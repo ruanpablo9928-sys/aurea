@@ -492,7 +492,7 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
 
   @override
   Widget build(BuildContext context) {
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final onion = ref.watch(onionSkinProvider);
     final drawing = ref.watch(freehandRequestProvider);
@@ -1182,7 +1182,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
 
   @override
   Widget build(BuildContext context) {
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
 
     // O RASCUNHO PRECISA DE QUEM O ESCUTE. Sem este ouvinte, a
     // qualidade cheia so voltaria no proximo quadro — e ao pausar nao ha

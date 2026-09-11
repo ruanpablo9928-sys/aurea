@@ -39,12 +39,14 @@ class PainelDeTransformacao extends ConsumerStatefulWidget {
     required this.playback,
     required this.aoVoltar,
     required this.alvoDoRail,
+    this.mais,
   });
 
   final Layer camada;
   final Duration tempo;
   final PlaybackController playback;
   final VoidCallback aoVoltar;
+  final Widget? mais;
 
   /// O que o rail esquerdo faz no modo vigente. Vem de fora porque quem
   /// sabe montar keyframe e curva e o painel das ferramentas, que ja tem
@@ -67,7 +69,11 @@ class _PainelDeTransformacaoState
 
   EditorController get _c => ref.read(editorControllerProvider.notifier);
 
-  Duration get _local => widget.camada.localTime(widget.tempo);
+  Layer get _camada =>
+      ref.watch(projetoVisivelProvider).layerById(widget.camada.id) ??
+      widget.camada;
+
+  Duration get _local => _camada.localTime(widget.tempo);
 
   void _abrirLote() => _c.beginGesture();
 
@@ -81,6 +87,7 @@ class _PainelDeTransformacaoState
         RailEsquerdo(
           aoVoltar: widget.aoVoltar,
           alvo: widget.alvoDoRail(modo),
+          mais: widget.mais,
         ),
         Expanded(
           child: Column(
@@ -111,7 +118,7 @@ class _PainelDeTransformacaoState
   // ------------------------------------------------------- os campos
 
   Widget _campos(ModoDeTransformacao modo) {
-    final l = widget.camada;
+    final l = _camada;
     switch (modo) {
       case ModoDeTransformacao.mover:
         final p = l.position.valueAt(_local);
@@ -239,12 +246,13 @@ class _PainelDeTransformacaoState
   // --------------------------------------------------- as superficies
 
   Widget _superficie(ModoDeTransformacao modo) {
-    final l = widget.camada;
+    final l = _camada;
     switch (modo) {
       case ModoDeTransformacao.mover:
-        final projeto = ref.watch(editorControllerProvider);
+        final projeto = ref.watch(projetoVisivelProvider);
         final ganho = projeto.outputWidth / 360;
         return AlmofadaDeArrasto(
+          key: const ValueKey('position-drag-pad'),
           cabecalho: _campos(ModoDeTransformacao.mover),
           aoComecar: () {
             _posicaoAoComecar = l.position.valueAt(_local);
@@ -334,28 +342,32 @@ class _PainelDeTransformacaoState
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            FitaDeAjuste(
-              rotulo: 'Inclinacao X',
-              valor: l.skewX.valueAt(_local),
-              porPixel: .25,
-              altura: 62,
-              aoComecar: _abrirLote,
-              aoMudar: (v) => _c.editSkewX(l.id, widget.tempo, v),
-              aoTerminar: _fecharLote,
+            Expanded(
+              child: FitaDeAjuste(
+                rotulo: 'Inclinacao X',
+                valor: l.skewX.valueAt(_local),
+                porPixel: .25,
+                altura: double.infinity,
+                aoComecar: _abrirLote,
+                aoMudar: (v) => _c.editSkewX(l.id, widget.tempo, v),
+                aoTerminar: _fecharLote,
+              ),
             ),
             const SizedBox(height: 8),
-            FitaDeAjuste(
-              rotulo: 'Inclinacao Y',
-              valor: l.skewY.valueAt(_local),
-              porPixel: .25,
-              altura: 62,
-              // A SEGUNDA FITA NAO E A ATIVA: a linha central dela sai
-              // branca, e e assim que se sabe qual das duas o dedo
-              // estava mexendo na referencia.
-              ativa: false,
-              aoComecar: _abrirLote,
-              aoMudar: (v) => _c.editSkewY(l.id, widget.tempo, v),
-              aoTerminar: _fecharLote,
+            Expanded(
+              child: FitaDeAjuste(
+                rotulo: 'Inclinacao Y',
+                valor: l.skewY.valueAt(_local),
+                porPixel: .25,
+                altura: double.infinity,
+                // A SEGUNDA FITA NAO E A ATIVA: a linha central dela sai
+                // branca, e e assim que se sabe qual das duas o dedo
+                // estava mexendo na referencia.
+                ativa: false,
+                aoComecar: _abrirLote,
+                aoMudar: (v) => _c.editSkewY(l.id, widget.tempo, v),
+                aoTerminar: _fecharLote,
+              ),
             ),
           ],
         );
@@ -364,9 +376,7 @@ class _PainelDeTransformacaoState
 
   /// Um dos tres dials do giro em 3D.
   Widget _dial(String rotulo, double angulo, void Function(double) aoMudar) =>
-      SizedBox(
-        width: 90,
-        height: 90,
+      Expanded(
         child: DialDeAngulo(
           compacto: true,
           rotulo: rotulo,
@@ -381,14 +391,14 @@ class _PainelDeTransformacaoState
   /// vale so para o eixo que [eixoY] escolhe.
   void _escalar(double valor, {bool eixoY = false}) {
     if (ref.read(escalaTravadaProvider)) {
-      _c.editScaleUniform(widget.camada.id, widget.tempo, valor);
+      _c.editScaleUniform(_camada.id, widget.tempo, valor);
       return;
     }
     if (eixoY) {
-      _c.editScaleY(widget.camada.id, widget.tempo, valor);
+      _c.editScaleY(_camada.id, widget.tempo, valor);
       return;
     }
-    _c.editScaleX(widget.camada.id, widget.tempo, valor);
+    _c.editScaleX(_camada.id, widget.tempo, valor);
   }
 }
 

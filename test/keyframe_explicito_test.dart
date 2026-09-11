@@ -153,4 +153,52 @@ void main() {
     expect(l.scaleY.isAnimated, isFalse);
     expect(l.scaleX.valueAt(Duration.zero), 2);
   });
+
+  test('projetoVisivelProvider reflete edicao pendente fora de keyframe e toggleKeyframe crava', () {
+    final ref = _comFormaAtrasada();
+    addTearDown(ref.dispose);
+    final editor = ref.read(editorControllerProvider.notifier);
+
+    // Marca em 3s (tempo local 0s)
+    editor.toggleKeyframe('shape', const Duration(seconds: 3), LayerProp.position);
+
+    // Edita em 5s (tempo local 2s, fora da marca)
+    editor.editPosition('shape', const Duration(seconds: 5), const Offset(88, 99));
+
+    // O projeto real continua intacto (sem keyframe fantasma)
+    final real = ref.read(editorControllerProvider).layerById('shape')!;
+    expect(real.position.keyframes, hasLength(1));
+    expect(real.position.keyframes.single.value, const Offset(10, 20));
+
+    // O projeto visivel (o que a previa e o painel mostram) reflete o valor novo em tempo real
+    final visivel = ref.read(projetoVisivelProvider).layerById('shape')!;
+    expect(visivel.position.valueAt(const Duration(seconds: 2)), const Offset(88, 99));
+
+    // Ao tocar no losango do rail, a pendencia e gravada no projeto de verdade
+    editor.toggleKeyframe('shape', const Duration(seconds: 5), LayerProp.position);
+    final gravado = ref.read(editorControllerProvider).layerById('shape')!;
+    expect(gravado.position.keyframes, hasLength(2));
+    expect(gravado.position.keyframes.last.value, const Offset(88, 99));
+    expect(gravado.position.keyframes.last.time, const Duration(seconds: 2));
+  });
+
+  test('com autoKeyframe ativo, edicao fora de marca grava direto no projeto real', () {
+    final ref = _comFormaAtrasada();
+    addTearDown(ref.dispose);
+    final editor = ref.read(editorControllerProvider.notifier);
+
+    // Liga autoKeyframe
+    ref.read(autoKeyframeProvider.notifier).state = true;
+
+    // Marca inicial em 3s
+    editor.toggleKeyframe('shape', const Duration(seconds: 3), LayerProp.position);
+
+    // Edita em 5s com autoKeyframe ligado
+    editor.editPosition('shape', const Duration(seconds: 5), const Offset(123, 456));
+
+    // Grava imediatamente sem ficar pendente
+    final real = ref.read(editorControllerProvider).layerById('shape')!;
+    expect(real.position.keyframes, hasLength(2));
+    expect(real.position.keyframes.last.value, const Offset(123, 456));
+  });
 }

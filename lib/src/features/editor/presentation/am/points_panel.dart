@@ -56,7 +56,7 @@ class PointsPanelState extends ConsumerState<PointsPanel> {
   Duration get _t => widget.playback.time.value;
 
   Layer? get _layer =>
-      ref.read(editorControllerProvider).layerById(widget.layerId);
+      ref.read(projetoVisivelProvider).layerById(widget.layerId);
 
   bool get _editaForma => ref.read(pathEditTargetProvider)?.forma ?? true;
 

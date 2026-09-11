@@ -283,7 +283,8 @@ class EditorController extends Notifier<VideoProject> {
     final camadaDaRecusa = _recusaCamada;
     _recusaLocal = null;
     _recusaCamada = null;
-    if (recusa != null) {
+    final autoKey = ref.read(autoKeyframeProvider);
+    if (recusa != null && !autoKey) {
       ref.read(edicaoPendenteProvider.notifier).state = EdicaoPendente(
         projeto: next,
         camadaId: camadaDaRecusa,

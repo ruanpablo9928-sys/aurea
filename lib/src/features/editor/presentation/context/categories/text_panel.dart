@@ -23,7 +23,7 @@ class TextPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AureaTokens.of(context);
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
     if (layer is! TextLayer || id == null) {

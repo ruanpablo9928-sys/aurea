@@ -38,7 +38,7 @@ class PainelDeForma extends ConsumerWidget {
       valueListenable: playback.time,
       builder: (context, tempo, _) {
         final c = ref.read(editorControllerProvider.notifier);
-        final real = ref.watch(editorControllerProvider).layerById(camada.id) as ShapeLayer? ?? camada;
+        final real = ref.watch(projetoVisivelProvider).layerById(camada.id) as ShapeLayer? ?? camada;
         final local = real.localTime(tempo);
         final escolhida = ref.watch(parametroDaFormaAbertoProvider);
 

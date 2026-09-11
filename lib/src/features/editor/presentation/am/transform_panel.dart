@@ -202,7 +202,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
   @override
   Widget build(BuildContext context) {
     ref.watch(autoKeyframeProvider);
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
     if (layer == null || id == null) {
@@ -221,6 +221,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
           tempo: t,
           playback: widget.playback,
           aoVoltar: widget.onBack,
+          mais: _options(controller, id, layer),
           alvoDoRail: (modo) {
             final prop = switch (modo) {
               ModoDeTransformacao.mover => LayerProp.position,
@@ -228,8 +229,10 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
               ModoDeTransformacao.escalar => LayerProp.scale,
               ModoDeTransformacao.inclinar => LayerProp.skew,
             };
-            final local = layer.localTime(t);
-            final times = keyframeTimesForProp(layer, prop);
+            final realLayer =
+                ref.watch(editorControllerProvider).layerById(id) ?? layer;
+            final local = realLayer.localTime(t);
+            final times = keyframeTimesForProp(realLayer, prop);
             final hasKfHere = times.any(
               (us) => (us - local.inMicroseconds).abs() < 8000,
             );

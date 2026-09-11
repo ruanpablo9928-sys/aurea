@@ -58,10 +58,12 @@ class RailEsquerdo extends StatelessWidget {
     super.key,
     required this.aoVoltar,
     required this.alvo,
+    this.mais,
   });
 
   final VoidCallback aoVoltar;
   final AlvoDoRail alvo;
+  final Widget? mais;
 
   static const largura = 46.0;
 
@@ -71,6 +73,7 @@ class RailEsquerdo extends StatelessWidget {
     child: Column(
       children: [
         _BotaoDoRail(
+          key: const ValueKey('painel-voltar'),
           icone: Icons.chevron_left_rounded,
           rotulo: 'Voltar as ferramentas',
           tamanho: 24,
@@ -91,16 +94,23 @@ class RailEsquerdo extends StatelessWidget {
           ),
         ),
         _BotaoCustomDoRail(
-          rotulo: 'Abrir a curva',
+          rotulo: 'Editar curva da propriedade',
           aoTocar: alvo.aoAbrirCurva,
-          child: CustomPaint(
-            size: const Size(20, 20),
-            painter: _CurveIconPainter(
-              ativo: alvo.aoAbrirCurva != null,
-              isAnimated: alvo.animado,
+          child: Tooltip(
+            message: 'Editar curva da propriedade',
+            child: CustomPaint(
+              size: const Size(20, 20),
+              painter: _CurveIconPainter(
+                ativo: alvo.aoAbrirCurva != null,
+                isAnimated: alvo.animado,
+              ),
             ),
           ),
         ),
+        if (mais != null)
+          Expanded(
+            child: Center(child: mais!),
+          ),
       ],
     ),
   );
@@ -163,6 +173,7 @@ class RailDireito extends StatelessWidget {
 
 class _BotaoDoRail extends StatelessWidget {
   const _BotaoDoRail({
+    super.key,
     required this.icone,
     required this.rotulo,
     required this.aoTocar,

@@ -3705,7 +3705,10 @@ class _MenuTile extends StatelessWidget {
         onTap: onTap,
         child: Container(
           height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: height < 65 ? 2 : 5,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFF222634),
             borderRadius: BorderRadius.circular(10),
@@ -3714,20 +3717,25 @@ class _MenuTile extends StatelessWidget {
             children: [
               Center(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, size: height < 60 ? 20 : 24, color: const Color(0xFFD4D8E2)),
-                    const SizedBox(height: 6),
+                    Icon(
+                      icon,
+                      size: height < 65 ? 18 : 22,
+                      color: const Color(0xFFD4D8E2),
+                    ),
+                    SizedBox(height: height < 65 ? 2 : 4),
                     Text(
                       label,
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        height: 1.15,
+                      style: TextStyle(
+                        fontSize: height < 65 ? 10.5 : 11.5,
+                        height: 1.1,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFFD4D8E2),
+                        color: const Color(0xFFD4D8E2),
                       ),
                     ),
                   ],
@@ -3909,12 +3917,13 @@ class BlendingPanel extends ConsumerStatefulWidget {
 class _BlendingPanelState extends ConsumerState<BlendingPanel> {
   @override
   Widget build(BuildContext context) {
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
     if (layer == null || id == null) {
       return const ColoredBox(color: AmColors.panel);
     }
+    final realLayer = ref.watch(editorControllerProvider).layerById(id) ?? layer;
     final controller = ref.read(editorControllerProvider.notifier);
 
     // Escuta o relogio: `t` sempre atual (keyframe cai no playhead real).
@@ -3926,8 +3935,9 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
 
         final tab = ref.watch(_blendTabProvider);
         final mask = layer.masks.isEmpty ? null : layer.masks.last;
-        final pathAnimated = mask?.path.isAnimated ?? false;
-        final pathKf = mask?.path.hasKeyframeAt(local) ?? false;
+        final realMask = realLayer.masks.isEmpty ? null : realLayer.masks.last;
+        final pathAnimated = realMask?.path.isAnimated ?? false;
+        final pathKf = realMask?.path.hasKeyframeAt(local) ?? false;
 
         return ColoredBox(
           color: AmColors.panel,
@@ -3952,10 +3962,10 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
                     },
                     child: AmDiamondAdd(
                       active: tab == _BlendTab.opacity
-                          ? layer.opacity.isAnimated
+                          ? realLayer.opacity.isAnimated
                           : tab == _BlendTab.mask && pathAnimated,
                       filled: tab == _BlendTab.opacity
-                          ? layer.opacity.hasKeyframeAt(local)
+                          ? realLayer.opacity.hasKeyframeAt(local)
                           : tab == _BlendTab.mask && pathKf,
                     ),
                   ),

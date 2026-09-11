@@ -141,12 +141,13 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final project = ref.watch(editorControllerProvider);
+    final project = ref.watch(projetoVisivelProvider);
     final id = ref.watch(selectedLayerProvider);
     final layer = id == null ? null : project.layerById(id);
     if (layer == null || id == null) {
       return const ColoredBox(color: AmColors.panel);
     }
+    final realLayer = ref.watch(editorControllerProvider).layerById(id) ?? layer;
     if (layer is AudioLayer) return AudioEffectsPanel(layerId: id);
     final effectIds = layer.effects.map((e) => e.id).toSet();
     if (_layerId != id) {
@@ -182,17 +183,21 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
           // sido removido ou reordenado desde a selecao.
           final partes = _selectedParam?.split('/');
           EffectInstance? sel;
+          EffectInstance? realSel;
           final chaves = <String>[];
           if (partes != null && partes.length == 2) {
             for (final e in layer.effects) {
               if (e.id == partes[0]) sel = e;
             }
+            for (final e in realLayer.effects) {
+              if (e.id == partes[0]) realSel = e;
+            }
             chaves.addAll(partes[1].split('|'));
           }
           // KEYFRAME UNIVERSAL: o diamante e do EFEITO inteiro, como
           // no Alight Motion — um keyframe guarda todos os parametros.
-          final selAnimado = sel != null && sel.hasAnimation;
-          final selKfAqui = sel != null && sel.hasKeyframeAt(local);
+          final selAnimado = realSel != null && realSel.hasAnimation;
+          final selKfAqui = realSel != null && realSel.hasKeyframeAt(local);
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
