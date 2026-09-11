@@ -18,7 +18,7 @@ import '../../editor/domain/layer.dart';
 import '../../../core/ui/am_colors.dart';
 import '../../editor/presentation/widgets/dither_layer.dart';
 import '../../editor/presentation/widgets/pixel_effect_engine.dart';
-import '../../editor/presentation/widgets/palco_de_previa.dart';
+import '../../editor/presentation/widgets/preview_stage.dart';
 import '../../editor/application/duck_service.dart';
 import '../../editor/application/media_preview_service.dart';
 import '../application/export_engine.dart';

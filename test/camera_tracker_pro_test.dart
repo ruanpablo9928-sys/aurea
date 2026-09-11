@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:aurea/src/features/editor/domain/algebra_numerica.dart';
 import 'package:aurea/src/features/editor/domain/camera_solver3d.dart';

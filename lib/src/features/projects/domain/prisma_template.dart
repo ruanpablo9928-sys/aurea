@@ -532,10 +532,11 @@ Scene3DLayer _cenaAnel() {
   ];
   double raio(double t) {
     if (t < .6) return 205 * _suave(t / .6);
-    if (t > 2.0)
+    if (t > 2.0) {
       return 205 +
           70 * math.sin(2 * math.pi * .42 * 1.4) +
           (t - 2.0) / .6 * 190;
+    }
     return 205 + 70 * math.sin(2 * math.pi * .42 * (t - .6));
   }
 

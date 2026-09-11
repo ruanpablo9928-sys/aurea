@@ -1,38 +1,66 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/ui/am_colors.dart';
-import '../application/editor_controller.dart';
-import '../application/playback_controller.dart';
-import '../application/video_layer_manager.dart';
-import '../domain/video_project.dart';
-import '../../export/presentation/export_video_screen.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../core/ui/snack.dart';
 import '../../projects/application/projects_controller.dart';
-import 'contexto_do_editor.dart';
-import 'widgets/ajustes_do_projeto.dart';
-import 'widgets/cabecalho_da_camada.dart';
-import 'widgets/linha_do_tempo.dart';
-import 'widgets/painel_da_camada.dart';
-import 'widgets/caneta_vetorial.dart';
-import 'widgets/freehand_overlay.dart';
-import 'widgets/palco_de_previa.dart';
-import 'widgets/seletor_de_insercao.dart';
-import 'widgets/visao_geral_das_camadas.dart';
+import '../../projects/application/thumbnail_service.dart';
+import '../application/editor_controller.dart';
+import '../application/freehand_session.dart';
+import '../application/playback_controller.dart';
+import '../application/preview_stats.dart';
+import '../application/qualidade3d_controller.dart';
+import '../application/ui/editor_layout.dart';
+import '../application/ui/editor_session.dart';
+import '../application/video_layer_manager.dart';
+import '../domain/effect.dart';
+import '../domain/gear.dart';
+import '../domain/layer.dart';
+import '../domain/orcamento_render.dart';
+import '../domain/shape.dart';
+import 'am/am_colors.dart';
+import 'am/am_timeline.dart';
+import 'am/am_widgets.dart';
+import 'am/beats_sheet.dart';
+import 'am/curve_panel.dart';
+import 'am/effects_panel.dart';
+import 'am/layer_menu.dart';
+import 'am/points_panel.dart';
+import 'am/property_keyframe_context.dart';
+import 'am/shape_panel.dart';
+import 'am/text_animators_panel.dart';
+import 'am/transform_panel.dart';
+import 'context/add_toolbar.dart';
+import 'shell/onboarding.dart';
+import '../../help/presentation/quick_guide_screen.dart';
+import 'context/categories/text_panel.dart';
+import 'context/context_sheet.dart';
+import 'context/layer_header.dart';
+import 'shell/layer_actions.dart';
+import 'shell/top_bar.dart';
+import 'shell/transport_bar.dart';
+import 'widgets/add_layer_sheet.dart';
+import 'widgets/mask_node_editor.dart';
+import 'widgets/painel_de_forma.dart';
+import 'widgets/preview_stage.dart';
 
-/// A TELA DE EDICAO, no osso.
+/// O EDITOR — cinco zonas fixas (secao 4 do prompt):
 ///
-/// A UI de edicao anterior — timeline, paineis, folhas, menus, barras,
-/// edicao no palco — foi apagada por inteiro para ser refeita. O que
-/// sobrou aqui e o minimo que ainda merece o nome de editor: a
-/// composicao desenhada, e um cabecote para andar no tempo.
+///   A  barra de cima     um estado so: voltar, nome, desfazer, projeto,
+///                        Exportar, Simples/Pro
+///   B  preview           com alca de altura
+///   C  transporte        play, timecode tocavel, loop, ◆, marca
+///   D  timeline          playhead central; nunca abaixo de 88 px
+///   E  painel contextual muda de CONTEUDO com a selecao, nunca de lugar
 ///
-/// O MOTOR NAO FOI TOCADO. O projeto, as camadas, os efeitos, a cena 3D,
-/// o desfazer, a gravacao e a exportacao continuam inteiros em
-/// `domain/` e `application/`. O que saiu foi so a casca. Construir a
-/// interface nova e ligar controles novos ao mesmo `EditorController`
-/// que ja esta aqui.
+/// O estado de sessao (o que esta aberto) mora em [editorSessionProvider];
+/// esta tela orquestra: le a sessao, resolve as alturas e monta as zonas.
 class EditorScreen extends ConsumerStatefulWidget {
-  const EditorScreen({super.key});
+  const EditorScreen({super.key, this.playback});
+
+  final PlaybackController? playback;
 
   @override
   ConsumerState<EditorScreen> createState() => _EditorScreenState();
@@ -43,44 +71,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   late final PlaybackController _playback;
   final VideoLayerManager _videos = VideoLayerManager();
 
-  /// ESCREVE O QUE ESTA PENDENTE ANTES DE IR PARA O FUNDO.
-  ///
-  /// A gravacao e adiada em 900 ms de proposito — arrastar um numero
-  /// manda dezenas de mutacoes por segundo, e gravar cada uma seria
-  /// reescrever o projeto inteiro dezenas de vezes por segundo. Mas o
-  /// sistema mata um app em segundo plano sem avisar, e esses 900 ms
-  /// seriam exatamente os ultimos ajustes de quem saiu do app logo
-  /// depois de mexer em alguma coisa. Ir para o fundo fecha a conta.
-  late final AppLifecycleListener _ciclo;
+  /// Dicas de primeiro uso ja vistas neste aparelho (Fase 6).
+  late bool _dicasVistas = OnboardingPrefs.vistas(ref);
+  final GlobalKey<PointsPanelState> _pointsKey = GlobalKey<PointsPanelState>();
+  AddTab? _addTab;
+
+  EditorSessionNotifier get _session =>
+      ref.read(editorSessionProvider.notifier);
+  EditorSession get _s => ref.read(editorSessionProvider);
 
   @override
   void initState() {
     super.initState();
-    _ciclo = AppLifecycleListener(
-      onPause: _gravarAgora,
-      onDetach: _gravarAgora,
-    );
-    _playback = PlaybackController(
+    RecentSheets.instance.clear();
+    _playback = widget.playback ?? PlaybackController(
       vsync: this,
       durationOf: () => ref.read(editorControllerProvider).duration,
     );
-    // A GRADE DO RELOGIO E A DO PROJETO.
-    //
-    // `compositionFps` nascia em 30 e NUNCA era atribuido: a capsula
-    // mostrava o quadro contado pelo fps do projeto e o cabecote se
-    // encaixava numa grade fixa de 30. Num projeto a 24 ou a 60, o
-    // numero que a pessoa le e o quadro que a exportacao grava eram
-    // coisas diferentes.
-    _playback.compositionFps = ref.read(editorControllerProvider).fps;
     _playback.time.addListener(_syncVideos);
     _playback.playing.addListener(_syncVideos);
-    // O CABECOTE ANDOU: a edicao pendente morre aqui.
-    //
-    // Ela e um valor que so faz sentido NAQUELE instante — a previa
-    // mostra, a linha do tempo nao, e o losango crava. Noutro tempo
-    // seria o retrato de um projeto que nao existe
-    // (`docs/keyframe-explicito.md`).
-    _playback.time.addListener(_descartarPendencia);
     // ABRIR UM PROJETO precisa montar os tocadores AGORA: o relogio esta
     // parado no zero e o sync so aconteceria quando ele andasse.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -88,15 +97,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     });
   }
 
-  void _descartarPendencia() {
-    if (!mounted) return;
-    ref.read(editorControllerProvider.notifier).descartarPendencia();
-  }
-
   void _syncVideos() {
     final project = ref.read(editorControllerProvider);
-    // O OLHO VALE PARA O SOM TAMBEM. Ver `VideoLayerManager.soaAgora`.
-    _videos.soaAgora = project.rendersInPreview;
     final master = _videos.sync(
       project.layers,
       _playback.time.value,
@@ -106,539 +108,1172 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (master != null) _playback.anchorToMedia(master);
   }
 
-  void _gravarAgora() {
-    if (!mounted) return;
-    ref.read(projectsControllerProvider.notifier).flush();
-  }
-
   @override
   void dispose() {
-    _ciclo.dispose();
-    _playback.dispose();
+    RecentSheets.instance.clear();
+    _playback.time.removeListener(_syncVideos);
+    _playback.playing.removeListener(_syncVideos);
+    if (widget.playback == null) {
+      _playback.dispose();
+    }
     _videos.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // O EDITOR NAO ESTAVA GRAVANDO NADA.
-    //
-    // A ponte que levava cada mutacao para a lista de projetos — e dali,
-    // com atraso, para o disco — morava na tela de edicao ANTIGA, e foi
-    // apagada junto com ela. A tela nova nunca a refez: dava para
-    // montar uma composicao inteira, sair do app e voltar para o
-    // projeto exatamente como estava antes de comecar.
-    //
-    // Nao havia aviso, nem botao de salvar que tivesse sido esquecido:
-    // este app nunca teve um, porque sempre salvou sozinho. O trabalho
-    // simplesmente nao voltava.
-    //
-    // `projetoCompleto` e nao `state`: dentro de um grupo o estado E o
-    // grupo, e gravar isso trocaria o projeto pelos filhos dele.
-    ref.listen(editorControllerProvider, (antes, agora) {
-      ref
-          .read(projectsControllerProvider.notifier)
-          .upsert(ref.read(editorControllerProvider.notifier).projetoCompleto);
-    });
-    // MEXEU NOUTRA PROPRIEDADE: a pendencia tambem morre.
-    //
-    // Ela pertence a UM controle, num instante. Trocar de camada, de
-    // ferramenta, de efeito, de mascara ou de parametro muda o que o
-    // losango mira — e um losango nunca pode cravar o valor de outra
-    // coisa.
-    //
-    // Isto era uma LISTA de dez providers escrita a mao, e uma lista
-    // escrita a mao esquece: cada painel novo tinha de lembrar de se
-    // inscrever aqui. Virou um valor — `FocoDoEditor` — e a regra passou
-    // a ser "se o foco mudou, a pendencia morre".
-    ref.listen(focoDoEditorProvider, (_, _) => _descartarPendencia());
-    final project = ref.watch(editorControllerProvider);
-    final selecionada = ref.watch(selectedLayerProvider);
-    final controlador = ref.read(editorControllerProvider.notifier);
-    // Trocar o fps do projeto tem de trocar a grade do relogio junto.
-    _playback.compositionFps = project.fps;
-    return PopScope(
-      // O BOTAO DE VOLTAR DO SISTEMA TAMBEM SAI DO GRUPO PRIMEIRO.
-      //
-      // Sem isto, o gesto de voltar do Android fecharia o editor com um
-      // grupo aberto — e as edicoes feitas la dentro so voltam para o
-      // grupo em `exitGroup`. Seria perder o trabalho por um gesto que
-      // todo mundo faz sem pensar.
-      canPop: !controlador.dentroDeGrupo,
-      onPopInvokedWithResult: (saiu, _) {
-        if (!saiu) controlador.exitGroup();
-      },
-      child: _corpo(project, selecionada),
+  // ------------------------------------------------------- navegacao
+
+  /// Fecha a coisa mais interna que estiver aberta; sem nada aberto,
+  /// sai do editor.
+  void _back() {
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
+    final s = _s;
+    if (s.adding) {
+      _session.closeAdd();
+      return;
+    }
+    if (ref.read(freehandRequestProvider)) {
+      ref.read(freehandRequestProvider.notifier).state = false;
+      return;
+    }
+    // Folhas persistentes tem uma entrada local de historico. Consumi-la
+    // primeiro nao remove o editor nem muda sua selecao.
+    if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (s.previewExpanded) {
+      _session.setPreviewExpanded(false);
+      return;
+    }
+    if (s.timelineExpanded) {
+      _session.toggleTimelineExpanded();
+      return;
+    }
+    switch (s.panel) {
+      case EditorPanel.editPoints:
+        _fecharEditPoints();
+        _session.backFromEditPoints();
+        return;
+      case EditorPanel.curve:
+        _session.backFromCurve();
+        return;
+      case EditorPanel.none:
+      case EditorPanel.add:
+        if (ref.read(multiSelectProvider).isNotEmpty) {
+          ref.read(multiSelectProvider.notifier).state = const {};
+          return;
+        }
+        if (ref.read(selectedLayerProvider) != null) {
+          ref.read(selectedLayerProvider.notifier).state = null;
+          return;
+        }
+        // Dentro de um grupo, Voltar sai do grupo (um nivel).
+        if (ref.read(editorControllerProvider.notifier).dentroDeGrupo) {
+          ref.read(editorControllerProvider.notifier).exitGroup();
+          return;
+        }
+        // A miniatura do projeto para a tela inicial: capturada AGORA,
+        // com o palco ainda vivo; a escrita segue em segundo plano.
+        ThumbnailService.instance.capture(
+          previewStageKey,
+          ref.read(editorControllerProvider).id,
+        );
+        Navigator.of(context).maybePop();
+      default:
+        _session.closePanel();
+    }
+  }
+
+  bool get _temContexto {
+    final s = _s;
+    return s.panel != EditorPanel.none ||
+        ref.read(freehandRequestProvider) ||
+        s.previewExpanded ||
+        s.timelineExpanded ||
+        ref.read(selectedLayerProvider) != null ||
+        ref.read(multiSelectProvider).isNotEmpty ||
+        ref.read(editorControllerProvider.notifier).dentroDeGrupo;
+  }
+
+  String get _backLabel => _temContexto ? 'Voltar' : 'Projetos';
+
+  /// Titulo da categoria aberta (cabecalho da zona E).
+  String? _tituloDoPainel(EditorSession s) => switch (s.panel) {
+    EditorPanel.none || EditorPanel.add => null,
+    EditorPanel.transform => 'Transformar · ${labelOfProp(propOfTool(s.tool))}',
+    EditorPanel.blending => 'Mesclagem e opacidade',
+    EditorPanel.colorFill => 'Cor e preenchimento',
+    EditorPanel.effects => 'Efeitos',
+    EditorPanel.curve => 'Curva de gradação',
+    EditorPanel.animators => 'Animacao de texto',
+    EditorPanel.editText => 'Editar texto',
+    EditorPanel.editShape => 'Editar forma',
+    EditorPanel.editPoints => 'Editar pontos',
+  };
+
+  Set<int> _timesForProp(Layer layer, LayerProp prop) =>
+      keyframeTimesForProp(layer, prop);
+
+  /// De qual propriedade e o keyframe que esta em [t], e como se chama.
+  (LayerProp, String)? _donoDoKeyframe(Layer layer, Duration t) {
+    final us = t.inMicroseconds;
+    const nomes = {
+      LayerProp.position: 'Posicao',
+      LayerProp.rotation: 'Rotacao',
+      LayerProp.scale: 'Escala',
+      LayerProp.skew: 'Inclinar',
+      LayerProp.pivot: 'Pivo',
+      LayerProp.opacity: 'Opacidade',
+    };
+    for (final entrada in nomes.entries) {
+      if (_timesForProp(layer, entrada.key).contains(us)) {
+        return (entrada.key, entrada.value);
+      }
+    }
+    if (layer.effectTimesUs.contains(us)) return (LayerProp.parent, 'Efeitos');
+    if (layer.maskTimesUs.contains(us)) return (LayerProp.parent, 'Mascaras');
+    return null;
+  }
+
+  /// TOCARAM NUM DIAMANTE ACESO (Fase 5): sem painel aberto, o toque
+  /// abre o easing do keyframe (E5) — selecionar, tocar o losango,
+  /// escolher o preset: tres toques. Com painel aberto, so navega.
+  void _onKeyframeTap(Layer layer, Duration t) {
+    if (_s.panel != EditorPanel.none) return;
+    if (ref.read(selectedLayerProvider) != layer.id) {
+      ref.read(selectedLayerProvider.notifier).state = layer.id;
+    }
+    final dono = _donoDoKeyframe(layer, t);
+    if (dono == null) return;
+    final (prop, nome) = dono;
+    if (nome == 'Efeitos') {
+      _session.openPanel(EditorPanel.effects);
+    } else if (nome == 'Mascaras') {
+      selectMaskInBlendingPanel(ref);
+      _session.openPanel(EditorPanel.blending);
+    } else {
+      _session.openCurve(prop);
+    }
+  }
+
+  /// TOCARAM NUM DIAMANTE APAGADO: dizer de quem e, e levar ate la.
+  void _onForeignKeyframe(Duration t) {
+    final id = ref.read(selectedLayerProvider);
+    final layer = id == null
+        ? null
+        : ref.read(editorControllerProvider).layerById(id);
+    if (layer == null) return;
+    final dono = _donoDoKeyframe(layer, t);
+    if (dono == null) return;
+    final (prop, nome) = dono;
+
+    final tool = switch (prop) {
+      LayerProp.position => TransformTool.position,
+      LayerProp.rotation => TransformTool.rotation,
+      LayerProp.scale => TransformTool.scale,
+      LayerProp.skew => TransformTool.skew,
+      LayerProp.pivot => TransformTool.pivot,
+      LayerProp.opacity => TransformTool.opacity,
+      _ => null,
+    };
+    final podeIr = tool != null || nome == 'Efeitos' || nome == 'Mascaras';
+
+    AureaSnack.show(
+      context,
+      'Este keyframe e de $nome.',
+      actionLabel: podeIr ? 'Ir' : null,
+      onAction: podeIr
+          ? () {
+              _playback.pause();
+              _playback.seek(layer.startTime + t);
+              if (tool != null) {
+                _session.openTransform(tool);
+              } else if (nome == 'Efeitos') {
+                _session.openPanel(EditorPanel.effects);
+              } else {
+                selectMaskInBlendingPanel(ref);
+                _session.openPanel(EditorPanel.blending);
+              }
+            }
+          : null,
     );
   }
 
-  Widget _corpo(VideoProject project, String? selecionada) {
-    return Scaffold(
-      backgroundColor: AmColors.bg,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, limites) {
-            // A DIVISAO VERTICAL: A COMPOSICAO PEDE, A LINHA DO
-            // TEMPO FICA COM TODO O RESTO.
-            //
-            // A conta responde as DUAS resolucoes ao mesmo tempo, que e
-            // o que faz esta tela servir em qualquer aparelho:
-            //
-            //   - a do APARELHO entra como `limites`, a area que sobrou
-            //     depois da barra de status e da de navegacao;
-            //   - a do PROJETO entra como `proporcao`, que decide quanta
-            //     ALTURA a composicao precisa para caber na largura
-            //     disponivel.
-            //
-            // Um 9:16 num celular alto pede quase tudo e a linha do
-            // tempo fica no chao dela; um 16:9 no mesmo celular pede um
-            // terco, e os outros dois tercos viram area de trabalho.
-            //
-            // Tres contas erradas ja passaram por aqui, e cada uma
-            // deixou um buraco:
-            //
-            //   - fatia FIXA para o preview: um 16:9 numa largura de 366
-            //     px so precisa de 206, e reservar 40% da altura deixava
-            //     quase trezentos pixels mortos sob a composicao;
-            //   - teto de 50%: num projeto em pe ele cortava o preview
-            //     em 369 px havendo 468 livres, e os 99 cortados iam
-            //     morrer embaixo das trilhas;
-            //   - dar o excedente ao preview: ele so cresce com tarja
-            //     preta em volta da composicao.
-            //
-            // Entao: a composicao pede o que precisa, a linha do tempo
-            // pede o chao dela, e o excedente e sempre da linha do
-            // tempo — que sabe usa-lo, porque mais espaco e mais camada
-            // a vista sem rolar.
-            final util = limites.maxHeight;
-            final proporcao = project.outputWidth / project.outputHeight;
-            // A PREVIA NAO ENCOLHE QUANDO UMA FERRAMENTA ABRE.
-            //
-            // Ela encolhia, e estava errado: no Alight a composicao fica
-            // do MESMO tamanho com a aba de transformacao, de efeito ou
-            // de curva aberta. Faz sentido — a previa e o que se olha
-            // enquanto o dedo mexe no controle; muda-la de tamanho no
-            // exato momento em que a atencao vai para ela e o pior
-            // momento possivel.
-            //
-            // A conta que garante isso: a previa e limitada pelo espaco
-            // que sobraria COM A FERRAMENTA ABERTA, sempre — aberta ou
-            // nao. Assim ela ja nasce no tamanho em que vai ficar, e
-            // abrir a ferramenta nao mexe num pixel dela.
-            //
-            // Quem cede e a LINHA DO TEMPO, que encolhe ate o chao dela
-            // (transporte, regua e uma trilha) e volta a crescer quando
-            // a ferramenta fecha. E o que a referencia faz: com uma aba
-            // aberta, la aparece uma trilha so.
-            final ferramenta = alturaDaFerramentaAberta(ref);
-            final disponivel = util - _Cabecalho.altura;
+  void _openCurve(LayerProp prop) => _session.openCurve(prop);
 
-            // O CHAO DA LINHA DO TEMPO COM FERRAMENTA ABERTA: transporte,
-            // regua e uma trilha. Menos que isso e nao dava mais para ver
-            // onde o cabecote esta enquanto se edita.
-            final chaoComFerramenta =
-                LinhaDoTempo.alturaDoTransporte +
-                LinhaDoTempo.alturaDaRegua +
-                VisaoGeralDasCamadas.alturaDaTrilha;
+  /// Tocar na barra JA selecionada: o painel ja esta aberto e sempre da
+  /// mesma altura, entao so resta parar a reproducao.
+  void _onTapLayer(Layer layer) => _playback.pause();
 
-            final pedidaPelaComposicao = (limites.maxWidth - 24) / proporcao;
-            // O TETO NAO DEPENDE DE A FERRAMENTA ESTAR ABERTA. E o que
-            // faz a previa ficar parada.
-            final tetoDoPreview =
-                disponivel - PainelDaCamada.alturaMaxima - chaoComFerramenta;
-            var preview = pedidaPelaComposicao < tetoDoPreview
-                ? pedidaPelaComposicao
-                : tetoDoPreview;
-            if (preview < 140) preview = 140;
+  void _openLayerAction(Layer layer, LayerMenuAction action) {
+    if (ref.read(selectedLayerProvider) != layer.id ||
+        ref.read(editorControllerProvider).layerById(layer.id) == null) {
+      return;
+    }
+    _playback.pause();
+    switch (action) {
+      case LayerMenuAction.transform:
+        _session.openTransform();
+      case LayerMenuAction.blending:
+        _session.openPanel(EditorPanel.blending);
+      case LayerMenuAction.colorFill:
+        _session.openPanel(EditorPanel.colorFill);
+      case LayerMenuAction.effects:
+        _session.openPanel(EditorPanel.effects);
+      case LayerMenuAction.editText:
+        _session.openPanel(EditorPanel.editText);
+      case LayerMenuAction.textAnimators:
+        _session.openPanel(EditorPanel.animators);
+      case LayerMenuAction.editShape:
+        _session.openShape(ShapeTool.size);
+      case LayerMenuAction.stroke:
+        _session.openShape(ShapeTool.stroke);
+    }
+  }
 
-            var tempo = disponivel - preview - ferramenta;
+  /// EDIT POINTS: a geometria vira caminho (se ainda nao e), o editor
+  /// de nos passa a mirar nela e o painel do trackpad abre.
+  void _abrirEditPoints([String? layerId]) {
+    final id = layerId ?? ref.read(selectedLayerProvider);
+    if (id == null) return;
+    final controller = ref.read(editorControllerProvider.notifier);
+    final itemId = controller.ensureShapeBezierGeometry(
+      id,
+      _playback.time.value,
+    );
+    if (itemId == null) {
+      showReasonToast(context, 'Esta camada nao tem caminho editavel');
+      return;
+    }
+    _playback.pause();
+    ref.read(selectedLayerProvider.notifier).state = id;
+    ref.read(pathEditTargetProvider.notifier).state = PathEditTarget(
+      id,
+      itemId,
+      forma: true,
+    );
+    ref.read(pathEditSelectedProvider.notifier).state = null;
+    ref.read(pathEditCursorProvider.notifier).state = null;
+    ref.read(pathEditModeProvider.notifier).state = PointsMode.move;
+    _session.openEditPoints(itemId, returnTo: EditorPanel.editShape);
+  }
 
-            // O QUE A LINHA DO TEMPO PEDE vem depois: com a ferramenta
-            // fechada ela usa o que sobrou; com a ferramenta aberta ela
-            // desce ate o chao e nao abaixo.
-            final pedidaPelaTimeline = LinhaDoTempo.alturaDoModo(
-              ref.watch(modoEfetivoProvider),
-              project.layers.length,
-            );
-            final chao = ferramenta > 0 ? chaoComFerramenta : pedidaPelaTimeline;
-            if (tempo < chao) {
-              tempo = chao;
-              preview = disponivel - tempo - ferramenta;
-              if (preview < 140) preview = 140;
-            }
+  /// A mascara usa o MESMO Edit Points com trackpad das formas.
+  void _abrirMaskEditPoints(String maskId) {
+    final id = ref.read(selectedLayerProvider);
+    if (id == null) return;
+    final layer = ref.read(editorControllerProvider).layerById(id);
+    if (layer == null || !layer.masks.any((m) => m.id == maskId)) {
+      showReasonToast(context, 'Esta mascara nao existe mais');
+      return;
+    }
+    _playback.pause();
+    ref.read(pathEditTargetProvider.notifier).state = PathEditTarget(
+      id,
+      maskId,
+      forma: false,
+    );
+    ref.read(pathEditSelectedProvider.notifier).state = null;
+    ref.read(pathEditCursorProvider.notifier).state = null;
+    ref.read(pathEditModeProvider.notifier).state = PointsMode.move;
+    _session.openEditPoints(maskId, returnTo: EditorPanel.blending);
+  }
 
-            return Stack(
+  void _fecharEditPoints() {
+    ref.read(pathEditTargetProvider.notifier).state = null;
+    ref.read(pathEditSelectedProvider.notifier).state = null;
+    ref.read(pathEditCursorProvider.notifier).state = null;
+  }
+
+  // ------------------------------------------------------- adicionar
+
+  void _openAdd([AddTab? tab]) {
+    _playback.pause();
+    _addTab = tab ?? AddTab.forma;
+    _session.openAdd();
+  }
+
+  /// O E1 pediu algo.
+  Future<void> _onAddTarget(AddTarget alvo) async {
+    final controller = ref.read(editorControllerProvider.notifier);
+    final t = _playback.time.value;
+    switch (alvo) {
+      case AddTarget.midia:
+        _openAdd(AddTab.midia);
+      case AddTarget.audio:
+        _openAdd(AddTab.audio);
+      case AddTarget.forma:
+        _openAdd(AddTab.forma);
+      case AddTarget.objeto:
+      case AddTarget.icone:
+        _openAdd(AddTab.objeto);
+      case AddTarget.ajuda:
+        _playback.pause();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const QuickGuideScreen(initialQuery: ''),
+          ),
+        );
+      case AddTarget.texto:
+        _playback.pause();
+        controller.addTextLayer(t);
+      case AddTarget.efeito:
+        // Um efeito sobre tudo: camada de ajuste, ja com o painel de
+        // efeitos aberto.
+        _playback.pause();
+        controller.addAdjustmentLayer(t);
+        _session.openPanel(EditorPanel.effects);
+      case AddTarget.grupo:
+        _agruparPorEscolha();
+      case AddTarget.legendas:
+        _playback.pause();
+        await showCaptionCreationSheet(context, ref);
+      case AddTarget.marcas:
+        await menuDasMarcas(context, ref, _playback);
+      case AddTarget.batidas:
+        final som = ref
+            .read(editorControllerProvider)
+            .layers
+            .where((l) => l is AudioLayer || l is VideoLayer)
+            .firstOrNull;
+        if (som == null) {
+          showReasonToast(context, 'Adicione um audio ou um video primeiro');
+          return;
+        }
+        _playback.pause();
+        await showBeatsSheet(context, ref, som.id);
+      case AddTarget.autoEdit:
+        // Fora do app por enquanto: sem entrada na interface.
+        break;
+    }
+  }
+
+  /// GRUPO sem selecao: escolher as camadas numa lista.
+  Future<void> _agruparPorEscolha() async {
+    final layers = ref.read(editorControllerProvider).layers;
+    if (layers.length < 2) {
+      showReasonToast(context, 'Um grupo precisa de duas ou mais camadas');
+      return;
+    }
+    final escolhidas = <String>{};
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AmColors.panel,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * .7,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Column(
-                  children: [
-                    _Cabecalho(
-                      nome: project.name,
-                      aoExportar: () {
-                        _playback.pause();
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ExportVideoScreen(),
-                          ),
-                        );
-                      },
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(18, 14, 18, 6),
+                  child: Text(
+                    'Agrupar quais camadas?',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AmColors.text,
                     ),
-                    SizedBox(
-                      height: preview,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Center(
-                          child: AspectRatio(
-                            aspectRatio: proporcao,
-                            child: DecoratedBox(
-                              key: const ValueKey('moldura-da-previa'),
-                              // OS LIMITES DA COMPOSICAO, visiveis. O
-                              // quadro do projeto e o fundo do editor
-                              // eram a mesma coisa preta. Este contorno e
-                              // DECORACAO DA TELA: vive fora da arvore
-                              // que a `CompositionView` desenha, entao
-                              // nao vira camada e nao entra na
-                              // exportacao.
-                              // O FUNDO E O DA COMPOSICAO, e nao um
-                              // preto cravado.
-                              //
-                              // A exportacao SEMPRE pintou
-                              // `project.backgroundColor` atras do
-                              // quadro; aqui havia um `0xFF000000` fixo.
-                              // Enquanto ninguem podia escolher a cor,
-                              // os dois coincidiam; com o controle
-                              // aberto, escolher amarelo mudaria o
-                              // arquivo e nao mudaria um pixel da tela
-                              // em que a pessoa esta olhando.
-                              decoration: BoxDecoration(
-                                border: Border.all(color: AmColors.hairline),
-                                color: project.backgroundColor,
-                              ),
-                              child: ClipRect(
-                                child: FittedBox(
-                                  fit: BoxFit.contain,
-                                  child: SizedBox(
-                                    width: project.outputWidth.toDouble(),
-                                    height: project.outputHeight.toDouble(),
-                                    // A ESCALA E VISUAL, e so ela. As
-                                    // coordenadas, a resolucao e a escala
-                                    // das camadas continuam as do
-                                    // projeto — e por isso um toque
-                                    // continua caindo no mesmo objeto
-                                    // depois de o preview mudar de
-                                    // tamanho.
-                                    // AS CAMADAS DE DESENHO VIVEM AQUI,
-                                    // ao LADO da composicao e nunca
-                                    // dentro dela: elas precisam das
-                                    // coordenadas do projeto para o
-                                    // ponto cair onde o dedo tocou, e
-                                    // nao podem entrar na arvore que a
-                                    // exportacao desenha.
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        CompositionView(
-                                          time: _playback.time,
-                                          videos: _videos,
-                                          selectedId: selecionada,
-                                        ),
-                                        FreehandOverlay(playback: _playback),
-                                        CanetaVetorialOverlay(
-                                          playback: _playback,
-                                        ),
-                                      ],
-                                    ),
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final l in layers)
+                        CheckboxListTile(
+                          key: ValueKey('agrupar-${l.id}'),
+                          value: escolhidas.contains(l.id),
+                          title: Text(
+                            l.name,
+                            style: const TextStyle(color: AmColors.text),
+                          ),
+                          activeColor: AmColors.action,
+                          onChanged: (v) => setSheet(() {
+                            if (v == true) {
+                              escolhidas.add(l.id);
+                            } else {
+                              escolhidas.remove(l.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: FilledButton(
+                    key: const ValueKey('agrupar-confirmar'),
+                    onPressed: escolhidas.length >= 2
+                        ? () => Navigator.pop(ctx, true)
+                        : null,
+                    child: const Text('Agrupar'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (ok == true && escolhidas.length >= 2) {
+      agruparSelecao(ref, escolhidas);
+    }
+  }
+
+  // ------------------------------------------------------- keyframe
+
+  /// O ◆ DO TRANSPORTE: com uma categoria aberta, crava na propriedade
+  /// dela; sem categoria, nas quatro de transformar de uma vez.
+  Set<LayerProp> _propsDoDiamante(EditorSession s) => switch (s.panel) {
+    EditorPanel.transform => {propOfTool(s.tool)},
+    EditorPanel.curve => {s.curveProp},
+    EditorPanel.blending => {LayerProp.opacity},
+    _ => {
+      LayerProp.position,
+      LayerProp.scale,
+      LayerProp.rotation,
+      LayerProp.opacity,
+    },
+  };
+
+  bool _keyframeAqui(Layer layer, EditorSession s) {
+    final local = layer.localTime(_playback.time.value).inMicroseconds;
+    for (final prop in _propsDoDiamante(s)) {
+      for (final us in _timesForProp(layer, prop)) {
+        if ((us - local).abs() < 8000) return true;
+      }
+    }
+    return false;
+  }
+
+  void _toggleKeyframe(Layer layer, EditorSession s) {
+    final controller = ref.read(editorControllerProvider.notifier);
+    final t = _playback.time.value;
+    final props = _propsDoDiamante(s);
+    final tem = _keyframeAqui(layer, s);
+    controller.runAsOneUndo(() {
+      for (final prop in props) {
+        final local = layer.localTime(t).inMicroseconds;
+        final temEste = _timesForProp(
+          layer,
+          prop,
+        ).any((us) => (us - local).abs() < 8000);
+        // Tirando: so as que tem. Pondo: so as que nao tem.
+        if (tem == temEste) controller.toggleKeyframe(layer.id, t, prop);
+      }
+    });
+  }
+
+  // ------------------------------------------------------- build
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedId = ref.watch(selectedLayerProvider);
+    final multi = ref.watch(multiSelectProvider);
+    final s = ref.watch(editorSessionProvider);
+
+    ref.listen<String?>(selectedLayerProvider, (previous, next) {
+      if (previous == next) return;
+      // Um painel/atalho capturado para A nao pode editar A depois de
+      // selecionar B.
+      RecentSheets.instance.clear();
+      closeActiveParamSheet(context);
+      _fecharEditPoints();
+      if (_s.panel != EditorPanel.none) _session.closePanel();
+    });
+
+    ref.listen(editorControllerProvider, (previous, updated) {
+      if (previous?.id != updated.id) {
+        RecentSheets.instance.clear();
+        closeActiveParamSheet(context);
+      }
+      // Dentro de um grupo o estado e o grupo; o que se salva e o todo.
+      ref
+          .read(projectsControllerProvider.notifier)
+          .upsert(ref.read(editorControllerProvider.notifier).projetoCompleto);
+      _syncVideos();
+    });
+
+    // Desenho vetorial pelo menu de adicionar: abre o Edit Points na
+    // camada recem-criada.
+    ref.listen<String?>(editPointsRequestProvider, (_, id) {
+      if (id == null) return;
+      ref.read(editPointsRequestProvider.notifier).state = null;
+      _abrirEditPoints(id);
+    });
+
+    // O clock compoe na taxa da COMPOSICAO, nao na da tela.
+    _playback.compositionFps = ref.watch(
+      editorControllerProvider.select((p) => p.fps),
+    );
+
+    final layer = selectedId == null
+        ? null
+        : ref.watch(editorControllerProvider).layerById(selectedId);
+    final targets = <String>{...multi, ?selectedId};
+    final semCamadas = ref.watch(
+      editorControllerProvider.select((p) => p.layers.isEmpty),
+    );
+
+    // O painel da categoria aberta (null sem categoria).
+    final Widget? panel = switch (s.panel) {
+      EditorPanel.none || EditorPanel.add => null,
+      EditorPanel.transform => TransformPanel(
+        playback: _playback,
+        tool: s.tool,
+        onToolChanged: _session.setTool,
+        onBack: _back,
+        onOpenCurve: _openCurve,
+      ),
+      EditorPanel.blending => BlendingPanel(
+        playback: _playback,
+        onBack: _back,
+        onOpenCurve: _openCurve,
+        onEditMaskPoints: _abrirMaskEditPoints,
+      ),
+      EditorPanel.colorFill => ColorFillPanel(
+        onBack: _back,
+        playback: _playback,
+      ),
+      EditorPanel.effects => EffectsPanel(playback: _playback, onBack: _back),
+      EditorPanel.curve => CurvePanel(
+        playback: _playback,
+        prop: s.curveProp,
+        onBack: _back,
+      ),
+      EditorPanel.animators => TextAnimatorsPanel(
+        playback: _playback,
+        onBack: _back,
+      ),
+      EditorPanel.editText => TextPanel(
+        playback: _playback,
+        onAnimar: () => _session.openPanel(EditorPanel.animators),
+      ),
+      EditorPanel.editShape => layer is ShapeLayer
+          ? PainelDeForma(
+              camada: layer,
+              playback: _playback,
+              aoVoltar: _back,
+              aoAbrirCurva: (chave, e, aoMudar) {
+                final c = ref.read(editorControllerProvider.notifier);
+                showTrackCurveSheet(
+                  context,
+                  ref,
+                  _playback,
+                  label: chave,
+                  layerId: layer.id,
+                  trackOf: (l) {
+                    if (l is! ShapeLayer) return null;
+                    final formas = l.contents.whereType<ShapeParametric>().toList();
+                    if (formas.isEmpty) return null;
+                    return shapeParamTrackOf(formas.first, chave);
+                  },
+                  onSetEase: (segStart, ease) =>
+                      c.setShapeParamSegmentEase(layer.id, chave, segStart, ease),
+                  onSetEaseAll: (ease) =>
+                      c.applyEaseToAllShapeParamSegments(layer.id, chave, ease),
+                );
+              },
+            )
+          : ShapePanel(
+              playback: _playback,
+              tool: s.shapeTool,
+              onToolChanged: _session.setShapeTool,
+              onBack: _back,
+              onEditPoints: _abrirEditPoints,
+            ),
+      EditorPanel.editPoints => PointsPanel(
+        key: _pointsKey,
+        playback: _playback,
+        layerId: selectedId ?? '',
+        itemId: s.pointsItemId ?? '',
+        onBack: _back,
+      ),
+    };
+
+    final pinkPlayhead =
+        s.panel == EditorPanel.effects ||
+        s.panel == EditorPanel.curve ||
+        s.panel == EditorPanel.animators;
+
+    // Diamantes da propriedade ativa acendem; os demais ficam apagados.
+    final Set<int>? activeTimesUs = layer == null
+        ? null
+        : switch (s.panel) {
+            EditorPanel.none || EditorPanel.add => null,
+            EditorPanel.transform => _timesForProp(layer, propOfTool(s.tool)),
+            EditorPanel.curve => _timesForProp(layer, s.curveProp),
+            EditorPanel.blending => {
+              ...layer.opacityTimesUs,
+              ...layer.maskTimesUs,
+            },
+            EditorPanel.effects => layer.effectTimesUs,
+            EditorPanel.colorFill => const <int>{},
+            EditorPanel.animators => null,
+            EditorPanel.editText => null,
+            EditorPanel.editShape => layer.moduleTimesUs,
+            EditorPanel.editPoints =>
+              (ref.watch(pathEditTargetProvider)?.forma ?? true)
+                  ? layer.moduleTimesUs
+                  : layer.maskTimesUs,
+          };
+
+    final temContexto =
+        s.panel != EditorPanel.none ||
+        ref.watch(freehandRequestProvider) ||
+        s.previewExpanded ||
+        s.timelineExpanded ||
+        selectedId != null ||
+        multi.isNotEmpty ||
+        ref.read(editorControllerProvider.notifier).dentroDeGrupo;
+
+    // O CONTEUDO DA ZONA E, pela selecao.
+    //
+    // SEM SELECAO E SEM O "+", O PAINEL NAO EXISTE: a barra de adicionar
+    // ficava aberta o tempo todo e comia meia tela de timeline sem
+    // ninguem ter pedido. Ela e o segundo passo do "+", e o toque na
+    // timeline fecha (ver AmTimeline: tocar no vazio fecha o adicionar).
+    Widget? conteudo;
+    String? titulo;
+    String? trilha;
+    if (panel != null) {
+      conteudo = panel;
+      titulo = _tituloDoPainel(s);
+      trilha = layer == null
+          ? ref.watch(editorControllerProvider).name
+          : '${ref.watch(editorControllerProvider).name} › ${layer.name}';
+    } else if (s.adding) {
+      conteudo = AddLayerPanel(
+        key: const ValueKey('adicionar-camada'),
+        playhead: _playback.time.value,
+        initialTab: _addTab,
+        onClose: _session.closeAdd,
+        onProjectAction: _onAddTarget,
+      );
+    } else if (targets.length >= 2) {
+      conteudo = MultiSelectionPanel(targets: targets, playback: _playback);
+    } else if (layer != null) {
+      conteudo = LayerToolsDock(
+        layer: layer,
+        playback: _playback,
+        onAction: (action) => _openLayerAction(layer, action),
+      );
+    } else {
+      conteudo = null;
+    }
+    // AS DICAS DE PRIMEIRO USO MORAM NA FOLHA, e nao por cima do palco.
+    //
+    // Como cartao flutuante elas cobriam o alto do preview — e o alto do
+    // preview e onde fica a alca de GIRAR. Enquanto as quatro dicas
+    // estavam na tela, girar era impossivel: o toque batia nos botoes do
+    // cartao. Ensinar a mexer no palco tapando o palco e o pior lugar
+    // possivel; embaixo, no lugar onde a ajuda ja vive, elas nao tapam
+    // nada.
+    //
+    // Elas ocupam o lugar da DICA DO PALCO — a linha "toque num objeto"
+    // que ja aparece quando nada esta selecionado. Assim que a pessoa
+    // seleciona alguma coisa, as ferramentas da camada voltam a mandar:
+    // ensinar e util ate o momento em que atrapalha.
+    final mostrandoDicas =
+        !_dicasVistas && !s.previewExpanded && conteudo is DicaDoPalco;
+    if (mostrandoDicas) {
+      conteudo = OnboardingCoach(
+        onFechar: () {
+          setState(() => _dicasVistas = true);
+          OnboardingPrefs.marcar(ref, true);
+        },
+      );
+    }
+    // O estado vazio e a dica ocupam UMA linha; o resto e painel de verdade.
+    final folhaFina =
+        !mostrandoDicas &&
+        panel == null &&
+        !s.adding &&
+        layer == null &&
+        targets.length < 2;
+
+    return AureaTheme(
+      tokens: AureaTokens.motion,
+      child: PopScope(
+        canPop: !temContexto,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _back();
+        },
+        child: Scaffold(
+          key: paramSheetHostKey,
+          resizeToAvoidBottomInset: ModalRoute.of(context)?.isCurrent ?? true,
+          backgroundColor: AmColors.bg,
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final ws = EditorLayoutMetrics.workspace(constraints.maxHeight);
+                // A ALTURA DO PREVIEW SAI DA PROPORCAO DA COMPOSICAO.
+                //
+                // Antes era uma fracao fixa da tela (40%), o que dava um
+                // retangulo com a proporcao do APARELHO. Um projeto 16:9
+                // dentro dele encostava so nas laterais e deixava duas
+                // tarjas pretas — e como o fundo do palco tambem e preto,
+                // o que se via era um vazio enorme e nenhuma pista de
+                // onde a composicao comeca. Deduzindo a altura da
+                // proporcao, o quadro preenche a area inteira e o que
+                // sobra vai para a timeline, que estava vazia.
+                final proporcao = ref
+                    .watch(editorControllerProvider)
+                    .aspectRatio;
+                // O aspecto so pode ENCOLHER o preview, nunca aumentar.
+                //
+                // Encolher e o que resolve a queixa (composicao larga
+                // dentro de um retangulo alto = duas tarjas pretas).
+                // Aumentar seria pedir mais tela para um projeto
+                // vertical, e ai a timeline e o painel e que ficam sem
+                // espaco — num aparelho pequeno isso estoura o layout.
+                final fracaoDaComposicao =
+                    constraints.maxHeight <= 0 || proporcao <= 0
+                    ? EditorSession.alturaDoPreview
+                    : math.min(
+                        math.min(
+                          EditorSession.alturaDoPreview,
+                          math.max(96, ws - 88 - 206) / constraints.maxHeight,
+                        ),
+                        (constraints.maxWidth / proporcao) /
+                            constraints.maxHeight,
+                      );
+                final m = EditorLayoutMetrics.solve(
+                  totalHeight: constraints.maxHeight,
+                  previewFraction: fracaoDaComposicao,
+                  // A dica e o estado vazio ocupam UMA linha; painel de
+                  // verdade ocupa o nivel que a alca deixou.
+                  // A FOLHA FINA E A FAIXA DO CABECALHO MAIS UMA LINHA.
+                  //
+                  // Era 48 px fixos, o que dava certo enquanto o
+                  // cabecalho tinha 18. Com o cabecalho em 34 (o Voltar
+                  // ganhou tamanho de alvo), sobravam 14 px para o texto
+                  // e a dica saia cortada pela metade.
+                  sheetFraction: folhaFina && ws > 0
+                      ? (ContextSheet.handleHeight + (semCamadas ? 86 : 30)) /
+                            ws
+                      : (mostrandoDicas && ws > 0
+                            ? (ContextSheet.handleHeight + 108) / ws
+                            : (s.adding ? 0.48 : EditorSession.alturaDaFolha)),
+                  previewExpanded: s.previewExpanded,
+                  timelineExpanded: s.timelineExpanded,
+                  sheetVisible: conteudo != null,
+                  timelineFloor: layer != null && s.panel == EditorPanel.none
+                      ? 126
+                      : 88,
+                  sheetMayCoverTimeline: s.adding,
+                  focusedLayer:
+                      layer != null && s.panel != EditorPanel.none && !s.adding,
+                );
+                // AS PECAS, montadas uma vez; o arranjo depende da largura
+                // (Fase 7: acima de 700 pt, timeline e painel lado a lado —
+                // tablet e paisagem).
+                Widget preview(double? altura) => SizedBox(
+                  height: altura,
+                  child: RepaintBoundary(
+                    key: previewStageKey,
+                    child: PreviewStage(playback: _playback, videos: _videos),
+                  ),
+                );
+                final alca = PreviewResizeHandle(
+                  expanded: false,
+                  onExpand: _session.togglePreviewExpanded,
+                );
+                final transporte = EditorTransportBar(
+                  playback: _playback,
+                  keyframeEnabled: layer != null,
+                  keyframeHere: layer != null && _keyframeAqui(layer, s),
+                  onKeyframe: () {
+                    if (layer != null) _toggleKeyframe(layer, s);
+                  },
+                  onAdd: s.adding ? null : _openAdd,
+                );
+                Widget timeline(double alturaTimeline) => RepaintBoundary(
+                  child: AmTimeline(
+                    playback: _playback,
+                    height: alturaTimeline,
+                    singleLayerId:
+                        targets.length < 2 &&
+                            s.panel != EditorPanel.none &&
+                            !s.adding
+                        ? selectedId
+                        : null,
+                    playheadColor: pinkPlayhead ? AmColors.pink : Colors.white,
+                    onTapLayer: (l) {
+                      if (panel != null) {
+                        _back();
+                        return;
+                      }
+                      _onTapLayer(l);
+                    },
+                    onScrub: _videos.scrub,
+                    onExpand: _session.toggleTimelineExpanded,
+                    expanded: s.timelineExpanded,
+                    activeTimesUs: activeTimesUs,
+                    onForeignKeyframe: panel == null
+                        ? null
+                        : _onForeignKeyframe,
+                    onKeyframeTap: _onKeyframeTap,
+                  ),
+                );
+                Widget folha(double alturaFolha) => ContextSheet(
+                  height: alturaFolha,
+                  title: null,
+                  subtitle: trilha,
+                  onBack: titulo == null ? null : _back,
+                  child: RepaintBoundary(child: conteudo),
+                );
+                final largo =
+                    constraints.maxWidth >= 600 &&
+                        constraints.maxWidth > constraints.maxHeight &&
+                        !s.previewExpanded ||
+                    constraints.maxWidth >= 900 && !s.previewExpanded;
+                final larguraFolha = (constraints.maxWidth * .4).clamp(
+                  280.0,
+                  380.0,
+                );
+                final alturaTimelineLarga =
+                    ((constraints.maxHeight -
+                                AureaTokens.topBar -
+                                AureaTokens.transport -
+                                EditorLayoutMetrics.handleHeight) *
+                            0.34)
+                        .clamp(88.0, 280.0)
+                        .toDouble();
+                return Stack(
+                  children: [
+                    if (largo)
+                      Column(
+                        key: const ValueKey('editor-largo'),
+                        children: [
+                          EditorTopBar(
+                            onBack: _back,
+                            backLabel: _backLabel,
+                            title: titulo,
+                          ),
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      Expanded(child: preview(null)),
+                                      alca,
+                                      transporte,
+                                      timeline(alturaTimelineLarga),
+                                    ],
                                   ),
                                 ),
+                                SizedBox(
+                                  width: larguraFolha,
+                                  child: folha(
+                                    constraints.maxHeight - AureaTokens.topBar,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Column(
+                        children: [
+                          if (!s.previewExpanded)
+                            EditorTopBar(
+                              onBack: _back,
+                              backLabel: _backLabel,
+                              title: titulo,
+                            ),
+                          preview(m.preview),
+                          if (!s.previewExpanded) alca,
+                          transporte,
+                          if (!s.previewExpanded) ...[
+                            timeline(m.timeline),
+                            if (conteudo != null) folha(m.sheet),
+                          ],
+                        ],
+                      ),
+                    if (!s.previewExpanded &&
+                        !s.adding &&
+                        layer == null &&
+                        targets.isEmpty)
+                      Positioned(
+                        right: 18 + (largo ? larguraFolha : 0),
+                        bottom: 18 + (largo || conteudo == null ? 0 : m.sheet),
+                        child: GestureDetector(
+                          key: const ValueKey('editor-fab'),
+                          onTap: _openAdd,
+                          child: Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF1E222D),
+                              border: Border.all(
+                                color: const Color(0xFF1ED6B1),
+                                width: 2.2,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black45,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              size: 32,
+                              color: Color(0xFF1ED6B1),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (s.previewExpanded)
+                      Positioned(
+                        right: 10,
+                        top: 10,
+                        child: Tooltip(
+                          message: 'Voltar ao editor',
+                          child: GestureDetector(
+                            key: const ValueKey('preview-collapse'),
+                            onTap: _session.togglePreviewExpanded,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: const BoxDecoration(
+                                color: Color(0xCC12151A),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.fullscreen_exit,
+                                color: AmColors.text,
                               ),
                             ),
                           ),
                         ),
                       ),
+                    if (ref.watch(debugOverlayProvider))
+                      Positioned(
+                        top: s.previewExpanded ? 6 : AureaTokens.topBar + 6,
+                        left: 8,
+                        child: IgnorePointer(
+                          child: _DiagOverlay(playback: _playback),
+                        ),
+                      ),
+                    // RASCUNHO ENQUANTO TOCA: a cena 3D e o glow desenham
+                    // simplificados durante a reproducao.
+                    Positioned(
+                      top: s.previewExpanded ? 6 : AureaTokens.topBar + 6,
+                      right: 8,
+                      child: const _RascunhoBadge(),
                     ),
-                    // TRANSPORTE, REGUA E TRILHAS SAO UM BLOCO SO. Eles
-                    // encostam de proposito: sao a mesma ferramenta.
-                    LinhaDoTempo(playback: _playback, altura: tempo),
-                    // O ESPACO DA FERRAMENTA, ja descontado do preview
-                    // acima. Reservado no arranjo para a linha do tempo
-                    // ficar inteira e visivel por cima dela.
-                    SizedBox(height: ferramenta),
                   ],
-                ),
-                // AS FERRAMENTAS DA CAMADA, sobrepostas ao rodape.
-                //
-                // A faixa fixa "Ferramentas da camada" foi REMOVIDA: ela
-                // reservava 52 px de altura o tempo inteiro para
-                // oferecer um caminho que o toque na propria camada ja
-                // oferece. Esses 52 px sao da linha do tempo agora.
-                PainelSobreposto(playback: _playback),
-                // O PAINEL DO MEIO, com a tela desfocada atras. Fica por
-                // cima de tudo porque enquanto ele esta aberto nao ha o
-                // que fazer atras dele.
-                // O `...` DO CABECALHO DA CAMADA, por cima de tudo:
-                // enquanto ele esta aberto nao ha o que fazer atras dele.
-                MenuDaCamada(playback: _playback),
-                // O SELETOR DE INSERCAO, ancorado no rodape.
-                SeletorDeInsercao(
-                  instanteDeInsercao: ref.watch(instanteDeInsercaoProvider),
-                  playback: _playback,
-                  aoInserir: () {
-                    fecharSeletor(ref);
-                    // A camada nova ja nasce selecionada — o motor faz
-                    // isso. Abrir o contexto dela na sequencia e o passo
-                    // que a pessoa ia dar de qualquer jeito, e e o que a
-                    // referencia faz (pagina 9).
-                    abrirFerramentasDaCamada(ref);
-                  },
-                ),
-              ],
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// A FAIXA DE CIMA, em dois estados.
-///
-/// EM REPOUSO: voltar, nome do projeto, trocar de vista, exportar. O
-/// botao de exportar mudou de lugar uma vez e ficou: ele morava no
-/// transporte, entre controles de tempo, e nao e um controle de tempo —
-/// e a saida do trabalho. Na referencia ele e a unica coisa colorida do
-/// cabecalho, na ponta oposta ao voltar. Aqui usa o lima da Aurea, e nao
-/// o verde de la: a estrutura se copia, a identidade nao.
-///
-/// COM FERRAMENTA ABERTA: a barra e TOMADA pela ferramenta — `‹` e o
-/// nome dela, centrado, e mais nada. E o que a referencia faz, e o
-/// motivo aparece na conta de espaco: o painel tem 260 px para caber
-/// campos, superficie de arrasto e dois rails; gastar 44 deles repetindo
-/// "voce esta em Opacidade" seria tirar do que se usa para dizer onde se
-/// esta. O cabecalho ja e o lugar onde o olho procura isso.
-class _Cabecalho extends ConsumerWidget {
-  const _Cabecalho({required this.nome, required this.aoExportar});
+/// Overlay de diagnostico: MARCHA com o motivo, composicoes por segundo,
+/// variancia entre ticks e % de tempo em marcha baixa.
+class _DiagOverlay extends ConsumerWidget {
+  const _DiagOverlay({required this.playback});
 
-  final String nome;
-  final VoidCallback aoExportar;
-
-  static const altura = alturaDaFaixaDeCima;
+  final PlaybackController playback;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // UM contexto, UMA barra. A cadeia de prioridade nao mora mais aqui
-    // — mora em `contexto_do_editor.dart`, e este `switch` so escolhe a
-    // barra de cada contexto. Era esta cadeia, copiada em tres arquivos,
-    // que deixava o titulo da familia antiga no cabecalho depois de
-    // trocar de camada.
-    switch (ref.watch(contextoDoEditorProvider)) {
-      case ContextoDoEditor.curva:
-        // A CURVA TOMA A BARRA IGUAL AS OUTRAS FERRAMENTAS, e antes
-        // delas: ela abre POR DENTRO de uma, e quem esta na frente e
-        // quem nomeia.
-        return const _CabecalhoDaFerramenta(titulo: 'Curva de gradacao');
-      case ContextoDoEditor.familia:
-        return _CabecalhoDaFerramenta(
-          titulo: tituloDaFerramenta(ref.watch(categoriaAbertaProvider)!),
-        );
-      case ContextoDoEditor.composicao:
-      case ContextoDoEditor.projeto:
-        break;
-      case ContextoDoEditor.selecao:
-        // QUANTAS CAMADAS ESTAO JUNTAS, no lugar do nome do projeto.
-        //
-        // O conjunto muda o que TODO gesto faz, e uma barra que
-        // continuasse dizendo o nome do projeto esconderia isso. Sair
-        // daqui desfaz a juncao, que e o unico caminho de volta que faz
-        // sentido: um conjunto invisivel agindo por tras seria pior que
-        // nenhum.
-        return _CabecalhoDaFerramenta(
-          titulo: '${ref.watch(multiSelectProvider).length} camadas',
-          aoSair: () => limparSelecao(ref),
-          rotuloDeSair: 'Desfazer a juncao',
-        );
-      case ContextoDoEditor.camada:
-        return const CabecalhoDaCamada();
-      case ContextoDoEditor.projeto:
-        break;
-    }
-    // DENTRO DE UM GRUPO, "VOLTAR" QUER DIZER SAIR DO GRUPO.
-    //
-    // Entrar num grupo troca a cena inteira pelos filhos dele. Se a
-    // unica seta da barra continuasse fechando o editor, entrar seria
-    // uma armadilha: quem entrasse sairia do projeto e as edicoes
-    // feitas la dentro nunca seriam gravadas de volta no grupo — e
-    // `exitGroup` e justamente quem faz essa gravacao.
-    ref.watch(editorControllerProvider);
-    final c = ref.read(editorControllerProvider.notifier);
-    final dentro = c.dentroDeGrupo;
-    return SizedBox(
-      height: altura,
-      child: Row(
-        children: [
-          Semantics(
-            container: true,
-            excludeSemantics: true,
-            button: true,
-            label: dentro ? 'Sair do grupo' : 'Voltar',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => dentro
-                  ? c.exitGroup()
-                  : Navigator.of(context).maybePop(),
-              child: const SizedBox(
-                width: 48,
-                height: altura,
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 19,
-                  color: AmColors.text,
+    final fps = ref.watch(editorControllerProvider.select((p) => p.fps));
+    final total = ref.watch(
+      editorControllerProvider.select((p) => p.layers.length),
+    );
+    PreviewStats.hookTimings();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ValueListenableBuilder<GearDecision?>(
+          valueListenable: PreviewStats.gear,
+          builder: (context, gear, _) => ValueListenableBuilder<int>(
+            valueListenable: PreviewStats.compsPerSec,
+            builder: (context, comps, _) => ValueListenableBuilder<double>(
+              valueListenable: PreviewStats.tickVarianceMs,
+              builder: (context, variance, _) => ValueListenableBuilder<int>(
+                valueListenable: PreviewStats.layersInFrame,
+                builder: (context, inFrame, _) => ValueListenableBuilder<int>(
+                  valueListenable: PreviewStats.lowGearPercent,
+                  builder: (context, lowPct, _) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC12151A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AmColors.hairline),
+                      ),
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: PreviewStats.jankFrames,
+                        builder: (context, jank, _) => ValueListenableBuilder<double>(
+                          valueListenable: PreviewStats.worstFrameMs,
+                          builder: (context, pior, _) =>
+                              ValueListenableBuilder<FrameReport?>(
+                                valueListenable: FrameLog.report,
+                                builder: (context, r, _) => Text(
+                                  'UI: $jank travadas · pior ${pior.toStringAsFixed(0)} ms\n'
+                                  'MARCHA: ${gear == null ? '—' : gearLabel(gear.gear)}\n'
+                                  'motivo: ${gear?.reason ?? '—'}\n'
+                                  'compoe $comps/s · projeto ${fps}fps\n'
+                                  'variancia entre ticks: $variance ms\n'
+                                  'camadas no frame: $inFrame / $total · '
+                                  'M1+M2: $lowPct%\n'
+                                  '── registrador (${r?.seconds ?? 0}s) ──\n'
+                                  'mediana ${r?.medianMs ?? 0} ms · '
+                                  'pico ${r?.peakMs ?? 0} ms\n'
+                                  'travadas ${r?.stutters ?? 0} · '
+                                  'intervalo ${r?.gapS ?? 0}s (±${r?.gapSdS ?? 0})\n'
+                                  'deriva video-audio ${r?.driftMs ?? 0} ms',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AmColors.accent,
+                                    height: 1.4,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
           ),
-          // O NOME DO PROJETO E A COMPOSICAO.
-          //
-          // Ele estava ali sem fazer nada, e e o unico ponto da tela
-          // que ja fala em nome dela — o fundo, que nao pertence a
-          // camada nenhuma, nao teria outro lugar honesto: num cartao
-          // de camada ele se repetiria em quatro tipos e cada controle
-          // teria de explicar sobre quem age.
-          Expanded(
-            child: Semantics(
-              container: true,
-              excludeSemantics: true,
-              button: true,
-              label: 'Ajustes da composicao',
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => abrirAjustesDaComposicao(ref),
-                child: SizedBox(
-                  height: altura,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      nome,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AmColors.text,
-                      ),
-                    ),
+        ),
+        const SizedBox(height: 4),
+        const _Diag3D(),
+      ],
+    );
+  }
+}
+
+/// O MOTOR 3D NO OVERLAY: nivel, pressao, a estimativa de GPU contra o
+/// orcamento, memoria do processo e o que o ultimo quadro desenhou.
+class _Diag3D extends StatelessWidget {
+  const _Diag3D();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = ControladorDeQualidade3D.instancia;
+    return ValueListenableBuilder<Estatisticas3D?>(
+      valueListenable: PreviewStats.cena3d,
+      builder: (context, e, _) => ValueListenableBuilder<Qualidade3D>(
+        valueListenable: c.nivel,
+        builder: (context, nivel, _) => ValueListenableBuilder<NivelDePressao>(
+          valueListenable: c.pressao,
+          builder: (context, pressao, _) => ValueListenableBuilder<int>(
+            valueListenable: PreviewStats.rssMb,
+            builder: (context, rss, _) {
+              if (e == null && c.cenasNaTela == 0) {
+                return const SizedBox.shrink();
+              }
+              final est = c.estimativa.value;
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC12151A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AmColors.hairline),
+                ),
+                child: Text(
+                  '── 3D ──\n'
+                  'nivel ${qualidade3dRotulo(nivel)} · pressao '
+                  '${nivelDePressaoRotulo(pressao)} · ${c.motivo.value}\n'
+                  'GPU estimada ${bytesLegiveis(est.total)} de '
+                  '${bytesLegiveis(c.orcamentoBytes)} '
+                  '(alvos ${bytesLegiveis(est.alvosDeRender)} · sombras '
+                  '${bytesLegiveis(est.sombras)} · tex ${bytesLegiveis(est.texturas)} · '
+                  'geo ${bytesLegiveis(est.geometria)})\n'
+                  'RSS $rss MB · disponivel '
+                  '${c.disponivelBytes >= 0 ? bytesLegiveis(c.disponivelBytes) : '?'} · '
+                  'termico ${c.termico}\n'
+                  '${e ?? 'sem quadro em GPU'}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AmColors.accent,
+                    height: 1.4,
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
-          // A ENGRENAGEM, no lugar que a referencia lhe da: ultimo
-          // antes do botao colorido. O alternador de vista, que e
-          // extensao do Aurea, cede o posto e fica antes dela.
-          const AlternadorDeVista(altura: altura),
-          Semantics(
-            container: true,
-            excludeSemantics: true,
-            button: true,
-            label: 'Ajustes do projeto',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => abrirAjustesDoProjeto(ref),
-              child: const SizedBox(
-                width: 42,
-                height: altura,
-                child: Icon(
-                  Icons.settings_rounded,
-                  size: 19,
-                  color: AmColors.text,
-                ),
-              ),
-            ),
-          ),
-          Semantics(
-            container: true,
-            excludeSemantics: true,
-            button: true,
-            label: 'Exportar',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: aoExportar,
-              child: Container(
-                width: 38,
-                height: 34,
-                margin: const EdgeInsets.only(left: 8, right: 10),
-                decoration: BoxDecoration(
-                  color: AmColors.action,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(
-                  Icons.ios_share_rounded,
-                  size: 19,
-                  color: AmColors.onAction,
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// A BARRA TOMADA PELA FERRAMENTA: so o `‹` e o nome, centrado.
-class _CabecalhoDaFerramenta extends ConsumerWidget {
-  const _CabecalhoDaFerramenta({
-    required this.titulo,
-    this.aoSair,
-    this.rotuloDeSair,
-  });
-
-  final String titulo;
-
-  /// O que a seta faz. Fechar a ferramenta e o caso comum; a barra da
-  /// selecao usa outra saida, porque la sair e desfazer a juncao.
-  final VoidCallback? aoSair;
-  final String? rotuloDeSair;
+/// "Rascunho" sobre o preview enquanto toca — so quando ha algo que o
+/// rascunho simplifica (cena 3D, glow), para nao virar ruido.
+class _RascunhoBadge extends ConsumerWidget {
+  const _RascunhoBadge();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => SizedBox(
-    height: _Cabecalho.altura,
-    child: Row(
-      children: [
-        Semantics(
-          container: true,
-          excludeSemantics: true,
-          button: true,
-          label: rotuloDeSair ?? 'Fechar a ferramenta',
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => aoSair == null ? fecharFerramenta(ref) : aoSair!(),
-            child: const SizedBox(
-              width: 48,
-              height: _Cabecalho.altura,
-              child: Icon(
-                Icons.arrow_back_ios_new_rounded,
-                size: 19,
-                color: AmColors.text,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final simplifica = ref.watch(
+      editorControllerProvider.select(
+        (p) => p.layers.any(
+          (l) =>
+              l is Scene3DLayer ||
+              l.effects.any(
+                (e) =>
+                    e.enabled &&
+                    (e.type == EffectType.lightGlow ||
+                        e.type == EffectType.glowVol),
               ),
+        ),
+      ),
+    );
+    if (!simplifica) return const SizedBox.shrink();
+    return ValueListenableBuilder<bool>(
+      valueListenable: PlaybackController.tocandoAgora,
+      builder: (context, tocando, _) {
+        if (!tocando) return const SizedBox.shrink();
+        return IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xCC12151A),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text(
+              'Rascunho · pause para ver a qualidade final',
+              style: TextStyle(fontSize: 10.5, color: AmColors.muted),
             ),
           ),
-        ),
-        Expanded(
-          child: Text(
-            titulo,
-            maxLines: 1,
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AmColors.text,
-            ),
-          ),
-        ),
-        // O MESMO ESPACO DA ESQUERDA, para o titulo cair no meio de
-        // verdade. Centrar sem isto joga o texto para a direita.
-        const SizedBox(width: 48),
-      ],
-    ),
-  );
+        );
+      },
+    );
+  }
 }

@@ -85,7 +85,8 @@ class _PainelDeTransformacaoState
         Expanded(
           child: Column(
             children: [
-              SizedBox(height: 44, child: Center(child: _campos(modo))),
+              if (modo != ModoDeTransformacao.mover)
+                SizedBox(height: 44, child: Center(child: _campos(modo))),
               Expanded(child: _superficie(modo)),
               const SizedBox(height: 10),
             ],
@@ -120,6 +121,7 @@ class _PainelDeTransformacaoState
             CampoDeValor(
               rotulo: 'x',
               valor: p.dx,
+              cor: AmColors.accent,
               aoDigitar: (v) =>
                   _c.editPosition(l.id, widget.tempo, Offset(v, p.dy)),
             ),
@@ -127,6 +129,7 @@ class _PainelDeTransformacaoState
             CampoDeValor(
               rotulo: 'y',
               valor: p.dy,
+              cor: AmColors.accent,
               aoDigitar: (v) =>
                   _c.editPosition(l.id, widget.tempo, Offset(p.dx, v)),
             ),
@@ -134,6 +137,7 @@ class _PainelDeTransformacaoState
             CampoDeValor(
               rotulo: 'z',
               valor: l.positionZ.valueAt(_local),
+              cor: Colors.white,
               // Z SO EDITA EM CAMADA 3D. O campo continua a vista, e
               // apagado, porque some-lo mudaria a largura da fileira
               // toda vez que alguem ligasse o 3D.
@@ -190,7 +194,8 @@ class _PainelDeTransformacaoState
             CampoDeValor(
               rotulo: 'Largura',
               valor: l.scaleX.valueAt(_local) * 100,
-              sufixo: '%',
+              cor: AmColors.accent,
+              sufixo: '',
               aoDigitar: (v) => _escalar(v / 100),
             ),
             _Corrente(
@@ -201,12 +206,8 @@ class _PainelDeTransformacaoState
             CampoDeValor(
               rotulo: 'Altura',
               valor: l.scaleY.valueAt(_local) * 100,
-              sufixo: '%',
-              // COM A CORRENTE TRAVADA, QUEM MANDA E O CAMPO TOCADO.
-              //
-              // Aqui ia `(escalaX, v/100)`, e travado o metodo usava so
-              // o primeiro: digitar na Altura abria o teclado, aceitava
-              // o numero, fechava e nao mudava nada. O campo mentia.
+              cor: Colors.white,
+              sufixo: '',
               aoDigitar: (v) => _escalar(v / 100, eixoY: true),
             ),
           ],
@@ -242,15 +243,9 @@ class _PainelDeTransformacaoState
     switch (modo) {
       case ModoDeTransformacao.mover:
         final projeto = ref.watch(editorControllerProvider);
-        // O GANHO TRADUZ DEDO EM COMPOSICAO.
-        //
-        // Um a um seria fiel e inutil: numa composicao de 1080 px vista
-        // num painel de 300, atravessar a almofada inteira andaria menos
-        // de um terco do quadro. Com este ganho, uma passada de dedo na
-        // almofada percorre quase a largura da composicao, seja ela de
-        // 720 ou de 4096.
         final ganho = projeto.outputWidth / 360;
         return AlmofadaDeArrasto(
+          cabecalho: _campos(ModoDeTransformacao.mover),
           aoComecar: () {
             _posicaoAoComecar = l.position.valueAt(_local);
             _abrirLote();
@@ -305,18 +300,35 @@ class _PainelDeTransformacaoState
           ),
         );
       case ModoDeTransformacao.escalar:
-        return Center(
-          child: FitaDeAjuste(
-            rotulo: 'Escala',
-            valor: l.scaleX.valueAt(_local) * 100,
-            // MEIO PONTO PERCENTUAL POR PIXEL: uma passada de dedo na
-            // largura do painel cobre de 100% a 250%, que e a faixa em
-            // que quase todo ajuste acontece.
-            porPixel: .5,
-            aoComecar: _abrirLote,
-            aoMudar: (v) => _escalar(v / 100),
-            aoTerminar: _fecharLote,
-          ),
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: FitaDeAjuste(
+                rotulo: 'Largura',
+                valor: l.scaleX.valueAt(_local) * 100,
+                porPixel: .5,
+                altura: double.infinity,
+                ativa: true,
+                aoComecar: _abrirLote,
+                aoMudar: (v) => _escalar(v / 100),
+                aoTerminar: _fecharLote,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: FitaDeAjuste(
+                rotulo: 'Altura',
+                valor: l.scaleY.valueAt(_local) * 100,
+                porPixel: .5,
+                altura: double.infinity,
+                ativa: false,
+                aoComecar: _abrirLote,
+                aoMudar: (v) => _escalar(v / 100, eixoY: true),
+                aoTerminar: _fecharLote,
+              ),
+            ),
+          ],
         );
       case ModoDeTransformacao.inclinar:
         return Column(
@@ -407,14 +419,13 @@ class _Corrente extends StatelessWidget {
         // referencia os tres formam uma fileira so, e um botao mais
         // baixo quebraria a linha de base do numero.
         decoration: BoxDecoration(
-          color: travada ? AmColors.chip : null,
+          color: const Color(0xFF434A60),
           borderRadius: BorderRadius.circular(8),
-          border: travada ? null : Border.all(color: AmColors.hairline),
         ),
         child: Icon(
           travada ? Icons.link_rounded : Icons.link_off_rounded,
-          size: 15,
-          color: travada ? AmColors.text : AmColors.muted,
+          size: 16,
+          color: Colors.white,
         ),
       ),
     ),

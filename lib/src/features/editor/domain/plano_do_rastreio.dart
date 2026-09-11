@@ -183,8 +183,9 @@ PlanoDoRastreio? planoDosPontos(
   var eixoX = normalizar(auto.vetores[2]);
   if (norma(eixoX) < .5) {
     eixoX = normalizar(produtoVetorial(normal, [0, 0, 1]));
-    if (norma(eixoX) < .5)
+    if (norma(eixoX) < .5) {
       eixoX = normalizar(produtoVetorial(normal, [1, 0, 0]));
+    }
   }
   // Ortogonaliza contra a normal: a decomposição já devolve eixos
   // ortogonais, mas o desempate acima pode ter trazido um vetor torto.

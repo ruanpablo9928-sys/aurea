@@ -301,7 +301,7 @@ class VistaDaCenaState extends ConsumerState<VistaDaCena> {
   void _transformar(Scene3DLayer camada, Offset delta, RenderCamera cam) {
     final alvos = [
       for (final id in _alvos)
-        if (camada.scene.nodeById(id) case final n?) n,
+        ?camada.scene.nodeById(id),
     ];
     if (alvos.isEmpty) return;
     _abrirNoControlador();

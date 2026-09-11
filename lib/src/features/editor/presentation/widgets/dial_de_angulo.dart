@@ -258,38 +258,25 @@ class _CaixaDoAngulo extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: compacto
         ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
-        : const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     decoration: BoxDecoration(
-      // [AmColors.campo], e nao [AmColors.chip]: sao dois tons quase
-      // iguais medidos em telas diferentes, e a caixa de valor e
-      // este aqui (`docs/painel-de-transformacao-alight.md`, "Cores").
-      color: AmColors.campo,
-      // O RAIO VEM DO CAMPO DE VALOR, e nao de um 8 repetido aqui:
-      // e para ser a mesma caixa, e dois oitos soltos em arquivos
-      // diferentes viram dois raios diferentes na primeira mudanca.
-      borderRadius: BorderRadius.circular(CampoDeValor.raio),
+      color: const Color(0xFF242436),
+      borderRadius: BorderRadius.circular(8),
     ),
     child: Text(
       texto,
       textAlign: TextAlign.center,
       style: TextStyle(
         color: AmColors.accent,
-        fontSize: compacto ? 13 : 20,
+        fontSize: compacto ? 13 : 24,
         fontWeight: FontWeight.w700,
-        // ALGARISMO DE LARGURA FIXA: este numero troca a cada quadro
-        // do arrasto, e com digitos de larguras diferentes a caixa
-        // inteira pulsaria embaixo do dedo enquanto o dial gira.
         fontFeatures: const [FontFeature.tabularFigures()],
       ),
     ),
   );
 }
 
-/// O CIRCULO E O BOTAO.
-///
-/// So estas duas coisas sao pintadas: o numero e um widget de verdade
-/// para poder ser achado e medido como texto, e nao um desenho que os
-/// testes teriam de adivinhar.
+/// O CIRCULO, O ARCO VERDE E O BOTAO.
 class _PinturaDoDial extends CustomPainter {
   const _PinturaDoDial({
     required this.graus,
@@ -305,23 +292,37 @@ class _PinturaDoDial extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (raio <= 0) return;
     final centro = Offset(size.width / 2, size.height / 2);
+    // Círculo escuro de trilha
     canvas.drawCircle(
       centro,
       raio,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        // O CONTORNO E QUASE INVISIVEL DE PROPOSITO: ele so precisa
-        // dizer por onde o botao anda. Mais forte que isso e a linha
-        // que o olho segue, em vez do numero.
-        ..color = AmColors.muted.withValues(alpha: .35),
+        ..strokeWidth = 2.0
+        ..color = const Color(0xFF2E3548),
     );
+
     final radianos = graus * math.pi / 180;
+    // Arco verde contínuo conectando de zero até a posição do botão
+    if (graus.abs() > 0.5) {
+      final sweep = (graus.abs() > 360 ? 360.0 : graus) * math.pi / 180;
+      canvas.drawArc(
+        Rect.fromCircle(center: centro, radius: raio),
+        0,
+        sweep,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5
+          ..strokeCap = StrokeCap.round
+          ..color = AmColors.accent,
+      );
+    }
+
     final botao =
         centro + Offset(math.cos(radianos), math.sin(radianos)) * raio;
-    // BRANCO, como o cabecote: a unica peca movel do desenho usa a cor
-    // que no editor inteiro significa "isto e o que voce esta pegando".
-    canvas.drawCircle(botao, raioDoBotao, Paint()..color = AmColors.cabecote);
+    // Manípulo branco na borda do anel
+    canvas.drawCircle(botao, raioDoBotao, Paint()..color = const Color(0xFFFFFFFF));
   }
 
   @override

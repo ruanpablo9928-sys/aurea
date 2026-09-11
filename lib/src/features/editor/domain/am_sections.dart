@@ -62,12 +62,19 @@ Set<AmSecao> secoesDe(Layer layer) {
   if (layer is NullLayer) {
     return const {AmSecao.moverTransformar, AmSecao.clonar};
   }
+  if (layer is Scene3DLayer) {
+    return const {
+      AmSecao.moverTransformar,
+      AmSecao.cena3d,
+      AmSecao.presets,
+      AmSecao.efeitos,
+    };
+  }
   return {
     AmSecao.moverTransformar,
     if (layer is ShapeLayer ||
         layer is TextLayer ||
-        layer is Element3DLayer ||
-        layer is Scene3DLayer)
+        layer is Element3DLayer)
       AmSecao.corPreenchimento,
     AmSecao.bordaSombra,
     AmSecao.mesclarOpacidade,

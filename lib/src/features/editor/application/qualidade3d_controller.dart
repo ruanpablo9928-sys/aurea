@@ -237,8 +237,9 @@ class ControladorDeQualidade3D with WidgetsBindingObserver {
     } else if (d < 0 || d > 400 * mb) {
       _tetoDeMemoria = Qualidade3D.ultra;
     }
-    if (d >= 0 && d < 80 * mb)
+    if (d >= 0 && d < 80 * mb) {
       _emergencia('memoria disponivel abaixo de 80 MB');
+    }
     _recalcular(
       termico >= 2
           ? 'aparelho esquentando'

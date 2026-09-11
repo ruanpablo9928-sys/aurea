@@ -58,7 +58,9 @@ export '../domain/video_project.dart' show LayerProp, PropertyLink;
 
 /// Camada selecionada no editor (null = nada).
 final selectedLayerProvider = StateProvider<String?>((ref) => null);
-// O KEYFRAME AUTOMATICO SAIU.
+
+/// Interruptor de auto-keyframe (desligado por padrao).
+final autoKeyframeProvider = StateProvider<bool>((ref) => false);
 //
 // `autoKeyframeProvider` vivia aqui e ja nascia desligado — e nao era
 // ele que criava os keyframes misteriosos. A raiz era `edited()`, que

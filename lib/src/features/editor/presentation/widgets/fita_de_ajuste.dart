@@ -139,7 +139,7 @@ class _FitaDeAjusteState extends State<FitaDeAjuste> {
       onHorizontalDragEnd: (_) => _terminar(),
       onHorizontalDragCancel: _terminar,
       child: SizedBox(
-        height: widget.altura,
+        height: widget.altura.isFinite ? widget.altura : null,
         child: CustomPaint(
           size: Size.infinite,
           painter: _PintorDaFita(

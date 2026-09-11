@@ -90,7 +90,10 @@ class CampoDeValor extends StatelessWidget {
     this.aoDigitar,
     this.largura = 61,
     this.nome,
+    this.cor,
   });
+
+  final Color? cor;
 
   /// A ALTURA DA CAIXA e o RAIO, medidos na referencia. Publicos porque
   /// quem monta a fila precisa reservar a linha sem adivinhar.
@@ -192,7 +195,7 @@ class CampoDeValor extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: AmColors.accent,
+                      color: cor ?? AmColors.accent,
                       // SEM CALLBACK, SEM SUBLINHADO: o sublinhado e a
                       // promessa de que da para digitar, e prometer o
                       // que nao se cumpre e o unico jeito de o campo
@@ -200,7 +203,7 @@ class CampoDeValor extends StatelessWidget {
                       decoration: _digitavel
                           ? TextDecoration.underline
                           : TextDecoration.none,
-                      decorationColor: AmColors.accent,
+                      decorationColor: cor ?? AmColors.accent,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),

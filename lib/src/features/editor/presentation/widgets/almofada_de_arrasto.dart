@@ -54,8 +54,12 @@ class AlmofadaDeArrasto extends StatefulWidget {
     this.aoTerminar,
     this.dica = 'Deslize aqui para mover a camada',
     this.rotulo = 'Mover a camada',
+    this.cabecalho,
     super.key,
   });
+
+  /// Conteudo opcional no topo (ex: campos X, Y, Z), emoldurado pelos cantos.
+  final Widget? cabecalho;
 
   /// O deslocamento acumulado desde o inicio do arrasto, em pixels de
   /// dedo.
@@ -156,22 +160,34 @@ class _AlmofadaDeArrastoState extends State<AlmofadaDeArrasto> {
                   const Positioned.fill(
                     child: CustomPaint(painter: _PintorDosCantos()),
                   ),
-                  Text(
-                    widget.dica,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      // A INSTRUCAO SOME DEPOIS DE OBEDECIDA: com o
-                      // dedo na almofada ela so disputa atencao com a
-                      // previa, que e onde o olho precisa estar.
-                      //
-                      // Some pela COR, e nao saindo da arvore: assim
-                      // nada e medido de novo no comeco e no fim de
-                      // cada arrasto, e a dica volta exatamente onde
-                      // estava.
-                      color: _dedoNaAlmofada
-                          ? Colors.transparent
-                          : AmColors.muted,
+                  if (widget.cabecalho != null)
+                    Positioned(
+                      top: 10,
+                      left: 16,
+                      right: 16,
+                      child: Center(child: widget.cabecalho!),
+                    ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: widget.cabecalho != null ? 36.0 : 0.0,
+                    ),
+                    child: Text(
+                      widget.dica,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        // A INSTRUCAO SOME DEPOIS DE OBEDECIDA: com o
+                        // dedo na almofada ela so disputa atencao com a
+                        // previa, que e onde o olho precisa estar.
+                        //
+                        // Some pela COR, e nao saindo da arvore: assim
+                        // nada e medido de novo no comeco e no fim de
+                        // cada arrasto, e a dica volta exatamente onde
+                        // estava.
+                        color: _dedoNaAlmofada
+                            ? Colors.transparent
+                            : AmColors.muted,
+                      ),
                     ),
                   ),
                 ],

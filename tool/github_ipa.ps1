@@ -4,7 +4,7 @@ param(
   [string]$OutputDirectory = 'build/releases/ipa-35'
 )
 $ErrorActionPreference = 'Stop'
-$repo = 'ruanpablo9928-sys/aurea'
+$repo = 'ueeruan/aurea'
 # Read credentials into memory only. Never print or persist them.
 $credentialLines = @('protocol=https', 'host=github.com', '') | git credential fill
 if ($LASTEXITCODE -ne 0) { throw 'GitHub authentication unavailable.' }

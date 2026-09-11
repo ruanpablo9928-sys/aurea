@@ -76,26 +76,30 @@ class RailEsquerdo extends StatelessWidget {
           tamanho: 24,
           aoTocar: aoVoltar,
         ),
-        _BotaoDoRail(
-          // O LOSANGO E O SIMBOLO DE KEYFRAME em todo editor de
-          // animacao que existe. Cheio quando ha marca no cabecote,
-          // vazado quando a propriedade anima mas nao aqui, apagado
-          // quando nao anima nada.
-          icone: alvo.temKeyframeAqui
-              ? Icons.change_history_rounded
-              : Icons.change_history_outlined,
+        _BotaoCustomDoRail(
           rotulo: alvo.temKeyframeAqui
               ? 'Tirar o keyframe daqui'
               : 'Marcar keyframe aqui',
           aoTocar: alvo.aoAlternarKeyframe,
-          aceso: alvo.temKeyframeAqui,
-          meioAceso: alvo.animado,
+          child: CustomPaint(
+            size: const Size(22, 22),
+            painter: _DiamondKeyframePainter(
+              hasKeyframe: alvo.temKeyframeAqui,
+              isAnimated: alvo.animado,
+              ativo: alvo.aoAlternarKeyframe != null,
+            ),
+          ),
         ),
-        _BotaoDoRail(
-          icone: Icons.timeline_rounded,
+        _BotaoCustomDoRail(
           rotulo: 'Abrir a curva',
           aoTocar: alvo.aoAbrirCurva,
-          meioAceso: alvo.animado,
+          child: CustomPaint(
+            size: const Size(20, 20),
+            painter: _CurveIconPainter(
+              ativo: alvo.aoAbrirCurva != null,
+              isAnimated: alvo.animado,
+            ),
+          ),
         ),
       ],
     ),
@@ -103,11 +107,6 @@ class RailEsquerdo extends StatelessWidget {
 }
 
 /// O RAIL DIREITO: os quatro modos de transformacao.
-///
-/// Empilhados na ordem da referencia — mover, girar, escalar, inclinar —
-/// e o vigente aceso. Sao MODOS, e nao abas: cada um troca a superficie
-/// do miolo inteira, porque cada grandeza pede um gesto diferente. Ver
-/// `docs/painel-de-transformacao-alight.md`, "A regra que muda tudo".
 class RailDireito extends StatelessWidget {
   const RailDireito({
     super.key,
@@ -143,13 +142,16 @@ class RailDireito extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: i == vigente ? AmColors.chip : null,
-                  borderRadius: BorderRadius.circular(9),
+                  color: i == vigente ? const Color(0xFF1E222D) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: i == vigente
+                      ? Border.all(color: AmColors.accent, width: 1.5)
+                      : null,
                 ),
                 child: Icon(
                   modos[i].$1,
                   size: 20,
-                  color: i == vigente ? AmColors.accent : AmColors.muted,
+                  color: i == vigente ? AmColors.accent : const Color(0xFF8B94A3),
                 ),
               ),
             ),
@@ -165,20 +167,12 @@ class _BotaoDoRail extends StatelessWidget {
     required this.rotulo,
     required this.aoTocar,
     this.tamanho = 20,
-    this.aceso = false,
-    this.meioAceso = false,
   });
 
   final IconData icone;
   final String rotulo;
   final VoidCallback? aoTocar;
   final double tamanho;
-
-  /// A propriedade tem marca EXATAMENTE aqui.
-  final bool aceso;
-
-  /// A propriedade anima, mas nao neste instante.
-  final bool meioAceso;
 
   @override
   Widget build(BuildContext context) {
@@ -195,23 +189,167 @@ class _BotaoDoRail extends StatelessWidget {
           onTap: aoTocar,
           child: SizedBox(
             width: RailEsquerdo.largura,
-            child: Icon(
-              icone,
-              size: tamanho,
-              color: !ativo
-                  // APAGADO NAO E CINZA CLARO: e quase invisivel. Um
-                  // controle que nao age precisa parecer que nao age
-                  // antes do dedo descobrir.
-                  ? AmColors.muted.withValues(alpha: .28)
-                  : aceso
-                  ? AmColors.accent
-                  : meioAceso
-                  ? AmColors.accent.withValues(alpha: .5)
-                  : AmColors.text,
+            child: Center(
+              child: Icon(
+                icone,
+                size: tamanho,
+                color: !ativo
+                    ? AmColors.muted.withValues(alpha: .28)
+                    : AmColors.text,
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _BotaoCustomDoRail extends StatelessWidget {
+  const _BotaoCustomDoRail({
+    required this.rotulo,
+    required this.aoTocar,
+    required this.child,
+  });
+
+  final String rotulo;
+  final VoidCallback? aoTocar;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final ativo = aoTocar != null;
+    return Expanded(
+      child: Semantics(
+        container: true,
+        excludeSemantics: true,
+        button: ativo,
+        enabled: ativo,
+        label: rotulo,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: aoTocar,
+          child: SizedBox(
+            width: RailEsquerdo.largura,
+            child: Center(child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Losango de keyframe com sinal de '+' no centro (conforme UI oficial AM).
+class _DiamondKeyframePainter extends CustomPainter {
+  const _DiamondKeyframePainter({
+    required this.hasKeyframe,
+    required this.isAnimated,
+    required this.ativo,
+  });
+
+  final bool hasKeyframe;
+  final bool isAnimated;
+  final bool ativo;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final color = !ativo
+        ? const Color(0xFF434956)
+        : hasKeyframe
+        ? AmColors.accent
+        : const Color(0xFFFFFFFF);
+
+    final path = Path()
+      ..moveTo(center.dx, 2)
+      ..lineTo(size.width - 2, center.dy)
+      ..lineTo(center.dx, size.height - 2)
+      ..lineTo(2, center.dy)
+      ..close();
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..color = color;
+
+    canvas.drawPath(path, paint);
+
+    if (hasKeyframe) {
+      // Sinal de menos '-' quando já existe keyframe aqui
+      canvas.drawLine(
+        Offset(center.dx - 3.5, center.dy),
+        Offset(center.dx + 3.5, center.dy),
+        paint..strokeWidth = 1.5,
+      );
+    } else {
+      // Sinal de mais '+' quando não há keyframe aqui
+      canvas.drawLine(
+        Offset(center.dx - 3.5, center.dy),
+        Offset(center.dx + 3.5, center.dy),
+        paint..strokeWidth = 1.5,
+      );
+      canvas.drawLine(
+        Offset(center.dx, center.dy - 3.5),
+        Offset(center.dx, center.dy + 3.5),
+        paint..strokeWidth = 1.5,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DiamondKeyframePainter old) =>
+      old.hasKeyframe != hasKeyframe ||
+      old.isAnimated != isAnimated ||
+      old.ativo != ativo;
+}
+
+/// Ícone de curva em caixa arredondada com curva S Bezier.
+class _CurveIconPainter extends CustomPainter {
+  const _CurveIconPainter({required this.ativo, required this.isAnimated});
+
+  final bool ativo;
+  final bool isAnimated;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final color = !ativo
+        ? const Color(0xFF434956)
+        : (isAnimated ? AmColors.accent : const Color(0xFF8B94A3));
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
+      const Radius.circular(4),
+    );
+
+    final boxPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..color = color.withValues(alpha: 0.5);
+
+    canvas.drawRRect(rrect, boxPaint);
+
+    // Curva S suave no interior
+    final path = Path()
+      ..moveTo(4, size.height - 5)
+      ..cubicTo(
+        size.width * 0.45,
+        size.height - 5,
+        size.width * 0.55,
+        5,
+        size.width - 4,
+        5,
+      );
+
+    final curvePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+
+    canvas.drawPath(path, curvePaint);
+  }
+
+  @override
+  bool shouldRepaint(_CurveIconPainter old) =>
+      old.ativo != ativo || old.isAnimated != isAnimated;
 }
