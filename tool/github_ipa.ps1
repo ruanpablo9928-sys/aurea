@@ -35,7 +35,8 @@ switch ($Operation) {
     $allowed = [IO.Path]::GetFullPath((Join-Path (Get-Location).Path 'build/releases')) + [IO.Path]::DirectorySeparatorChar
     if (-not $directory.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase)) { throw 'Output must stay inside build/releases.' }
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
-    $client = [Net.Http.HttpClient]::new([Net.Http.HttpClientHandler]@{AllowAutoRedirect=$false})
+    Add-Type -AssemblyName System.Net.Http
+    $client = [System.Net.Http.HttpClient]::new([System.Net.Http.HttpClientHandler]@{AllowAutoRedirect=$false})
     try {
       $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get,$artifact[0].archive_download_url)
       foreach($key in $headers.Keys) { $request.Headers.TryAddWithoutValidation($key,$headers[$key]) | Out-Null }
