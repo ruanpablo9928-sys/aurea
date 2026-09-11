@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/aurea_logo.dart';
 import '../../about/presentation/report_sheet.dart';
 import '../../editor/application/editor_controller.dart';
 import '../../editor/domain/template_pack.dart';
@@ -31,8 +30,10 @@ import '../domain/notes_motion_template.dart';
 import '../domain/pindown_motion_template.dart';
 import '../domain/project_presets.dart';
 import '../../tutoriais/presentation/tutorial_screen.dart';
+import 'home_shell.dart';
 import 'new_project_sheet.dart';
 import 'whats_new.dart';
+import 'widgets/aurea_welcome_header.dart';
 
 /// A INICIO, do jeito de um app de video: o titulo, UM botao de criar,
 /// os projetos recentes numa lista com a miniatura DE VERDADE e um menu
@@ -222,6 +223,49 @@ class ProjectsTab extends ConsumerWidget {
     ref.read(editorControllerProvider.notifier).openProject(novo);
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
+  }
+
+  /// IMPORTAR MÍDIA: escolhe foto ou vídeo da galeria e já inicia um
+  /// projeto novo com a mídia inserida no palco.
+  Future<void> _importarMidia(BuildContext context, WidgetRef ref) async {
+    try {
+      final r = await FilePicker.platform.pickFiles(
+        type: FileType.media,
+        allowMultiple: false,
+      );
+      final caminho = r?.files.single.path;
+      if (caminho == null || !context.mounted) return;
+      final nome = r?.files.single.name ?? 'Mídia Importada';
+      final projeto = VideoProject(
+        id: 'projeto-${DateTime.now().millisecondsSinceEpoch}',
+        name: nome.replaceAll(RegExp(r'\.[^.]+$'), ''),
+        createdAt: DateTime.now(),
+        fps: 30,
+        aspectRatio: 9 / 16,
+      );
+      ref.read(projectsControllerProvider.notifier).add(projeto);
+      final controller = ref.read(editorControllerProvider.notifier);
+      controller.openProject(projeto);
+      final ext = caminho.split('.').last.toLowerCase();
+      if (['mp4', 'mov', 'm4v', 'avi', 'mkv'].contains(ext)) {
+        controller.addVideoLayer(
+          Duration.zero,
+          caminho,
+          nome,
+          const Duration(seconds: 5),
+        );
+      } else {
+        controller.addImageLayer(Duration.zero, caminho, nome);
+      }
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const EditorScreen()));
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Não consegui importar essa mídia.')),
+        );
+      }
+    }
   }
 
   /// CENA EM XML: le o que reconhece, mostra o balanco (camadas,
@@ -426,7 +470,6 @@ class ProjectsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final projects = ref.watch(projectsControllerProvider);
     final mostrarTodos = ref.watch(_mostrarTodosProvider);
-    final theme = Theme.of(context);
     const completo = true;
     ThumbnailService.instance.init();
     final visiveis = mostrarTodos
@@ -438,22 +481,10 @@ class ProjectsTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(0, 10, 0, 120),
         children: [
-          // TITULO GRANDE, como toda tela raiz do app.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text('Aurea', style: theme.textTheme.headlineLarge),
-                ),
-                const AureaLogo(size: 38),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          // UM BOTAO SO, na largura inteira. O formato, a resolucao e o
-          // nome se escolhem dentro da folha — com a moldura na frente.
+          // CABEÇALHO ANIMADO DE BOAS-VINDAS COM PERFIL INTEGRADO
+          const AureaWelcomeHeader(),
+          const SizedBox(height: 12),
+          // UM BOTAO SO, na largura inteira.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: SizedBox(
@@ -471,35 +502,53 @@ class ProjectsTab extends ConsumerWidget {
               ),
             ),
           ),
-          // As outras duas portas, escritas: sem caixa em volta. Template
-          // e cena em XML sao estudio.
+          // ATALHOS RÁPIDOS MODERNOS (DOCK CRIATIVO)
           if (completo) ...[
             const SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              // Wrap, nao Row: num celular estreito com fonte grande o
-              // segundo atalho desce de linha em vez de estourar.
-              child: Wrap(
-                spacing: 24,
-                runSpacing: 2,
+              child: Row(
                 children: [
-                  _Atalho(
-                    icon: CupertinoIcons.doc_on_doc,
-                    texto: 'Template',
-                    tooltip: 'Abrir template',
-                    onTap: () => _openTemplate(context, ref),
+                  Expanded(
+                    child: _AtalhoModerno(
+                      icon: CupertinoIcons.photo_on_rectangle,
+                      rotulo: 'Mídia',
+                      subrotulo: 'Galeria',
+                      onTap: () => _importarMidia(context, ref),
+                    ),
                   ),
-                  _Atalho(
-                    icon: CupertinoIcons.arrow_down_doc,
-                    texto: 'Importar XML',
-                    tooltip: 'Importar cena (XML)',
-                    onTap: () => _importarCena(context, ref),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _AtalhoModerno(
+                      icon: CupertinoIcons.arrow_down_doc,
+                      rotulo: 'XML',
+                      subrotulo: 'Cena 3D',
+                      onTap: () => _importarCena(context, ref),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _AtalhoModerno(
+                      icon: CupertinoIcons.doc_on_doc,
+                      rotulo: 'Template',
+                      subrotulo: 'Modelos',
+                      onTap: () => _openTemplate(context, ref),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _AtalhoModerno(
+                      icon: CupertinoIcons.sparkles,
+                      rotulo: 'Mural',
+                      subrotulo: 'Social',
+                      onTap: () => ref.read(homeTabProvider.notifier).state = 2,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
-          const SizedBox(height: 30),
+          const SizedBox(height: 26),
           _TituloSecao(
             'Recentes',
             detalhe: projects.isEmpty
@@ -655,6 +704,10 @@ class ProjectsTab extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 24),
+          _SpotlightComunidade(
+            onExplorar: () => ref.read(homeTabProvider.notifier).state = 2,
+          ),
+          const SizedBox(height: 12),
           _Linha(
             icon: CupertinoIcons.sparkles,
             texto: 'O que ha de novo nesta versao',
@@ -739,51 +792,6 @@ class _TituloSecao extends StatelessWidget {
               style: TextStyle(fontSize: 12.5, color: AppColors.muted),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// Uma porta secundaria, escrita: icone e nome, sem caixa.
-class _Atalho extends StatelessWidget {
-  const _Atalho({
-    required this.icon,
-    required this.texto,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String texto;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: AppColors.lime),
-              const SizedBox(width: 7),
-              Text(
-                texto,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
-                  color: AppColors.onDark,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1037,6 +1045,155 @@ class _Linha extends StatelessWidget {
               CupertinoIcons.chevron_right,
               size: 15,
               color: AppColors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Atalho moderno do dock criativo da Home com ícone, título e subtítulo.
+class _AtalhoModerno extends StatelessWidget {
+  const _AtalhoModerno({
+    required this.icon,
+    required this.rotulo,
+    required this.subrotulo,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String rotulo;
+  final String subrotulo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.hairline,
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: AppColors.lime),
+            const SizedBox(height: 5),
+            Text(
+              rotulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onDark,
+              ),
+            ),
+            Text(
+              subrotulo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                color: AppColors.muted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Destaque interativo da Comunidade na Home que conecta direto ao mural.
+class _SpotlightComunidade extends ConsumerWidget {
+  const _SpotlightComunidade({required this.onExplorar});
+
+  final VoidCallback onExplorar;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.surface,
+              AppColors.surfaceHigh,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.lime.withValues(alpha: 0.25),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.lime.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                CupertinoIcons.person_2_fill,
+                color: AppColors.lime,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Mural da Comunidade',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Explore projetos reais, templates e criações no Cloudflare.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.muted,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.lime,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              onPressed: onExplorar,
+              child: const Text('Ver feed'),
             ),
           ],
         ),

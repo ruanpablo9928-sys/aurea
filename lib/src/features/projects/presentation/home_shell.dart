@@ -17,6 +17,8 @@ import '../../user/presentation/user_tab.dart';
 import 'aviso_ao_vivo.dart';
 import 'projects_tab.dart';
 
+final homeTabProvider = StateProvider<int>((ref) => 0);
+
 /// Casca principal: abas com tab bar translucida estilo iOS
 /// (blur + hairline, conteudo rolando por baixo).
 class HomeShell extends ConsumerStatefulWidget {
@@ -27,8 +29,6 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  int _index = 0;
-
   @override
   void initState() {
     super.initState();
@@ -60,18 +60,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       CupertinoIcons.slider_horizontal_3,
       'Ajustes',
     ),
-    (CupertinoIcons.person, CupertinoIcons.person_fill, 'Usuario'),
+    (CupertinoIcons.person, CupertinoIcons.person_fill, 'Perfil'),
     (CupertinoIcons.info_circle, CupertinoIcons.info_circle_fill, 'Sobre'),
   ];
 
   void _select(int i) {
-    if (i == _index) return;
+    if (i == ref.read(homeTabProvider)) return;
     HapticFeedback.selectionClick();
-    setState(() => _index = i);
+    ref.read(homeTabProvider.notifier).state = i;
   }
 
   @override
   Widget build(BuildContext context) {
+    final index = ref.watch(homeTabProvider);
     return Scaffold(
       extendBody: true,
       body: Column(
@@ -82,7 +83,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           const AvisoAoVivo(),
           Expanded(
             child: IndexedStack(
-              index: _index,
+              index: index,
               children: const [
                 ProjectsTab(),
                 CommunityTab(),
@@ -116,7 +117,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                           icon: _tabs[i].$1,
                           activeIcon: _tabs[i].$2,
                           label: _tabs[i].$3,
-                          selected: i == _index,
+                          selected: i == index,
                           onTap: () => _select(i),
                         ),
                       ),
