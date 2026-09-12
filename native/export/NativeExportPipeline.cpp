@@ -1,4 +1,5 @@
 #include "NativeExportPipeline.h"
+#include "optical_flow/OpticalFlowEngine.h"
 #include <chrono>
 #include <thread>
 
