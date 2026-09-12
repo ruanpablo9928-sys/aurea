@@ -1168,12 +1168,12 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
             physics: const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
             children: [
-              // 1. Câmera com badge PROVAR
+              // 1. Scene 3D com badge PROVAR
               cardItem(
                 badge: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1ED6B1),
+                    color: const Color(0xFF00FFB2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
@@ -1190,7 +1190,7 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
                   size: 38,
                   color: Colors.white,
                 ),
-                label: 'Câmera',
+                label: 'Scene 3D',
                 onTap: () {
                   _fecha();
                   final cena = _cena;

@@ -6,6 +6,7 @@ import '../../../../core/theme/tokens.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../application/ui/editor_session.dart';
+import '../am/am_colors.dart';
 import 'layer_actions.dart';
 
 /// ZONA C — O TRANSPORTE (48 pt).
@@ -125,6 +126,20 @@ class EditorTransportBar extends ConsumerWidget {
               onTap: () => playback.seek(duration),
               onLongPress: () =>
                   _digitarTempo(context, playback, duration, fps),
+            ),
+            botao(
+              key: const ValueKey('transport-keyframe'),
+              icon: keyframeHere
+                  ? CupertinoIcons.rhombus_fill
+                  : CupertinoIcons.rhombus,
+              tooltip: keyframeHere
+                  ? 'Remover keyframe no cabeçote'
+                  : 'Adicionar keyframe no cabeçote',
+              cor: !keyframeEnabled
+                  ? t.muted.withValues(alpha: .35)
+                  : (keyframeHere ? AmColors.accent : t.text),
+              size: 24,
+              onTap: keyframeEnabled ? onKeyframe : null,
             ),
             botao(
               key: const ValueKey('camada-duplicar'),

@@ -4806,7 +4806,8 @@ RenderCamera? cameraDaCena(
   Duration local,
   Duration global,
 ) {
-  final paiId = l.cameraParentLayerId;
+  final paiId = l.cameraParentLayerId ??
+      project.linkFor(l.id, LayerProp.parent)?.sourceLayerId;
   if (paiId == null) {
     return l.shots.isEmpty && l.scene.cameraParentId == null
         ? null

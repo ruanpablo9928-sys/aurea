@@ -24,20 +24,12 @@ import 'transition_sheet.dart';
 import '../../application/registro_de_travadas.dart';
 import '../../application/perfil3d.dart';
 
-// Mais baixas do que eram (46/38): num celular, tres camadas ja
-// tomavam a tela; e o que se le numa barra e nome e keyframe.
-const double kAmRowHeight = 38;
-const double kAmBarHeight = 30;
+// Alturas confortaveis para mobile (alvo de toque >= 44pt e visibilidade de keyframes).
+const double kAmRowHeight = 46;
+const double kAmBarHeight = 36;
 
 /// A TIRA DE BAIXO DA BARRA, so dos keyframes.
-///
-/// A barra tem duas faixas: o nome em cima, os keyframes embaixo. Antes
-/// dividiam a mesma linha, e numa camada animada os losangos cobriam o
-/// nome — o rotulo saia "◆ABIS◆O◆c◆a 3◆", que nao se le. A altura da
-/// barra NAO mudou de proposito: ela e o passo da linha do tempo, e
-/// mexer nela desalinha a coluna dos controles e estoura painel em tela
-/// pequena.
-const double kAmFaixaKeyframes = 12;
+const double kAmFaixaKeyframes = 15;
 
 /// TIMELINE MAGNETICA — ligada por padrao.
 ///
@@ -384,8 +376,13 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       for (final layer in project.layers)
         if (layer.matteMode != MatteMode.none && layer.matteSourceId != null)
           layer.matteSourceId!,
-    };
-    final totalWidth = _timeToPx(project.duration);
+    var maxEndUs = project.duration.inMicroseconds;
+    for (final l in project.layers) {
+      if (l.endTime.inMicroseconds > maxEndUs) {
+        maxEndUs = l.endTime.inMicroseconds;
+      }
+    }
+    final totalWidth = (maxEndUs / 1e6 * _pps) + 200.0;
     final trilhas = empacotarTrilhas(layers);
     final selecionadas = <String>{?selectedId, ...multi};
     final controller = ref.read(editorControllerProvider.notifier);
@@ -590,7 +587,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 18),
                               Expanded(
                                 child: ListView.builder(
                                   controller: _rowsScroll,
@@ -806,24 +803,38 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                   // linha (Fase 2). A miniatura mora dentro da barra.
                   Positioned(
                     left: 0,
-                    top: 50,
+                    top: 38,
                     bottom: 0,
-                    width: 60,
-                    child: ListView.builder(
-                      controller: _pillsScroll,
-                      padding: EdgeInsets.zero,
-                      itemExtent: kAmRowHeight,
-                      itemCount: trilhas.length,
-                      itemBuilder: (context, index) {
-                        final trilha = trilhas[index];
-                        return _ControlesDaTrilha(
-                          trilha: trilha,
-                          playback: widget.playback,
-                          isMatteSource: trilha.any(
-                            (l) => matteSourceIds.contains(l.id),
-                          ),
-                        );
-                      },
+                    width: 66,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            AmColors.bg,
+                            AmColors.bg.withValues(alpha: 0.95),
+                            AmColors.bg.withValues(alpha: 0.0),
+                          ],
+                          stops: const [0.0, 0.78, 1.0],
+                        ),
+                      ),
+                      child: ListView.builder(
+                        controller: _pillsScroll,
+                        padding: EdgeInsets.zero,
+                        itemExtent: kAmRowHeight,
+                        itemCount: trilhas.length,
+                        itemBuilder: (context, index) {
+                          final trilha = trilhas[index];
+                          return _ControlesDaTrilha(
+                            trilha: trilha,
+                            playback: widget.playback,
+                            isMatteSource: trilha.any(
+                              (l) => matteSourceIds.contains(l.id),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],
@@ -2103,9 +2114,10 @@ class _AmBarState extends ConsumerState<_AmBar> {
                     grupo.times.any(
                       (t) => activeTimesUs!.contains(t.inMicroseconds),
                     );
+                // Dourado/Âmbar brilhante estilo After Effects para keyframes ativos; branco nítido para inativos
                 final cor = active
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.65);
+                    ? const Color(0xFFFFC107)
+                    : Colors.white.withValues(alpha: 0.90);
                 final x0 = grupo.times.first.inMicroseconds / 1e6 * pps;
                 final x1 = grupo.times.last.inMicroseconds / 1e6 * pps;
 
@@ -2113,54 +2125,57 @@ class _AmBarState extends ConsumerState<_AmBar> {
                     ? Transform.rotate(
                         angle: 0.785398,
                         child: Container(
-                          width: 10,
-                          height: 10,
+                          width: 11,
+                          height: 11,
                           decoration: BoxDecoration(
                             color: cor,
                             borderRadius: BorderRadius.circular(2),
                             border: Border.all(
-                              color: Colors.black.withValues(alpha: 0.45),
-                              width: 0.8,
+                              color: Colors.black.withValues(alpha: 0.85),
+                              width: 1.2,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (active ? const Color(0xFFFFC107) : Colors.black)
+                                    .withValues(alpha: active ? 0.5 : 0.3),
+                                blurRadius: 3,
+                                spreadRadius: 0.5,
+                              ),
+                            ],
                           ),
                         ),
                       )
                     : Container(
-                        height: 8,
+                        height: 10,
                         decoration: BoxDecoration(
                           color: cor,
-                          borderRadius: BorderRadius.circular(4),
-                          border: active
-                              ? Border.all(color: Colors.black38)
-                              : null,
+                          borderRadius: BorderRadius.circular(5),
+                          border: Border.all(
+                            color: Colors.black.withValues(alpha: 0.85),
+                            width: 1.2,
+                          ),
                         ),
                       );
 
-                final largura = grupo.times.length == 1 ? 22.0 : (x1 - x0) + 22;
+                final largura = grupo.times.length == 1 ? 28.0 : (x1 - x0) + 28;
                 return Positioned(
-                  left: left + x0 - 11,
+                  left: left + x0 - 14,
                   top: compact
-                      ? (kAmBarHeight - 12) / 2
-                      : kAmBarHeight - kAmFaixaKeyframes - 3,
+                      ? (kAmBarHeight - 16) / 2
+                      : kAmBarHeight - kAmFaixaKeyframes - 1,
                   width: largura,
-                  height: compact ? 12 : kAmFaixaKeyframes + 3,
-                  // O APAGADO RESPONDE AO TOQUE. Marca que se ve e nao se
-                  // consegue tocar vira enigma: de quem e essa? So `onTap`
-                  // — arrastar continua movendo o clipe, porque um
-                  // reconhecedor de toque perde a arena para um de arrasto.
-                  // O diamante ACESO leva o cabecote ate ele: e como se
-                  // navega de keyframe em keyframe no Alight Motion, tocando
-                  // na barra. Sem botao de anterior/proximo, sem menu.
+                  height: compact ? 16 : kAmFaixaKeyframes + 2,
                   child: GestureDetector(
                     key: ValueKey(
                       'layer-keyframe-${layer.id}-${grupo.times.first.inMicroseconds}',
                     ),
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
+                      HapticFeedback.selectionClick();
+                      playback.pause();
+                      playback.seek(layer.startTime + grupo.times.first);
                       if (active) {
-                        playback.pause();
-                        playback.seek(layer.startTime + grupo.times.first);
-                        // E5: tocar o losango leva ao easing dele.
+                        // Tocar o losango leva ao easing dele ou abre curva
                         widget.onKeyframeTap?.call(layer, grupo.times.first);
                       } else {
                         onForeignKeyframe?.call(grupo.times.first);
@@ -2172,10 +2187,10 @@ class _AmBarState extends ConsumerState<_AmBar> {
                           'keyframe-glyph-${layer.id}-${grupo.times.first.inMicroseconds}',
                         ),
                         width: grupo.times.length == 1
-                            ? 10
-                            : (x1 - x0).clamp(10.0, double.infinity),
-                        height: 10,
-                        child: marca,
+                            ? 16
+                            : (x1 - x0).clamp(16.0, double.infinity),
+                        height: 16,
+                        child: Center(child: marca),
                       ),
                     ),
                   ),
@@ -2188,7 +2203,6 @@ class _AmBarState extends ConsumerState<_AmBar> {
   }
 }
 
-
 /// Um punhado de keyframes perto demais para se distinguirem.
 class _GrupoDeKeyframes {
   const _GrupoDeKeyframes(this.times);
@@ -2196,14 +2210,10 @@ class _GrupoDeKeyframes {
 }
 
 /// Junta os keyframes que ficariam a menos de [minPx] um do outro.
-///
-/// O criterio e em PIXEL, nao em tempo: o mesmo par de keyframes se
-/// distingue com a linha ampliada e some quando ela e reduzida, e o
-/// desenho tem de acompanhar isso.
 List<_GrupoDeKeyframes> _agrupaKeyframes(
   List<Duration> times,
   double pps, {
-  double minPx = 9,
+  double minPx = 4,
 }) {
   if (times.isEmpty) return const [];
   final ordenados = [...times]..sort();

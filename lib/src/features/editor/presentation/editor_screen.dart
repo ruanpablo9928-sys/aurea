@@ -871,8 +871,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   timelineExpanded: s.timelineExpanded,
                   sheetVisible: conteudo != null,
                   timelineFloor: layer != null && s.panel == EditorPanel.none
-                      ? 126
-                      : (s.panel != EditorPanel.none ? 56 : 88),
+                      ? 140
+                      : (s.panel != EditorPanel.none ? 110 : 120),
                   sheetMayCoverTimeline: s.adding,
                   focusedLayer:
                       layer != null && s.panel != EditorPanel.none && !s.adding,

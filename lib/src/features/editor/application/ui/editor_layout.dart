@@ -18,7 +18,7 @@ class EditorLayoutMetrics {
     required this.sheet,
   });
 
-  static const double timelineMin = 88;
+  static const double timelineMin = 110;
   static const double previewMin = 96;
   static const double handleHeight = 8;
 
@@ -98,10 +98,10 @@ class EditorLayoutMetrics {
     // O painel tem prioridade de espaço (mínimo 270px), a timeline opera em modo compacto (56px)
     // e o preview cede altura, mantendo o enquadramento perfeito via BoxFit.contain.
     if (focusedLayer && sheetVisible && !timelineExpanded) {
-      final timelinePiso = math.min(56.0, ws * 0.15);
+      final timelinePiso = math.max(110.0, math.min(140.0, ws * 0.24));
       final sheetAlvo = math.min(
         math.max(0.0, ws - timelinePiso - previewMin),
-        math.max(270.0, ws * (sheetFraction > 0.40 ? sheetFraction : 0.46)),
+        math.max(260.0, ws * (sheetFraction > 0.40 ? sheetFraction : 0.44)),
       );
       sheet = sheetAlvo;
       timeline = timelinePiso;

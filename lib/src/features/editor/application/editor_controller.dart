@@ -1748,7 +1748,7 @@ class EditorController extends Notifier<VideoProject> {
     final n = state.layers.whereType<Scene3DLayer>().length + 1;
     _push(
       Scene3DLayer(
-        name: 'Cena 3D $n',
+        name: 'Scene 3D $n',
         startTime: at,
         duration: const Duration(seconds: 5),
         // Nasce vazia, mas ja com luz de tres pontos, ambiente Estudio e
@@ -7936,6 +7936,22 @@ class EditorController extends Notifier<VideoProject> {
             baseZ: pe.z,
           ),
         ];
+        if (target is Scene3DLayer) {
+          final cena = target.copyScene(
+            cameraParentLayerId: sourceId,
+            clearCameraParent: false,
+          );
+          _mutate(
+            state.copyWith(
+              links: links,
+              layers: [
+                for (final l in state.layers)
+                  if (l.id == targetId) cena else l,
+              ],
+            ),
+          );
+          return;
+        }
         _mutate(state.copyWith(links: links));
         return;
       case LayerProp.skew:
@@ -7958,14 +7974,25 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void unlinkProperty(String targetId, LayerProp prop) {
-    _mutate(
-      state.copyWith(
-        links: [
-          for (final l in state.links)
-            if (!(l.targetLayerId == targetId && l.targetProp == prop)) l,
-        ],
-      ),
+    var newState = state.copyWith(
+      links: [
+        for (final l in state.links)
+          if (!(l.targetLayerId == targetId && l.targetProp == prop)) l,
+      ],
     );
+    if (prop == LayerProp.parent) {
+      final t = _layer(targetId);
+      if (t is Scene3DLayer && t.cameraParentLayerId != null) {
+        final cena = t.copyScene(clearCameraParent: true);
+        newState = newState.copyWith(
+          layers: [
+            for (final l in newState.layers)
+              if (l.id == targetId) cena else l,
+          ],
+        );
+      }
+    }
+    _mutate(newState);
   }
 
   void editVideoVolume(String id, double volume) {

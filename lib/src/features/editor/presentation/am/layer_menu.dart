@@ -136,6 +136,24 @@ class LayerToolsDock extends ConsumerWidget {
                       },
                       icon: const Icon(CupertinoIcons.speaker_2, size: 20, color: AmColors.text),
                     ),
+                    IconButton(
+                      tooltip: 'Vincular (Parentear)',
+                      onPressed: () {
+                        playback.pause();
+                        showParentSheet(context, ref, layer, playback.time.value);
+                      },
+                      icon: Icon(
+                        (ref.watch(editorControllerProvider).linkFor(layer.id, LayerProp.parent) != null ||
+                                (layer is Scene3DLayer && layer.cameraParentLayerId != null))
+                            ? CupertinoIcons.link_circle_fill
+                            : CupertinoIcons.link,
+                        size: 20,
+                        color: (ref.watch(editorControllerProvider).linkFor(layer.id, LayerProp.parent) != null ||
+                                (layer is Scene3DLayer && layer.cameraParentLayerId != null))
+                            ? AmColors.accent
+                            : AmColors.text,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1586,6 +1604,10 @@ Future<void> showParentSheet(
 ) async {
   final project = ref.read(editorControllerProvider);
   final controller = ref.read(editorControllerProvider.notifier);
+  final currentParentLink = project.linkFor(child.id, LayerProp.parent);
+  final currentParentId = currentParentLink?.sourceLayerId ??
+      (child is Scene3DLayer ? child.cameraParentLayerId : null);
+
   final candidates = [
     ...project.layers.whereType<NullLayer>(),
     ...project.layers.where((l) => l is! NullLayer),
@@ -1630,8 +1652,15 @@ Future<void> showParentSheet(
                 'Solta a camada do pai',
                 style: TextStyle(fontSize: 11, color: AmColors.muted),
               ),
+              trailing: currentParentId == null
+                  ? const Icon(CupertinoIcons.checkmark_alt,
+                      color: AmColors.accent, size: 20)
+                  : null,
               onTap: () {
                 controller.unlinkProperty(child.id, LayerProp.parent);
+                if (child is Scene3DLayer) {
+                  controller.setSceneCameraCompParent(child.id, null);
+                }
                 Navigator.of(sheetContext).pop();
               },
             ),
@@ -1659,14 +1688,25 @@ Future<void> showParentSheet(
                   ),
                   subtitle: other.id == child.id
                       ? const Text(
-                          'E a propria camada',
+                          'É a própria camada',
                           style: TextStyle(fontSize: 11, color: AmColors.muted),
                         )
                       : other is NullLayer
-                      ? const Text(
-                          'Objeto nulo',
-                          style: TextStyle(fontSize: 11, color: AmColors.muted),
-                        )
+                          ? Text(
+                              other.is3D ? 'Objeto Nulo 3D' : 'Objeto Nulo',
+                              style: const TextStyle(
+                                  fontSize: 11, color: AmColors.muted),
+                            )
+                          : other is Scene3DLayer
+                              ? const Text(
+                                  'Scene 3D',
+                                  style: TextStyle(
+                                      fontSize: 11, color: AmColors.muted),
+                                )
+                              : null,
+                  trailing: other.id == currentParentId
+                      ? const Icon(CupertinoIcons.checkmark_alt,
+                          color: AmColors.accent, size: 20)
                       : null,
                   onTap: other.id == child.id
                       ? null
@@ -1677,6 +1717,9 @@ Future<void> showParentSheet(
                             other.id,
                             t,
                           );
+                          if (child is Scene3DLayer) {
+                            controller.setSceneCameraCompParent(child.id, other.id);
+                          }
                           Navigator.of(sheetContext).pop();
                         },
                 ),

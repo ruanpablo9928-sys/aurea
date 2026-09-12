@@ -62,7 +62,8 @@ List<QuickAction> quickActionsFor(
   final id = layer.id;
   final temSom = layer is AudioLayer || layer is VideoLayer;
   final mudo = controller.audioSpecOf(id)?.muted ?? false;
-  final pai = project.linkFor(id, LayerProp.parent);
+  final temPai = project.linkFor(id, LayerProp.parent) != null ||
+      (layer is Scene3DLayer && layer.cameraParentLayerId != null);
   final t = playback.time.value;
 
   void pausa(void Function() abrir) {
@@ -206,12 +207,12 @@ List<QuickAction> quickActionsFor(
     ),
     QuickAction(
       key: 'vincular',
-      icon: pai == null ? CupertinoIcons.link : CupertinoIcons.link_circle_fill,
-      label: pai == null ? 'Vincular' : 'Soltar',
-      pro: true,
-      aceso: pai != null,
+      icon: !temPai ? CupertinoIcons.link : CupertinoIcons.link_circle_fill,
+      label: !temPai ? 'Vincular' : 'Soltar',
+      pro: false,
+      aceso: temPai,
       onTap: () {
-        if (pai != null) {
+        if (temPai) {
           controller.unlinkProperty(id, LayerProp.parent);
         } else {
           pausa(() => showParentSheet(context, ref, layer, t));
