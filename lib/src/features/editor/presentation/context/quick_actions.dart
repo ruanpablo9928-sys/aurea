@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/tokens.dart';
@@ -457,6 +458,7 @@ class QuickActionsRow extends StatelessWidget {
           key: ValueKey('acao-${a.key}'),
           behavior: HitTestBehavior.opaque,
           onTap: () {
+            HapticFeedback.lightImpact();
             if (!a.enabled) {
               showReasonToast(context, a.reason);
               return;
@@ -533,6 +535,7 @@ Future<void> showAllActionsSheet(
                   title: Text(a.label, style: TextStyle(color: t.text)),
                   enabled: a.enabled,
                   onTap: () {
+                    HapticFeedback.lightImpact();
                     Navigator.pop(ctx);
                     a.onTap();
                   },

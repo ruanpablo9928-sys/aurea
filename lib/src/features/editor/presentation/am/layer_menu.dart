@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/mesh_cache.dart';
 import '../../domain/mesh_import.dart';
@@ -96,6 +97,7 @@ class LayerToolsDock extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Velocidade',
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         playback.pause();
                         showSpeedSheet(context, ref, layer.id, playback: playback);
                       },
@@ -104,6 +106,7 @@ class LayerToolsDock extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Mover início para o cabeçote',
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         playback.pause();
                         ref.read(editorControllerProvider.notifier).moveLayer(layer.id, playback.time.value);
                       },
@@ -112,6 +115,7 @@ class LayerToolsDock extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Dividir camada',
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         ref.read(editorControllerProvider.notifier).splitLayer(layer.id, playback.time.value);
                       },
                       icon: const Icon(CupertinoIcons.scissors, size: 19, color: AmColors.text),
@@ -119,6 +123,7 @@ class LayerToolsDock extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Mover fim para o cabeçote',
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         playback.pause();
                         final start = playback.time.value - layer.duration;
                         ref.read(editorControllerProvider.notifier).moveLayer(
@@ -131,6 +136,7 @@ class LayerToolsDock extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Volume / Áudio',
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         playback.pause();
                         showAudioSheet(context, ref, layer.id);
                       },
@@ -139,6 +145,7 @@ class LayerToolsDock extends ConsumerWidget {
                     IconButton(
                       tooltip: 'Vincular (Parentear)',
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         playback.pause();
                         showParentSheet(context, ref, layer, playback.time.value);
                       },
@@ -3745,7 +3752,10 @@ class _MenuTile extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
         child: Container(
           height: height,
           padding: EdgeInsets.symmetric(

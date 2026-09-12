@@ -321,7 +321,10 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
         melhor = m.time;
       }
     }
-    if (melhor != null && melhor != t) widget.playback.seek(melhor);
+    if (melhor != null && melhor != t) {
+      widget.playback.seek(melhor);
+      HapticFeedback.selectionClick();
+    }
   }
 
   bool _onScroll(ScrollNotification n) {
@@ -333,6 +336,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
     if (n.metrics.axis != Axis.horizontal) return false;
     if (n is ScrollStartNotification) {
       _rolagemDoDedo = true;
+      if (n.dragDetails != null) {
+        HapticFeedback.selectionClick();
+      }
     } else if (n is ScrollEndNotification) {
       _rolagemDoDedo = false;
       // ENCAIXE DO CABECOTE: soltou perto de uma marca, cai nela — e o
@@ -437,6 +443,9 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
             final pad = constraints.maxWidth / 2;
             return GestureDetector(
               onScaleStart: (d) {
+                if (d.pointerCount >= 2) {
+                  HapticFeedback.selectionClick();
+                }
                 _ppsAtGestureStart = _pps;
                 _scrollAtGestureStart = _scroll.hasClients ? _scroll.offset : 0;
                 _focalAtGestureStart = d.localFocalPoint.dx;
@@ -886,11 +895,14 @@ class _ControlesDaTrilha extends ConsumerWidget {
               child: GestureDetector(
                 key: ValueKey('olho-${layer.id}'),
                 behavior: HitTestBehavior.opaque,
-                onTap: () => controller.runAsOneUndo(() {
-                  for (final l in trilha) {
-                    controller.toggleHidden(l.id);
-                  }
-                }),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  controller.runAsOneUndo(() {
+                    for (final l in trilha) {
+                      controller.toggleHidden(l.id);
+                    }
+                  });
+                },
                 child: SizedBox(
                   width: 26,
                   height: kAmRowHeight,
@@ -910,14 +922,18 @@ class _ControlesDaTrilha extends ConsumerWidget {
                 key: ValueKey('kf-${layer.id}'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
+                  HapticFeedback.selectionClick();
                   ref.read(multiSelectProvider.notifier).state = const {};
                   ref.read(selectedLayerProvider.notifier).state = layer.id;
                 },
-                onLongPress: () => controller.runAsOneUndo(() {
-                  for (final l in trilha) {
-                    controller.toggleLocked(l.id);
-                  }
-                }),
+                onLongPress: () {
+                  HapticFeedback.mediumImpact();
+                  controller.runAsOneUndo(() {
+                    for (final l in trilha) {
+                      controller.toggleLocked(l.id);
+                    }
+                  });
+                },
                 child: Container(
                   width: 18,
                   height: 18,
@@ -968,8 +984,16 @@ class _BotaoDaRegua extends StatelessWidget {
     message: tooltip,
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      onLongPress: onLongPress,
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      onLongPress: onLongPress == null
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              onLongPress!();
+            },
       child: Container(
         width: 30,
         height: 22,
@@ -1154,8 +1178,14 @@ class _MarcaNaReguaState extends State<_MarcaNaRegua> {
       height: 20,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onLongPress: widget.onMenu,
-        onHorizontalDragStart: (_) => _acumulado = 0,
+        onLongPress: () {
+          HapticFeedback.mediumImpact();
+          widget.onMenu();
+        },
+        onHorizontalDragStart: (_) {
+          HapticFeedback.lightImpact();
+          _acumulado = 0;
+        },
         onHorizontalDragUpdate: (d) {
           _acumulado += d.delta.dx;
           widget.onMover(_acumulado);
@@ -1397,6 +1427,7 @@ class _AmLayerRow extends ConsumerWidget {
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
+              HapticFeedback.selectionClick();
               ref.read(multiSelectProvider.notifier).state = const {};
               ref.read(selectedLayerProvider.notifier).state = null;
               ref.read(editorSessionProvider.notifier).closeAdd();
@@ -1669,6 +1700,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
+                HapticFeedback.selectionClick();
                 // No modo compacto (a timeline de um painel aberto) o
                 // toque na barra e a saida do painel: quem decide e o
                 // editor, pelo mesmo onTapLayer.
@@ -1722,13 +1754,17 @@ class _AmBarState extends ConsumerState<_AmBar> {
               // ARRASTO VERTICAL na barra selecionada: sobe ou desce a
               // camada na pilha, um degrau por linha.
               onVerticalDragStart: podeMover && !compact
-                  ? (_) => _acumuladoVertical = 0
+                  ? (_) {
+                      HapticFeedback.lightImpact();
+                      _acumuladoVertical = 0;
+                    }
                   : null,
               onVerticalDragUpdate: podeMover && !compact
                   ? (d) => _reordenarPorArrasto(d.delta.dy)
                   : null,
               onHorizontalDragStart: podeMover
                   ? (_) {
+                      HapticFeedback.lightImpact();
                       _comecarArrasto();
                       _dragStart0 = layer.startTime;
                       _accumPx = 0;
@@ -1743,8 +1779,18 @@ class _AmBarState extends ConsumerState<_AmBar> {
                       controller.moveLayer(layer.id, snapped);
                     }
                   : null,
-              onHorizontalDragEnd: podeMover ? (_) => _terminarArrasto() : null,
-              onHorizontalDragCancel: podeMover ? _terminarArrasto : null,
+              onHorizontalDragEnd: podeMover
+                  ? (_) {
+                      HapticFeedback.lightImpact();
+                      _terminarArrasto();
+                    }
+                  : null,
+              onHorizontalDragCancel: podeMover
+                  ? () {
+                      HapticFeedback.lightImpact();
+                      _terminarArrasto();
+                    }
+                  : null,
               child: compact
                   ? Container(
                       decoration: BoxDecoration(
@@ -1755,7 +1801,10 @@ class _AmBarState extends ConsumerState<_AmBar> {
                         children: [
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
-                            onTap: () => controller.selectNeighbor(1),
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              controller.selectNeighbor(1);
+                            },
                             child: const SizedBox(
                               width: 22,
                               height: kAmBarHeight,
@@ -1790,7 +1839,10 @@ class _AmBarState extends ConsumerState<_AmBar> {
                           ),
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
-                            onTap: () => controller.selectNeighbor(-1),
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              controller.selectNeighbor(-1);
+                            },
                             child: const SizedBox(
                               width: 22,
                               height: kAmBarHeight,
@@ -2022,6 +2074,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
                 key: ValueKey('juntar-${layer.id}'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
+                  HapticFeedback.lightImpact();
                   if (controller.joinWithNeighbour(layer.id)) {
                     AureaSnack.show(
                       context,
@@ -2370,10 +2423,19 @@ class _TrimHandle extends StatelessWidget {
       width: 16,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (_) => onStart(),
+        onHorizontalDragStart: (_) {
+          HapticFeedback.lightImpact();
+          onStart();
+        },
         onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
-        onHorizontalDragEnd: (_) => onEnd(),
-        onHorizontalDragCancel: onEnd,
+        onHorizontalDragEnd: (_) {
+          HapticFeedback.lightImpact();
+          onEnd();
+        },
+        onHorizontalDragCancel: () {
+          HapticFeedback.lightImpact();
+          onEnd();
+        },
         child: Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF2F5F9),

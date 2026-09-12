@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/tokens.dart';
@@ -58,8 +59,18 @@ class EditorTransportBar extends ConsumerWidget {
       child: GestureDetector(
         key: key,
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        onLongPress: onLongPress,
+        onTap: onTap == null
+            ? null
+            : () {
+                HapticFeedback.lightImpact();
+                onTap();
+              },
+        onLongPress: onLongPress == null
+            ? null
+            : () {
+                HapticFeedback.mediumImpact();
+                onLongPress();
+              },
         child: SizedBox(
           width: AureaTokens.minTap,
           height: AureaTokens.minTap,
