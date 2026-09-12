@@ -11,7 +11,7 @@ name: Build IPA (unsigned)
 on:
   workflow_dispatch:
   push:
-    tags: ['ipa-*']
+    tags: ['ipa-*', 'v*']
 
 jobs:
   build-ipa:
