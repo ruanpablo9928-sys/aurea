@@ -1,16 +1,21 @@
 #include "VideoEngine.h"
-
-#if defined(__ANDROID__)
-#include <media/NdkMediaCodec.h>
-#include <media/NdkMediaExtractor.h>
-#include <media/NdkMediaFormat.h>
-#include <GLES3/gl3.h>
-#endif
+#include <iostream>
 
 namespace aurea {
 
-VideoTrack::VideoTrack(const std::string& filePath)
-    : filePath_(filePath) {
+VideoTrack::VideoTrack(const std::string& filePath, std::shared_ptr<GPUProcessor> gpu)
+    : filePath_(filePath), gpu_(gpu) {
+    decoder_ = std::make_shared<FFmpegVideoDecoder>();
+    cache_ = std::make_shared<VideoFrameCache>(128 * 1024 * 1024); // 128 MB
+    prefetch_ = std::make_shared<PrefetchManager>(decoder_, cache_);
+
+    // Registra callback do decoder para alimentar o cache automaticamente
+    auto weakCache = std::weak_ptr<VideoFrameCache>(cache_);
+    decoder_->setFrameCallback([weakCache](std::shared_ptr<DecodedVideoFrame> frame) {
+        if (auto c = weakCache.lock()) {
+            c->put(frame);
+        }
+    });
 }
 
 VideoTrack::~VideoTrack() {
@@ -19,81 +24,85 @@ VideoTrack::~VideoTrack() {
 
 bool VideoTrack::open() {
     if (isOpen_) return true;
-
-#if defined(__ANDROID__)
-    AMediaExtractor* ex = AMediaExtractor_new();
-    media_status_t err = AMediaExtractor_setDataSource(ex, filePath_.c_str());
-    if (err != AMEDIA_OK) {
-        AMediaExtractor_delete(ex);
+    if (!decoder_->open(filePath_)) {
         return false;
     }
-
-    size_t numTracks = AMediaExtractor_getTrackCount(ex);
-    for (size_t i = 0; i < numTracks; ++i) {
-        AMediaFormat* format = AMediaExtractor_getTrackFormat(ex, i);
-        const char* mime;
-        if (AMediaFormat_getString(format, AMEDIAFORMAT_KEY_MIME, &mime)) {
-            if (strncmp(mime, "video/", 6) == 0) {
-                AMediaExtractor_selectTrack(ex, i);
-                AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_WIDTH, &width_);
-                AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_HEIGHT, &height_);
-                AMediaFormat_getInt64(format, AMEDIAFORMAT_KEY_DURATION, &durationUs_);
-
-                AMediaCodec* codec = AMediaCodec_createDecoderByType(mime);
-                AMediaCodec_configure(codec, format, nullptr, nullptr, 0);
-                AMediaCodec_start(codec);
-
-                mediaExtractor_ = ex;
-                mediaCodec_ = codec;
-                AMediaFormat_delete(format);
-                isOpen_ = true;
-                return true;
-            }
-        }
-        AMediaFormat_delete(format);
-    }
-    AMediaExtractor_delete(ex);
-    return false;
-#else
     isOpen_ = true;
-    width_ = 1920;
-    height_ = 1080;
-    durationUs_ = 10000000;
     return true;
-#endif
 }
 
 void VideoTrack::close() {
-#if defined(__ANDROID__)
-    if (mediaCodec_) {
-        AMediaCodec_stop(static_cast<AMediaCodec*>(mediaCodec_));
-        AMediaCodec_delete(static_cast<AMediaCodec*>(mediaCodec_));
-        mediaCodec_ = nullptr;
-    }
-    if (mediaExtractor_) {
-        AMediaExtractor_delete(static_cast<AMediaExtractor*>(mediaExtractor_));
-        mediaExtractor_ = nullptr;
-    }
-    if (currentTextureId_ != 0) {
-        glDeleteTextures(1, &currentTextureId_);
-        currentTextureId_ = 0;
-    }
-#endif
+    if (!isOpen_) return;
+    decoder_->close();
+    cache_->clear();
+    currentGpuTexture_.reset();
     isOpen_ = false;
 }
 
-bool VideoTrack::seekTo(int64_t timeUs) {
-    if (!isOpen_) return false;
+int VideoTrack::getWidth() const {
+    return decoder_->getStreamInfo().width;
+}
 
-#if defined(__ANDROID__)
-    if (mediaExtractor_) {
-        AMediaExtractor_seekTo(static_cast<AMediaExtractor*>(mediaExtractor_), timeUs, AMEDIAEXTRACTOR_SEEK_CLOSEST_SYNC);
-        return true;
+int VideoTrack::getHeight() const {
+    return decoder_->getStreamInfo().height;
+}
+
+int64_t VideoTrack::getDurationUs() const {
+    return decoder_->getStreamInfo().durationUs;
+}
+
+uint32_t VideoTrack::getFrameTextureAt(int64_t compositionTimeUs, const TimeRemapProperty& remap, uint64_t generationId, bool exactSync) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!isOpen_) {
+        if (!open()) return 0;
     }
-#else
-    (void)timeUs;
-#endif
-    return true;
+
+    // 1. Mapeamento temporal de Composição -> Tempo da Fonte (PTS)
+    double compSec = static_cast<double>(compositionTimeUs) / 1000000.0;
+    double sourceSec = remap.evaluate(compSec);
+    int64_t sourcePtsUs = static_cast<int64_t>(sourceSec * 1000000.0);
+
+    // 2. Dispara pré-busca adaptativa para playback em tempo real
+    if (!exactSync && prefetch_) {
+        prefetch_->onCompositionTick(compSec, remap, generationId);
+    }
+
+    // 3. Tenta obter do cache (L1/L2)
+    auto frame = cache_->get(sourcePtsUs);
+    if (!frame) {
+        if (exactSync) {
+            // Decodificação síncrona determinística frame a frame para exportação
+            frame = decoder_->decodeExactSync(sourcePtsUs);
+            if (frame) {
+                cache_->put(frame);
+            }
+        } else {
+            // Decodificação assíncrona orientada a pipeline para preview de baixa latência
+            decoder_->requestFrame(sourcePtsUs, generationId);
+            frame = decoder_->getLatestFrame();
+        }
+    }
+
+    if (!frame || frame->rgbaData.empty()) {
+        return currentGpuTexture_ ? currentGpuTexture_->id : 0;
+    }
+
+    // 4. Se o quadro for novo, aloca textura e envia os pixels para GPU
+    if (gpu_ && frame->ptsUs != lastPtsUs_) {
+        if (!currentGpuTexture_ ||
+            currentGpuTexture_->width != frame->width ||
+            currentGpuTexture_->height != frame->height) {
+            currentGpuTexture_ = gpu_->acquireTexture(frame->width, frame->height);
+        }
+
+        if (currentGpuTexture_) {
+            gpu_->uploadTextureRGBA(currentGpuTexture_->id, frame->width, frame->height, frame->rgbaData.data());
+        }
+
+        lastPtsUs_ = frame->ptsUs;
+    }
+
+    return currentGpuTexture_ ? currentGpuTexture_->id : 0;
 }
 
 VideoEngine::VideoEngine() = default;
@@ -109,28 +118,31 @@ std::shared_ptr<VideoTrack> VideoEngine::loadVideo(const std::string& filePath) 
         return it->second;
     }
 
-    auto track = std::make_shared<VideoTrack>(filePath);
-    track->open();
+    auto track = std::make_shared<VideoTrack>(filePath, gpu_);
     tracks_[filePath] = track;
     return track;
 }
 
 void VideoEngine::releaseVideo(const std::string& filePath) {
     std::lock_guard<std::mutex> lock(mutex_);
-    tracks_.erase(filePath);
+    auto it = tracks_.find(filePath);
+    if (it != tracks_.end()) {
+        it->second->close();
+        tracks_.erase(it);
+    }
 }
 
-void VideoEngine::seekAll(int64_t timeUs) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    for (auto& pair : tracks_) {
-        if (pair.second) {
-            pair.second->seekTo(timeUs);
-        }
-    }
+uint32_t VideoEngine::getFrameTexture(const std::string& filePath, int64_t compositionTimeUs, const TimeRemapProperty& remap, uint64_t generationId, bool exactSync) {
+    auto track = loadVideo(filePath);
+    if (!track) return 0;
+    return track->getFrameTextureAt(compositionTimeUs, remap, generationId, exactSync);
 }
 
 void VideoEngine::clearCache() {
     std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& pair : tracks_) {
+        pair.second->close();
+    }
     tracks_.clear();
 }
 

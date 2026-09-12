@@ -145,6 +145,17 @@ void GPUProcessor::readPixelsRGBA(int width, int height, uint8_t* outBuffer) {
 #endif
 }
 
+void GPUProcessor::uploadTextureRGBA(uint32_t texId, int width, int height, const uint8_t* pixels) {
+    if (texId == 0 || !pixels || width <= 0 || height <= 0) return;
+#if defined(__ANDROID__)
+    glBindTexture(GL_TEXTURE_2D, texId);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glBindTexture(GL_TEXTURE_2D, 0);
+#else
+    (void)texId; (void)width; (void)height; (void)pixels;
+#endif
+}
+
 uint32_t GPUProcessor::compileShader(uint32_t type, const char* source) {
 #if defined(__ANDROID__)
     GLuint shader = glCreateShader(type);

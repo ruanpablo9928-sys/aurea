@@ -61,12 +61,12 @@ void PreviewEngine::tick(double deltaSeconds) {
 }
 
 uint32_t PreviewEngine::getPreviewTextureId() const {
-    // Retrieve texture from async core's internal engine main framebuffer
-    auto fbo = renderEngine_.getMainFramebuffer();
-    if (fbo) {
-        return fbo->colorTextureId;
+    // Retrieve texture from async core's internal engine main framebuffer, falling back to sync
+    auto fbo = asyncCore_.getMainFramebuffer();
+    if (!fbo) {
+        fbo = renderEngine_.getMainFramebuffer();
     }
-    return 0;
+    return fbo ? fbo->colorTextureId : 0;
 }
 
 } // namespace aurea

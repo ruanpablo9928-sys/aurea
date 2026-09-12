@@ -54,3 +54,5 @@ app.*.map.json
 /tmp/
 output/
 android/.kotlin/
+*.apk
+*.ipa

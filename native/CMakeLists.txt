@@ -20,6 +20,9 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/effects
     ${CMAKE_CURRENT_SOURCE_DIR}/scene3d
     ${CMAKE_CURRENT_SOURCE_DIR}/video
+    ${CMAKE_CURRENT_SOURCE_DIR}/video/time_remap
+    ${CMAKE_CURRENT_SOURCE_DIR}/video/ffmpeg
+    ${CMAKE_CURRENT_SOURCE_DIR}/video/cache
     ${CMAKE_CURRENT_SOURCE_DIR}/preview
     ${CMAKE_CURRENT_SOURCE_DIR}/export
     ${CMAKE_CURRENT_SOURCE_DIR}/bridge
@@ -40,6 +43,7 @@ set(AUREA_SOURCES
     renderer/RenderEngine.cpp
     renderer/GPUProcessor.cpp
     renderer/Renderer2D.cpp
+    renderer/RenderTargetPool.cpp
 
     # Effects
     effects/EffectsEngine.cpp
@@ -59,10 +63,17 @@ set(AUREA_SOURCES
     scene3d/ModelImportManager.cpp
     scene3d/FilamentRenderer.cpp
 
-    # Video
+    # Video & Time Remap Engine
+    video/time_remap/BezierEvaluator.cpp
+    video/time_remap/TimeRemapCurve.cpp
+    video/time_remap/TimeRemapProperty.cpp
+    video/ffmpeg/VideoTimeMapper.cpp
+    video/ffmpeg/FFmpegVideoDecoder.cpp
+    video/cache/VideoFrameCache.cpp
+    video/cache/PrefetchManager.cpp
     video/VideoEngine.cpp
 
-    # Preview
+    # Preview & RenderCore
     preview/PreviewEngine.cpp
     preview/FrameScheduler.cpp
     rendercore/RenderCore.cpp   # async render core

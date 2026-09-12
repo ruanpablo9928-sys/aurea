@@ -108,6 +108,26 @@ AUREA_EXPORT void aurea_model_import_cancel(int64_t jobId);
 AUREA_EXPORT void aurea_scene3d_set_frame_budget(AureaEngineHandle handle, float budgetMs);
 AUREA_EXPORT void aurea_scene3d_get_metrics(AureaEngineHandle handle, AureaSceneMetrics* outMetrics);
 
+// Time Remapping Profissional (After Effects style)
+AUREA_EXPORT void aurea_layer_time_remap_enable(AureaEngineHandle handle, const char* layerId, int32_t enable);
+AUREA_EXPORT void aurea_layer_time_remap_reset_default(AureaEngineHandle handle, const char* layerId, double durationSeconds);
+AUREA_EXPORT void aurea_layer_time_remap_add_keyframe(AureaEngineHandle handle, const char* layerId,
+                                                     double compositionTime, double sourceTime,
+                                                     int32_t interpolation,
+                                                     double inDx, double inDy,
+                                                     double outDx, double outDy);
+AUREA_EXPORT int32_t aurea_layer_time_remap_remove_keyframe(AureaEngineHandle handle, const char* layerId, int32_t index);
+AUREA_EXPORT int32_t aurea_layer_time_remap_remove_keyframe_at(AureaEngineHandle handle, const char* layerId, double compositionTime, double tolerance);
+AUREA_EXPORT void aurea_layer_time_remap_clear(AureaEngineHandle handle, const char* layerId);
+AUREA_EXPORT int32_t aurea_layer_time_remap_get_keyframe_count(AureaEngineHandle handle, const char* layerId);
+AUREA_EXPORT int32_t aurea_layer_time_remap_get_keyframe(AureaEngineHandle handle, const char* layerId, int32_t index,
+                                                        double* outCompTime, double* outSourceTime,
+                                                        int32_t* outInterp,
+                                                        double* outInDx, double* outInDy,
+                                                        double* outOutDx, double* outOutDy);
+AUREA_EXPORT double aurea_layer_time_remap_evaluate(AureaEngineHandle handle, const char* layerId, double compositionTime);
+AUREA_EXPORT double aurea_layer_time_remap_get_speed(AureaEngineHandle handle, const char* layerId, double compositionTime);
+
 #ifdef __cplusplus
 }
 #endif

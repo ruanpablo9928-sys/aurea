@@ -23,12 +23,20 @@ bool RenderEngine::initialize(int width, int height) {
     }
     renderer2D_->setViewport(width_, height_);
 
-    mainFbo_ = gpu_->createFramebuffer(width_, height_);
+    targetPool_ = std::make_shared<RenderTargetPool>(gpu_);
+    mainFbo_ = targetPool_->acquire(width_, height_);
+    videoEngine_.setGPU(gpu_);
     return true;
 }
 
 void RenderEngine::shutdown() {
+    if (targetPool_) {
+        targetPool_->release(mainFbo_);
+        targetPool_->clear();
+        targetPool_.reset();
+    }
     mainFbo_.reset();
+    videoEngine_.clearCache();
     if (renderer2D_) {
         renderer2D_->shutdown();
         renderer2D_.reset();
@@ -39,7 +47,7 @@ void RenderEngine::shutdown() {
     }
 }
 
-void RenderEngine::renderFrame(ProjectCore& project, int64_t timeUs, const std::shared_ptr<GPUFramebuffer>& targetFbo) {
+void RenderEngine::renderFrame(ProjectCore& project, int64_t timeUs, const std::shared_ptr<GPUFramebuffer>& targetFbo, bool exactSync) {
     // 1. Avalia interpolação de keyframes para o tempo atual
     animationEngine_.evaluateProject(project, timeUs);
 
@@ -63,8 +71,19 @@ void RenderEngine::renderFrame(ProjectCore& project, int64_t timeUs, const std::
 
         if (eval.layer->getType() == LayerType::Shape) {
             renderer2D_->drawShape(eval.layer->getShapeData(), eval.globalTransform);
+        } else if (eval.layer->getType() == LayerType::Video) {
+            // Obtenção de textura de vídeo com Time Remap
+            uint32_t tex = videoEngine_.getFrameTexture(
+                eval.layer->getSourcePath(),
+                timeUs,
+                eval.layer->getTimeRemap(),
+                0,
+                exactSync
+            );
+            if (tex != 0) {
+                renderer2D_->drawTexture(tex, eval.globalTransform, width_, height_);
+            }
         }
-        // Camadas de Vídeo / Imagem / 3D são desenhadas de acordo com o tipo
     }
 
     if (gpu_) {

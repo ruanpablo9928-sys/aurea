@@ -213,6 +213,49 @@ typedef DAureaScene3DSetFrameBudget = void Function(Pointer<Void> handle, double
 typedef CAureaScene3DGetMetrics = Void Function(Pointer<Void> handle, Pointer<NativeSceneMetrics> outMetrics);
 typedef DAureaScene3DGetMetrics = void Function(Pointer<Void> handle, Pointer<NativeSceneMetrics> outMetrics);
 
+// Time Remap FFI Typedefs
+typedef CAureaLayerTimeRemapEnable = Void Function(Pointer<Void> handle, Pointer<Utf8> layerId, Int32 enable);
+typedef DAureaLayerTimeRemapEnable = void Function(Pointer<Void> handle, Pointer<Utf8> layerId, int enable);
+
+typedef CAureaLayerTimeRemapResetDefault = Void Function(Pointer<Void> handle, Pointer<Utf8> layerId, Double durationSeconds);
+typedef DAureaLayerTimeRemapResetDefault = void Function(Pointer<Void> handle, Pointer<Utf8> layerId, double durationSeconds);
+
+typedef CAureaLayerTimeRemapAddKeyframe = Void Function(
+    Pointer<Void> handle, Pointer<Utf8> layerId, Double compositionTime, Double sourceTime, Int32 interpolation, Double inDx, Double inDy, Double outDx, Double outDy);
+typedef DAureaLayerTimeRemapAddKeyframe = void Function(
+    Pointer<Void> handle, Pointer<Utf8> layerId, double compositionTime, double sourceTime, int interpolation, double inDx, double inDy, double outDx, double outDy);
+
+typedef CAureaLayerTimeRemapRemoveKeyframe = Int32 Function(Pointer<Void> handle, Pointer<Utf8> layerId, Int32 index);
+typedef DAureaLayerTimeRemapRemoveKeyframe = int Function(Pointer<Void> handle, Pointer<Utf8> layerId, int index);
+
+typedef CAureaLayerTimeRemapRemoveKeyframeAt = Int32 Function(Pointer<Void> handle, Pointer<Utf8> layerId, Double compositionTime, Double tolerance);
+typedef DAureaLayerTimeRemapRemoveKeyframeAt = int Function(Pointer<Void> handle, Pointer<Utf8> layerId, double compositionTime, double tolerance);
+
+typedef CAureaLayerTimeRemapClear = Void Function(Pointer<Void> handle, Pointer<Utf8> layerId);
+typedef DAureaLayerTimeRemapClear = void Function(Pointer<Void> handle, Pointer<Utf8> layerId);
+
+typedef CAureaLayerTimeRemapGetKeyframeCount = Int32 Function(Pointer<Void> handle, Pointer<Utf8> layerId);
+typedef DAureaLayerTimeRemapGetKeyframeCount = int Function(Pointer<Void> handle, Pointer<Utf8> layerId);
+
+typedef CAureaLayerTimeRemapGetKeyframe = Int32 Function(
+    Pointer<Void> handle, Pointer<Utf8> layerId, Int32 index,
+    Pointer<Double> outCompTime, Pointer<Double> outSourceTime,
+    Pointer<Int32> outInterp,
+    Pointer<Double> outInDx, Pointer<Double> outInDy,
+    Pointer<Double> outOutDx, Pointer<Double> outOutDy);
+typedef DAureaLayerTimeRemapGetKeyframe = int Function(
+    Pointer<Void> handle, Pointer<Utf8> layerId, int index,
+    Pointer<Double> outCompTime, Pointer<Double> outSourceTime,
+    Pointer<Int32> outInterp,
+    Pointer<Double> outInDx, Pointer<Double> outInDy,
+    Pointer<Double> outOutDx, Pointer<Double> outOutDy);
+
+typedef CAureaLayerTimeRemapEvaluate = Double Function(Pointer<Void> handle, Pointer<Utf8> layerId, Double compositionTime);
+typedef DAureaLayerTimeRemapEvaluate = double Function(Pointer<Void> handle, Pointer<Utf8> layerId, double compositionTime);
+
+typedef CAureaLayerTimeRemapGetSpeed = Double Function(Pointer<Void> handle, Pointer<Utf8> layerId, Double compositionTime);
+typedef DAureaLayerTimeRemapGetSpeed = double Function(Pointer<Void> handle, Pointer<Utf8> layerId, double compositionTime);
+
 /// Bindings FFI do Aurea Native Core
 class AureaNativeBindings {
   AureaNativeBindings._(this._dylib) {
@@ -244,6 +287,17 @@ class AureaNativeBindings {
     modelImportCancel = _dylib.lookupFunction<CAureaModelImportCancel, DAureaModelImportCancel>('aurea_model_import_cancel');
     scene3dSetFrameBudget = _dylib.lookupFunction<CAureaScene3DSetFrameBudget, DAureaScene3DSetFrameBudget>('aurea_scene3d_set_frame_budget');
     scene3dGetMetrics = _dylib.lookupFunction<CAureaScene3DGetMetrics, DAureaScene3DGetMetrics>('aurea_scene3d_get_metrics');
+
+    timeRemapEnable = _dylib.lookupFunction<CAureaLayerTimeRemapEnable, DAureaLayerTimeRemapEnable>('aurea_layer_time_remap_enable');
+    timeRemapResetDefault = _dylib.lookupFunction<CAureaLayerTimeRemapResetDefault, DAureaLayerTimeRemapResetDefault>('aurea_layer_time_remap_reset_default');
+    timeRemapAddKeyframe = _dylib.lookupFunction<CAureaLayerTimeRemapAddKeyframe, DAureaLayerTimeRemapAddKeyframe>('aurea_layer_time_remap_add_keyframe');
+    timeRemapRemoveKeyframe = _dylib.lookupFunction<CAureaLayerTimeRemapRemoveKeyframe, DAureaLayerTimeRemapRemoveKeyframe>('aurea_layer_time_remap_remove_keyframe');
+    timeRemapRemoveKeyframeAt = _dylib.lookupFunction<CAureaLayerTimeRemapRemoveKeyframeAt, DAureaLayerTimeRemapRemoveKeyframeAt>('aurea_layer_time_remap_remove_keyframe_at');
+    timeRemapClear = _dylib.lookupFunction<CAureaLayerTimeRemapClear, DAureaLayerTimeRemapClear>('aurea_layer_time_remap_clear');
+    timeRemapGetKeyframeCount = _dylib.lookupFunction<CAureaLayerTimeRemapGetKeyframeCount, DAureaLayerTimeRemapGetKeyframeCount>('aurea_layer_time_remap_get_keyframe_count');
+    timeRemapGetKeyframe = _dylib.lookupFunction<CAureaLayerTimeRemapGetKeyframe, DAureaLayerTimeRemapGetKeyframe>('aurea_layer_time_remap_get_keyframe');
+    timeRemapEvaluate = _dylib.lookupFunction<CAureaLayerTimeRemapEvaluate, DAureaLayerTimeRemapEvaluate>('aurea_layer_time_remap_evaluate');
+    timeRemapGetSpeed = _dylib.lookupFunction<CAureaLayerTimeRemapGetSpeed, DAureaLayerTimeRemapGetSpeed>('aurea_layer_time_remap_get_speed');
   }
 
   final DynamicLibrary _dylib;
@@ -276,6 +330,17 @@ class AureaNativeBindings {
   late final DAureaModelImportCancel modelImportCancel;
   late final DAureaScene3DSetFrameBudget scene3dSetFrameBudget;
   late final DAureaScene3DGetMetrics scene3dGetMetrics;
+
+  late final DAureaLayerTimeRemapEnable timeRemapEnable;
+  late final DAureaLayerTimeRemapResetDefault timeRemapResetDefault;
+  late final DAureaLayerTimeRemapAddKeyframe timeRemapAddKeyframe;
+  late final DAureaLayerTimeRemapRemoveKeyframe timeRemapRemoveKeyframe;
+  late final DAureaLayerTimeRemapRemoveKeyframeAt timeRemapRemoveKeyframeAt;
+  late final DAureaLayerTimeRemapClear timeRemapClear;
+  late final DAureaLayerTimeRemapGetKeyframeCount timeRemapGetKeyframeCount;
+  late final DAureaLayerTimeRemapGetKeyframe timeRemapGetKeyframe;
+  late final DAureaLayerTimeRemapEvaluate timeRemapEvaluate;
+  late final DAureaLayerTimeRemapGetSpeed timeRemapGetSpeed;
 
   static AureaNativeBindings? _instance;
   static bool _initAttempted = false;

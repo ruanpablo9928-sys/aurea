@@ -45,7 +45,7 @@ switch ($Operation) {
       $download = $response.Headers.Location.AbsoluteUri
       # Signed artifact URL receives no GitHub Authorization header.
       $archive = Join-Path $directory 'artifact.zip'
-      Invoke-WebRequest $download -OutFile $archive
+      & curl.exe -L -s -S "$download" -o "$archive"
       Expand-Archive -LiteralPath $archive -DestinationPath $directory -Force
       Get-ChildItem -LiteralPath $directory -Filter '*.ipa' | ForEach-Object {
         [pscustomobject]@{path=$_.FullName; bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}

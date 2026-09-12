@@ -340,6 +340,119 @@ class NativeEngine {
       calloc.free(metricsPtr);
     }
   }
+
+  // ==========================================
+  // TIME REMAP (After Effects Mobile Engine)
+  // ==========================================
+
+  void setTimeRemapEnabled(String layerId, bool enabled) {
+    if (!isInitialized) return;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      AureaNativeBindings.instance!.timeRemapEnable(_handle!, idPtr, enabled ? 1 : 0);
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  void resetTimeRemapDefault(String layerId, double durationSeconds) {
+    if (!isInitialized) return;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      AureaNativeBindings.instance!.timeRemapResetDefault(_handle!, idPtr, durationSeconds);
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  void addTimeRemapKeyframe(
+    String layerId,
+    double compositionTime,
+    double sourceTime, {
+    int interpolation = 0,
+    double inDx = 0.0,
+    double inDy = 0.0,
+    double outDx = 0.0,
+    double outDy = 0.0,
+  }) {
+    if (!isInitialized) return;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      AureaNativeBindings.instance!.timeRemapAddKeyframe(
+        _handle!,
+        idPtr,
+        compositionTime,
+        sourceTime,
+        interpolation,
+        inDx,
+        inDy,
+        outDx,
+        outDy,
+      );
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  bool removeTimeRemapKeyframe(String layerId, int index) {
+    if (!isInitialized) return false;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      return AureaNativeBindings.instance!.timeRemapRemoveKeyframe(_handle!, idPtr, index) == 1;
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  bool removeTimeRemapKeyframeAt(String layerId, double compositionTime, {double tolerance = 0.001}) {
+    if (!isInitialized) return false;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      return AureaNativeBindings.instance!.timeRemapRemoveKeyframeAt(_handle!, idPtr, compositionTime, tolerance) == 1;
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  void clearTimeRemapKeyframes(String layerId) {
+    if (!isInitialized) return;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      AureaNativeBindings.instance!.timeRemapClear(_handle!, idPtr);
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  int getTimeRemapKeyframeCount(String layerId) {
+    if (!isInitialized) return 0;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      return AureaNativeBindings.instance!.timeRemapGetKeyframeCount(_handle!, idPtr);
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  double evaluateTimeRemap(String layerId, double compositionTime) {
+    if (!isInitialized) return compositionTime;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      return AureaNativeBindings.instance!.timeRemapEvaluate(_handle!, idPtr, compositionTime);
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
+
+  double getTimeRemapSpeed(String layerId, double compositionTime) {
+    if (!isInitialized) return 1.0;
+    final idPtr = layerId.toNativeUtf8();
+    try {
+      return AureaNativeBindings.instance!.timeRemapGetSpeed(_handle!, idPtr, compositionTime);
+    } finally {
+      calloc.free(idPtr);
+    }
+  }
 }
 
 /// Resultado da pré-análise do modelo 3D

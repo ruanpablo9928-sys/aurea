@@ -44,6 +44,9 @@ public:
     // Leitura rápida de pixels do framebuffer atual
     void readPixelsRGBA(int width, int height, uint8_t* outBuffer);
 
+    // Upload de textura RGBA para GPU
+    void uploadTextureRGBA(uint32_t texId, int width, int height, const uint8_t* pixels);
+
     // Utilitários de Shaders
     static uint32_t compileShader(uint32_t type, const char* source);
     static uint32_t createProgram(const char* vertexSource, const char* fragmentSource);

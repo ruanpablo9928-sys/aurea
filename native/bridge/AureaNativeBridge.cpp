@@ -328,3 +328,152 @@ void aurea_scene3d_get_metrics(AureaEngineHandle handle, AureaSceneMetrics* outM
         outMetrics->gpuFrameTimeMs = m.gpuFrameTimeMs;
     }
 }
+
+// Time Remapping Profissional (After Effects style)
+void aurea_layer_time_remap_enable(AureaEngineHandle handle, const char* layerId, int32_t enable) {
+    if (!handle || !layerId) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            layer->getTimeRemap().setEnabled(enable != 0);
+            ctx->project->markDirty(DirtyFlags::Animation | DirtyFlags::Video);
+        }
+    }
+}
+
+void aurea_layer_time_remap_reset_default(AureaEngineHandle handle, const char* layerId, double durationSeconds) {
+    if (!handle || !layerId) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            layer->getTimeRemap().reset(durationSeconds);
+            ctx->project->markDirty(DirtyFlags::Animation | DirtyFlags::Video);
+        }
+    }
+}
+
+void aurea_layer_time_remap_add_keyframe(AureaEngineHandle handle, const char* layerId,
+                                         double compositionTime, double sourceTime,
+                                         int32_t interpolation,
+                                         double inDx, double inDy,
+                                         double outDx, double outDy) {
+    if (!handle || !layerId) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            TimeRemapKeyframe kf;
+            kf.compositionTime = compositionTime;
+            kf.sourceTime = sourceTime;
+            kf.interpolation = static_cast<TimeRemapInterpolation>(interpolation);
+            kf.inHandle = {inDx, inDy};
+            kf.outHandle = {outDx, outDy};
+            layer->getTimeRemap().getCurve().addKeyframe(kf);
+            ctx->project->markDirty(DirtyFlags::Animation | DirtyFlags::Video);
+        }
+    }
+}
+
+int32_t aurea_layer_time_remap_remove_keyframe(AureaEngineHandle handle, const char* layerId, int32_t index) {
+    if (!handle || !layerId || index < 0) return 0;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            bool ok = layer->getTimeRemap().getCurve().removeKeyframe(static_cast<size_t>(index));
+            if (ok) ctx->project->markDirty(DirtyFlags::Animation | DirtyFlags::Video);
+            return ok ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+int32_t aurea_layer_time_remap_remove_keyframe_at(AureaEngineHandle handle, const char* layerId, double compositionTime, double tolerance) {
+    if (!handle || !layerId) return 0;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            bool ok = layer->getTimeRemap().getCurve().removeKeyframeAt(compositionTime, tolerance);
+            if (ok) ctx->project->markDirty(DirtyFlags::Animation | DirtyFlags::Video);
+            return ok ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+void aurea_layer_time_remap_clear(AureaEngineHandle handle, const char* layerId) {
+    if (!handle || !layerId) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            layer->getTimeRemap().getCurve().clear();
+            ctx->project->markDirty(DirtyFlags::Animation | DirtyFlags::Video);
+        }
+    }
+}
+
+int32_t aurea_layer_time_remap_get_keyframe_count(AureaEngineHandle handle, const char* layerId) {
+    if (!handle || !layerId) return 0;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            return static_cast<int32_t>(layer->getTimeRemap().getCurve().getKeyframeCount());
+        }
+    }
+    return 0;
+}
+
+int32_t aurea_layer_time_remap_get_keyframe(AureaEngineHandle handle, const char* layerId, int32_t index,
+                                            double* outCompTime, double* outSourceTime,
+                                            int32_t* outInterp,
+                                            double* outInDx, double* outInDy,
+                                            double* outOutDx, double* outOutDy) {
+    if (!handle || !layerId || index < 0) return 0;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            TimeRemapKeyframe kf;
+            if (layer->getTimeRemap().getCurve().getKeyframe(static_cast<size_t>(index), kf)) {
+                if (outCompTime) *outCompTime = kf.compositionTime;
+                if (outSourceTime) *outSourceTime = kf.sourceTime;
+                if (outInterp) *outInterp = static_cast<int32_t>(kf.interpolation);
+                if (outInDx) *outInDx = kf.inHandle.dx;
+                if (outInDy) *outInDy = kf.inHandle.dy;
+                if (outOutDx) *outOutDx = kf.outHandle.dx;
+                if (outOutDy) *outOutDy = kf.outHandle.dy;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+double aurea_layer_time_remap_evaluate(AureaEngineHandle handle, const char* layerId, double compositionTime) {
+    if (!handle || !layerId) return compositionTime;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            return layer->getTimeRemap().evaluate(compositionTime);
+        }
+    }
+    return compositionTime;
+}
+
+double aurea_layer_time_remap_get_speed(AureaEngineHandle handle, const char* layerId, double compositionTime) {
+    if (!handle || !layerId) return 1.0;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->project) {
+        auto layer = ctx->project->getLayer(layerId);
+        if (layer) {
+            return layer->getTimeRemap().getSpeed(compositionTime);
+        }
+    }
+    return 1.0;
+}

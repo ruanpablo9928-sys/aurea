@@ -58,6 +58,10 @@ void RenderCore::setEffect(int id, float value) {
     // For now no-op
 }
 
+std::shared_ptr<GPUFramebuffer> RenderCore::getMainFramebuffer() const {
+    return engine_ ? engine_->getMainFramebuffer() : nullptr;
+}
+
 void RenderCore::loop() {
     while (true) {
         Frame frame;

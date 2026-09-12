@@ -57,6 +57,9 @@ public:
     // Set effect parameters – delegated to effect processor (placeholder)
     void setEffect(int id, float value);
 
+    // Obtém o framebuffer principal do motor de renderização interno
+    std::shared_ptr<GPUFramebuffer> getMainFramebuffer() const;
+
 private:
     void loop();
 

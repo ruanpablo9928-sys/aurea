@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <mutex>
+#include "../video/time_remap/TimeRemapProperty.h"
 
 namespace aurea {
 
@@ -95,6 +96,9 @@ public:
         return timeUs >= startTimeUs_ && timeUs < (startTimeUs_ + durationUs_);
     }
 
+    TimeRemapProperty& getTimeRemap() { return timeRemap_; }
+    const TimeRemapProperty& getTimeRemap() const { return timeRemap_; }
+
 private:
     std::string id_;
     std::string name_;
@@ -104,6 +108,7 @@ private:
     Transform2D transform_;
     ShapeData shapeData_;
     std::string sourcePath_;
+    TimeRemapProperty timeRemap_;
 };
 
 class ProjectCore {

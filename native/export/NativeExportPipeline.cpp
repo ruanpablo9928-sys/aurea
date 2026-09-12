@@ -47,8 +47,8 @@ bool NativeExportPipeline::exportProject(std::shared_ptr<ProjectCore> project,
         int64_t timeUs = (static_cast<int64_t>(frame) * 1000000LL) / config.fps;
 
         // 1. Avalia projeto e animação
-        // 2. Renderiza no FBO da GPU de forma ultrarrápida
-        exportRenderEngine_->renderFrame(*project, timeUs, fbo);
+        // 2. Renderiza no FBO da GPU de forma ultrarrápida com sincronismo exato de frames (exactSync = true)
+        exportRenderEngine_->renderFrame(*project, timeUs, fbo, true);
 
         float currentProgress = static_cast<float>(frame + 1) / static_cast<float>(totalFrames);
         progress_.store(currentProgress);
@@ -85,8 +85,8 @@ bool NativeExportPipeline::renderFrameDirect(std::shared_ptr<ProjectCore> projec
     int64_t timeUs = (static_cast<int64_t>(frameIndex) * 1000000LL) / (fps > 0 ? fps : 30);
     auto fbo = exportRenderEngine_->getMainFramebuffer();
 
-    // Renderiza quadro diretamente na GPU
-    exportRenderEngine_->renderFrame(*project, timeUs, fbo);
+    // Renderiza quadro diretamente na GPU com sincronismo exato de frames
+    exportRenderEngine_->renderFrame(*project, timeUs, fbo, true);
 
     // Lê pixels diretamente para o buffer contíguo
     if (exportRenderEngine_->getGPU()) {

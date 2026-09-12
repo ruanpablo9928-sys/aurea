@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/time_format.dart';
@@ -12,6 +13,7 @@ import '../../domain/cut_ops.dart';
 import '../../domain/layer.dart';
 import 'am_colors.dart';
 import 'am_widgets.dart';
+import 'time_remap_curve_editor.dart';
 
 /// Velocidade constante, rampas compiladas em Time Remap e controles
 /// avancados continuam na mesma folha aberta pelo icone de relogio.
@@ -265,13 +267,40 @@ Future<void> showSpeedSheet(
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // OS DOIS GESTOS QUE FALTAVAM. O remap nascia com um
-                  // keyframe em cada ponta e nenhum jeito de por outro no
-                  // meio — entao nao havia como fazer uma rampa, e o
-                  // recurso "nao funcionava". Um keyframe no cabecote, com
-                  // o instante da fonte que ja esta na tela, nao muda nada
-                  // ate a pessoa arrastar o valor; segurar um quadro poe
-                  // dois iguais, um segundo adiante.
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      key: const ValueKey('abrir-curva-time-remap'),
+                      icon: const Icon(Icons.show_chart_rounded, size: 18),
+                      label: const Text(
+                        'ABRIR EDITOR DE CURVA BÉZIER',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AmColors.accent,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: sheetContext,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (ctx) => FractionallySizedBox(
+                            heightFactor: 0.82,
+                            child: TimeRemapCurveEditor(
+                              layerId: layerId,
+                              playback: playback,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   if (playback != null)
                     Row(
                       children: [
