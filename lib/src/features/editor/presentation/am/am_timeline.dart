@@ -382,6 +382,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
       for (final layer in project.layers)
         if (layer.matteMode != MatteMode.none && layer.matteSourceId != null)
           layer.matteSourceId!,
+    };
     var maxEndUs = project.duration.inMicroseconds;
     for (final l in project.layers) {
       if (l.endTime.inMicroseconds > maxEndUs) {
