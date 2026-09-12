@@ -1,4 +1,6 @@
 #include "RenderEngine.h"
+#include "../optical_flow/OpticalFlowEngine.h"
+#include "../scene3d/DeviceProfile.h"
 
 namespace aurea {
 
@@ -26,6 +28,13 @@ bool RenderEngine::initialize(int width, int height) {
     targetPool_ = std::make_shared<RenderTargetPool>(gpu_);
     mainFbo_ = targetPool_->acquire(width_, height_);
     videoEngine_.setGPU(gpu_);
+
+    // Inicializa o motor de Optical Flow / RIFE com Vulkan e ncnn
+    opticalFlow_ = std::make_shared<OpticalFlowEngine>();
+    opticalFlow_->initialize(DeviceProfile::instance().getCapabilities());
+    opticalFlow_->setGPU(gpu_);
+    videoEngine_.setOpticalFlowEngine(opticalFlow_);
+
     return true;
 }
 
@@ -36,6 +45,10 @@ void RenderEngine::shutdown() {
         targetPool_.reset();
     }
     mainFbo_.reset();
+    if (opticalFlow_) {
+        opticalFlow_->shutdown();
+        opticalFlow_.reset();
+    }
     videoEngine_.clearCache();
     if (renderer2D_) {
         renderer2D_->shutdown();
@@ -47,7 +60,7 @@ void RenderEngine::shutdown() {
     }
 }
 
-void RenderEngine::renderFrame(ProjectCore& project, int64_t timeUs, const std::shared_ptr<GPUFramebuffer>& targetFbo, bool exactSync) {
+void RenderEngine::renderFrame(ProjectCore& project, int64_t timeUs, const std::shared_ptr<GPUFramebuffer>& targetFbo, bool exactSync, uint64_t generationId) {
     // 1. Avalia interpolação de keyframes para o tempo atual
     animationEngine_.evaluateProject(project, timeUs);
 
@@ -72,12 +85,12 @@ void RenderEngine::renderFrame(ProjectCore& project, int64_t timeUs, const std::
         if (eval.layer->getType() == LayerType::Shape) {
             renderer2D_->drawShape(eval.layer->getShapeData(), eval.globalTransform);
         } else if (eval.layer->getType() == LayerType::Video) {
-            // Obtenção de textura de vídeo com Time Remap
+            // Obtenção de textura de vídeo com Time Remap e Optical Flow RIFE
             uint32_t tex = videoEngine_.getFrameTexture(
                 eval.layer->getSourcePath(),
                 timeUs,
                 eval.layer->getTimeRemap(),
-                0,
+                generationId,
                 exactSync
             );
             if (tex != 0) {

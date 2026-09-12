@@ -62,6 +62,10 @@ std::shared_ptr<GPUFramebuffer> RenderCore::getMainFramebuffer() const {
     return engine_ ? engine_->getMainFramebuffer() : nullptr;
 }
 
+std::shared_ptr<class OpticalFlowEngine> RenderCore::getOpticalFlowEngine() const {
+    return engine_ ? engine_->getOpticalFlowEngine() : nullptr;
+}
+
 void RenderCore::loop() {
     while (true) {
         Frame frame;
@@ -88,9 +92,9 @@ void RenderCore::loop() {
                 fbo = engine_->getGPU()->createFramebuffer(w, h);
             }
         }
-        // Render using internal engine
+        // Render using internal engine with exactSync and frame.id as generationId
         if (frame.project && fbo) {
-            engine_->renderFrame(*frame.project, frame.timeUs, fbo);
+            engine_->renderFrame(*frame.project, frame.timeUs, fbo, mode_ == RenderMode::EXPORT, frame.id);
         }
     }
 }

@@ -60,6 +60,9 @@ public:
     // Obtém o framebuffer principal do motor de renderização interno
     std::shared_ptr<GPUFramebuffer> getMainFramebuffer() const;
 
+    // Obtém o motor de Optical Flow associado
+    std::shared_ptr<class OpticalFlowEngine> getOpticalFlowEngine() const;
+
 private:
     void loop();
 

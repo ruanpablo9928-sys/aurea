@@ -256,6 +256,63 @@ typedef DAureaLayerTimeRemapEvaluate = double Function(Pointer<Void> handle, Poi
 typedef CAureaLayerTimeRemapGetSpeed = Double Function(Pointer<Void> handle, Pointer<Utf8> layerId, Double compositionTime);
 typedef DAureaLayerTimeRemapGetSpeed = double Function(Pointer<Void> handle, Pointer<Utf8> layerId, double compositionTime);
 
+// Optical Flow & RIFE FFI Struct & Typedefs
+final class NativeOpticalFlowDiagnostics extends Struct {
+  @Int32()
+  external int enabled;
+
+  @Int32()
+  external int modelLoaded;
+
+  @Int32()
+  external int vulkanAvailable;
+
+  @Int32()
+  external int gpuDeviceId;
+
+  @Float()
+  external double lastInferenceTimeMs;
+
+  @Float()
+  external double avgInferenceTimeMs;
+
+  @Int64()
+  external int cacheHits;
+
+  @Int64()
+  external int cacheMisses;
+
+  @Int64()
+  external int droppedJobs;
+
+  @Int64()
+  external int completedJobs;
+
+  @Int64()
+  external int sceneCutsDetected;
+
+  @Int32()
+  external int activeWorkers;
+
+  @Int32()
+  external int pendingJobs;
+}
+
+typedef CAureaOpticalFlowSetQuality = Void Function(Pointer<Void> handle, Int32 quality);
+typedef DAureaOpticalFlowSetQuality = void Function(Pointer<Void> handle, int quality);
+
+typedef CAureaOpticalFlowLoadModel = Int32 Function(Pointer<Void> handle, Pointer<Utf8> modelPath, Pointer<Utf8> modelName);
+typedef DAureaOpticalFlowLoadModel = int Function(Pointer<Void> handle, Pointer<Utf8> modelPath, Pointer<Utf8> modelName);
+
+typedef CAureaOpticalFlowGetDiagnostics = Void Function(Pointer<Void> handle, Pointer<NativeOpticalFlowDiagnostics> outDiagnostics);
+typedef DAureaOpticalFlowGetDiagnostics = void Function(Pointer<Void> handle, Pointer<NativeOpticalFlowDiagnostics> outDiagnostics);
+
+typedef CAureaOpticalFlowClearCache = Void Function(Pointer<Void> handle);
+typedef DAureaOpticalFlowClearCache = void Function(Pointer<Void> handle);
+
+typedef CAureaOpticalFlowSetSceneCutThreshold = Void Function(Pointer<Void> handle, Float threshold);
+typedef DAureaOpticalFlowSetSceneCutThreshold = void Function(Pointer<Void> handle, double threshold);
+
 /// Bindings FFI do Aurea Native Core
 class AureaNativeBindings {
   AureaNativeBindings._(this._dylib) {
@@ -298,6 +355,12 @@ class AureaNativeBindings {
     timeRemapGetKeyframe = _dylib.lookupFunction<CAureaLayerTimeRemapGetKeyframe, DAureaLayerTimeRemapGetKeyframe>('aurea_layer_time_remap_get_keyframe');
     timeRemapEvaluate = _dylib.lookupFunction<CAureaLayerTimeRemapEvaluate, DAureaLayerTimeRemapEvaluate>('aurea_layer_time_remap_evaluate');
     timeRemapGetSpeed = _dylib.lookupFunction<CAureaLayerTimeRemapGetSpeed, DAureaLayerTimeRemapGetSpeed>('aurea_layer_time_remap_get_speed');
+
+    opticalFlowSetQuality = _dylib.lookupFunction<CAureaOpticalFlowSetQuality, DAureaOpticalFlowSetQuality>('aurea_optical_flow_set_quality');
+    opticalFlowLoadModel = _dylib.lookupFunction<CAureaOpticalFlowLoadModel, DAureaOpticalFlowLoadModel>('aurea_optical_flow_load_model');
+    opticalFlowGetDiagnostics = _dylib.lookupFunction<CAureaOpticalFlowGetDiagnostics, DAureaOpticalFlowGetDiagnostics>('aurea_optical_flow_get_diagnostics');
+    opticalFlowClearCache = _dylib.lookupFunction<CAureaOpticalFlowClearCache, DAureaOpticalFlowClearCache>('aurea_optical_flow_clear_cache');
+    opticalFlowSetSceneCutThreshold = _dylib.lookupFunction<CAureaOpticalFlowSetSceneCutThreshold, DAureaOpticalFlowSetSceneCutThreshold>('aurea_optical_flow_set_scene_cut_threshold');
   }
 
   final DynamicLibrary _dylib;
@@ -323,7 +386,6 @@ class AureaNativeBindings {
   late final DAureaExportStart exportStart;
   late final DAureaExportGetProgress exportGetProgress;
   late final DAureaExportCancel exportCancel;
-
   late final DAureaModelAnalyze modelAnalyze;
   late final DAureaModelImportAsync modelImportAsync;
   late final DAureaModelImportGetProgress modelImportGetProgress;
@@ -341,6 +403,12 @@ class AureaNativeBindings {
   late final DAureaLayerTimeRemapGetKeyframe timeRemapGetKeyframe;
   late final DAureaLayerTimeRemapEvaluate timeRemapEvaluate;
   late final DAureaLayerTimeRemapGetSpeed timeRemapGetSpeed;
+
+  late final DAureaOpticalFlowSetQuality opticalFlowSetQuality;
+  late final DAureaOpticalFlowLoadModel opticalFlowLoadModel;
+  late final DAureaOpticalFlowGetDiagnostics opticalFlowGetDiagnostics;
+  late final DAureaOpticalFlowClearCache opticalFlowClearCache;
+  late final DAureaOpticalFlowSetSceneCutThreshold opticalFlowSetSceneCutThreshold;
 
   static AureaNativeBindings? _instance;
   static bool _initAttempted = false;

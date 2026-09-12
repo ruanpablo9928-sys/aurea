@@ -453,6 +453,64 @@ class NativeEngine {
       calloc.free(idPtr);
     }
   }
+
+  /// Configura a qualidade do Optical Flow (0: Low, 1: Medium, 2: High, 3: Ultra)
+  void setOpticalFlowQuality(int quality) {
+    if (!isInitialized) return;
+    AureaNativeBindings.instance!.opticalFlowSetQuality(_handle!, quality);
+  }
+
+  /// Carrega modelo RIFE específico
+  bool loadRIFEModel(String modelPath, String modelName) {
+    if (!isInitialized) return false;
+    final pathPtr = modelPath.toNativeUtf8();
+    final namePtr = modelName.toNativeUtf8();
+    try {
+      return AureaNativeBindings.instance!.opticalFlowLoadModel(_handle!, pathPtr, namePtr) == 1;
+    } finally {
+      calloc.free(pathPtr);
+      calloc.free(namePtr);
+    }
+  }
+
+  /// Limpa o cache de Optical Flow
+  void clearOpticalFlowCache() {
+    if (!isInitialized) return;
+    AureaNativeBindings.instance!.opticalFlowClearCache(_handle!);
+  }
+
+  /// Define o limiar de corte de cena (padrão 0.38)
+  void setSceneCutThreshold(double threshold) {
+    if (!isInitialized) return;
+    AureaNativeBindings.instance!.opticalFlowSetSceneCutThreshold(_handle!, threshold);
+  }
+
+  /// Obtém diagnósticos internos de Optical Flow / RIFE
+  OpticalFlowDiagnosticsResult? getOpticalFlowDiagnostics() {
+    if (!isInitialized) return null;
+    final diagPtr = calloc<NativeOpticalFlowDiagnostics>();
+    try {
+      AureaNativeBindings.instance!.opticalFlowGetDiagnostics(_handle!, diagPtr);
+      final ref = diagPtr.ref;
+      return OpticalFlowDiagnosticsResult(
+        enabled: ref.enabled == 1,
+        modelLoaded: ref.modelLoaded == 1,
+        vulkanAvailable: ref.vulkanAvailable == 1,
+        gpuDeviceId: ref.gpuDeviceId,
+        lastInferenceTimeMs: ref.lastInferenceTimeMs,
+        avgInferenceTimeMs: ref.avgInferenceTimeMs,
+        cacheHits: ref.cacheHits,
+        cacheMisses: ref.cacheMisses,
+        droppedJobs: ref.droppedJobs,
+        completedJobs: ref.completedJobs,
+        sceneCutsDetected: ref.sceneCutsDetected,
+        activeWorkers: ref.activeWorkers,
+        pendingJobs: ref.pendingJobs,
+      );
+    } finally {
+      calloc.free(diagPtr);
+    }
+  }
 }
 
 /// Resultado da pré-análise do modelo 3D
@@ -522,4 +580,37 @@ class Scene3DMetricsResult {
   final int renderedVertices;
   final int culledNodes;
   final double gpuFrameTimeMs;
+}
+
+/// Diagnósticos de telemetria do motor de Optical Flow e RIFE
+class OpticalFlowDiagnosticsResult {
+  const OpticalFlowDiagnosticsResult({
+    this.enabled = false,
+    this.modelLoaded = false,
+    this.vulkanAvailable = false,
+    this.gpuDeviceId = 0,
+    this.lastInferenceTimeMs = 0.0,
+    this.avgInferenceTimeMs = 0.0,
+    this.cacheHits = 0,
+    this.cacheMisses = 0,
+    this.droppedJobs = 0,
+    this.completedJobs = 0,
+    this.sceneCutsDetected = 0,
+    this.activeWorkers = 0,
+    this.pendingJobs = 0,
+  });
+
+  final bool enabled;
+  final bool modelLoaded;
+  final bool vulkanAvailable;
+  final int gpuDeviceId;
+  final double lastInferenceTimeMs;
+  final double avgInferenceTimeMs;
+  final int cacheHits;
+  final int cacheMisses;
+  final int droppedJobs;
+  final int completedJobs;
+  final int sceneCutsDetected;
+  final int activeWorkers;
+  final int pendingJobs;
 }

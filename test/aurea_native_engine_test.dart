@@ -80,5 +80,23 @@ void main() {
         expect(metrics.renderedTriangles, equals(0));
       }
     });
+
+    test('NativeEngine Optical Flow & RIFE methods handle environment safely', () {
+      final engine = NativeEngine.instance;
+
+      expect(() => engine.setOpticalFlowQuality(2), returnsNormally);
+      expect(() => engine.setSceneCutThreshold(0.38), returnsNormally);
+      expect(() => engine.clearOpticalFlowCache(), returnsNormally);
+
+      final loaded = engine.loadRIFEModel('assets/models/rife', 'rife-v4.6');
+      if (!engine.isInitialized) {
+        expect(loaded, isFalse);
+      }
+
+      final diag = engine.getOpticalFlowDiagnostics();
+      if (!engine.isInitialized) {
+        expect(diag, isNull);
+      }
+    });
   });
 }

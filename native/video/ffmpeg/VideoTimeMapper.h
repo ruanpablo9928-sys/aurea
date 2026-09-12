@@ -31,6 +31,9 @@ public:
     // Encontra o PTS de quadro mais próximo para um tempo de fonte desejado (em microssegundos)
     int64_t findClosestPtsUs(int64_t targetTimeUs) const;
 
+    // Encontra os dois quadros delimitadores [Frame A, Frame B] e o fator t [0..1] para interpolação
+    bool findBoundingFrames(int64_t targetTimeUs, int64_t& outPtsA, int64_t& outPtsB, float& outT) const;
+
     // Encontra o keyframe anterior mais próximo para seek seguro
     int64_t findPrecedingKeyframePtsUs(int64_t targetTimeUs) const;
 

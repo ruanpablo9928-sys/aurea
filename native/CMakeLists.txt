@@ -23,6 +23,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/video/time_remap
     ${CMAKE_CURRENT_SOURCE_DIR}/video/ffmpeg
     ${CMAKE_CURRENT_SOURCE_DIR}/video/cache
+    ${CMAKE_CURRENT_SOURCE_DIR}/optical_flow
     ${CMAKE_CURRENT_SOURCE_DIR}/preview
     ${CMAKE_CURRENT_SOURCE_DIR}/export
     ${CMAKE_CURRENT_SOURCE_DIR}/bridge
@@ -73,6 +74,17 @@ set(AUREA_SOURCES
     video/cache/PrefetchManager.cpp
     video/VideoEngine.cpp
 
+    # Optical Flow & RIFE Frame Interpolation (ncnn + Vulkan)
+    optical_flow/SceneCutDetector.cpp
+    optical_flow/FlowFrameCache.cpp
+    optical_flow/RIFEModelManager.cpp
+    optical_flow/VulkanBackend.cpp
+    optical_flow/NCNNBackend.cpp
+    optical_flow/QualityController.cpp
+    optical_flow/InterpolationScheduler.cpp
+    optical_flow/GPUTextureBridge.cpp
+    optical_flow/OpticalFlowEngine.cpp
+
     # Preview & RenderCore
     preview/PreviewEngine.cpp
     preview/FrameScheduler.cpp
@@ -92,6 +104,7 @@ if (ANDROID)
     find_library(EGL_LIB EGL)
     find_library(GLES_LIB GLESv3)
     find_library(MEDIA_LIB mediandk)
+    find_library(VULKAN_LIB vulkan)
 
     target_link_libraries(aurea_native
         ${LOG_LIB}
@@ -99,6 +112,7 @@ if (ANDROID)
         ${EGL_LIB}
         ${GLES_LIB}
         ${MEDIA_LIB}
+        ${VULKAN_LIB}
     )
 elseif (APPLE)
     find_library(METAL_LIB Metal)

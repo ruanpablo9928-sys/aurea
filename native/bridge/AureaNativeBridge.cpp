@@ -5,6 +5,7 @@
 #include "../scene3d/Scene3D.h"
 #include "../scene3d/ModelAnalyzer.h"
 #include "../scene3d/ModelImportManager.h"
+#include "../optical_flow/OpticalFlowEngine.h"
 #include <memory>
 #include <string>
 #include <cstring>
@@ -476,4 +477,80 @@ double aurea_layer_time_remap_get_speed(AureaEngineHandle handle, const char* la
         }
     }
     return 1.0;
+}
+
+void aurea_optical_flow_set_quality(AureaEngineHandle handle, int32_t quality) {
+    if (!handle) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->preview) {
+        auto flow = ctx->preview->getRenderEngine().getOpticalFlowEngine();
+        if (flow) {
+            flow->setQuality(static_cast<FlowQuality>(quality));
+        }
+    }
+}
+
+int32_t aurea_optical_flow_load_model(AureaEngineHandle handle, const char* modelPath, const char* modelName) {
+    if (!handle || !modelPath || !modelName) return 0;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->preview) {
+        auto flow = ctx->preview->getRenderEngine().getOpticalFlowEngine();
+        if (flow) {
+            RIFEModelConfig config;
+            config.modelName = modelName;
+            config.modelPath = modelPath;
+            config.paramFile = std::string(modelPath) + "/" + modelName + ".param";
+            config.binFile = std::string(modelPath) + "/" + modelName + ".bin";
+            return flow->loadModel(config) ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+void aurea_optical_flow_get_diagnostics(AureaEngineHandle handle, AureaOpticalFlowDiagnostics* outDiagnostics) {
+    if (!handle || !outDiagnostics) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->preview) {
+        auto flow = ctx->preview->getRenderEngine().getOpticalFlowEngine();
+        if (flow) {
+            auto diag = flow->getDiagnostics();
+            outDiagnostics->enabled = diag.enabled ? 1 : 0;
+            outDiagnostics->modelLoaded = diag.modelLoaded ? 1 : 0;
+            outDiagnostics->vulkanAvailable = diag.vulkanAvailable ? 1 : 0;
+            outDiagnostics->gpuDeviceId = diag.gpuDeviceId;
+            outDiagnostics->lastInferenceTimeMs = diag.lastInferenceTimeMs;
+            outDiagnostics->avgInferenceTimeMs = diag.avgInferenceTimeMs;
+            outDiagnostics->cacheHits = static_cast<int64_t>(diag.cacheHits);
+            outDiagnostics->cacheMisses = static_cast<int64_t>(diag.cacheMisses);
+            outDiagnostics->droppedJobs = static_cast<int64_t>(diag.droppedJobs);
+            outDiagnostics->completedJobs = static_cast<int64_t>(diag.completedJobs);
+            outDiagnostics->sceneCutsDetected = static_cast<int64_t>(diag.sceneCutsDetected);
+            outDiagnostics->activeWorkers = diag.activeWorkers;
+            outDiagnostics->pendingJobs = diag.pendingJobs;
+            return;
+        }
+    }
+    std::memset(outDiagnostics, 0, sizeof(AureaOpticalFlowDiagnostics));
+}
+
+void aurea_optical_flow_clear_cache(AureaEngineHandle handle) {
+    if (!handle) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->preview) {
+        auto flow = ctx->preview->getRenderEngine().getOpticalFlowEngine();
+        if (flow) {
+            flow->clearCache();
+        }
+    }
+}
+
+void aurea_optical_flow_set_scene_cut_threshold(AureaEngineHandle handle, float threshold) {
+    if (!handle) return;
+    auto* ctx = static_cast<AureaEngineContext*>(handle);
+    if (ctx->preview) {
+        auto flow = ctx->preview->getRenderEngine().getOpticalFlowEngine();
+        if (flow) {
+            flow->setSceneCutThreshold(threshold);
+        }
+    }
 }

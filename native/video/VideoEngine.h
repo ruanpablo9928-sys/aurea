@@ -29,6 +29,7 @@ public:
     // Obtém textura GPU do quadro correspondente a compositionTimeUs avaliado via Time Remap
     uint32_t getFrameTextureAt(int64_t compositionTimeUs, const TimeRemapProperty& remap, uint64_t generationId = 0, bool exactSync = false);
 
+    void setOpticalFlowEngine(std::shared_ptr<class OpticalFlowEngine> flowEngine) { opticalFlow_ = flowEngine; }
     std::shared_ptr<FFmpegVideoDecoder> getDecoder() const { return decoder_; }
     std::shared_ptr<VideoFrameCache> getCache() const { return cache_; }
 
@@ -43,6 +44,7 @@ private:
 
     std::shared_ptr<GPUTexture> currentGpuTexture_;
     int64_t lastPtsUs_ = -1;
+    std::shared_ptr<class OpticalFlowEngine> opticalFlow_;
     mutable std::mutex mutex_;
 };
 
@@ -51,7 +53,9 @@ public:
     VideoEngine();
     ~VideoEngine();
 
-    void setGPU(std::shared_ptr<GPUProcessor> gpu) { gpu_ = gpu; }
+    void setGPU(std::shared_ptr<GPUProcessor> gpu);
+    void setOpticalFlowEngine(std::shared_ptr<class OpticalFlowEngine> flowEngine);
+    std::shared_ptr<class OpticalFlowEngine> getOpticalFlowEngine() const { return opticalFlow_; }
 
     std::shared_ptr<VideoTrack> loadVideo(const std::string& filePath);
     void releaseVideo(const std::string& filePath);
@@ -63,6 +67,7 @@ public:
 
 private:
     std::shared_ptr<GPUProcessor> gpu_;
+    std::shared_ptr<class OpticalFlowEngine> opticalFlow_;
     std::unordered_map<std::string, std::shared_ptr<VideoTrack>> tracks_;
     mutable std::mutex mutex_;
 };

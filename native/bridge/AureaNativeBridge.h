@@ -128,6 +128,29 @@ AUREA_EXPORT int32_t aurea_layer_time_remap_get_keyframe(AureaEngineHandle handl
 AUREA_EXPORT double aurea_layer_time_remap_evaluate(AureaEngineHandle handle, const char* layerId, double compositionTime);
 AUREA_EXPORT double aurea_layer_time_remap_get_speed(AureaEngineHandle handle, const char* layerId, double compositionTime);
 
+// Optical Flow & RIFE Frame Interpolation (ncnn + Vulkan)
+typedef struct {
+    int32_t enabled;
+    int32_t modelLoaded;
+    int32_t vulkanAvailable;
+    int32_t gpuDeviceId;
+    float lastInferenceTimeMs;
+    float avgInferenceTimeMs;
+    int64_t cacheHits;
+    int64_t cacheMisses;
+    int64_t droppedJobs;
+    int64_t completedJobs;
+    int64_t sceneCutsDetected;
+    int32_t activeWorkers;
+    int32_t pendingJobs;
+} AureaOpticalFlowDiagnostics;
+
+AUREA_EXPORT void aurea_optical_flow_set_quality(AureaEngineHandle handle, int32_t quality);
+AUREA_EXPORT int32_t aurea_optical_flow_load_model(AureaEngineHandle handle, const char* modelPath, const char* modelName);
+AUREA_EXPORT void aurea_optical_flow_get_diagnostics(AureaEngineHandle handle, AureaOpticalFlowDiagnostics* outDiagnostics);
+AUREA_EXPORT void aurea_optical_flow_clear_cache(AureaEngineHandle handle);
+AUREA_EXPORT void aurea_optical_flow_set_scene_cut_threshold(AureaEngineHandle handle, float threshold);
+
 #ifdef __cplusplus
 }
 #endif

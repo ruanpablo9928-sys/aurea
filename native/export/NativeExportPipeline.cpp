@@ -33,6 +33,11 @@ bool NativeExportPipeline::exportProject(std::shared_ptr<ProjectCore> project,
         return false;
     }
 
+    if (exportRenderEngine_->getOpticalFlowEngine()) {
+        exportRenderEngine_->getOpticalFlowEngine()->setQuality(FlowQuality::Ultra);
+        exportRenderEngine_->getOpticalFlowEngine()->loadOptimalModel(FlowQuality::Ultra, false);
+    }
+
     int totalFrames = static_cast<int>((config.durationUs * config.fps) / 1000000LL);
     if (totalFrames <= 0) totalFrames = 1;
 

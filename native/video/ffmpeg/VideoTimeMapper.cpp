@@ -62,6 +62,56 @@ int64_t VideoTimeMapper::findClosestPtsUs(int64_t targetTimeUs) const {
     return it->ptsUs;
 }
 
+bool VideoTimeMapper::findBoundingFrames(int64_t targetTimeUs, int64_t& outPtsA, int64_t& outPtsB, float& outT) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (frameIndexTable_.empty()) {
+        double frameDurUs = 1000000.0 / std::max(1.0, streamInfo_.fps);
+        int64_t idxA = static_cast<int64_t>(std::floor(static_cast<double>(targetTimeUs) / frameDurUs));
+        if (idxA < 0) idxA = 0;
+        int64_t idxB = idxA + 1;
+        outPtsA = static_cast<int64_t>(idxA * frameDurUs);
+        outPtsB = static_cast<int64_t>(idxB * frameDurUs);
+        double delta = static_cast<double>(targetTimeUs - outPtsA);
+        outT = static_cast<float>(std::clamp(delta / frameDurUs, 0.0, 1.0));
+        return true;
+    }
+
+    if (targetTimeUs <= frameIndexTable_.front().ptsUs) {
+        outPtsA = frameIndexTable_.front().ptsUs;
+        outPtsB = frameIndexTable_.size() > 1 ? frameIndexTable_[1].ptsUs : outPtsA;
+        outT = 0.0f;
+        return true;
+    }
+
+    if (targetTimeUs >= frameIndexTable_.back().ptsUs) {
+        outPtsA = frameIndexTable_.back().ptsUs;
+        outPtsB = outPtsA;
+        outT = 0.0f;
+        return true;
+    }
+
+    FrameTimestampEntry target{targetTimeUs, 0, false};
+    auto it = std::lower_bound(frameIndexTable_.begin(), frameIndexTable_.end(), target);
+    if (it != frameIndexTable_.end() && it->ptsUs == targetTimeUs) {
+        outPtsA = it->ptsUs;
+        outPtsB = it->ptsUs;
+        outT = 0.0f;
+        return true;
+    }
+
+    auto nextIt = it;
+    auto prevIt = it - 1;
+    outPtsA = prevIt->ptsUs;
+    outPtsB = nextIt->ptsUs;
+    int64_t span = outPtsB - outPtsA;
+    if (span <= 0) {
+        outT = 0.0f;
+    } else {
+        outT = static_cast<float>(std::clamp(static_cast<double>(targetTimeUs - outPtsA) / span, 0.0, 1.0));
+    }
+    return true;
+}
+
 int64_t VideoTimeMapper::findPrecedingKeyframePtsUs(int64_t targetTimeUs) const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (frameIndexTable_.empty()) {

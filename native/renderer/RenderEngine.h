@@ -25,9 +25,10 @@ public:
     AnimationEngine& getAnimationEngine() { return animationEngine_; }
     CompositionCore& getCompositionCore() { return compositionCore_; }
     VideoEngine& getVideoEngine() { return videoEngine_; }
+    std::shared_ptr<class OpticalFlowEngine> getOpticalFlowEngine() const { return opticalFlow_; }
 
     // Renderiza um quadro completo no instante timeUs
-    void renderFrame(ProjectCore& project, int64_t timeUs, const std::shared_ptr<GPUFramebuffer>& targetFbo = nullptr, bool exactSync = false);
+    void renderFrame(ProjectCore& project, int64_t timeUs, const std::shared_ptr<GPUFramebuffer>& targetFbo = nullptr, bool exactSync = false, uint64_t generationId = 0);
 
     // Obtém o FBO principal de renderização offscreen
     std::shared_ptr<GPUFramebuffer> getMainFramebuffer() const { return mainFbo_; }
@@ -40,6 +41,7 @@ private:
     std::shared_ptr<Renderer2D> renderer2D_;
     std::shared_ptr<GPUFramebuffer> mainFbo_;
     std::shared_ptr<RenderTargetPool> targetPool_;
+    std::shared_ptr<class OpticalFlowEngine> opticalFlow_;
 
     VideoEngine videoEngine_;
     AnimationEngine animationEngine_;
