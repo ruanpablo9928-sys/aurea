@@ -9,6 +9,57 @@ import 'package:flutter_test/flutter_test.dart';
 import 'editor_hierarchy_test.dart' show openEditor;
 
 void main() {
+  for (final z in [0.0, 600.0, -400.0]) {
+    testWidgets('depth Z $z and tilted layer remain selectable and draggable', (
+      tester,
+    ) async {
+      final c = await openEditor(tester);
+      final controller = c.read(editorControllerProvider.notifier);
+      final id = c.read(editorControllerProvider).layers.first.id;
+      for (final l in c.read(editorControllerProvider).layers.toList()) {
+        if (l.id != id) controller.removeLayer(l.id);
+      }
+      controller.editPositionZ(id, Duration.zero, z);
+      controller.editRotationX(id, Duration.zero, 42);
+      controller.editRotationY(id, Duration.zero, 33);
+      c.read(selectedLayerProvider.notifier).state = null;
+      await tester.pumpAndSettle();
+      final project = c.read(editorControllerProvider),
+          layer = c.read(editorControllerProvider).layerById(id)!;
+      final stage = tester.getRect(find.byType(PreviewStage));
+      final comp = compositionRect(
+        stage.size,
+        Size(project.outputWidth.toDouble(), project.outputHeight.toDouble()),
+      );
+      final matrix = selectionTransform(project, layer, Duration.zero);
+      const local = Offset(35, 15);
+      final projected = MatrixUtils.transformPoint(matrix, local);
+      final recovered = MatrixUtils.transformPoint(
+        Matrix4.inverted(matrix),
+        projected,
+      );
+      expect((local - recovered).distance, lessThan(1e-6));
+      final touch =
+          stage.topLeft +
+          comp.topLeft +
+          projected * (comp.width / project.outputWidth);
+      await tester.tapAt(touch);
+      await tester.pumpAndSettle();
+      expect(c.read(selectedLayerProvider), id);
+      final before = c
+          .read(editorControllerProvider)
+          .layerById(id)!
+          .position
+          .base;
+      await tester.dragFrom(touch, const Offset(45, 22));
+      await tester.pumpAndSettle();
+      expect(
+        c.read(editorControllerProvider).layerById(id)!.position.base,
+        isNot(before),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final scale in [0.5, 2.0, -1.5]) {
     testWidgets('selection follows nonuniform scale $scale and pivot', (
       tester,

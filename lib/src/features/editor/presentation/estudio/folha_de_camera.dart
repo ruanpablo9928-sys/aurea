@@ -54,66 +54,6 @@ class _FolhaDeCameraState extends ConsumerState<FolhaDeCamera> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Banner de Visualização da Câmera
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            height: 120,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: const Color(0xFF131821),
-              border: Border.all(color: Scene3DTheme.border),
-            ),
-            child: Stack(
-              children: [
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.videocam_rounded,
-                        size: 36,
-                        color: Scene3DTheme.accent.withValues(alpha: 0.8),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        cam.name,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Scene3DTheme.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  right: 10,
-                  bottom: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'FOV ${fov.round()}°',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-
         // Posição: X, Y, Z com reset
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -167,12 +107,14 @@ class _FolhaDeCameraState extends ConsumerState<FolhaDeCamera> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Campo de visão (FOV)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Scene3DTheme.text,
+                  const Expanded(
+                    child: Text(
+                      'Campo de visão (FOV)',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Scene3DTheme.text,
+                      ),
                     ),
                   ),
                   Container(

@@ -22,6 +22,7 @@ import '../domain/cut.dart';
 import '../domain/cut_ops.dart';
 import '../domain/panorama3d.dart';
 import '../domain/scene3d.dart';
+import '../domain/rotation_math.dart';
 import '../domain/effect.dart';
 import '../domain/oscillate.dart';
 import '../domain/effect_preset.dart';
@@ -59,16 +60,8 @@ export '../domain/video_project.dart' show LayerProp, PropertyLink;
 /// Camada selecionada no editor (null = nada).
 final selectedLayerProvider = StateProvider<String?>((ref) => null);
 
-/// Interruptor de auto-keyframe (desligado por padrao).
-final autoKeyframeProvider = StateProvider<bool>((ref) => false);
-//
-// `autoKeyframeProvider` vivia aqui e ja nascia desligado — e nao era
-// ele que criava os keyframes misteriosos. A raiz era `edited()`, que
-// cravava marca em toda propriedade JA animada, com o interruptor
-// desligado ou nao. Ver `docs/keyframe-explicito.md`.
-//
-// Se um dia voltar como recurso, volta desligado, anunciado enquanto
-// estiver ligado, e sai com um toque.
+/// Atualiza automaticamente as trilhas animadas; pode ser desligado na UI.
+final autoKeyframeProvider = StateProvider<bool>((ref) => true);
 
 /// A EDICAO PENDENTE: o valor que ja esta na tela e ainda nao esta gravado.
 ///
@@ -1968,7 +1961,12 @@ class EditorController extends Notifier<VideoProject> {
   /// Parenteia um no da cena a outro. Passar null solta.
   ///
   /// Recusa o ciclo: A pai de B e B pai de A travaria o quadro.
-  void setSceneNodeParent(String sceneId, String nodeId, String? parentId) {
+  void setSceneNodeParent(
+    String sceneId,
+    String nodeId,
+    String? parentId, {
+    Duration? preserveWorldAt,
+  }) {
     final cena = _layer(sceneId);
     if (cena is! Scene3DLayer) return;
     if (cena.scene.nodeById(nodeId)?.locked ?? false) return;
@@ -1976,15 +1974,61 @@ class EditorController extends Notifier<VideoProject> {
     if (parentId != null && _criaCiclo(cena.scene, nodeId, parentId)) {
       return;
     }
+    final node = cena.scene.nodeById(nodeId);
+    if (node == null ||
+        (parentId != null && cena.scene.nodeById(parentId) == null)) {
+      return;
+    }
+    var linked = node.copyWith(
+      parentId: parentId,
+      clearParent: parentId == null,
+    );
+    if (preserveWorldAt != null) {
+      final world = resolveNodeTransform(cena.scene, node, preserveWorldAt);
+      final parent = parentId == null
+          ? NodeTransform.identity
+          : resolveNodeTransform(
+              cena.scene,
+              cena.scene.nodeById(parentId)!,
+              preserveWorldAt,
+            );
+      if (parent.scale.abs() < 1e-9) return;
+      final localPosition = sceneLocalDelta(
+        cena.scene,
+        linked,
+        preserveWorldAt,
+        world.position - parent.position,
+      );
+      final orientation = rotationMatrix(parent.rotX, parent.rotY, parent.rotZ)
+        ..transpose();
+      orientation.multiply(rotationMatrix(world.rotX, world.rotY, world.rotZ));
+      final angles = rotationAngles(orientation);
+      AnimatedDouble shift(AnimatedDouble track, double value) {
+        final delta = value - track.valueAt(preserveWorldAt);
+        return AnimatedDouble(
+          track.base + delta,
+          [for (final k in track.keyframes) k.copyWith(value: k.value + delta)],
+          track.loop,
+          track.expression,
+        );
+      }
+
+      linked = linked.copyWith(
+        x: shift(node.x, localPosition.x),
+        y: shift(node.y, localPosition.y),
+        z: shift(node.z, localPosition.z),
+        rotX: shift(node.rotX, angles.$1),
+        rotY: shift(node.rotY, angles.$2),
+        rotZ: shift(node.rotZ, angles.$3),
+        scale: shift(node.scale, world.scale / parent.scale),
+      );
+    }
     _replace(
       cena.withScene(
         cena.scene.copyWith(
           nodes: [
             for (final n in cena.scene.nodes)
-              if (n.id == nodeId)
-                n.copyWith(parentId: parentId, clearParent: parentId == null)
-              else
-                n,
+              if (n.id == nodeId) linked else n,
           ],
         ),
       ),
@@ -3937,6 +3981,20 @@ class EditorController extends Notifier<VideoProject> {
     );
   }
 
+  void resetClipTimeRemap(String id) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return;
+    final track = AnimatedDouble(0)
+        .withKeyframe(Duration.zero, 0)
+        .withKeyframe(
+          layer.duration,
+          layer.duration.inMicroseconds / 1000000.0,
+        );
+    _replace(
+      layer.copyLayer(speed: 1, effects: replaceTimeRemap(layer, track)),
+    );
+  }
+
   void setClipTimeRemapKeyframe(
     String id,
     Duration localTime,
@@ -5168,6 +5226,7 @@ class EditorController extends Notifier<VideoProject> {
   }) {
     final layer = _layer(id);
     if (layer == null) return;
+    if ([x, y, z].any((v) => v != null && !v.isFinite)) return;
     final t = layer.localTime(globalTime);
     final anyAnimated =
         layer.rotation.isAnimated ||
@@ -5183,18 +5242,17 @@ class EditorController extends Notifier<VideoProject> {
       );
       return;
     }
-    // ANIMADA: so escreve na marca que JA existe neste instante. Fora
-    // dela a trilha volta intacta, e a edicao vira pendente (quem
-    // decide isso e `editRotation`/`editRotationX`/`editRotationY`, que
-    // chamam por aqui).
-    //
-    // Os tres eixos andam juntos porque a rotacao e UMA propriedade de
-    // tres eixos no motor: marcar num marca nos tres, e a curva vale
-    // para os tres.
+    // Os tres eixos compartilham o instante. Fora de uma marca, _mutate
+    // grava com AutoKey ou mostra uma edicao pendente quando desligado.
+    if (![
+      layer.rotation,
+      layer.rotationX,
+      layer.rotationY,
+    ].any((track) => track.hasKeyframeAt(t))) {
+      _recusaLocal = t;
+    }
     AnimatedDouble key(AnimatedDouble track, double? v) =>
-        track.hasKeyframeAt(t)
-        ? track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t))
-        : track;
+        track.withKeyframe(t, v ?? track.valueAt(t), track.easeAt(t));
     _replace(
       layer.copyLayer(
         rotation: key(layer.rotation, z),
@@ -5614,6 +5672,15 @@ class EditorController extends Notifier<VideoProject> {
   void addEffect(String layerId, EffectType type) {
     final layer = _layer(layerId);
     if (layer == null) return;
+    if (type == EffectType.timeRemap && layer is VideoLayer) {
+      setClipTimeRemapEnabled(layerId, true);
+      return;
+    }
+    if (type == EffectType.opticalFlow) {
+      if (layer is! VideoLayer || layer.effects.any((e) => e.type == type)) {
+        return;
+      }
+    }
     _replace(
       layer.copyLayer(
         effects: [
@@ -5665,6 +5732,10 @@ class EditorController extends Notifier<VideoProject> {
     final idx = layer.effects.indexWhere((e) => e.id == effectId);
     if (idx < 0) return;
     final original = layer.effects[idx];
+    if (original.type == EffectType.timeRemap ||
+        original.type == EffectType.opticalFlow) {
+      return;
+    }
     // Sem id: a instancia nova sorteia o proprio. Os keyframes vao junto
     // porque AnimatedDouble e imutavel — compartilhar a trilha aqui e
     // seguro, e e o que faz o duplicado nascer identico.
@@ -7921,7 +7992,13 @@ class EditorController extends Notifier<VideoProject> {
         // Parenting: captura o transform EFETIVO do pai (a cadeia dele ja
         // resolvida — o pai pode estar linkado a outro nulo) no instante
         // do vinculo; o filho segue o delta (nada pula ao parear).
-        final pe = effectiveTransform(state, source, globalTime);
+        final ancestors = <String>{targetId};
+        String? ancestor = sourceId;
+        while (ancestor != null) {
+          if (!ancestors.add(ancestor)) return;
+          ancestor = state.linkFor(ancestor, LayerProp.parent)?.sourceLayerId;
+        }
+        final pe = effectiveTransform(state, source, globalTime, <String>{});
         final links = [
           for (final l in state.links)
             if (!(l.targetLayerId == targetId &&
@@ -7940,7 +8017,15 @@ class EditorController extends Notifier<VideoProject> {
             baseZ: pe.z,
           ),
         ];
-        _mutate(state.copyWith(links: links));
+        final boundTarget = _withoutParentPose(target, globalTime);
+        _mutate(
+          state.copyWith(
+            links: links,
+            layers: [
+              for (final l in state.layers) l.id == targetId ? boundTarget : l,
+            ],
+          ),
+        );
         return;
       case LayerProp.skew:
       case LayerProp.pivot:
@@ -7961,8 +8046,67 @@ class EditorController extends Notifier<VideoProject> {
     _mutate(state.copyWith(links: links));
   }
 
-  void unlinkProperty(String targetId, LayerProp prop) {
+  // Keep the visible pose at the binding time, including an existing chain.
+  // Shift entire tracks so reparenting does not discard their keyframes/eases.
+  Layer _withoutParentPose(Layer layer, Duration time) {
+    if (state.linkFor(layer.id, LayerProp.parent) == null) return layer;
+    final world = effectiveTransform(state, layer, time, <String>{});
+    final local = layer.localTime(time);
+    final delta = world.pos - layer.position.valueAt(local);
+    AnimatedDouble shift(AnimatedDouble track, double delta) => AnimatedDouble(
+      track.base + delta,
+      [for (final k in track.keyframes) k.copyWith(value: k.value + delta)],
+      track.loop,
+      track.expression,
+    );
+    final rawScale = layer.scaleX.valueAt(local);
+    final ratio = rawScale.abs() < 1e-9 ? 1.0 : world.scale / rawScale;
+    AnimatedDouble scale(AnimatedDouble track) => AnimatedDouble(
+      track.base * ratio,
+      [for (final k in track.keyframes) k.copyWith(value: k.value * ratio)],
+      track.loop,
+      track.expression,
+    );
+    return layer.copyLayer(
+      position: AnimatedOffset(layer.position.base + delta, [
+        for (final k in layer.position.keyframes)
+          k.copyWith(value: k.value + delta),
+      ], layer.position.loop),
+      positionZ: shift(
+        layer.positionZ,
+        world.z - layer.positionZ.valueAt(local),
+      ),
+      rotation: shift(
+        layer.rotation,
+        world.rot - layer.rotation.valueAt(local),
+      ),
+      rotationX: shift(
+        layer.rotationX,
+        world.rotX - layer.rotationX.valueAt(local),
+      ),
+      rotationY: shift(
+        layer.rotationY,
+        world.rotY - layer.rotationY.valueAt(local),
+      ),
+      scaleX: scale(layer.scaleX),
+      scaleY: scale(layer.scaleY),
+    );
+  }
+
+  void unlinkProperty(
+    String targetId,
+    LayerProp prop, {
+    Duration time = Duration.zero,
+  }) {
+    final target = _layer(targetId);
+    final detached = prop == LayerProp.parent && target != null
+        ? _withoutParentPose(target, time)
+        : target;
     final newState = state.copyWith(
+      layers: [
+        for (final l in state.layers)
+          if (l.id == targetId && detached != null) detached else l,
+      ],
       links: [
         for (final l in state.links)
           if (!(l.targetLayerId == targetId && l.targetProp == prop)) l,

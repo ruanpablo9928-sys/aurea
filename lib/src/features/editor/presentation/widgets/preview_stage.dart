@@ -147,10 +147,16 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
     final project = ref.read(editorControllerProvider);
     final controller = ref.read(editorControllerProvider.notifier);
     final t = widget.playback.time.value;
-    for (final l in project.layers) {
-      // Som, nulo e camada de ajuste nao tem desenho: se entrassem na
-      // conta, um deles por cima engoliria o toque do que se ve.
-      if (l is AudioLayer || l is NullLayer || l is AdjustmentLayer) continue;
+    final ordered = depthSortPaintOrder(
+      project.layers.reversed.toList(),
+      t,
+    ).reversed;
+    for (final l in [
+      ...ordered.where((l) => l is! NullLayer),
+      ...ordered.whereType<NullLayer>(),
+    ]) {
+      // Nulos ficam por ultimo: o gizmo pode ser escolhido sem bloquear midia.
+      if (l is AudioLayer || l is AdjustmentLayer) continue;
       if (!l.activeAt(t)) continue;
       if (project.isHidden(l.id)) continue;
       if (project.metaOf(l.id).locked) continue;
@@ -4345,6 +4351,7 @@ class _CompositionViewState extends ConsumerState<CompositionView> {
 
         // O remapeamento de tempo nao pinta nada: ele ja mudou QUAL
         // instante da camada foi montado, la em cima.
+        case EffectType.opticalFlow:
         case EffectType.timeRemap:
         // FORCE MOTION BLUR nao acontece aqui: ele precisa re-renderizar
         // a camada em outros instantes, e a pilha de efeitos so recebe o

@@ -592,16 +592,19 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
                       child: SizedBox(
                         width: w,
                         height: h,
-                        child: ColoredBox(
-                          color: project.backgroundColor,
-                          child: DitherLayer(
-                            time: _time.value,
-                            child: CompositionView(
-                              time: _time,
-                              videos: _videos,
-                              selectedId: null,
-                              exportFrames: _quadroAtual,
-                              exporting: true,
+                        child: ClipRect(
+                          key: const ValueKey('export-composition-clip'),
+                          child: ColoredBox(
+                            color: project.backgroundColor,
+                            child: DitherLayer(
+                              time: _time.value,
+                              child: CompositionView(
+                                time: _time,
+                                videos: _videos,
+                                selectedId: null,
+                                exportFrames: _quadroAtual,
+                                exporting: true,
+                              ),
                             ),
                           ),
                         ),

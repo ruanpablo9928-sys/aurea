@@ -68,6 +68,7 @@ enum EffectType {
   offset,
   invert,
   waveWarp,
+  opticalFlow,
 }
 
 /// O tipo a partir do IDENTIFICADOR estavel.
@@ -1418,6 +1419,15 @@ const effectSpecs = <EffectType, EffectSpec>{
   /// REMAPEAMENTO DE TEMPO, igual ao do After Effects: em vez de mexer
   /// na velocidade, voce anima QUAL INSTANTE da camada aparece agora.
   /// Congelar, voltar, acelerar no meio — tudo vira keyframe de tempo.
+  EffectType.opticalFlow: EffectSpec(
+    id: 'optical_flow',
+    name: 'Optical Flow',
+    category: 'Time',
+    synonyms: ['fluxo óptico', 'camera lenta', 'interpolação', 'slow motion'],
+    params: {},
+    montar: [],
+    presets: [],
+  ),
   EffectType.timeRemap: EffectSpec(
     id: 'time_remap',
     name: 'Time Remap',

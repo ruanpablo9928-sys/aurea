@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide Easing;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
@@ -9,11 +10,9 @@ import '../../domain/layer.dart';
 import 'estado_do_estudio.dart';
 import 'ficha_do_selecionado.dart';
 import 'folhas_do_estudio.dart';
-import 'gizmo_de_vista.dart';
 import 'scene3d_theme.dart';
 import 'vista_da_cena.dart';
 
-/// Abre o Estudio da Cena 3D por cima do editor.
 Future<void> abrirEstudioDaCena(
   BuildContext context, {
   required String layerId,
@@ -24,17 +23,14 @@ Future<void> abrirEstudioDaCena(
   ),
 );
 
-/// O ESTÚDIO DA CENA 3D (Tela 1 do mockup).
 class EstudioDaCena extends ConsumerStatefulWidget {
   const EstudioDaCena({
     super.key,
     required this.layerId,
     required this.playback,
   });
-
   final String layerId;
   final PlaybackController playback;
-
   @override
   ConsumerState<EstudioDaCena> createState() => _EstudioDaCenaState();
 }
@@ -42,7 +38,16 @@ class EstudioDaCena extends ConsumerStatefulWidget {
 class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
   final _navegacao = NavegacaoDaVista();
   final _vista = GlobalKey<VistaDaCenaState>();
-
+  int _tab = 0;
+  bool _expanded = false;
+  static const _tabs = ['Objetos', 'Transformar', 'Animar', 'Câmeras', 'Luz'];
+  static const _icons = [
+    Icons.layers_outlined,
+    Icons.open_with,
+    Icons.auto_graph,
+    Icons.videocam_outlined,
+    Icons.wb_sunny_outlined,
+  ];
   @override
   void initState() {
     super.initState();
@@ -55,122 +60,371 @@ class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
     super.dispose();
   }
 
-  void _dizer(String texto) =>
-      ref.read(recadoDoEstudioProvider.notifier).state = texto;
+  void _dizer(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _adicionar(BuildContext context, Duration time) => abrirFolhaDeAdicionar(
+    context,
+    ref,
+    layerId: widget.layerId,
+    tempo: time,
+    navegacao: _navegacao,
+    aoAvisar: _dizer,
+  );
+
+  void _dicas(BuildContext context) => mostrarFolhaScene3D<void>(
+    context,
+    title: 'Dicas • Scene 3D',
+    body: const Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Tip(
+            'Criar',
+            'Use + Adicionar para modelos, formas, nulos, luzes e câmeras. Toque em um objeto na cena ou na lista para selecioná-lo.',
+          ),
+          _Tip(
+            'Mover, girar e tamanho',
+            'Escolha uma ferramenta e arraste na cena. Em Transformar você ajusta números, materiais e o vínculo com um nulo. X, Y e Z limitam o movimento a um eixo.',
+          ),
+          _Tip(
+            'AutoKey',
+            'Nas propriedades já animadas, mudar um valor grava uma marca no instante atual. Comece pelo losango em Animar, avance o tempo e mude o valor. Desligue AutoKey para experimentar sem gravar novas marcas.',
+          ),
+          _Tip(
+            'Linha do tempo',
+            'Arraste a régua para escolher o instante. Os losangos mostram marcas do objeto selecionado; toque neles para voltar exatamente à marca.',
+          ),
+          _Tip(
+            'Câmera no vídeo',
+            'Escolher outra câmera no menu acima da prévia cria um corte no instante atual. A vista Livre serve para navegar; Câmera mostra o enquadramento que será exportado.',
+          ),
+          _Tip(
+            'Luz e reflexos',
+            'Combine uma luz principal com iluminação ambiente. Ative Reflexos da cena para capturar os objetos ao redor. Materiais metálicos com pouca rugosidade refletem mais.',
+          ),
+          _Tip(
+            'Desempenho',
+            'A qualidade da prévia se adapta ao aparelho. O primeiro carregamento prepara malhas e texturas; reutilizar objetos evita carregar várias cópias do mesmo modelo.',
+          ),
+        ],
+      ),
+    ),
+  );
 
   @override
-  Widget build(BuildContext context) {
-    final projeto = ref.watch(projetoVisivelProvider);
-    final bruta = projeto.layerById(widget.layerId);
-    if (bruta is! Scene3DLayer) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) Navigator.of(context).maybePop();
-      });
-      return const Scaffold(backgroundColor: Scene3DTheme.bg, body: SizedBox());
-    }
-    final camada = bruta;
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle.light,
+    child: Theme(
+      data: Scene3DTheme.theme,
+      child: Builder(builder: _buildStudio),
+    ),
+  );
 
+  Widget _buildStudio(BuildContext context) {
+    final project = ref.watch(projetoVisivelProvider);
+    final layer = project.layerById(widget.layerId);
+    if (layer is! Scene3DLayer) {
+      return const Scaffold(body: Center(child: Text('Cena indisponível')));
+    }
+    final autoKey = ref.watch(autoKeyframeProvider);
+    final tool = ref.watch(ferramentaProvider);
+    final marks = marcasDaSelecao(ref, layer);
+    final controller = ref.read(editorControllerProvider.notifier);
     return Scaffold(
       backgroundColor: Scene3DTheme.bg,
       body: SafeArea(
         child: ValueListenableBuilder<Duration>(
           valueListenable: widget.playback.time,
-          builder: (context, tempo, _) {
-            final local = camada.localTime(tempo);
+          builder: (context, time, _) {
+            final local = layer.localTime(time);
+            final camera = cameraNoAr(layer, local);
             return Column(
               children: [
-                // Barra Superior: < Scene 3D | [Exportar]
-                _BarraSuperiorScene3D(
-                  camada: camada,
-                  local: local,
-                  navegacao: _navegacao,
-                  playback: widget.playback,
-                  aoVoltar: () => Navigator.of(context).maybePop(),
-                  aoExportar: () => abrirFolhaDeExportar(
-                    context,
-                    ref,
-                    layerId: widget.layerId,
-                  ),
-                ),
-
-                // Viewport 3D com Overlays Flutuantes
-                Expanded(
-                  child: Stack(
+                SizedBox(
+                  height: 48,
+                  child: Row(
                     children: [
-                      // Renderizador e Interação 3D
-                      Positioned.fill(
-                        child: VistaDaCena(
-                          key: _vista,
+                      IconButton(
+                        key: const ValueKey('estudio-voltar'),
+                        tooltip: 'Voltar ao editor',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'Scene 3D',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _dicas(context),
+                        icon: const Icon(Icons.help_outline, size: 18),
+                        label: const Text('Dicas'),
+                      ),
+                      IconButton(
+                        tooltip: 'Exportar cena',
+                        onPressed: () => abrirFolhaDeExportar(
+                          context,
+                          ref,
                           layerId: widget.layerId,
-                          navegacao: _navegacao,
-                          tempo: tempo,
-                          aoTocarVazio: () {},
                         ),
-                      ),
-
-                      // Barra Lateral Flutuante Esquerda (8 Ferramentas)
-                      Positioned(
-                        left: 12,
-                        top: 14,
-                        child: _BarraLateralFlutuante(
-                          layerId: widget.layerId,
-                          tempo: tempo,
-                          navegacao: _navegacao,
-                          aoFocar: () => _vista.currentState?.focar(),
-                          aoAvisar: _dizer,
+                        icon: const Icon(
+                          Icons.ios_share,
+                          color: Scene3DTheme.accent,
                         ),
-                      ),
-
-                      // Cubo de Orientação de Vista (Top-Right)
-                      Positioned(
-                        right: 12,
-                        top: 14,
-                        child: GizmoDeVista(
-                          navegacao: _navegacao,
-                          camera: cameraNoAr(camada, local),
-                          tempo: local,
-                        ),
-                      ),
-
-                      // Gizmo 3D de Eixos (Bottom-Left)
-                      const Positioned(
-                        left: 14,
-                        bottom: 14,
-                        child: _Gizmo3DEixos(),
-                      ),
-
-                      // Pílula Indicadora de Projeção / Perspectiva (Bottom-Right)
-                      Positioned(
-                        right: 14,
-                        bottom: 14,
-                        child: _BadgePerspectiva(
-                          navegacao: _navegacao,
-                          camera: cameraNoAr(camada, local),
-                          tempo: local,
-                        ),
-                      ),
-
-                      // Recado de Feedback Rápido
-                      const Positioned(
-                        left: 0,
-                        right: 0,
-                        top: 12,
-                        child: _RecadoScene3D(),
                       ),
                     ],
                   ),
                 ),
-
-                // Barra de Scrub / Transporte com Linha de Tempo
-                _FaixaDeTempoScene3D(playback: widget.playback, camada: camada),
-
-                // Barra Inferior de Navegação (4 Abas)
-                _BarraInferiorScene3D(
-                  layerId: widget.layerId,
-                  tempo: tempo,
-                  navegacao: _navegacao,
-                  playback: widget.playback,
-                  aoAvisar: _dizer,
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, bounds) {
+                      final landscape =
+                          bounds.maxWidth > bounds.maxHeight * 1.2;
+                      final viewport = Column(
+                        children: [
+                          Container(
+                            color: Scene3DTheme.panel,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.videocam_outlined, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: DropdownButton<String>(
+                                    key: const ValueKey('scene-quick-camera'),
+                                    isExpanded: true,
+                                    underline: const SizedBox(),
+                                    value: camera.id,
+                                    items: [
+                                      for (final cam in layer.allCameras)
+                                        DropdownMenuItem(
+                                          value: cam.id,
+                                          child: Text(
+                                            'No vídeo: ${cam.name}',
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                    onChanged: (id) {
+                                      if (id == null) return;
+                                      controller.setCameraShot(
+                                        layer.id,
+                                        local,
+                                        id,
+                                      );
+                                      ref
+                                              .read(
+                                                cameraSelecionadaProvider
+                                                    .notifier,
+                                              )
+                                              .state =
+                                          id;
+                                      ref
+                                              .read(
+                                                noSelecionadoProvider.notifier,
+                                              )
+                                              .state =
+                                          null;
+                                      ref
+                                              .read(
+                                                luzSelecionadaProvider.notifier,
+                                              )
+                                              .state =
+                                          null;
+                                      _navegacao.verVista(SceneView.camera);
+                                    },
+                                  ),
+                                ),
+                                PopupMenuButton<SceneView>(
+                                  tooltip: 'Vista de trabalho',
+                                  icon: const Icon(Icons.view_in_ar_outlined),
+                                  onSelected: (view) => _navegacao.verVista(
+                                    view,
+                                    camera: camera,
+                                    tempo: local,
+                                  ),
+                                  itemBuilder: (_) => [
+                                    for (final v in [
+                                      SceneView.camera,
+                                      SceneView.custom1,
+                                      SceneView.front,
+                                      SceneView.top,
+                                      SceneView.right,
+                                    ])
+                                      PopupMenuItem(
+                                        value: v,
+                                        child: Text(sceneViewLabel(v)),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ClipRect(
+                              child: VistaDaCena(
+                                key: _vista,
+                                layerId: layer.id,
+                                navegacao: _navegacao,
+                                tempo: time,
+                                aoTocarVazio: () {},
+                              ),
+                            ),
+                          ),
+                          if (landscape) _timeline(layer, local, marks),
+                          SizedBox(
+                            height: 46,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              children: [
+                                for (final f in FerramentaDoEstudio.values)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ChoiceChip(
+                                      label: Text(ferramentaLabel(f)),
+                                      selected: tool == f,
+                                      onSelected: (_) =>
+                                          ref
+                                                  .read(
+                                                    ferramentaProvider.notifier,
+                                                  )
+                                                  .state =
+                                              f,
+                                    ),
+                                  ),
+                                IconButton(
+                                  key: const ValueKey('estudio-focar'),
+                                  tooltip: 'Enquadrar seleção',
+                                  onPressed: () => _vista.currentState?.focar(),
+                                  icon: const Icon(Icons.center_focus_strong),
+                                ),
+                                IconButton(
+                                  tooltip: 'Mostrar grade',
+                                  onPressed: () => controller.setSceneFloorGrid(
+                                    layer.id,
+                                    !layer.scene.showFloorGrid,
+                                  ),
+                                  icon: Icon(
+                                    Icons.grid_4x4,
+                                    color: layer.scene.showFloorGrid
+                                        ? Scene3DTheme.accent
+                                        : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                      final panel = Material(
+                        key: const ValueKey('scene-edit-panel'),
+                        color: Scene3DTheme.panel,
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: FilterChip(
+                                    label: const Text(
+                                      'AutoKey',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    selected: autoKey,
+                                    onSelected: (v) =>
+                                        ref
+                                                .read(
+                                                  autoKeyframeProvider.notifier,
+                                                )
+                                                .state =
+                                            v,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: TextButton.icon(
+                                    key: const ValueKey('estudio-adicionar'),
+                                    onPressed: () => _adicionar(context, time),
+                                    icon: const Icon(Icons.add, size: 18),
+                                    label: const Text(
+                                      'Adicionar',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: _expanded
+                                      ? 'Reduzir painel'
+                                      : 'Ampliar painel',
+                                  onPressed: () =>
+                                      setState(() => _expanded = !_expanded),
+                                  icon: Icon(
+                                    _expanded
+                                        ? Icons.expand_more
+                                        : Icons.expand_less,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(
+                              height: 48,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                children: [
+                                  for (var i = 0; i < _tabs.length; i++)
+                                    TextButton.icon(
+                                      key: ValueKey('scene-tab-$i'),
+                                      onPressed: () => setState(() => _tab = i),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: _tab == i
+                                            ? Scene3DTheme.accent
+                                            : Scene3DTheme.textMuted,
+                                      ),
+                                      icon: Icon(_icons[i], size: 18),
+                                      label: Text(_tabs[i]),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Expanded(child: _panel(context, layer, time)),
+                          ],
+                        ),
+                      );
+                      if (landscape) {
+                        return Row(
+                          children: [
+                            Expanded(child: viewport),
+                            SizedBox(
+                              width: bounds.maxWidth * .45,
+                              child: panel,
+                            ),
+                          ],
+                        );
+                      }
+                      final panelHeight =
+                          (bounds.maxHeight * (_expanded ? .62 : .44)).clamp(
+                            175.0,
+                            bounds.maxHeight * .72,
+                          );
+                      return Column(
+                        children: [
+                          Expanded(child: viewport),
+                          _timeline(layer, local, marks),
+                          SizedBox(height: panelHeight, child: panel),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ],
             );
@@ -179,668 +433,260 @@ class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
       ),
     );
   }
-}
 
-/// Barra Superior Moderna: `< Scene 3D` com botão pílula verde `[Exportar]`
-class _BarraSuperiorScene3D extends ConsumerWidget {
-  const _BarraSuperiorScene3D({
-    required this.camada,
-    required this.local,
-    required this.navegacao,
-    required this.playback,
-    required this.aoVoltar,
-    required this.aoExportar,
-  });
+  Widget _panel(BuildContext context, Scene3DLayer layer, Duration time) {
+    if (_tab == 1) {
+      final node = layer.scene.nodeById(ref.watch(noSelecionadoProvider) ?? '');
+      bool canParent(String id) {
+        final seen = <String>{};
+        String? cursor = id;
+        while (cursor != null && seen.add(cursor)) {
+          if (cursor == node?.id) return false;
+          cursor = layer.scene.nodeById(cursor)?.parentId;
+        }
+        return true;
+      }
 
-  final Scene3DLayer camada;
-  final Duration local;
-  final NavegacaoDaVista navegacao;
-  final PlaybackController playback;
-  final VoidCallback aoVoltar;
-  final VoidCallback aoExportar;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: const BoxDecoration(
-        color: Scene3DTheme.panel,
-        border: Border(
-          bottom: BorderSide(color: Scene3DTheme.border, width: 0.8),
-        ),
-      ),
-      child: Row(
-        children: [
-          // Botão Voltar com Ícone e Título
-          GestureDetector(
-            key: const ValueKey('estudio-voltar'),
-            behavior: HitTestBehavior.opaque,
-            onTap: aoVoltar,
-            child: const Row(
-              children: [
-                Icon(
-                  Icons.chevron_left_rounded,
-                  color: Scene3DTheme.text,
-                  size: 28,
-                ),
-                SizedBox(width: 4),
-                Text(
-                  'Scene 3D',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: Scene3DTheme.text,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-
-          // Botão Pílula Verde Neon: [Exportar]
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: aoExportar,
-            child: Container(
-              height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: Scene3DTheme.accent,
-                borderRadius: BorderRadius.circular(17),
-              ),
-              child: const Row(
+      return LayoutBuilder(
+        builder: (_, box) => SingleChildScrollView(
+          child: SizedBox(
+            height: box.maxHeight < 380 ? 380 : box.maxHeight,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
                 children: [
-                  Icon(
-                    Icons.file_upload_outlined,
-                    color: Scene3DTheme.onAccent,
-                    size: 16,
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'Exportar',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Scene3DTheme.onAccent,
+                  if (node != null)
+                    DropdownButton<String>(
+                      key: const ValueKey('scene-link-null'),
+                      isExpanded: true,
+                      value:
+                          layer.scene.nodeById(node.parentId ?? '') != null &&
+                              canParent(node.parentId!)
+                          ? node.parentId
+                          : '',
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('Vincular a nulo: nenhum'),
+                        ),
+                        for (final parent in layer.scene.nodes)
+                          if ((parent.isNull || parent.id == node.parentId) &&
+                              canParent(parent.id))
+                            DropdownMenuItem(
+                              value: parent.id,
+                              child: Text(
+                                'Nulo: ${parent.name}',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                      ],
+                      onChanged: (id) => ref
+                          .read(editorControllerProvider.notifier)
+                          .setSceneNodeParent(
+                            layer.id,
+                            node.id,
+                            id == '' ? null : id,
+                            preserveWorldAt: layer.localTime(time),
+                          ),
+                    ),
+                  Expanded(
+                    child: FichaDoSelecionado(
+                      layerId: layer.id,
+                      tempo: time,
+                      abaInicial: AbaDaFicha.transformar,
                     ),
                   ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Barra Lateral Flutuante com 8 Ferramentas Essenciais
-class _BarraLateralFlutuante extends ConsumerWidget {
-  const _BarraLateralFlutuante({
-    required this.layerId,
-    required this.tempo,
-    required this.navegacao,
-    required this.aoFocar,
-    required this.aoAvisar,
-  });
-
-  final String layerId;
-  final Duration tempo;
-  final NavegacaoDaVista navegacao;
-  final VoidCallback aoFocar;
-  final void Function(String) aoAvisar;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final ferramentaAtual = ref.watch(ferramentaProvider);
-
-    return Container(
-      width: 46,
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: Scene3DTheme.panel.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(23),
-        border: Border.all(color: Scene3DTheme.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 1. Selecionar
-          _buildToolButton(
-            icon: Icons.near_me_rounded,
-            isSelected: ferramentaAtual == FerramentaDoEstudio.selecionar,
-            semanticLabel: 'Selecionar',
-            onTap: () => ref.read(ferramentaProvider.notifier).state =
-                FerramentaDoEstudio.selecionar,
-          ),
-          const SizedBox(height: 4),
-
-          // 2. Mover
-          _buildToolButton(
-            icon: Icons.open_with_rounded,
-            isSelected: ferramentaAtual == FerramentaDoEstudio.mover,
-            semanticLabel: 'Mover',
-            onTap: () => ref.read(ferramentaProvider.notifier).state =
-                FerramentaDoEstudio.mover,
-          ),
-          const SizedBox(height: 4),
-
-          // 3. Girar
-          _buildToolButton(
-            icon: Icons.rotate_right_rounded,
-            isSelected: ferramentaAtual == FerramentaDoEstudio.girar,
-            semanticLabel: 'Girar',
-            onTap: () => ref.read(ferramentaProvider.notifier).state =
-                FerramentaDoEstudio.girar,
-          ),
-          const SizedBox(height: 4),
-
-          // 4. Escalar
-          _buildToolButton(
-            icon: Icons.aspect_ratio_rounded,
-            isSelected: ferramentaAtual == FerramentaDoEstudio.escalar,
-            semanticLabel: 'Escalar',
-            onTap: () => ref.read(ferramentaProvider.notifier).state =
-                FerramentaDoEstudio.escalar,
-          ),
-          const SizedBox(height: 4),
-
-          // 5. Camadas / Malhas
-          _buildToolButton(
-            icon: Icons.layers_rounded,
-            isSelected: false,
-            semanticLabel: 'Camadas',
-            onTap: () =>
-                abrirFolhaDaCena(context, ref, layerId: layerId, tempo: tempo),
-          ),
-          const SizedBox(height: 4),
-
-          // 6. Material / Shaders
-          _buildToolButton(
-            icon: Icons.palette_outlined,
-            isSelected: false,
-            semanticLabel: 'Material',
-            onTap: () => abrirFichaDoSelecionado(
-              context,
-              ref,
-              layerId: layerId,
-              tempo: tempo,
+        ),
+      );
+    }
+    if (_tab == 2) {
+      return SingleChildScrollView(
+        child: FolhaDeAnimacao(layerId: layer.id, playback: widget.playback),
+      );
+    }
+    if (_tab == 3) {
+      return SingleChildScrollView(
+        child: FolhaDeCamera(layerId: layer.id, tempo: time),
+      );
+    }
+    if (_tab == 4) {
+      return SingleChildScrollView(
+        child: FolhaDeLuzes(layerId: layer.id, tempo: time),
+      );
+    }
+    final selected = ref.watch(noSelecionadoProvider);
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      children: [
+        if (layer.scene.nodes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Sua cena começa aqui. Toque em Adicionar para criar ou importar um objeto.',
             ),
           ),
-          const SizedBox(height: 4),
-
-          // 7. Grade / Snapping
-          _buildToolButton(
-            icon: Icons.grid_4x4_rounded,
-            isSelected: false,
-            semanticLabel: 'Grade',
+        for (final node in layer.scene.nodes)
+          ListTile(
+            dense: true,
+            selected: selected == node.id,
+            leading: Icon(
+              node.isNull ? Icons.control_camera : Icons.view_in_ar_outlined,
+            ),
+            title: Text(
+              node.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: node.parentId == null
+                ? null
+                : Text(
+                    'Ligado a ${layer.scene.nodeById(node.parentId!)?.name ?? "nulo"}',
+                  ),
+            trailing: const Icon(Icons.tune, size: 20),
             onTap: () {
-              final c = ref.read(editorControllerProvider.notifier);
-              final camada = ref
-                  .read(editorControllerProvider)
-                  .layerById(layerId);
-              if (camada is Scene3DLayer) {
-                c.setSceneFloorGrid(layerId, !camada.scene.showFloorGrid);
-                aoAvisar(
-                  camada.scene.showFloorGrid
-                      ? 'Grade desativada.'
-                      : 'Grade ativada.',
-                );
-              }
+              ref.read(noSelecionadoProvider.notifier).state = node.id;
+              ref.read(cameraSelecionadaProvider.notifier).state = null;
+              ref.read(luzSelecionadaProvider.notifier).state = null;
+              setState(() => _tab = 1);
             },
           ),
-          const SizedBox(height: 4),
-
-          // 8. Foco / Enquadrar
-          _buildToolButton(
-            key: const ValueKey('estudio-focar'),
-            icon: Icons.center_focus_strong_rounded,
-            isSelected: false,
-            semanticLabel: 'Focar',
-            onTap: aoFocar,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildToolButton({
-    Key? key,
-    required IconData icon,
-    required bool isSelected,
-    required String semanticLabel,
-    required VoidCallback onTap,
-  }) {
-    return Semantics(
-      key: key,
-      container: true,
-      button: true,
-      label: semanticLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: isSelected ? Scene3DTheme.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Icon(
-            icon,
-            size: 19,
-            color: isSelected ? Scene3DTheme.onAccent : Scene3DTheme.textMuted,
-          ),
+        TextButton.icon(
+          key: const ValueKey('estudio-cena'),
+          icon: const Icon(Icons.account_tree_outlined),
+          label: const Text('Organizar objetos, luzes e câmeras'),
+          onPressed: () =>
+              abrirFolhaDaCena(context, ref, layerId: layer.id, tempo: time),
         ),
-      ),
+      ],
     );
   }
-}
 
-/// Gizmo 3D de Eixos (X vermelho, Y verde, Z azul) no canto inferior esquerdo
-class _Gizmo3DEixos extends StatelessWidget {
-  const _Gizmo3DEixos();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 50,
-      height: 50,
-      decoration: BoxDecoration(
-        color: Scene3DTheme.panel.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Scene3DTheme.border),
-      ),
-      child: CustomPaint(painter: _GizmoEixosPainter()),
-    );
-  }
-}
-
-class _GizmoEixosPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width * 0.35;
-    final cy = size.height * 0.65;
-
-    void drawAxis(Offset end, Color color, String label) {
-      final paint = Paint()
-        ..color = color
-        ..strokeWidth = 2.2
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawLine(Offset(cx, cy), end, paint);
-
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(
-            color: color,
-            fontSize: 8.5,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      tp.paint(canvas, Offset(end.dx - 2, end.dy - 6));
+  Widget _timeline(Scene3DLayer layer, Duration local, List<Duration> marks) {
+    final end = layer.duration.inMicroseconds;
+    final fraction = end <= 0
+        ? 0.0
+        : (local.inMicroseconds / end).clamp(0.0, 1.0);
+    void seek(double f) {
+      widget.playback.pause();
+      widget.playback.seek(
+        layer.startTime +
+            Duration(microseconds: (f.clamp(0.0, 1.0) * end).round()),
+      );
     }
 
-    // Eixo Y (verde, para cima)
-    drawAxis(Offset(cx, cy - 20), Scene3DTheme.axisY, 'Y');
-    // Eixo X (vermelho, para a direita)
-    drawAxis(Offset(cx + 20, cy), Scene3DTheme.axisX, 'X');
-    // Eixo Z (azul, diagonal perspectiva)
-    drawAxis(Offset(cx - 12, cy + 12), Scene3DTheme.axisZ, 'Z');
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-/// Pílula Indicadora de Projeção / Perspectiva
-class _BadgePerspectiva extends StatelessWidget {
-  const _BadgePerspectiva({
-    required this.navegacao,
-    required this.camera,
-    required this.tempo,
-  });
-
-  final NavegacaoDaVista navegacao;
-  final Camera3D camera;
-  final Duration tempo;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        // Alterna entre perspectiva e vistas ortográficas
-        final prox = switch (navegacao.vista) {
-          SceneView.camera => SceneView.top,
-          SceneView.top => SceneView.front,
-          SceneView.front => SceneView.right,
-          _ => SceneView.camera,
-        };
-        navegacao.verVista(prox, camera: camera, tempo: tempo);
-      },
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: Scene3DTheme.panelElevated.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Scene3DTheme.border),
-        ),
-        child: Center(
-          child: Text(
-            navegacao.pelaCamera
-                ? 'Perspectiva'
-                : sceneViewLabel(navegacao.vista),
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Scene3DTheme.textMuted,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Barra de Transporte e Scrubbing com Marcador de Tempo
-class _FaixaDeTempoScene3D extends ConsumerWidget {
-  const _FaixaDeTempoScene3D({required this.playback, required this.camada});
-
-  final PlaybackController playback;
-  final Scene3DLayer camada;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dur = camada.duration.inMicroseconds.toDouble();
-    final tempoAtual = playback.time.value;
-    final local = camada.localTime(tempoAtual).inMicroseconds.toDouble();
-    final fracao = dur > 0 ? (local / dur).clamp(0.0, 1.0) : 0.0;
-
-    final segDecorridos = (local / 1e6).floor();
-    final segTotal = dur > 0 ? (dur / 1e6).floor() : 10;
-    final textoTempo =
-        '00:${segDecorridos.toString().padLeft(2, '0')} / 00:${segTotal.toString().padLeft(2, '0')}';
-
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: const BoxDecoration(
-        color: Scene3DTheme.panel,
-        border: Border(top: BorderSide(color: Scene3DTheme.border, width: 0.8)),
-      ),
+    return SizedBox(
+      height: 66,
       child: Row(
         children: [
-          // Botão Play / Pause
           ValueListenableBuilder<bool>(
-            valueListenable: PlaybackController.tocandoAgora,
-            builder: (_, tocando, _) {
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (tocando) {
-                    playback.pause();
-                  } else {
-                    playback.play();
-                  }
-                },
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: const BoxDecoration(
-                    color: Scene3DTheme.panelElevated,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    tocando ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 18,
+            valueListenable: widget.playback.playing,
+            builder: (_, playing, _) => IconButton(
+              tooltip: playing ? 'Pausar' : 'Reproduzir',
+              onPressed: widget.playback.toggle,
+              icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  '${(local.inMilliseconds / 1000).toStringAsFixed(2)} / ${(end / 1000000).toStringAsFixed(2)} s',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (_, box) => GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (d) => seek(d.localPosition.dx / box.maxWidth),
+                      onHorizontalDragUpdate: (d) =>
+                          seek(d.localPosition.dx / box.maxWidth),
+                      child: Stack(
+                        clipBehavior: Clip.hardEdge,
+                        children: [
+                          const Positioned(
+                            left: 0,
+                            right: 0,
+                            top: 20,
+                            child: Divider(height: 1),
+                          ),
+                          for (final shot in layer.shots)
+                            Positioned(
+                              left: end <= 0
+                                  ? 0
+                                  : shot.time.inMicroseconds /
+                                        end *
+                                        box.maxWidth,
+                              top: 5,
+                              child: const Icon(
+                                Icons.videocam,
+                                size: 12,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          for (final mark in marks)
+                            Positioned(
+                              left: end <= 0
+                                  ? 0
+                                  : (mark.inMicroseconds /
+                                        end *
+                                        (box.maxWidth - 22)),
+                              top: 10,
+                              child: GestureDetector(
+                                onTap: () => seek(
+                                  end <= 0 ? 0 : mark.inMicroseconds / end,
+                                ),
+                                child: const Icon(
+                                  Icons.diamond,
+                                  size: 22,
+                                  color: Scene3DTheme.accent,
+                                ),
+                              ),
+                            ),
+                          Positioned(
+                            left: fraction * (box.maxWidth - 2),
+                            top: 0,
+                            bottom: 0,
+                            width: 2,
+                            child: const ColoredBox(color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
-
-          // Barra Slider Interativa de Scrub
-          Expanded(
-            child: Semantics(
-              key: const ValueKey('scene-motion-time'),
-              slider: true,
-              value: textoTempo,
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  void irPara(double dx) {
-                    final f = (dx / c.maxWidth).clamp(0.0, 1.0);
-                    playback.seek(
-                      camada.startTime +
-                          Duration(microseconds: (f * dur).round()),
-                    );
-                  }
-
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (d) => irPara(d.localPosition.dx),
-                    onHorizontalDragUpdate: (d) => irPara(d.localPosition.dx),
-                    child: CustomPaint(
-                      painter: _PinturaDoScrub(fracao: fracao),
-                      child: const SizedBox(height: 24, width: double.infinity),
-                    ),
-                  );
-                },
-              ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
-
-          // Texto de Tempo: 00:00 / 00:10
-          Text(
-            textoTempo,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Scene3DTheme.textMuted,
-            ),
-          ),
         ],
       ),
     );
   }
 }
 
-class _PinturaDoScrub extends CustomPainter {
-  const _PinturaDoScrub({required this.fracao});
-  final double fracao;
-
+class _Tip extends StatelessWidget {
+  const _Tip(this.title, this.body);
+  final String title, body;
   @override
-  void paint(Canvas canvas, Size size) {
-    final y = size.height / 2;
-    // Trilha inativa
-    canvas.drawLine(
-      Offset(0, y),
-      Offset(size.width, y),
-      Paint()
-        ..color = Scene3DTheme.border
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // Trilha ativa em verde neon
-    final progX = fracao * size.width;
-    canvas.drawLine(
-      Offset(0, y),
-      Offset(progX, y),
-      Paint()
-        ..color = Scene3DTheme.accent
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // Cabeçote circular verde
-    canvas.drawCircle(
-      Offset(progX, y),
-      5,
-      Paint()..color = Scene3DTheme.accent,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_PinturaDoScrub old) => old.fracao != fracao;
-}
-
-/// Barra Inferior de Navegação do Scene 3D (4 Abas)
-class _BarraInferiorScene3D extends StatelessWidget {
-  const _BarraInferiorScene3D({
-    required this.layerId,
-    required this.tempo,
-    required this.navegacao,
-    required this.playback,
-    required this.aoAvisar,
-  });
-
-  final String layerId;
-  final Duration tempo;
-  final NavegacaoDaVista navegacao;
-  final PlaybackController playback;
-  final void Function(String) aoAvisar;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 66,
-      decoration: const BoxDecoration(
-        color: Scene3DTheme.panel,
-        border: Border(top: BorderSide(color: Scene3DTheme.border, width: 0.8)),
-      ),
-      child: Consumer(
-        builder: (context, ref, _) {
-          return Row(
-            children: [
-              // Aba 1: Câmera (Tela 6)
-              _buildNavTab(
-                key: const ValueKey('estudio-camera'),
-                icon: Icons.videocam_outlined,
-                label: 'Câmera',
-                onTap: () => abrirFolhaDeCameras(
-                  context,
-                  ref,
-                  layerId: layerId,
-                  navegacao: navegacao,
-                  tempo: tempo,
-                ),
-              ),
-
-              // Aba 2: Objetos (Tela 2)
-              _buildNavTab(
-                key: const ValueKey('estudio-cena'),
-                icon: Icons.view_in_ar_outlined,
-                label: 'Objetos',
-                onTap: () => abrirFolhaDaCena(
-                  context,
-                  ref,
-                  layerId: layerId,
-                  tempo: tempo,
-                ),
-              ),
-
-              // Aba 3: Animação (Tela 3)
-              _buildNavTab(
-                icon: Icons.auto_graph_outlined,
-                label: 'Animação',
-                onTap: () => abrirFolhaDeAnimacao(
-                  context,
-                  ref,
-                  layerId: layerId,
-                  playback: playback,
-                ),
-              ),
-
-              // Aba 4: Cena / Luzes (Tela 7)
-              _buildNavTab(
-                key: const ValueKey('estudio-mais'),
-                icon: Icons.tune_rounded,
-                label: 'Cena',
-                onTap: () => abrirFolhaDeLuzes(
-                  context,
-                  ref,
-                  layerId: layerId,
-                  tempo: tempo,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildNavTab({
-    Key? key,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        key: key,
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 22, color: Scene3DTheme.text),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Scene3DTheme.textMuted,
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Scene3DTheme.accent,
+          ),
         ),
-      ),
-    );
-  }
-}
-
-/// Recado Flutuante de Feedback
-class _RecadoScene3D extends ConsumerWidget {
-  const _RecadoScene3D();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final texto = ref.watch(recadoDoEstudioProvider);
-    if (texto == null) return const SizedBox.shrink();
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: Scene3DTheme.panelElevated.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Scene3DTheme.border),
-        ),
-        child: Text(
-          texto,
-          style: const TextStyle(fontSize: 12, color: Scene3DTheme.text),
-        ),
-      ),
-    );
-  }
+        const SizedBox(height: 4),
+        Text(body),
+      ],
+    ),
+  );
 }

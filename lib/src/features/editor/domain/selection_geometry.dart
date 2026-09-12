@@ -20,14 +20,24 @@ Matrix4 selectionTransform(VideoProject project, Layer layer, Duration time) {
     sy *= perspective;
   }
   final pivot = layer.pivot.valueAt(local);
-  return Matrix4.identity()
-    ..translateByDouble(
-      effective.pos.dx + pivot.dx,
-      effective.pos.dy + pivot.dy,
-      0,
-      1,
-    )
-    ..rotateZ(effective.rot * math.pi / 180)
+  final tilt =
+      (effective.rotX != 0 || effective.rotY != 0) &&
+      layer is! ParticlesLayer &&
+      layer is! Element3DLayer;
+  final matrix = Matrix4.identity()
+    ..translateByDouble(effective.pos.dx, effective.pos.dy, 0, 1);
+  if (tilt) {
+    matrix.multiply(
+      Matrix4.identity()
+        ..setEntry(3, 2, -1 / 1200)
+        ..rotateZ(effective.rot * math.pi / 180)
+        ..rotateY(effective.rotY * math.pi / 180)
+        ..rotateX(effective.rotX * math.pi / 180),
+    );
+  }
+  matrix.translateByDouble(pivot.dx, pivot.dy, 0, 1);
+  if (!tilt) matrix.rotateZ(effective.rot * math.pi / 180);
+  matrix
     ..multiply(
       Matrix4.skew(
         layer.skewX.valueAt(local) * math.pi / 180,
@@ -36,4 +46,12 @@ Matrix4 selectionTransform(VideoProject project, Layer layer, Duration time) {
     )
     ..scaleByDouble(sx, sy, 1, 1)
     ..translateByDouble(-pivot.dx, -pivot.dy, 0, 1);
+  // Hit testing inverts the projected layer plane, not a point at world Z=0.
+  // Preserve x/y/w as a homography; flatten the unused Z row and column.
+  for (final i in [0, 1, 3]) {
+    matrix.setEntry(2, i, 0);
+    matrix.setEntry(i, 2, 0);
+  }
+  matrix.setEntry(2, 2, 1);
+  return matrix;
 }

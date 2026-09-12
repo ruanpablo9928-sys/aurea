@@ -63,7 +63,8 @@ List<QuickAction> quickActionsFor(
   final id = layer.id;
   final temSom = layer is AudioLayer || layer is VideoLayer;
   final mudo = controller.audioSpecOf(id)?.muted ?? false;
-  final temPai = project.linkFor(id, LayerProp.parent) != null ||
+  final temPai =
+      project.linkFor(id, LayerProp.parent) != null ||
       (layer is Scene3DLayer && layer.cameraParentLayerId != null);
   final t = playback.time.value;
 
@@ -214,7 +215,7 @@ List<QuickAction> quickActionsFor(
       aceso: temPai,
       onTap: () {
         if (temPai) {
-          controller.unlinkProperty(id, LayerProp.parent);
+          controller.unlinkProperty(id, LayerProp.parent, time: t);
         } else {
           pausa(() => showParentSheet(context, ref, layer, t));
         }

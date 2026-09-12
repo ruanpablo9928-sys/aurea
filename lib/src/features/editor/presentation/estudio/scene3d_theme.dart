@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 /// Design system e paleta de cores para a nova UI do Scene 3D.
 abstract final class Scene3DTheme {
+  static final ThemeData theme = ThemeData(
+    brightness: Brightness.dark,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: accent,
+      brightness: Brightness.dark,
+    ).copyWith(primary: accent, surface: panel, onPrimary: onAccent),
+    scaffoldBackgroundColor: bg,
+    chipTheme: const ChipThemeData(
+      selectedColor: accentDim,
+      backgroundColor: panel,
+    ),
+  );
   // Paleta de cores principais
   static const Color bg = Color(0xFF0B0F15);
   static const Color panel = Color(0xFF161B22);
@@ -32,29 +44,27 @@ abstract final class Scene3DTheme {
     Color? borderColor,
     double borderRadius = 16,
     bool isSelected = false,
-  }) =>
-      BoxDecoration(
-        color: color ?? panelElevated,
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: isSelected ? accent : (borderColor ?? border),
-          width: isSelected ? 1.5 : 1.0,
-        ),
-      );
+  }) => BoxDecoration(
+    color: color ?? panelElevated,
+    borderRadius: BorderRadius.circular(borderRadius),
+    border: Border.all(
+      color: isSelected ? accent : (borderColor ?? border),
+      width: isSelected ? 1.5 : 1.0,
+    ),
+  );
 
   static BoxDecoration pillDecoration({
     required bool active,
     Color? activeColor,
     Color? inactiveColor,
-  }) =>
-      BoxDecoration(
-        color: active ? (activeColor ?? accent) : (inactiveColor ?? panelElevated),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: active ? (activeColor ?? accent) : border,
-          width: 1,
-        ),
-      );
+  }) => BoxDecoration(
+    color: active ? (activeColor ?? accent) : (inactiveColor ?? panelElevated),
+    borderRadius: BorderRadius.circular(20),
+    border: Border.all(
+      color: active ? (activeColor ?? accent) : border,
+      width: 1,
+    ),
+  );
 }
 
 /// Cabeçalho estilizado para as folhas modais do Scene 3D
@@ -85,21 +95,28 @@ class Scene3DSheetHeader extends StatelessWidget {
               child: const SizedBox(
                 width: 36,
                 height: 36,
-                child: Icon(Icons.chevron_left_rounded, color: Scene3DTheme.text, size: 26),
+                child: Icon(
+                  Icons.chevron_left_rounded,
+                  color: Scene3DTheme.text,
+                  size: 26,
+                ),
               ),
             ),
             const SizedBox(width: 4),
           ],
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Scene3DTheme.text,
-              letterSpacing: -0.2,
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Scene3DTheme.text,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
-          const Spacer(),
           ?trailing,
           if (onClose != null)
             GestureDetector(
@@ -113,7 +130,11 @@ class Scene3DSheetHeader extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: Scene3DTheme.border),
                 ),
-                child: const Icon(Icons.close_rounded, color: Scene3DTheme.textMuted, size: 18),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: Scene3DTheme.textMuted,
+                  size: 18,
+                ),
               ),
             ),
         ],
@@ -149,7 +170,9 @@ class Scene3DActionButton extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: outlined ? const BorderSide(color: Scene3DTheme.border, width: 1.2) : BorderSide.none,
+            side: outlined
+                ? const BorderSide(color: Scene3DTheme.border, width: 1.2)
+                : BorderSide.none,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20),
         ),
@@ -158,7 +181,11 @@ class Scene3DActionButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 19, color: outlined ? Scene3DTheme.text : Scene3DTheme.onAccent),
+              Icon(
+                icon,
+                size: 19,
+                color: outlined ? Scene3DTheme.text : Scene3DTheme.onAccent,
+              ),
               const SizedBox(width: 8),
             ],
             Text(

@@ -1,3 +1,5 @@
+import '../../domain/panorama3d.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +9,8 @@ import '../../domain/scene3d.dart';
 import '../am/color_picker_sheet.dart';
 import 'folhas_do_estudio.dart';
 import 'scene3d_theme.dart';
+import 'estado_do_estudio.dart';
+import 'ficha_do_selecionado.dart';
 
 /// Abre a folha modal de Luzes (Tela 7 do mockup).
 Future<void> abrirFolhaDeLuzes(
@@ -97,12 +101,73 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                     ),
                 ],
               ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Reflexos da cena'),
+                subtitle: const Text(
+                  'Captura real dos objetos ao redor; reutilizada durante a reprodução.',
+                ),
+                value: camada.scene.reflectionProbe.enabled,
+                onChanged: (v) => c.setSceneReflectionProbe(
+                  widget.layerId,
+                  camada.scene.reflectionProbe.copyWith(
+                    enabled: v,
+                    updateMode: ProbeUpdateMode.stopped,
+                    position:
+                        camada.scene.reflectionProbe.position ==
+                            ProbePoint3D.zero
+                        ? const ProbePoint3D(0, 300, 300)
+                        : null,
+                  ),
+                ),
+              ),
+              if (camada.scene.reflectionProbe.enabled) ...[
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Atualizar reflexos'),
+                  onPressed: () => c.setSceneReflectionProbe(
+                    widget.layerId,
+                    camada.scene.reflectionProbe.copyWith(),
+                  ),
+                ),
+                const Text('Força dos reflexos'),
+                Slider(
+                  value: camada.scene.envReflect.clamp(0.0, 1.0),
+                  onChanged: (v) => c.setSceneEnvReflect(widget.layerId, v),
+                ),
+              ],
               const Text('Iluminação ambiente da cena'),
               Slider(
                 key: const ValueKey('scene-ambient-intensity'),
                 value: camada.scene.ambient.clamp(0.0, 1.0),
                 onChanged: (v) => c.setSceneAmbient(widget.layerId, v),
               ),
+              if (activeLight != null &&
+                  activeLight.kind != Light3DKind.ambient)
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Projetar sombras'),
+                  value: activeLight.castsShadow,
+                  onChanged: (v) =>
+                      c.setSceneLightShadow(widget.layerId, activeLight.id, v),
+                ),
+              if (activeLight != null)
+                TextButton.icon(
+                  icon: const Icon(Icons.open_with),
+                  label: const Text('Posição, direção e alcance'),
+                  onPressed: () {
+                    ref.read(noSelecionadoProvider.notifier).state = null;
+                    ref.read(cameraSelecionadaProvider.notifier).state = null;
+                    ref.read(luzSelecionadaProvider.notifier).state =
+                        activeLight.id;
+                    abrirFichaDoSelecionado(
+                      context,
+                      ref,
+                      layerId: widget.layerId,
+                      tempo: widget.tempo,
+                    );
+                  },
+                ),
               if (activeLight == null)
                 const Text(
                   'Adicione uma luz para ajustar sua cor e intensidade.',

@@ -1,3 +1,5 @@
+import '../../../domain/layer.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,6 +54,12 @@ Future<void> showEffectGallery(
                 : (category == null
                       ? effectSpecs.keys.toList()
                       : effectsInCategory(category!));
+            if (ref.read(editorControllerProvider).layerById(layerId)
+                is! VideoLayer) {
+              results = results
+                  .where((t) => t != EffectType.opticalFlow)
+                  .toList();
+            }
             if (favoritos && query.isEmpty) {
               results = [
                 for (final t in results)

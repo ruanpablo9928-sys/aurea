@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+// TensorFlow Lite resolves its C API through Dart FFI at runtime.
+STRIP_STYLE = non-global

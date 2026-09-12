@@ -167,6 +167,7 @@ const quickStartSteps = <(String, String)>[
 ];
 
 String effectHelp(EffectType type) => switch (type) {
+  EffectType.opticalFlow => 'Estima o movimento entre quadros para suavizar câmera lenta e curvas de Time Remap. A prévia é preparada em segundo plano; a exportação calcula os quadros a partir do original. Cortes de cena não são misturados.',
   EffectType.twirl => 'Torce a imagem ao redor de um centro. Angulo controla o giro e raio delimita a area afetada. As bordas sao espelhadas.',
   EffectType.fisheye => 'Deforma a imagem como uma lente grande angular. Valores positivos ampliam o centro; negativos comprimem.',
   EffectType.kaleidoscope => 'Espelha setores ao redor do centro. Ajuste segmentos, rotacao e mistura; todos aceitam keyframes.',

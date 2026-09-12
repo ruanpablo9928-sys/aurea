@@ -1,3 +1,5 @@
+import 'optical_flow_preview.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -19,6 +21,7 @@ import 'audio_render_service.dart';
 class VideoLayerManager {
   VideoLayerManager() {
     AudioRenderService.instance.revision.addListener(_audioChanged);
+    OpticalFlowPreview.instance.revision.addListener(_audioChanged);
   }
   Timer? _audioDebounce;
   int _lastAudioRevision = -1;
@@ -56,6 +59,8 @@ class VideoLayerManager {
   final Map<String, Future<void>> _initializing = {};
   final Map<String, DateTime> _lastSeek = {};
   int _lastProxyRevision = -1;
+  int _lastFlowRevision = -1;
+  final Set<String> _remapProxiesRequested = {};
   int _seekRevision = 0;
   final Map<String, Object> _positioning = {};
   final Set<String> _starting = {};
@@ -285,13 +290,16 @@ class VideoLayerManager {
     // Zero alocacao no caminho quente (travada-periodica C6): a lista de
     // midias so e remontada quando a CENA muda, nunca a cada tick.
     final proxyRevision = ProxyService.instance.revision.value;
+    final flowRevision = OpticalFlowPreview.instance.revision.value;
     final audioService = AudioRenderService.instance;
     final audioRevision = audioService.revision.value;
     if (!identical(layers, _lastLayers) ||
         proxyRevision != _lastProxyRevision ||
+        flowRevision != _lastFlowRevision ||
         audioRevision != _lastAudioRevision) {
       _lastLayers = layers;
       _lastProxyRevision = proxyRevision;
+      _lastFlowRevision = flowRevision;
       _lastAudioRevision = audioRevision;
       _prepareAudio();
       _media
@@ -323,7 +331,9 @@ class VideoLayerManager {
                 // PROXY quando ha: quadro-chave a cada 6 quadros faz o
                 // scrub ficar continuo. Sem proxy, o original — nunca
                 // deixa de tocar por falta de cache.
-                path: ProxyService.instance.playbackPath(l.sourcePath),
+                path:
+                    OpticalFlowPreview.instance.ready(l) ??
+                    ProxyService.instance.playbackPath(l.sourcePath),
                 volume: l.volume,
                 offset: l.sourceOffset,
                 layer: l,
@@ -366,7 +376,19 @@ class VideoLayerManager {
       if (!wanted.contains(id)) _evict(id);
     }
     for (final m in mediaLayers) {
-      if (wanted.contains(m.id)) _ensure(m.id, m.path, m.volume);
+      if (wanted.contains(m.id)) {
+        _ensure(m.id, m.path, m.volume);
+        if (m.layer is VideoLayer) {
+          unawaited(OpticalFlowPreview.instance.ensure(m.layer as VideoLayer));
+          final video = m.layer as VideoLayer;
+          if (hasTimeRemap(video) &&
+              _remapProxiesRequested.add(video.sourcePath)) {
+            unawaited(
+              ProxyService.instance.ensureProxy(video.sourcePath, force: true),
+            );
+          }
+        }
+      }
       if (wanted.contains(m.id) &&
           AudioRenderService.needed(m.layer) &&
           audioService.ready(m.layer) == null &&
@@ -450,15 +472,15 @@ class VideoLayerManager {
       final rate = vel.abs().clamp(0.1, 10.0).toDouble();
       final nativeRateFailed =
           ((_failedNativeRate[m.id] ?? -1) - rate).abs() < 0.001;
-      // Reverso e Time Remap nao possuem um unico clock de playback: o
-      // quadro correto e uma funcao pura do tempo da composicao. Nesses
-      // modos o player vira apenas decoder e recebe o source-time exato.
+      // Reverso e trechos parados exigem decodificacao por source-time.
+      // Curvas para frente usam playback continuo com velocidade local,
+      // evitando reiniciar o decoder a cada quadro do Time Remap.
       // Fora de 0,5..2x fazemos o mesmo: Android pode limitar extremos e
       // iOS pode rejeita-los; seek por source-time sustenta todo 0,1..10x.
       final frameDriven =
           layer is VideoLayer &&
           (layer.reverse ||
-              hasTimeRemap(layer) ||
+              vel <= 0 ||
               rate < 0.5 ||
               rate > 2.0 ||
               nativeRateFailed);
@@ -542,7 +564,9 @@ class VideoLayerManager {
             _lastPos[m.id] = pos;
             // A posicao do plugin so atualiza a cada ~500 ms: ancorar
             // com amostra repetida empurraria o relogio para tras.
-            if (master == null && !frameDriven) {
+            if (master == null &&
+                !frameDriven &&
+                !(layer is VideoLayer && hasTimeRemap(layer))) {
               // A amostra nasce VELHA (idade media ~250 ms). Esse vies e
               // constante e NAO e deriva: ancorar nele puxaria o relogio
               // para tras. Guardamos o vies na primeira amostra e
@@ -625,6 +649,7 @@ class VideoLayerManager {
   void dispose() {
     _audioDebounce?.cancel();
     AudioRenderService.instance.revision.removeListener(_audioChanged);
+    OpticalFlowPreview.instance.revision.removeListener(_audioChanged);
     _positioning.clear();
     _starting.clear();
     _positionTargets.clear();

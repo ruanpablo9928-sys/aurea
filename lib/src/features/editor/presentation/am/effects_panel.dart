@@ -1,3 +1,6 @@
+import 'time_remap_curve_editor.dart';
+import '../../application/optical_flow_preview.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,6 +123,10 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
   /// edicoes viram um undo so (coalesce de 450 ms).
   void _resetarEfeito(String layerId, EffectInstance effect) {
     final controller = ref.read(editorControllerProvider.notifier);
+    if (effect.type == EffectType.timeRemap) {
+      controller.resetClipTimeRemap(layerId);
+      return;
+    }
     final agora = widget.playback.time.value;
     for (final e in effect.spec.params.entries) {
       controller.editEffectParam(
@@ -147,7 +154,8 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
     if (layer == null || id == null) {
       return const ColoredBox(color: AmColors.panel);
     }
-    final realLayer = ref.watch(editorControllerProvider).layerById(id) ?? layer;
+    final realLayer =
+        ref.watch(editorControllerProvider).layerById(id) ?? layer;
     if (layer is AudioLayer) return AudioEffectsPanel(layerId: id);
     final effectIds = layer.effects.map((e) => e.id).toSet();
     if (_layerId != id) {
@@ -363,6 +371,31 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                     for (var i = 0; i < layer.effects.length; i++)
                       _EffectCard(
                         key: ValueKey(layer.effects[i].id),
+                        temporalControls:
+                            layer is VideoLayer &&
+                                layer.effects[i].type == EffectType.timeRemap
+                            ? TextButton.icon(
+                                icon: const Icon(Icons.timeline),
+                                label: const Text('Editar curva de tempo'),
+                                onPressed: () => showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  useSafeArea: true,
+                                  builder: (_) => SizedBox(
+                                    height:
+                                        MediaQuery.sizeOf(context).height * .8,
+                                    child: TimeRemapCurveEditor(
+                                      layerId: id,
+                                      playback: widget.playback,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : layer is VideoLayer &&
+                                  layer.effects[i].type ==
+                                      EffectType.opticalFlow
+                            ? OpticalFlowStatus(layer: layer)
+                            : null,
                         index: i,
                         effect: layer.effects[i],
                         local: local,
@@ -451,6 +484,7 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
 class _EffectCard extends StatelessWidget {
   const _EffectCard({
     super.key,
+    this.temporalControls,
     required this.index,
     required this.effect,
     required this.local,
@@ -475,6 +509,7 @@ class _EffectCard extends StatelessWidget {
 
   /// Os parametros sao completos nos dois modos; Pro acrescenta salvar
   /// preset e assar em keyframes.
+  final Widget? temporalControls;
   final bool pro;
   final VoidCallback onAssar;
 
@@ -683,14 +718,16 @@ class _EffectCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: onDuplicar,
-                  child: const Icon(
-                    CupertinoIcons.plus_square_on_square,
-                    size: 20,
-                    color: AmColors.text,
+                if (effect.type != EffectType.timeRemap &&
+                    effect.type != EffectType.opticalFlow)
+                  GestureDetector(
+                    onTap: onDuplicar,
+                    child: const Icon(
+                      CupertinoIcons.plus_square_on_square,
+                      size: 20,
+                      color: AmColors.text,
+                    ),
                   ),
-                ),
                 const SizedBox(width: 12),
                 GestureDetector(
                   onTap: onRemove,
@@ -718,6 +755,7 @@ class _EffectCard extends StatelessWidget {
             ),
             // Recolhido: nem constroi o corpo.
             if (expanded) ...[
+              ?temporalControls,
               const SizedBox(height: 8),
               // OS DOIS COMANDOS QUE FALTAVAM, VISIVEIS.
               //
@@ -728,11 +766,12 @@ class _EffectCard extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _ComandoDoEfeito(
-                    rotulo: 'Resetar',
-                    icone: CupertinoIcons.arrow_counterclockwise,
-                    onTap: onResetar,
-                  ),
+                  if (effect.type != EffectType.opticalFlow)
+                    _ComandoDoEfeito(
+                      rotulo: 'Resetar',
+                      icone: CupertinoIcons.arrow_counterclockwise,
+                      onTap: onResetar,
+                    ),
                   if (pro)
                     _ComandoDoEfeito(
                       key: const ValueKey('efeito-salvar-preset'),

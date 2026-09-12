@@ -38,7 +38,11 @@ void main() {
     expect(fatorDeInterpolacao(_clipe(speed: .5)), 2);
     expect(fatorDeInterpolacao(_clipe(speed: .25)), 4);
     expect(fatorDeInterpolacao(_clipe(speed: .1)), 4, reason: 'teto');
-    expect(fatorDeInterpolacao(_clipe(speed: .4)), 3, reason: 'arredonda para cima');
+    expect(
+      fatorDeInterpolacao(_clipe(speed: .4)),
+      3,
+      reason: 'arredonda para cima',
+    );
   });
 
   test('sem pedir interpolacao, a camera lenta continua repetindo quadros', () {
@@ -50,7 +54,7 @@ void main() {
   test('o filtro e o do ffmpeg, na taxa certa, com a virgula no fim', () {
     expect(
       filtroDeInterpolacao(_clipe(speed: .5), fps: 30),
-      'minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,',
+      'minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1:scd=fdiff:scd_threshold=10,',
     );
     expect(
       filtroDeInterpolacao(
@@ -61,19 +65,22 @@ void main() {
     );
   });
 
-  test('no time remap, vale o trecho mais lento — e o quadro segurado nao conta', () {
-    final base = _clipe();
-    // Um trecho a 25% e um trecho segurado (mesmo valor nos dois lados).
-    final track = AnimatedDouble(0)
-        .withKeyframe(Duration.zero, 0)
-        .withKeyframe(const Duration(seconds: 2), 0.5)
-        .withKeyframe(const Duration(seconds: 3), 0.5)
-        .withKeyframe(const Duration(seconds: 4), 1.5);
-    final remap = base.copyLayer(effects: replaceTimeRemap(base, track));
-    expect(hasTimeRemap(remap), isTrue);
-    expect(velocidadeMaisLenta(remap), closeTo(0.25, 1e-9));
-    expect(fatorDeInterpolacao(remap), 4);
-  });
+  test(
+    'no time remap, vale o trecho mais lento — e o quadro segurado nao conta',
+    () {
+      final base = _clipe();
+      // Um trecho a 25% e um trecho segurado (mesmo valor nos dois lados).
+      final track = AnimatedDouble(0)
+          .withKeyframe(Duration.zero, 0)
+          .withKeyframe(const Duration(seconds: 2), 0.5)
+          .withKeyframe(const Duration(seconds: 3), 0.5)
+          .withKeyframe(const Duration(seconds: 4), 1.5);
+      final remap = base.copyLayer(effects: replaceTimeRemap(base, track));
+      expect(hasTimeRemap(remap), isTrue);
+      expect(velocidadeMaisLenta(remap), closeTo(0.25, 1e-9));
+      expect(fatorDeInterpolacao(remap), 4);
+    },
+  );
 
   test('o modo sobrevive a gravacao do projeto', () {
     final p = VideoProject(

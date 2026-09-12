@@ -1,3 +1,5 @@
+import 'rotation_math.dart';
+
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
@@ -1148,8 +1150,7 @@ int facesQueONoDesenha(SceneNode no, bool rascunho, {int? teto}) {
   if (modelo != null) {
     // O pintor corta o modelo no teto antes de desenhar; a estimativa
     // conta o que ele vai desenhar de verdade, nao o arquivo inteiro.
-    final limite =
-        teto ?? (rascunho ? tetoDeFacesCpuRascunho : tetoDeFacesCpu);
+    final limite = teto ?? (rascunho ? tetoDeFacesCpuRascunho : tetoDeFacesCpu);
     final faces = modelo.triangleCount;
     return faces < limite ? faces : limite;
   }
@@ -1195,34 +1196,29 @@ NodeTransform resolveNodeTransform(
   NodeTransform external = NodeTransform.identity,
   int depth = 0,
 }) {
-  final local = NodeTransform(
-    position: node.positionAt(t),
-    rotX: node.rotX.valueAt(t),
-    rotY: node.rotY.valueAt(t),
-    rotZ: node.rotZ.valueAt(t),
-    scale: node.scale.valueAt(t),
-  );
-
-  final pid = node.parentId;
-  NodeTransform pai;
-  if (pid == null || depth >= 16) {
-    pai = external;
-  } else {
-    final parent = scene.nodeById(pid);
-    if (parent == null) {
-      pai = external;
-    } else {
-      pai = resolveNodeTransform(
-        scene,
-        parent,
-        t,
-        external: external,
-        depth: depth + 1,
-      );
-    }
+  final chain = <SceneNode>[];
+  final seen = <String>{};
+  SceneNode? current = node;
+  while (current != null && seen.add(current.id)) {
+    chain.add(current);
+    current = current.parentId == null
+        ? null
+        : scene.nodeById(current.parentId!);
   }
-
-  return composeTransforms(pai, local);
+  var result = external;
+  for (final n in chain.reversed) {
+    result = composeTransforms(
+      result,
+      NodeTransform(
+        position: n.positionAt(t),
+        rotX: n.rotX.valueAt(t),
+        rotY: n.rotY.valueAt(t),
+        rotZ: n.rotZ.valueAt(t),
+        scale: n.scale.valueAt(t),
+      ),
+    );
+  }
+  return result;
 }
 
 /// Pai depois filho: a posicao do filho gira e escala com o pai.
@@ -1252,11 +1248,28 @@ NodeTransform composeTransforms(NodeTransform pai, NodeTransform filho) {
     pai.rotY * math.pi / 180,
     pai.rotZ * math.pi / 180,
   );
+  final sum = (
+    pai.rotX + filho.rotX,
+    pai.rotY + filho.rotY,
+    pai.rotZ + filho.rotZ,
+  );
+  final activeAxes =
+      (sum.$1 != 0 || pai.rotX != 0 ? 1 : 0) +
+      (sum.$2 != 0 || pai.rotY != 0 ? 1 : 0) +
+      (sum.$3 != 0 || pai.rotZ != 0 ? 1 : 0);
+  final parentIdentity = pai.rotX == 0 && pai.rotY == 0 && pai.rotZ == 0;
+  final childIdentity = filho.rotX == 0 && filho.rotY == 0 && filho.rotZ == 0;
+  final angles = activeAxes <= 1 || parentIdentity || childIdentity
+      ? sum
+      : rotationAngles(
+          rotationMatrix(pai.rotX, pai.rotY, pai.rotZ)
+            ..multiply(rotationMatrix(filho.rotX, filho.rotY, filho.rotZ)),
+        );
   return NodeTransform(
     position: pai.position + girada,
-    rotX: pai.rotX + filho.rotX,
-    rotY: pai.rotY + filho.rotY,
-    rotZ: pai.rotZ + filho.rotZ,
+    rotX: nearestRotationTurn(angles.$1, pai.rotX + filho.rotX),
+    rotY: nearestRotationTurn(angles.$2, pai.rotY + filho.rotY),
+    rotZ: nearestRotationTurn(angles.$3, pai.rotZ + filho.rotZ),
     scale: pai.scale * filho.scale,
   );
 }
@@ -1340,6 +1353,7 @@ SceneFrame renderScene(
   Size viewport,
   Duration t, {
   EnvironmentSampler? environmentSampler,
+
   /// Quantas faces, no maximo, um modelo importado pode contribuir.
   /// Nulo = o teto de sempre (cheio ou de rascunho, pela cena).
   ///
@@ -1375,7 +1389,8 @@ SceneFrame renderScene(
     // tudo.
     final bruto = node.modelAsset?.evaluate(t, node.modelMotion);
     final modelFrame = bruto?.rascunho(
-      tetoDeFaces ?? (scene.draftMode ? tetoDeFacesCpuRascunho : tetoDeFacesCpu),
+      tetoDeFaces ??
+          (scene.draftMode ? tetoDeFacesCpuRascunho : tetoDeFacesCpu),
     );
     // Malha propria (forma extrudada) manda; sem ela, o solido do tipo.
     final selectedMesh =

@@ -1740,7 +1740,7 @@ Future<void> showParentSheet(
                     )
                   : null,
               onTap: () {
-                controller.unlinkProperty(child.id, LayerProp.parent);
+                controller.unlinkProperty(child.id, LayerProp.parent, time: t);
                 if (child is Scene3DLayer) {
                   controller.setSceneCameraCompParent(child.id, null);
                 }

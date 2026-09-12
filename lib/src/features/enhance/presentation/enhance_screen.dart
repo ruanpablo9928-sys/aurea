@@ -1,0 +1,387 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
+import 'package:video_player/video_player.dart';
+
+import '../application/enhancement_job.dart';
+import '../domain/color_look.dart';
+
+class EnhanceScreen extends StatefulWidget {
+  const EnhanceScreen({super.key});
+  @override
+  State<EnhanceScreen> createState() => _EnhanceScreenState();
+}
+
+class _EnhanceScreenState extends State<EnhanceScreen> {
+  final _job = EnhancementJob();
+  String? _source, _before, _after, _result;
+  bool _video = false,
+      _busy = false,
+      _ai = true,
+      _showBefore = false,
+      _saving = false;
+  int _scale = 2;
+  double _strength = 1, _denoise = 0, _detail = .15;
+  ColorLook _look = ColorLook.natural;
+  VideoPlayerController? _player;
+  EnhanceSettings get _settings => EnhanceSettings(
+    ai: _ai,
+    scale: _scale,
+    look: _look,
+    strength: _strength,
+    denoise: _denoise,
+    detail: _detail,
+  );
+  @override
+  void dispose() {
+    _player?.dispose();
+    unawaited(_job.close());
+    super.dispose();
+  }
+
+  void _message(String text) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    }
+  }
+
+  void _changed(VoidCallback change) {
+    unawaited(_player?.dispose());
+    _player = null;
+    setState(() {
+      change();
+      _after = null;
+      _result = null;
+    });
+  }
+
+  Future<void> _pick() async {
+    try {
+      final files = await FilePicker.platform.pickFiles(
+        type: FileType.media,
+        allowMultiple: false,
+        withData: false,
+      );
+      if (!mounted || files == null || files.files.single.path == null) return;
+      await _player?.dispose();
+      _player = null;
+      if (!mounted) return;
+      final file = files.files.single;
+      final ext = (file.extension ?? '').toLowerCase();
+      setState(() {
+        _source = file.path;
+        _before = null;
+        _after = null;
+        _result = null;
+        _video = ![
+          'jpg',
+          'jpeg',
+          'png',
+          'webp',
+          'heic',
+          'heif',
+          'avif',
+          'bmp',
+          'tiff',
+          'tif',
+          'gif',
+        ].contains(ext);
+      });
+    } catch (_) {
+      _message(
+        'Não foi possível abrir este arquivo. Tente selecionar novamente.',
+      );
+    }
+  }
+
+  Future<void> _run({required bool preview}) async {
+    if (_busy || _source == null) return;
+    setState(() {
+      _busy = true;
+      _result = null;
+    });
+    try {
+      await _player?.dispose();
+      _player = null;
+      if (preview) {
+        final paths = await _job.preview(_source!, _video, _settings);
+        if (mounted) {
+          setState(() {
+            _before = paths.$1;
+            _after = paths.$2;
+            _showBefore = false;
+          });
+        }
+      } else {
+        final output = await _job.process(_source!, _video, _settings);
+        if (!mounted) return;
+        setState(() => _result = output.path);
+        if (_video) {
+          final player = VideoPlayerController.file(output);
+          _player = player;
+          await player.initialize();
+          if (mounted && identical(_player, player)) setState(() {});
+        } else {
+          setState(() {
+            _before = _source;
+            _after = output.path;
+          });
+        }
+      }
+    } catch (error) {
+      final text = error.toString().replaceFirst('Bad state: ', '');
+      _message(
+        text.contains('Cancelado')
+            ? 'Cancelado. Seu original foi mantido.'
+            : 'Não foi possível concluir. $text',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      } else {
+        await _job.close();
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    if (_result == null || _saving) return;
+    setState(() => _saving = true);
+    try {
+      if (_video) {
+        await Gal.putVideo(_result!);
+      } else {
+        await Gal.putImage(_result!);
+      }
+      _message('Salvo na galeria!');
+    } catch (_) {
+      _message(
+        'Não foi possível salvar na galeria. Verifique a permissão de fotos e tente novamente.',
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _help() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Qualidade e cor'),
+      content: const SingleChildScrollView(
+        child: Text(
+          'Escolha uma foto ou vídeo. A IA ESRGAN amplia detalhes no aparelho, sem enviar sua mídia. Use 2× para arquivos menores ou 4× para ampliar mais.\n\nOs CCs mudam as cores: escolha um visual e ajuste a intensidade. Reduzir ruído suaviza granulação; Detalhes realça bordas.\n\nComparar processa uma imagem ou o primeiro quadro do vídeo. Gerar resultado processa tudo. Vídeos são salvos a 30 fps com o áudio original, recodificado. O tempo depende do arquivo e do celular.\n\nA IA pode alterar texturas; compare antes de salvar. O original permanece intacto.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Entendi'),
+        ),
+      ],
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop && _busy) _message('Toque em Cancelar antes de sair.');
+    },
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Melhorar qualidade'),
+        actions: [
+          IconButton(
+            tooltip: 'Como funciona',
+            icon: const Icon(Icons.help_outline),
+            onPressed: _help,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text(
+              'Mais definição. Sua cor.',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Amplie com IA e aplique um visual de cor, sem abrir o editor.',
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _pick,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(
+                _source == null ? 'Escolher foto ou vídeo' : 'Trocar arquivo',
+              ),
+            ),
+            if (_source != null) ...[
+              const SizedBox(height: 12),
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ColoredBox(color: Colors.black, child: _preview()),
+                ),
+              ),
+              if (_after != null && _player == null)
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('Antes')),
+                    ButtonSegment(value: false, label: Text('Depois')),
+                  ],
+                  selected: {_showBefore},
+                  onSelectionChanged: (v) =>
+                      setState(() => _showBefore = v.first),
+                ),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ampliar com IA'),
+                subtitle: const Text('ESRGAN • processamento no aparelho'),
+                value: _ai,
+                onChanged: _busy ? null : (v) => _changed(() => _ai = v),
+              ),
+              if (_ai)
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 2, label: Text('2×')),
+                    ButtonSegment(value: 4, label: Text('4×')),
+                  ],
+                  selected: {_scale},
+                  onSelectionChanged: _busy
+                      ? null
+                      : (v) => _changed(() => _scale = v.first),
+                ),
+              const SizedBox(height: 20),
+              const Text(
+                'CCs • Correção de cor',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final look in ColorLook.values)
+                    ChoiceChip(
+                      label: Text(look.label),
+                      selected: _look == look,
+                      onSelected: _busy
+                          ? null
+                          : (_) => _changed(() => _look = look),
+                    ),
+                ],
+              ),
+              if (_look != ColorLook.natural)
+                _slider('Intensidade da cor', _strength, (v) => _strength = v),
+              _slider('Reduzir ruído', _denoise, (v) => _denoise = v),
+              _slider('Detalhes', _detail, (v) => _detail = v),
+              if (_busy) ...[
+                ValueListenableBuilder<EnhanceProgress>(
+                  valueListenable: _job.progress,
+                  builder: (_, p, _) => Column(
+                    children: [
+                      LinearProgressIndicator(
+                        value: p.fraction > 0 ? p.fraction : null,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(p.label),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _job.cancel,
+                  child: const Text('Cancelar'),
+                ),
+              ] else ...[
+                OutlinedButton.icon(
+                  onPressed: () => _run(preview: true),
+                  icon: const Icon(Icons.compare),
+                  label: const Text('Comparar antes e depois'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _run(preview: false),
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('Gerar resultado'),
+                ),
+              ],
+              if (_result != null)
+                FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: const Icon(Icons.download),
+                  label: Text(_saving ? 'Salvando…' : 'Salvar na galeria'),
+                ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+  Widget _preview() {
+    final player = _player;
+    if (player != null && player.value.isInitialized) {
+      return GestureDetector(
+        onTap: () async {
+          if (player.value.isPlaying) {
+            await player.pause();
+          } else {
+            await player.play();
+          }
+          if (mounted) setState(() {});
+        },
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AspectRatio(
+              aspectRatio: player.value.aspectRatio,
+              child: VideoPlayer(player),
+            ),
+            if (!player.value.isPlaying)
+              const Icon(Icons.play_circle, color: Colors.white, size: 52),
+          ],
+        ),
+      );
+    }
+    final path = _showBefore
+        ? (_before ?? _source)
+        : (_after ?? _before ?? (_video ? null : _source));
+    return path == null
+        ? const Center(
+            child: Text(
+              'Toque em Comparar para ver a prévia',
+              style: TextStyle(color: Colors.white),
+              textAlign: TextAlign.center,
+            ),
+          )
+        : Image.file(
+            File(path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const Center(
+              child: Text(
+                'Use Comparar para preparar a imagem',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          );
+  }
+
+  Widget _slider(String label, double value, void Function(double) update) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 14),
+          Text('$label • ${(value * 100).round()}%'),
+          Slider(
+            value: value,
+            onChanged: _busy ? null : (v) => _changed(() => update(v)),
+          ),
+        ],
+      );
+}

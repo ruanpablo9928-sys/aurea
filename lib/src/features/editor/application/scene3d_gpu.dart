@@ -1,4 +1,9 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:aurea_meshopt/aurea_meshopt.dart';
+
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -111,6 +116,8 @@ class Scene3DGpu {
   // Uploads include an RGBA readback and mip generation. Serializing them
   // across views prevents a textured import from allocating all copies at once.
   static Future<void> _uploads = Future<void>.value();
+  static Future<void> _meshJobs = Future<void>.value();
+  static int optimizedGeometryCount = 0;
 
   /// Carrega os shaders e recursos estaticos do motor. Falha em silencio
   /// (com log) onde nao ha GPU: [pronto] fica false e o pintor em CPU
@@ -206,6 +213,9 @@ class Scene3DGpu {
   fs.SkyEnvironment? _ceuDoAmbiente;
   int _epocaAmbiente = 0;
   bool _descartado = false;
+  fs.Node? _probeNode;
+  fs.ReflectionProbeComponent? _probe;
+  ReflectionProbe3D? _probeSettings;
 
   ReceitaDeQualidade _receita = ReceitaDeQualidade.alta;
   int _capDasTexturas = ReceitaDeQualidade.alta.texturaMax;
@@ -322,6 +332,7 @@ class Scene3DGpu {
         ),
       );
       RegistroDeTravadas.marcando('cena 3D: sincronizar > nevoa e pos', () {
+        _sincronizarReflexos(scene);
         _sincronizarNevoa(scene);
         _sincronizarPos(scene, rascunho);
       });
@@ -486,6 +497,9 @@ class Scene3DGpu {
   void descartar() {
     _descartado = true;
     _epocaAmbiente++;
+    if (_probeNode != null) cena.remove(_probeNode!);
+    _probeNode = null;
+    _probe = null;
     for (final n in _nos.values) {
       n.remover(cena);
     }
@@ -634,9 +648,48 @@ class Scene3DGpu {
         texCoords: g.texCoords,
         indices: g.indexList,
       );
+      final primitive = fs.MeshPrimitive(geometria, material);
       no.geometrias[e.key] = geometria;
       no.indices[e.key] = g.indexList;
       no.tamanhos[e.key] = g.positions.length;
+      if (!fonte.dinamica &&
+          !instanciado &&
+          g.indices >= 3000 &&
+          e.key.kind != MaterialKind.transparent &&
+          e.key.opacity >= .999 &&
+          e.key.baseColor.a >= .999) {
+        // One background job at a time bounds temporary native allocations.
+        // The first preview can render while optimization runs.
+        final original = g.indexList;
+        _meshJobs = _meshJobs.then((_) async {
+          if (_descartado || !identical(no.geometrias[e.key], geometria)) {
+            return;
+          }
+          try {
+            final optimized = await compute(_optimizeMesh, (
+              original,
+              g.vertices,
+            ));
+            if (_descartado || !identical(no.geometrias[e.key], geometria)) {
+              return;
+            }
+            final replacement = fs.MeshGeometry.fromArrays(
+              storage: fs.GeometryStorage.fixed,
+              positions: g.positions,
+              normals: g.normals,
+              texCoords: g.texCoords,
+              indices: optimized,
+            );
+            primitive.geometry = replacement;
+            no.geometrias[e.key] = replacement;
+            no.indices[e.key] = optimized;
+            optimizedGeometryCount++;
+            onMudou?.call();
+          } catch (error) {
+            debugPrint('meshoptimizer: original mesh retained ($error)');
+          }
+        });
+      }
       if (instanciado) {
         final im = fs.InstancedMesh(
           geometry: geometria,
@@ -649,11 +702,7 @@ class Scene3DGpu {
       } else {
         no.no.add(
           fs.Node()..addComponent(
-            fs.MeshComponent(
-              fs.Mesh.primitives(
-                primitives: [fs.MeshPrimitive(geometria, material)],
-              ),
-            ),
+            fs.MeshComponent(fs.Mesh.primitives(primitives: [primitive])),
           ),
         );
       }
@@ -974,6 +1023,39 @@ class Scene3DGpu {
 
   // --------------------------------------------------------- ambiente
 
+  /// Captura HDR local de seis faces, prefiltrada pelo renderer PBR.
+  /// Retida entre quadros: nao aloca cubemaps continuamente na reproducao.
+  /// Atualizar reflexos na UI produz novas configuracoes e solicita captura.
+  void _sincronizarReflexos(Scene3D scene) {
+    final settings = scene.reflectionProbe;
+    if (!settings.enabled) {
+      if (_probeNode != null) cena.remove(_probeNode!);
+      _probeNode = null;
+      _probe = null;
+      _probeSettings = null;
+      return;
+    }
+    if (_probe == null) {
+      _probe = fs.ReflectionProbeComponent(
+        extents: vm.Vector3.all(5000),
+        blendDistance: 2000,
+        faceResolution: settings.quality.faceResolution,
+      );
+      _probeNode = fs.Node()..addComponent(_probe!);
+      cena.add(_probeNode!);
+    }
+    final position = settings.position;
+    _probeNode!.localTransform = vm.Matrix4.translation(
+      vm.Vector3(position.x, position.y, position.z),
+    );
+    _probe!.weight = scene.envReflect.clamp(0.0, 1.0);
+    if (!identical(_probeSettings, settings)) {
+      _probe!.faceResolution = settings.quality.faceResolution;
+      _probe!.requestCapture();
+      _probeSettings = settings;
+    }
+  }
+
   void _sincronizarAmbiente(Scene3D scene, Duration t, VoidCallback? onMudou) {
     var extra = 0.0;
     for (final l in scene.lights) {
@@ -1029,6 +1111,7 @@ class Scene3DGpu {
           if (_descartado || epoca != _epocaAmbiente) return;
           cena.skyEnvironment = null;
           cena.environment = mapa;
+          _probe?.requestCapture();
           cena.skybox = pano.showBackground
               ? fs.Skybox(
                   fs.EnvironmentSkySource(
@@ -1110,6 +1193,7 @@ class Scene3DGpu {
           if (_descartado || epoca != _epocaAmbiente) return;
           cena.skyEnvironment = null;
           cena.environment = map;
+          _probe?.requestCapture();
           cena.skybox = pano.showBackground
               ? fs.Skybox(
                   fs.EnvironmentSkySource(
@@ -1293,5 +1377,11 @@ class _NoGpu {
     }
   }
 
-  void remover(fs.Scene cena) => cena.remove(no);
+  void remover(fs.Scene cena) {
+    cena.remove(no);
+    geometrias.clear();
+  }
 }
+
+Uint32List _optimizeMesh((Uint32List, int) input) =>
+    optimizeVertexCache(input.$1, input.$2);

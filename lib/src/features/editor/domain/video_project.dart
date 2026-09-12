@@ -2,8 +2,10 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:uuid/uuid.dart';
+import 'package:vector_math/vector_math_64.dart' as vm;
 
 import 'layer.dart';
+import 'rotation_math.dart';
 import 'layer_meta.dart';
 
 /// Propriedade animavel de camada (alvo de keyframes, curvas e vinculos).
@@ -445,27 +447,30 @@ LayerTransform effectiveTransform(
         final vy = (pos.dy - par.offsetY) * ratio;
         final vz = (z - par.baseZ) * ratio;
 
-        // v' = Rz * Ry * Rx * v com os deltas do pai.
-        final dRx = (pe.rotX - par.baseRotationX) * math.pi / 180;
-        final dRy = (pe.rotY - par.baseRotationY) * math.pi / 180;
-        final dRz = (pe.rot - par.baseRotation) * math.pi / 180;
-        final cxr = math.cos(dRx), sxr = math.sin(dRx);
-        final y1 = vy * cxr - vz * sxr;
-        final z1 = vy * sxr + vz * cxr;
-        final cyr = math.cos(dRy), syr = math.sin(dRy);
-        final x1 = vx * cyr + z1 * syr;
-        final z2 = -vx * syr + z1 * cyr;
-        final czr = math.cos(dRz), szr = math.sin(dRz);
-
-        // Projeta a POSICAO pela mesma focal do resto do motor (1200):
-        // o lado proximo da orbita abre, o distante comprime — sem isso
-        // a orbita fica "chapada" e o conjunto parece cisalhado.
-        final persp = 1200 / (1200 + (pe.z + z2).clamp(-1100.0, 100000.0));
-        pos = pe.pos + Offset(x1 * czr - y1 * szr, x1 * szr + y1 * czr) * persp;
-        z = pe.z + z2;
-        rot += pe.rot - par.baseRotation;
-        rotX += pe.rotX - par.baseRotationX;
-        rotY += pe.rotY - par.baseRotationY;
+        // Rotacoes em eixos diferentes nao comutam. O delta correto e
+        // R(atual) * inversa(R(vinculo)), nao a diferenca dos angulos.
+        final delta = rotationMatrix(pe.rotX, pe.rotY, pe.rot)
+          ..multiply(
+            rotationMatrix(
+              par.baseRotationX,
+              par.baseRotationY,
+              par.baseRotation,
+            )..transpose(),
+          );
+        final v = delta.transform3(vm.Vector3(vx, vy, vz));
+        pos = pe.pos + Offset(v.x, v.y);
+        z = pe.z + v.z;
+        final orientation = delta..multiply(rotationMatrix(rotX, rotY, rot));
+        final angles = rotationAngles(orientation);
+        rot = nearestRotationTurn(angles.$3, rot + pe.rot - par.baseRotation);
+        rotX = nearestRotationTurn(
+          angles.$1,
+          rotX + pe.rotX - par.baseRotationX,
+        );
+        rotY = nearestRotationTurn(
+          angles.$2,
+          rotY + pe.rotY - par.baseRotationY,
+        );
         scale *= ratio;
       }
     }

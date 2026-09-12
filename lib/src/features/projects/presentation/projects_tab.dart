@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../../enhance/presentation/enhance_screen.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -499,6 +501,16 @@ class ProjectsTab extends ConsumerWidget {
                   ref,
                   nomeSugerido: 'Projeto ${projects.length + 1}',
                 ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Melhorar qualidade • IA e cores'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const EnhanceScreen()),
               ),
             ),
           ),
@@ -1077,10 +1089,7 @@ class _AtalhoModerno extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.hairline,
-            width: 1,
-          ),
+          border: Border.all(color: AppColors.hairline, width: 1),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1101,10 +1110,7 @@ class _AtalhoModerno extends StatelessWidget {
               subrotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColors.muted,
-              ),
+              style: TextStyle(fontSize: 10, color: AppColors.muted),
             ),
           ],
         ),
@@ -1127,10 +1133,7 @@ class _SpotlightComunidade extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              AppColors.surface,
-              AppColors.surfaceHigh,
-            ],
+            colors: [AppColors.surface, AppColors.surfaceHigh],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -1185,7 +1188,10 @@ class _SpotlightComunidade extends ConsumerWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.lime,
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 visualDensity: VisualDensity.compact,
                 textStyle: const TextStyle(
                   fontSize: 12,
