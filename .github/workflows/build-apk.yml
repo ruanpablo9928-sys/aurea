@@ -1,4 +1,4 @@
-﻿name: Build APK (Release)
+name: Build APK (Release)
 
 on:
   workflow_dispatch:
@@ -24,6 +24,7 @@ jobs:
 
       - name: Setup Android SDK NDK & CMake
         run: |
+          sed -i '/org.gradle.java.home/d' android/gradle.properties || true
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;28.2.13676358" "cmake;3.22.1" || true
 
