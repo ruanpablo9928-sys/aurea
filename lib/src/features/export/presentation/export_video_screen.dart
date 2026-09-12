@@ -24,6 +24,7 @@ import '../../editor/application/media_preview_service.dart';
 import '../application/export_engine.dart';
 import '../application/platform_encoder.dart';
 import '../domain/export_settings.dart';
+import '../../native/native_engine.dart';
 import '../../settings/application/settings_controller.dart';
 
 /// EXPORTAR VIDEO.
@@ -249,38 +250,72 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         );
       }
 
-      for (var i = 0; i < total; i++) {
-        if (engine.cancelled) return;
-        final t = engine.timeOfFrame(i);
-        await _prepararQuadrosDeVideo(videoLayers, t);
-        _time.value = t;
+      final bool useNative = NativeEngine.instance.initialize(
+        width: engine.width,
+        height: engine.height,
+        fps: engine.fps,
+      );
+      if (useNative) {
+        NativeEngine.instance.syncProject(project);
+      }
 
-        // Espera a arvore ser reconstruida E pintada antes de capturar.
-        if (!mounted) return;
-        setState(() {});
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted || engine.cancelled) return;
+      try {
+        for (var i = 0; i < total; i++) {
+          if (engine.cancelled) return;
+          final t = engine.timeOfFrame(i);
 
-        if (emFluxo) {
-          final quadro = await _capturarCru(escala);
-          if (quadro == null) {
-            throw ExportException('Nao consegui desenhar o quadro $i.');
+          Uint8List? nativeFrame;
+          if (useNative && emFluxo) {
+            nativeFrame = NativeEngine.instance.renderFrameDirect(
+              frameIndex: i,
+              width: engine.width,
+              height: engine.height,
+              fps: engine.fps,
+            );
           }
-          await PlatformEncoder.frameRgba(
-            quadro.bytes,
-            quadro.largura,
-            quadro.altura,
-          );
-        } else {
-          final png = await _capturar();
-          if (png == null) {
-            throw ExportException('Nao consegui desenhar o quadro $i.');
+
+          if (nativeFrame != null) {
+            await PlatformEncoder.frameRgba(
+              nativeFrame,
+              engine.width,
+              engine.height,
+            );
+          } else {
+            await _prepararQuadrosDeVideo(videoLayers, t);
+            _time.value = t;
+
+            // Espera a arvore ser reconstruida E pintada antes de capturar.
+            if (!mounted) return;
+            setState(() {});
+            await WidgetsBinding.instance.endOfFrame;
+            if (!mounted || engine.cancelled) return;
+
+            if (emFluxo) {
+              final quadro = await _capturarCru(escala);
+              if (quadro == null) {
+                throw ExportException('Nao consegui desenhar o quadro $i.');
+              }
+              await PlatformEncoder.frameRgba(
+                quadro.bytes,
+                quadro.largura,
+                quadro.altura,
+              );
+            } else {
+              final png = await _capturar();
+              if (png == null) {
+                throw ExportException('Nao consegui desenhar o quadro $i.');
+              }
+              final name = i.toString().padLeft(6, '0');
+              File('${framesDir.path}/$name.png').writeAsBytesSync(png);
+            }
           }
-          final name = i.toString().padLeft(6, '0');
-          File('${framesDir.path}/$name.png').writeAsBytesSync(png);
+
+          _passo(_Fase.desenhando, (i + 1) / total, 'Quadro ${i + 1} de $total');
         }
-
-        _passo(_Fase.desenhando, (i + 1) / total, 'Quadro ${i + 1} de $total');
+      } finally {
+        if (useNative) {
+          NativeEngine.instance.dispose();
+        }
       }
 
       // 3. EM FLUXO o video ja esta pronto quando o laco acaba: so falta

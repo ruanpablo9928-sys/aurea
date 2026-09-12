@@ -320,7 +320,7 @@ _Tile? _tileDaSecao(
     ),
     AmSecao.cena3d => (
       icone: CupertinoIcons.videocam,
-      rotulo: layer is Scene3DLayer ? 'Opções de Câmera' : 'Elemento 3D',
+      rotulo: layer is Scene3DLayer ? 'Cena 3D' : 'Elemento 3D',
       onTap: () => abrirDepois(
         () => layer is Scene3DLayer
             ? abrirEstudioDaCena(context, layerId: layer.id, playback: playback)

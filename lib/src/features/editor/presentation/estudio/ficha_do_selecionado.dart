@@ -13,6 +13,9 @@ import '../widgets/editor_de_curva.dart';
 import '../widgets/linha_de_parametro.dart';
 import 'estado_do_estudio.dart';
 import 'folhas_do_estudio.dart';
+import 'folha_de_propriedades.dart';
+
+export 'folha_de_propriedades.dart';
 
 /// AS MARCAS DO QUE ESTA SELECIONADO — a regua da faixa de tempo.
 ///
@@ -270,21 +273,18 @@ String abaLabel(AbaDaFicha a) => switch (a) {
   AbaDaFicha.mais => 'Mais',
 };
 
-/// A FICHA DO QUE ESTA SELECIONADO.
-///
-/// Ela nao mostra todas as propriedades do universo: muda conforme a
-/// selecao, e dentro de cada tipo mostra primeiro o que quase todo
-/// mundo usa. O resto fica atras de `Avancado`, um toque adiante.
+/// A FICHA DO QUE ESTA SELECIONADO (Tela 4: Propriedades / Inspector).
 Future<void> abrirFichaDoSelecionado(
   BuildContext context,
   WidgetRef ref, {
   required String layerId,
   required Duration tempo,
   AbaDaFicha aba = AbaDaFicha.transformar,
-}) => mostrarFolha(
+}) => abrirFolhaDePropriedadesNova(
   context,
-  titulo: 'Ficha',
-  corpo: (ctx) => _Ficha(layerId: layerId, tempo: tempo, abaInicial: aba),
+  ref,
+  layerId: layerId,
+  tempo: tempo,
 );
 
 class _Ficha extends ConsumerStatefulWidget {

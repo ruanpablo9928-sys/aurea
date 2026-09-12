@@ -22,7 +22,7 @@
 const versaoDoApp = '1.0.0-beta.3';
 
 /// O numero da compilacao — o que muda a cada IPA/APK entregue.
-const buildDoApp = 73;
+const buildDoApp = 75;
 
 /// Como aparece para quem le: `1.0.0-beta.1 (71)`.
 const versaoCompleta = '$versaoDoApp ($buildDoApp)';

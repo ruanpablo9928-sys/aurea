@@ -14,7 +14,69 @@ import '../widgets/campo_de_valor.dart';
 import '../widgets/escolha_de_cor.dart';
 import '../widgets/fita_de_ajuste.dart';
 import 'estado_do_estudio.dart';
-import 'ficha_do_selecionado.dart';
+import 'scene3d_theme.dart';
+import 'folha_de_objetos.dart';
+import 'folha_de_adicionar.dart';
+import 'folha_de_camera.dart';
+
+export 'folha_de_animacao.dart';
+export 'folha_de_objetos.dart';
+export 'folha_de_adicionar.dart';
+export 'folha_de_camera.dart';
+export 'folha_de_luzes.dart';
+export 'folha_de_exportar.dart';
+
+/// Modal estilizado moderno para o Scene 3D
+Future<T?> mostrarFolhaScene3D<T>(
+  BuildContext context, {
+  required String title,
+  required Widget body,
+  VoidCallback? onBack,
+  Widget? trailing,
+  double maxHeightFactor = 0.85,
+}) => showModalBottomSheet<T>(
+  context: context,
+  backgroundColor: Scene3DTheme.panel,
+  isScrollControlled: true,
+  useSafeArea: true,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  ),
+  builder: (ctx) => ConstrainedBox(
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(ctx).size.height * maxHeightFactor,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Scene3DTheme.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Scene3DSheetHeader(
+          title: title,
+          onBack: onBack,
+          onClose: () => Navigator.of(ctx).pop(),
+          trailing: trailing,
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: body,
+          ),
+        ),
+      ],
+    ),
+  ),
+);
 
 /// QUEM ESCOLHE O ARQUIVO DO MODELO.
 ///
@@ -91,12 +153,7 @@ Future<T?> mostrarFolha<T>(
 
 // ------------------------------------------------------- as folhas
 
-/// `+` — TUDO QUE SE PODE CRIAR, num menu so.
-///
-/// A cena nascia vazia e nao havia caminho nenhum para o primeiro
-/// objeto: `addSceneNode`, `addSceneLight`, `addSceneNull` e
-/// `addModel3D` nao tinham um chamador em lugar nenhum
-/// (`docs/motor-3d-inventario.md`).
+/// `+` — TUDO QUE SE PODE CRIAR, num menu so (Tela 5: Adicionar Objeto).
 Future<void> abrirFolhaDeAdicionar(
   BuildContext context,
   WidgetRef ref, {
@@ -104,15 +161,12 @@ Future<void> abrirFolhaDeAdicionar(
   required Duration tempo,
   required NavegacaoDaVista? navegacao,
   required void Function(String) aoAvisar,
-}) => mostrarFolha(
+}) => abrirFolhaDeAdicionarNovo(
   context,
-  titulo: 'Adicionar',
-  corpo: (ctx) => _FolhaDeAdicionar(
-    layerId: layerId,
-    tempo: tempo,
-    navegacao: navegacao,
-    aoAvisar: aoAvisar,
-  ),
+  ref,
+  layerId: layerId,
+  tempo: tempo,
+  aoAvisar: aoAvisar,
 );
 
 class _FolhaDeAdicionar extends ConsumerStatefulWidget {
@@ -320,151 +374,32 @@ class _FolhaDeAdicionarState extends ConsumerState<_FolhaDeAdicionar> {
   }
 }
 
-/// A CAMERA A UM TOQUE.
-///
-/// Trocar de camera e a acao mais repetida de um trabalho 3D. Aqui ela
-/// custa um toque na barra de cima e um na lista.
+/// A CAMERA A UM TOQUE (Tela 6: Câmera).
 Future<void> abrirFolhaDeCameras(
   BuildContext context,
   WidgetRef ref, {
   required String layerId,
   required NavegacaoDaVista navegacao,
   required Duration tempo,
-}) => mostrarFolha(
+}) => abrirFolhaDeCameraNova(
   context,
-  titulo: 'Cameras',
-  corpo: (ctx) => _FolhaDeCameras(
-    layerId: layerId,
-    navegacao: navegacao,
-    tempo: tempo,
-  ),
+  ref,
+  layerId: layerId,
+  tempo: tempo,
 );
 
-class _FolhaDeCameras extends ConsumerWidget {
-  const _FolhaDeCameras({
-    required this.layerId,
-    required this.navegacao,
-    required this.tempo,
-  });
 
-  final String layerId;
-  final NavegacaoDaVista navegacao;
-  final Duration tempo;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bruta = ref.watch(editorControllerProvider).layerById(layerId);
-    if (bruta is! Scene3DLayer) return const SizedBox.shrink();
-    final camada = bruta;
-    final local = camada.localTime(tempo);
-    final c = ref.read(editorControllerProvider.notifier);
-    final noAr = cameraNoAr(camada, local);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const TituloDaFolha('Cameras'),
-        Flexible(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final cam in camada.allCameras)
-                  _LinhaDeCamera(
-                    nome: cam.name,
-                    noAr: cam.id == noAr.id && navegacao.pelaCamera,
-                    aoUsar: () {
-                      // USAR UMA CAMERA E UM CORTE no instante atual —
-                      // o modelo do app inteiro. Trocar sem gravar o
-                      // corte faria a tela e a exportacao discordarem.
-                      c.setCameraShot(layerId, tempo, cam.id);
-                      navegacao.verVista(SceneView.camera);
-                      ref.read(recadoDoEstudioProvider.notifier).state =
-                          'No ar: ${cam.name}.';
-                      Navigator.of(context).pop();
-                    },
-                    aoAbrirFicha: () {
-                      ref.read(cameraSelecionadaProvider.notifier).state =
-                          cam.id;
-                      ref.read(noSelecionadoProvider.notifier).state = null;
-                      ref.read(luzSelecionadaProvider.notifier).state = null;
-                      Navigator.of(context).pop();
-                      abrirFichaDoSelecionado(
-                        context,
-                        ref,
-                        layerId: layerId,
-                        tempo: tempo,
-                      );
-                    },
-                    aoDuplicar: () =>
-                        c.duplicateSceneCamera(layerId, cam.id),
-                    aoApagar: cam.id == camada.camera.id
-                        ? null
-                        : () => c.removeScene3DCamera(layerId, cam.id),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const Divider(height: 14, color: AmColors.hairline),
-        AcaoDaFolha(
-          icone: Icons.add_a_photo_rounded,
-          rotulo: 'Nova camera',
-          detalhe: 'Nasce com o enquadramento de agora, e ja entra no ar',
-          aoTocar: () {
-            final id = c.addScene3DCamera(layerId);
-            if (id.isNotEmpty) {
-              c.setCameraShot(layerId, tempo, id);
-              navegacao.verVista(SceneView.camera);
-            }
-            Navigator.of(context).pop();
-          },
-        ),
-        const TituloDaFolha('Movimento pronto'),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final r in CameraRig.values)
-              ChipDaFolha(
-                rotulo: cameraRigLabel(r),
-                escolhida: false,
-                aoTocar: () {
-                  c.applyRigToScene(layerId, r);
-                  ref.read(recadoDoEstudioProvider.notifier).state =
-                      '${cameraRigLabel(r)} aplicado, com keyframes '
-                      'editaveis.';
-                  Navigator.of(context).pop();
-                },
-              ),
-          ],
-        ),
-        if (camada.shots.isNotEmpty)
-          AcaoDaFolha(
-            icone: Icons.clear_rounded,
-            rotulo: 'Tirar os cortes (${camada.shots.length})',
-            aoTocar: () {
-              c.clearCameraShots(layerId);
-              Navigator.of(context).pop();
-            },
-          ),
-      ],
-    );
-  }
-}
-
-/// A CENA: hierarquia com busca.
+/// A CENA / OBJETOS (Tela 2: Objetos - Outliner).
 Future<void> abrirFolhaDaCena(
   BuildContext context,
   WidgetRef ref, {
   required String layerId,
   required Duration tempo,
-}) => mostrarFolha(
+}) => abrirFolhaDeObjetos(
   context,
-  titulo: 'Cena',
-  corpo: (ctx) => _FolhaDaCena(layerId: layerId, tempo: tempo),
+  ref,
+  layerId: layerId,
+  tempo: tempo,
 );
 
 class _FolhaDaCena extends ConsumerStatefulWidget {
@@ -1570,98 +1505,6 @@ class _Voltar extends StatelessWidget {
           ],
         ),
       ),
-    ),
-  );
-}
-
-class _LinhaDeCamera extends StatelessWidget {
-  const _LinhaDeCamera({
-    required this.nome,
-    required this.noAr,
-    required this.aoUsar,
-    required this.aoAbrirFicha,
-    required this.aoDuplicar,
-    required this.aoApagar,
-  });
-
-  final String nome;
-  final bool noAr;
-  final VoidCallback aoUsar;
-  final VoidCallback aoAbrirFicha;
-  final VoidCallback aoDuplicar;
-
-  /// A PRIMEIRA CAMERA NAO SE APAGA: sem nenhuma nao ha do que
-  /// renderizar, e o motor cairia de volta nela de qualquer jeito.
-  final VoidCallback? aoApagar;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 46,
-    child: Row(
-      children: [
-        Expanded(
-          child: Semantics(
-            container: true,
-            excludeSemantics: true,
-            button: true,
-            selected: noAr,
-            label: 'Usar $nome',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: aoUsar,
-              child: Row(
-                children: [
-                  Icon(
-                    noAr
-                        ? Icons.videocam_rounded
-                        : Icons.videocam_outlined,
-                    size: 18,
-                    color: noAr ? AmColors.accent : AmColors.muted,
-                  ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      nome,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: noAr ? AmColors.accent : AmColors.text,
-                      ),
-                    ),
-                  ),
-                  if (noAr)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 6),
-                      child: Icon(
-                        Icons.check_rounded,
-                        size: 15,
-                        color: AmColors.accent,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        _IconeDaLinha(
-          icone: Icons.tune_rounded,
-          rotulo: 'Ficha de $nome',
-          aoTocar: aoAbrirFicha,
-        ),
-        _IconeDaLinha(
-          icone: Icons.copy_all_rounded,
-          rotulo: 'Duplicar $nome',
-          aoTocar: aoDuplicar,
-        ),
-        if (aoApagar != null)
-          _IconeDaLinha(
-            icone: Icons.delete_outline_rounded,
-            rotulo: 'Apagar $nome',
-            aoTocar: aoApagar!,
-          ),
-      ],
     ),
   );
 }

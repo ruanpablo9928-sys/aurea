@@ -7,9 +7,42 @@ import '../domain/model_asset3d.dart';
 import '../domain/model_import3d.dart';
 import '../domain/fbx_import3d.dart';
 import '../domain/obj_import3d.dart';
+import '../../native/native_engine.dart';
 
-Future<ModelAsset3D> readModel3DFiles(List<String> paths) =>
-    Isolate.run(() => _read(paths));
+Future<ModelAsset3D> readModel3DFiles(List<String> paths) async {
+  ModelAnalysisResult? analysis;
+  final candidateModels = paths.where(
+    (p) => RegExp(r'\.(glb|gltf|obj|fbx)$', caseSensitive: false).hasMatch(p),
+  ).toList();
+  if (candidateModels.length == 1) {
+    try {
+      if (NativeEngine.instance.isSupported) {
+        analysis = NativeEngine.instance.analyzeModel(candidateModels.single);
+      }
+    } catch (_) {}
+  }
+
+  final model = await Isolate.run(() => _read(paths));
+  if (analysis != null) {
+    final warnings = List<String>.from(model.warnings);
+    if (!analysis.isSafeForDevice) {
+      warnings.add(
+        'Aviso: O modelo excede a recomendação de VRAM (${analysis.estimatedGpuMemoryMb}MB) ou triângulos (${analysis.triangleCount}) para este hardware. O motor 3D aplicará LOD e streaming.',
+      );
+    }
+    model.data['warnings'] = warnings;
+    model.data['analysis'] = {
+      'triangles': analysis.triangleCount,
+      'meshes': analysis.meshCount,
+      'vertices': analysis.vertexCount,
+      'vramMb': analysis.estimatedGpuMemoryMb,
+      'ramMb': analysis.estimatedCpuMemoryMb,
+      'recommendedLOD': analysis.recommendedLOD,
+      'isSafe': analysis.isSafeForDevice,
+    };
+  }
+  return model;
+}
 
 Future<ModelAsset3D> _read(List<String> paths) async {
   final models = paths
