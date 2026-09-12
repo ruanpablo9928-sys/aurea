@@ -1,6 +1,5 @@
-import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/time_format.dart';
@@ -161,7 +160,7 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     if (_points.length == 1) return _points.first.sourceTime;
 
     if (compTime <= _points.first.compositionTime) return _points.first.sourceTime;
-    if (compTime >= _points.back.compositionTime) return _points.back.sourceTime;
+    if (compTime >= _points.last.compositionTime) return _points.last.sourceTime;
 
     for (var i = 0; i < _points.length - 1; i++) {
       final p0 = _points[i];
@@ -193,7 +192,7 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
 
   // ADIÇÃO EXPLÍCITA DE KEYFRAME (NUNCA AUTOMÁTICA)
   void _addKeyframeExplicit() {
-    final currentPlayheadSec = (widget.playback?.currentTime.inMicroseconds ?? 0) / 1000000.0;
+    final currentPlayheadSec = (widget.playback?.time.value.inMicroseconds ?? 0) / 1000000.0;
     final clampedComp = currentPlayheadSec.clamp(0.0, _maxCompDuration);
     final currentSource = _evaluateAt(clampedComp);
 
@@ -295,7 +294,7 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final playheadSec = (widget.playback?.currentTime.inMicroseconds ?? 0) / 1000000.0;
+    final playheadSec = (widget.playback?.time.value.inMicroseconds ?? 0) / 1000000.0;
     final selectedPoint = (_selectedIndex != null && _selectedIndex! < _points.length)
         ? _points[_selectedIndex!]
         : null;
@@ -437,7 +436,7 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                       children: [
                         const Text('COMPOSIÇÃO', style: TextStyle(color: Colors.grey, fontSize: 10)),
                         Text(
-                          formatDurationPrecise(
+                          formatTime(
                             Duration(microseconds: (selectedPoint.compositionTime * 1000000).round()),
                           ),
                           style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
@@ -451,7 +450,7 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                       children: [
                         const Text('FONTE (VÍDEO)', style: TextStyle(color: Colors.grey, fontSize: 10)),
                         Text(
-                          formatDurationPrecise(
+                          formatTime(
                             Duration(microseconds: (selectedPoint.sourceTime * 1000000).round()),
                           ),
                           style: const TextStyle(color: AmColors.accent, fontSize: 13, fontWeight: FontWeight.w600),

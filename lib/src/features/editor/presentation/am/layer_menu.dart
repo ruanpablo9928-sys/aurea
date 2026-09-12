@@ -151,12 +151,12 @@ class LayerToolsDock extends ConsumerWidget {
                       },
                       icon: Icon(
                         (ref.watch(editorControllerProvider).linkFor(layer.id, LayerProp.parent) != null ||
-                                (layer is Scene3DLayer && layer.cameraParentLayerId != null))
+                                ((layer is Scene3DLayer) && (layer as Scene3DLayer).cameraParentLayerId != null))
                             ? CupertinoIcons.link_circle_fill
                             : CupertinoIcons.link,
                         size: 20,
                         color: (ref.watch(editorControllerProvider).linkFor(layer.id, LayerProp.parent) != null ||
-                                (layer is Scene3DLayer && layer.cameraParentLayerId != null))
+                                ((layer is Scene3DLayer) && (layer as Scene3DLayer).cameraParentLayerId != null))
                             ? AmColors.accent
                             : AmColors.text,
                       ),

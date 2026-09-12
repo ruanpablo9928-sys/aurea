@@ -3903,6 +3903,14 @@ class EditorController extends Notifier<VideoProject> {
     );
   }
 
+  void setClipTimeRemap(String id, AnimatedDouble track) {
+    final layer = _layer(id);
+    if (layer is! VideoLayer) return;
+    _replace(
+      layer.copyLayer(speed: 1, effects: replaceTimeRemap(layer, track)),
+    );
+  }
+
   /// Liga o modo avancado com identidade linear ou volta a velocidade
   /// constante equivalente, sem alterar o quadro nem a duracao.
   void setClipInterpolacao(String id, InterpolacaoDeQuadros modo) {
