@@ -15,19 +15,14 @@ Future<void> abrirFolhaDeObjetos(
   WidgetRef ref, {
   required String layerId,
   required Duration tempo,
-}) =>
-    mostrarFolhaScene3D<void>(
-      context,
-      title: 'Objetos',
-      body: FolhaDeObjetos(layerId: layerId, tempo: tempo),
-    );
+}) => mostrarFolhaScene3D<void>(
+  context,
+  title: 'Objetos',
+  body: FolhaDeObjetos(layerId: layerId, tempo: tempo),
+);
 
 class FolhaDeObjetos extends ConsumerStatefulWidget {
-  const FolhaDeObjetos({
-    super.key,
-    required this.layerId,
-    required this.tempo,
-  });
+  const FolhaDeObjetos({super.key, required this.layerId, required this.tempo});
 
   final String layerId;
   final Duration tempo;
@@ -40,7 +35,6 @@ enum _FiltroObjetos { todos, modelos, luzes, cameras }
 
 class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
   _FiltroObjetos _filtro = _FiltroObjetos.todos;
-  final Set<String> _expandidos = {'Casa Principal', 'Objeto 3D'};
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +76,8 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Modelos e Nós 3D
-              if (_filtro == _FiltroObjetos.todos || _filtro == _FiltroObjetos.modelos) ...[
+              if (_filtro == _FiltroObjetos.todos ||
+                  _filtro == _FiltroObjetos.modelos) ...[
                 for (final n in camada.scene.nodes)
                   _buildNodeItem(
                     node: n,
@@ -92,7 +87,12 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
                       ref.read(luzSelecionadaProvider.notifier).state = null;
                       ref.read(cameraSelecionadaProvider.notifier).state = null;
                       Navigator.of(context).pop();
-                      abrirFichaDoSelecionado(context, ref, layerId: widget.layerId, tempo: widget.tempo);
+                      abrirFichaDoSelecionado(
+                        context,
+                        ref,
+                        layerId: widget.layerId,
+                        tempo: widget.tempo,
+                      );
                     },
                     onToggleVisibility: () {
                       c.setSceneNodeVisible(widget.layerId, n.id, !n.visible);
@@ -101,7 +101,8 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
               ],
 
               // Luzes
-              if (_filtro == _FiltroObjetos.todos || _filtro == _FiltroObjetos.luzes) ...[
+              if (_filtro == _FiltroObjetos.todos ||
+                  _filtro == _FiltroObjetos.luzes) ...[
                 for (final l in camada.scene.lights)
                   _buildGenericRow(
                     icon: switch (l.kind) {
@@ -122,7 +123,12 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
                       ref.read(noSelecionadoProvider.notifier).state = null;
                       ref.read(cameraSelecionadaProvider.notifier).state = null;
                       Navigator.of(context).pop();
-                      abrirFichaDoSelecionado(context, ref, layerId: widget.layerId, tempo: widget.tempo);
+                      abrirFichaDoSelecionado(
+                        context,
+                        ref,
+                        layerId: widget.layerId,
+                        tempo: widget.tempo,
+                      );
                     },
                     visible: l.intensity.base > 0,
                     onToggleVisibility: () {
@@ -130,7 +136,9 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
                         widget.layerId,
                         l.id,
                         (light) => light.copyWith(
-                          intensity: light.intensity.withBase(light.intensity.base > 0 ? 0.0 : 1.0),
+                          intensity: light.intensity.withBase(
+                            light.intensity.base > 0 ? 0.0 : 1.0,
+                          ),
                         ),
                       );
                     },
@@ -138,21 +146,32 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
               ],
 
               // Câmeras
-              if (_filtro == _FiltroObjetos.todos || _filtro == _FiltroObjetos.cameras) ...[
+              if (_filtro == _FiltroObjetos.todos ||
+                  _filtro == _FiltroObjetos.cameras) ...[
                 for (final cam in camada.allCameras)
                   _buildGenericRow(
                     icon: Icons.videocam_rounded,
                     name: cam.name,
                     isSelected: cam.id == cameraSelecionada,
                     onSelect: () {
-                      ref.read(cameraSelecionadaProvider.notifier).state = cam.id;
+                      ref.read(cameraSelecionadaProvider.notifier).state =
+                          cam.id;
                       ref.read(noSelecionadoProvider.notifier).state = null;
                       ref.read(luzSelecionadaProvider.notifier).state = null;
                       Navigator.of(context).pop();
-                      abrirFichaDoSelecionado(context, ref, layerId: widget.layerId, tempo: widget.tempo);
+                      abrirFichaDoSelecionado(
+                        context,
+                        ref,
+                        layerId: widget.layerId,
+                        tempo: widget.tempo,
+                      );
                     },
-                    visible: true,
-                    onToggleVisibility: () {},
+                    visible:
+                        cameraNoAr(camada, camada.localTime(widget.tempo)).id ==
+                        cam.id,
+                    visibilityIcon: Icons.videocam_rounded,
+                    onToggleVisibility: () =>
+                        c.setCameraShot(widget.layerId, widget.tempo, cam.id),
                   ),
               ],
             ],
@@ -210,79 +229,16 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
     required bool isSelected,
     required VoidCallback onSelect,
     required VoidCallback onToggleVisibility,
-  }) {
-    final hasSubParts = node.modelAsset != null || node.name.toLowerCase().contains('casa');
-    final isExpanded = _expandidos.contains(node.name);
-
-    return Column(
-      children: [
-        _buildGenericRow(
-          icon: node.modelAsset != null
-              ? Icons.view_in_ar_rounded
-              : (node.name.toLowerCase().contains('árvore')
-                  ? Icons.park_rounded
-                  : (node.name.toLowerCase().contains('pedra')
-                      ? Icons.terrain_rounded
-                      : Icons.category_rounded)),
-          name: node.name,
-          isSelected: isSelected,
-          onSelect: onSelect,
-          visible: node.visible,
-          onToggleVisibility: onToggleVisibility,
-          hasChildren: hasSubParts,
-          isExpanded: isExpanded,
-          onToggleExpand: () {
-            setState(() {
-              if (isExpanded) {
-                _expandidos.remove(node.name);
-              } else {
-                _expandidos.add(node.name);
-              }
-            });
-          },
-        ),
-        if (hasSubParts && isExpanded) ...[
-          // Sub-partes do modelo (ex: Telhado, Paredes, Janelas, Porta)
-          _buildSubPartRow('Telhado', Icons.change_history_rounded, node.visible, onSelect),
-          _buildSubPartRow('Paredes', Icons.crop_square_rounded, node.visible, onSelect),
-          _buildSubPartRow('Janelas', Icons.window_rounded, node.visible, onSelect),
-          _buildSubPartRow('Porta', Icons.door_front_door_outlined, node.visible, onSelect),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSubPartRow(String name, IconData icon, bool visible, VoidCallback onTap) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: 38,
-        margin: const EdgeInsets.only(left: 32, bottom: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF13171F),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: Scene3DTheme.textMuted),
-            const SizedBox(width: 10),
-            Text(
-              name,
-              style: const TextStyle(fontSize: 13, color: Scene3DTheme.textMuted),
-            ),
-            const Spacer(),
-            Icon(
-              visible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-              color: Scene3DTheme.textSubtle,
-              size: 17,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  }) => _buildGenericRow(
+    icon: node.modelAsset != null
+        ? Icons.view_in_ar_rounded
+        : Icons.category_rounded,
+    name: node.name,
+    isSelected: isSelected,
+    onSelect: onSelect,
+    visible: node.visible,
+    onToggleVisibility: onToggleVisibility,
+  );
 
   Widget _buildGenericRow({
     required IconData icon,
@@ -291,6 +247,7 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
     required VoidCallback onSelect,
     required bool visible,
     required VoidCallback onToggleVisibility,
+    IconData? visibilityIcon,
     bool hasChildren = false,
     bool isExpanded = false,
     VoidCallback? onToggleExpand,
@@ -301,7 +258,9 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
       decoration: Scene3DTheme.cardDecoration(
         borderRadius: 12,
         isSelected: isSelected,
-        color: isSelected ? const Color(0xFF192622) : Scene3DTheme.panelElevated,
+        color: isSelected
+            ? const Color(0xFF192622)
+            : Scene3DTheme.panelElevated,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -317,7 +276,9 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
                   child: Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: Icon(
-                      isExpanded ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_right_rounded,
+                      isExpanded
+                          ? Icons.keyboard_arrow_down_rounded
+                          : Icons.keyboard_arrow_right_rounded,
                       color: Scene3DTheme.textMuted,
                       size: 20,
                     ),
@@ -325,7 +286,13 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
                 )
               else
                 const SizedBox(width: 6),
-              Icon(icon, size: 20, color: isSelected ? Scene3DTheme.accent : Scene3DTheme.textMuted),
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? Scene3DTheme.accent
+                    : Scene3DTheme.textMuted,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -343,8 +310,13 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
                 child: Padding(
                   padding: const EdgeInsets.all(6),
                   child: Icon(
-                    visible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                    color: visible ? Scene3DTheme.textMuted : Scene3DTheme.textSubtle,
+                    visibilityIcon ??
+                        (visible
+                            ? Icons.visibility_rounded
+                            : Icons.visibility_off_rounded),
+                    color: visible
+                        ? Scene3DTheme.textMuted
+                        : Scene3DTheme.textSubtle,
                     size: 19,
                   ),
                 ),

@@ -59,6 +59,7 @@ import '../../application/mesh_cache.dart';
 import 'masked_box.dart';
 import 'dither_layer.dart';
 import 'preview_raster.dart';
+import '../../application/ui/preview_resolution.dart';
 import 'fx_lote2.dart';
 import 'particles_painter.dart';
 import '../../application/scene3d_gpu.dart';
@@ -493,6 +494,8 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
   @override
   Widget build(BuildContext context) {
     final project = ref.watch(projetoVisivelProvider);
+    final resolution = ref.watch(previewResolutionProvider);
+    final padGuides = ref.watch(transformGuidesProvider);
     final selectedId = ref.watch(selectedLayerProvider);
     final onion = ref.watch(onionSkinProvider);
     final drawing = ref.watch(freehandRequestProvider);
@@ -557,7 +560,7 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                                   : 2160,
                               compWidth: compW,
                               compHeight: compH,
-                              stageScale: scale,
+                              stageScale: scale * resolution.scale,
                               devicePixelRatio: MediaQuery.devicePixelRatioOf(
                                 context,
                               ),
@@ -651,8 +654,8 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                                           previewScale: scale,
                                           guides: project.guides,
                                           compSize: Size(compW, compH),
-                                          encaixeX: _encaixeX,
-                                          encaixeY: _encaixeY,
+                                          encaixeX: _encaixeX ?? padGuides.x,
+                                          encaixeY: _encaixeY ?? padGuides.y,
                                         ),
                                       ),
                                     ),
@@ -685,6 +688,35 @@ class _PreviewStageState extends ConsumerState<PreviewStage> {
                   ),
                 );
               },
+            ),
+          ),
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Material(
+              color: const Color(0xCC171D25),
+              borderRadius: BorderRadius.circular(6),
+              child: PopupMenuButton<PreviewResolution>(
+                key: const ValueKey('preview-resolution'),
+                tooltip: 'Resolução da prévia',
+                initialValue: resolution,
+                onSelected: (v) =>
+                    ref.read(previewResolutionProvider.notifier).state = v,
+                itemBuilder: (_) => [
+                  for (final v in PreviewResolution.values)
+                    PopupMenuItem(value: v, child: Text(v.label)),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    resolution.label,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
             ),
           ),
           // ALCAS DA SELECAO: marcadores sem desenho visivel
@@ -4806,7 +4838,8 @@ RenderCamera? cameraDaCena(
   Duration local,
   Duration global,
 ) {
-  final paiId = l.cameraParentLayerId ??
+  final paiId =
+      l.cameraParentLayerId ??
       project.linkFor(l.id, LayerProp.parent)?.sourceLayerId;
   if (paiId == null) {
     return l.shots.isEmpty && l.scene.cameraParentId == null
@@ -5040,7 +5073,9 @@ class _LayerContent extends StatelessWidget {
               );
             }
             final rawRatio = controller.value.aspectRatio;
-            final ratio = rawRatio > 0 && rawRatio.isFinite ? rawRatio : (16 / 9);
+            final ratio = rawRatio > 0 && rawRatio.isFinite
+                ? rawRatio
+                : (16 / 9);
             return SizedBox(
               width: compWidth,
               height: compWidth / ratio,

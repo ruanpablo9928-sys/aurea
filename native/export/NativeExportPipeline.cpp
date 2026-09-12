@@ -75,17 +75,17 @@ bool NativeExportPipeline::renderFrameDirect(std::shared_ptr<ProjectCore> projec
                                              int height,
                                              int fps,
                                              uint8_t* outRgbaBuffer) {
-    if (!project || !outRgbaBuffer) return false;
+    if (!project || !outRgbaBuffer || width <= 0 || height <= 0 || fps <= 0 || frameIndex < 0) return false;
 
     // Inicializa render engine para a resolução requerida se ainda não inicializado
-    static int curW = 0, curH = 0;
-    if (curW != width || curH != height) {
+
+    if (renderWidth_ != width || renderHeight_ != height) {
         exportRenderEngine_->shutdown();
         if (!exportRenderEngine_->initialize(width, height)) {
             return false;
         }
-        curW = width;
-        curH = height;
+        renderWidth_ = width;
+        renderHeight_ = height;
     }
 
     int64_t timeUs = (static_cast<int64_t>(frameIndex) * 1000000LL) / (fps > 0 ? fps : 30);

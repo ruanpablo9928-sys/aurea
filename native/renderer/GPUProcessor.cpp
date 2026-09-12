@@ -23,6 +23,13 @@ GPUProcessor::~GPUProcessor() {
 }
 
 bool GPUProcessor::initialize() {
+#if defined(__ANDROID__)
+    // FFI calls on the UI isolate do not own Flutter's render context.
+    if (eglGetCurrentContext() == EGL_NO_CONTEXT) return false;
+#else
+    // No offscreen Metal/desktop implementation is installed in this backend.
+    return false;
+#endif
     initialized_ = true;
     LOGI("GPUProcessor initialized successfully.");
     return true;

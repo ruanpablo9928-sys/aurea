@@ -4,7 +4,6 @@ import 'dart:convert';
 
 import 'package:aurea/src/features/editor/application/editor_controller.dart';
 import 'package:aurea/src/features/editor/application/ui/editor_session.dart';
-import 'package:aurea/src/features/editor/application/ui/pro_mode.dart';
 import 'package:aurea/src/features/editor/domain/layer.dart';
 import 'package:aurea/src/features/editor/domain/layer_meta.dart';
 import 'package:aurea/src/features/editor/domain/project_store.dart';
@@ -27,7 +26,7 @@ import 'editor_hierarchy_test.dart' show openEditor;
 ///   editam com tudo que o editor tem; sair grava num undo so.
 /// - Expandir timeline pelo canto da regua.
 /// - Pedacos do mesmo arquivo, sem sobreposicao, na mesma linha.
-/// - Ima com estado a vista; busca de camadas (Pro).
+/// - Regua sem os controles removidos a pedido dos betas.
 void main() {
   setUpAll(() async {
     for (final family in ['Aurea Motion Sans', 'Roboto']) {
@@ -382,35 +381,19 @@ void main() {
     expect(c.read(editorSessionProvider).timelineExpanded, isFalse);
   });
 
-  testWidgets('ima com estado a vista; busca de camadas no Pro', (
+  testWidgets('regua sem os controles removidos a pedido dos betas', (
     tester,
   ) async {
     final c = await openEditor(tester);
     expect(c.read(magneticProvider), isTrue);
-    expect(find.byTooltip('Encaixe ligado'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('timeline-ima')));
-    await tester.pumpAndSettle();
-    expect(c.read(magneticProvider), isFalse);
-    expect(find.byTooltip('Encaixe desligado'), findsOneWidget);
-
-    expect(
-      find.byKey(const ValueKey('timeline-buscar')),
-      findsOneWidget,
-      reason: 'busca e Pro',
-    );
-    c.read(proModeProvider.notifier).set(true);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('timeline-buscar')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('busca-campo')), 'fundo');
-    await tester.pumpAndSettle();
-    final fundo = c
-        .read(editorControllerProvider)
-        .layers
-        .firstWhere((l) => l.name.toLowerCase().contains('fundo'));
-    expect(find.byKey(ValueKey('busca-camada-${fundo.id}')), findsOneWidget);
-    await tester.tap(find.byKey(ValueKey('busca-camada-${fundo.id}')));
-    await tester.pumpAndSettle();
-    expect(c.read(selectedLayerProvider), fundo.id);
+    for (final key in [
+      'timeline-ima',
+      'timeline-buscar',
+      'timeline-entrada',
+      'timeline-saida',
+    ]) {
+      expect(find.byKey(ValueKey(key)), findsNothing);
+    }
+    expect(find.byKey(const ValueKey('timeline-expandir')), findsOneWidget);
   });
 }

@@ -159,7 +159,7 @@ void main() {
       expect(find.byType(ModalBarrier).evaluate().length, barriers);
       expect(tester.getRect(find.byType(PreviewStage)), preview);
       await capture('aurea-shapes');
-      await tester.tap(find.text('Midia'));
+      await tester.tap(find.text('Mídia'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('gallery-grid')), findsOneWidget);
       expect(

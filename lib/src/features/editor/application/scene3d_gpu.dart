@@ -311,7 +311,8 @@ class Scene3DGpu {
       );
       RegistroDeTravadas.marcando(
         'cena 3D: sincronizar > luzes',
-        () => Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t)),
+        () =>
+            Perfil3D.fase('sincronia.luzes', () => _sincronizarLuzes(scene, t)),
       );
       RegistroDeTravadas.marcando(
         'cena 3D: sincronizar > ambiente',
@@ -320,13 +321,10 @@ class Scene3DGpu {
           () => _sincronizarAmbiente(scene, t, onMudou),
         ),
       );
-      RegistroDeTravadas.marcando(
-        'cena 3D: sincronizar > nevoa e pos',
-        () {
-          _sincronizarNevoa(scene);
-          _sincronizarPos(scene, rascunho);
-        },
-      );
+      RegistroDeTravadas.marcando('cena 3D: sincronizar > nevoa e pos', () {
+        _sincronizarNevoa(scene);
+        _sincronizarPos(scene, rascunho);
+      });
     });
     Perfil3D.quadro();
   }
@@ -400,6 +398,7 @@ class Scene3DGpu {
     fs.Camera camera, {
     bool rascunho = false,
     bool exporting = false,
+    double previewScale = 1,
   }) {
     if (!pronto) return;
     _registrarSeMudou(area.size);
@@ -429,6 +428,7 @@ class Scene3DGpu {
         escalaDoPreview(area.width, area.height, _receita),
       );
     }
+    if (!exporting) escala *= previewScale.clamp(.125, 1);
     cena.renderScale = escala;
     _ultimoAlvo = area.size;
     _ultimaEscala = escala;
@@ -873,11 +873,20 @@ class Scene3DGpu {
           );
           if (principal == null || (sombra && !principal.castsShadow)) {
             if (principal != null) {
-              _luzes.add(_noDeLuz(fs.DirectionalLightComponent(principal)));
+              _luzes.add(
+                _noDeLuz(
+                  fs.DirectionalLightComponent.aimed(
+                    principal,
+                    principal.direction,
+                  ),
+                ),
+              );
             }
             principal = d;
           } else {
-            _luzes.add(_noDeLuz(fs.DirectionalLightComponent(d)));
+            _luzes.add(
+              _noDeLuz(fs.DirectionalLightComponent.aimed(d, d.direction)),
+            );
           }
           _luzObjetos.add(d);
         case Light3DKind.point:

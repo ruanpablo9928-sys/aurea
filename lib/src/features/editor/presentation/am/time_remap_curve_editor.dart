@@ -8,7 +8,6 @@ import '../../application/playback_controller.dart';
 import '../../domain/cut_ops.dart';
 import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
-import '../../../native/native_engine.dart';
 import 'am_colors.dart';
 
 /// Modelo de Keyframe local para edição da Curva de Time Remapping
@@ -16,13 +15,16 @@ class RemapPoint {
   RemapPoint({
     required this.compositionTime,
     required this.sourceTime,
-    this.interpolation = 0, // 0=Linear, 1=Hold, 2=Bezier, 3=EaseIn, 4=EaseOut, 5=EaseInOut
+    this.preservedEase,
+    this.interpolation =
+        0, // 0=Linear, 1=Hold, 2=Bezier, 3=EaseIn, 4=EaseOut, 5=EaseInOut
     this.inHandle = const Offset(-0.2, 0.0),
     this.outHandle = const Offset(0.2, 0.0),
   });
 
+  Easing? preservedEase;
   double compositionTime; // segundos
-  double sourceTime;      // segundos
+  double sourceTime; // segundos
   int interpolation;
   Offset inHandle;
   Offset outHandle;
@@ -33,29 +35,84 @@ class RemapPoint {
     int? interpolation,
     Offset? inHandle,
     Offset? outHandle,
-  }) =>
+  }) => RemapPoint(
+    compositionTime: compositionTime ?? this.compositionTime,
+    sourceTime: sourceTime ?? this.sourceTime,
+    interpolation: interpolation ?? this.interpolation,
+    preservedEase: preservedEase,
+    inHandle: inHandle ?? this.inHandle,
+    outHandle: outHandle ?? this.outHandle,
+  );
+}
+
+List<RemapPoint> remapPointsFromTrack(AnimatedDouble track) {
+  final points = [
+    for (final k in track.keyframes)
       RemapPoint(
-        compositionTime: compositionTime ?? this.compositionTime,
-        sourceTime: sourceTime ?? this.sourceTime,
-        interpolation: interpolation ?? this.interpolation,
-        inHandle: inHandle ?? this.inHandle,
-        outHandle: outHandle ?? this.outHandle,
-      );
+        compositionTime: k.time.inMicroseconds / 1e6,
+        sourceTime: k.value,
+        interpolation: k.ease.type == EasingType.hold
+            ? 1
+            : (k.ease.isLinear ? 0 : 2),
+        preservedEase: k.ease,
+      ),
+  ];
+  if (points.isEmpty) {
+    return [RemapPoint(compositionTime: 0, sourceTime: track.base)];
+  }
+  for (var i = 0; i + 1 < points.length; i++) {
+    final a = points[i], b = points[i + 1], e = track.keyframes[i].ease;
+    final dt = b.compositionTime - a.compositionTime;
+    final dy = b.sourceTime - a.sourceTime;
+    a.outHandle = Offset(e.x1 * dt, e.y1 * dy);
+    b.inHandle = Offset((e.x2 - 1) * dt, (e.y2 - 1) * dy);
+  }
+  return points;
+}
+
+AnimatedDouble remapTrackFromPoints(List<RemapPoint> points) {
+  if (points.isEmpty) return AnimatedDouble(0);
+  var track = AnimatedDouble(points.first.sourceTime);
+  for (var i = 0; i < points.length; i++) {
+    final p = points[i];
+    Easing ease = p.preservedEase ?? Easing.linear;
+    if (p.preservedEase == null && i + 1 < points.length) {
+      final n = points[i + 1];
+      final dt = n.compositionTime - p.compositionTime;
+      final dy = n.sourceTime - p.sourceTime;
+      ease = switch (p.interpolation) {
+        1 => const Easing(type: EasingType.hold),
+        3 => Easing.easeIn,
+        4 => Easing.easeOut,
+        5 => Easing.easeInOut,
+        2 when dt > 0 && dy.abs() > 1e-9 => Easing(
+          x1: (p.outHandle.dx / dt).clamp(0, 1),
+          y1: p.outHandle.dy / dy,
+          x2: (1 + n.inHandle.dx / dt).clamp(0, 1),
+          y2: 1 + n.inHandle.dy / dy,
+        ),
+        _ => Easing.linear,
+      };
+    }
+    track = track.withKeyframe(
+      Duration(microseconds: (p.compositionTime * 1e6).round()),
+      p.sourceTime,
+      ease,
+    );
+  }
+  return track;
 }
 
 /// EDITOR DE CURVA DE TIME REMAPPING (Estilo After Effects para Mobile)
 class TimeRemapCurveEditor extends ConsumerStatefulWidget {
-  const TimeRemapCurveEditor({
-    super.key,
-    required this.layerId,
-    this.playback,
-  });
+  const TimeRemapCurveEditor({super.key, required this.layerId, this.playback});
 
   final String layerId;
   final PlaybackController? playback;
 
   @override
-  ConsumerState<TimeRemapCurveEditor> createState() => _TimeRemapCurveEditorState();
+  ConsumerState<TimeRemapCurveEditor> createState() =>
+      _TimeRemapCurveEditorState();
 }
 
 class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
@@ -72,6 +129,20 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
   void initState() {
     super.initState();
     _loadFromProject();
+    widget.playback?.time.addListener(_onPlayhead);
+  }
+
+  @override
+  void didUpdateWidget(TimeRemapCurveEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playback != widget.playback) {
+      oldWidget.playback?.time.removeListener(_onPlayhead);
+      widget.playback?.time.addListener(_onPlayhead);
+    }
+    if (oldWidget.layerId != widget.layerId) {
+      _selectedIndex = null;
+      _loadFromProject();
+    }
   }
 
   void _loadFromProject() {
@@ -80,107 +151,57 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     if (layer is! VideoLayer) return;
 
     _maxCompDuration = layer.duration.inMicroseconds / 1000000.0;
-    _maxSourceDuration = (layer.sourceDuration?.inMicroseconds ?? layer.duration.inMicroseconds) / 1000000.0;
+    _maxSourceDuration =
+        (layer.sourceDuration?.inMicroseconds ??
+            layer.duration.inMicroseconds) /
+        1000000.0;
     if (_maxCompDuration <= 0) _maxCompDuration = 5.0;
     if (_maxSourceDuration <= 0) _maxSourceDuration = 5.0;
 
     _points.clear();
 
-    // Sincroniza a partir do track existente ou gera padrão 1:1
-    final track = timeRemapTrackOf(layer);
-    if (track != null && track.keyframes.isNotEmpty) {
-      for (final kf in track.keyframes) {
-        _points.add(
-          RemapPoint(
-            compositionTime: kf.time.inMicroseconds / 1000000.0,
-            sourceTime: kf.value,
-            interpolation: 2, // Bezier
-          ),
-        );
-      }
-    } else {
-      // Padrão 1:1 inicial (0s -> 0s e fim -> fim)
-      _points.add(RemapPoint(compositionTime: 0.0, sourceTime: 0.0));
-      _points.add(RemapPoint(compositionTime: _maxCompDuration, sourceTime: _maxCompDuration));
-    }
+    final track =
+        timeRemapTrackOf(layer) ??
+        AnimatedDouble(0)
+            .withKeyframe(Duration.zero, 0)
+            .withKeyframe(layer.duration, _maxCompDuration * layer.speed);
+    _points.addAll(remapPointsFromTrack(track));
     _sortPoints();
-    _syncToNative();
+  }
+
+  void _onPlayhead() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.playback?.time.removeListener(_onPlayhead);
+    super.dispose();
+  }
+
+  double get _playheadLocal {
+    final layer = ref.read(editorControllerProvider).layerById(widget.layerId);
+    if (layer == null) return 0;
+    return layer
+            .localTime(widget.playback?.time.value ?? layer.startTime)
+            .inMicroseconds /
+        1e6;
   }
 
   void _sortPoints() {
     _points.sort((a, b) => a.compositionTime.compareTo(b.compositionTime));
   }
 
-  void _syncToNative() {
-    final native = NativeEngine.instance;
-    if (!native.isSupported) return;
-
-    native.setTimeRemapEnabled(widget.layerId, true);
-    native.clearTimeRemapKeyframes(widget.layerId);
-
-    for (final p in _points) {
-      native.addTimeRemapKeyframe(
-        widget.layerId,
-        p.compositionTime,
-        p.sourceTime,
-        interpolation: p.interpolation,
-        inDx: p.inHandle.dx,
-        inDy: p.inHandle.dy,
-        outDx: p.outHandle.dx,
-        outDy: p.outHandle.dy,
-      );
-    }
-  }
-
   void _syncToDartProject() {
-    // Sincroniza os pontos com a AnimatedDouble do EffectInstance no VideoLayer
-    final controller = ref.read(editorControllerProvider.notifier);
-    final project = ref.read(editorControllerProvider);
-    final layer = project.layerById(widget.layerId);
-    if (layer is! VideoLayer) return;
-
     if (_points.isEmpty) return;
-
-    var track = AnimatedDouble(_points.first.sourceTime);
-    for (final p in _points) {
-      track = track.withKeyframe(
-        Duration(microseconds: (p.compositionTime * 1000000).round()),
-        p.sourceTime,
-        Easing.linear,
-      );
-    }
-
-    controller.setClipTimeRemap(widget.layerId, track);
-    _syncToNative();
+    ref
+        .read(editorControllerProvider.notifier)
+        .setClipTimeRemap(widget.layerId, remapTrackFromPoints(_points));
   }
 
-  // AVALIAÇÃO DETERMINÍSTICA
-  double _evaluateAt(double compTime) {
-    if (_points.isEmpty) return compTime;
-    if (_points.length == 1) return _points.first.sourceTime;
-
-    if (compTime <= _points.first.compositionTime) return _points.first.sourceTime;
-    if (compTime >= _points.last.compositionTime) return _points.last.sourceTime;
-
-    for (var i = 0; i < _points.length - 1; i++) {
-      final p0 = _points[i];
-      final p1 = _points[i + 1];
-      if (compTime >= p0.compositionTime && compTime <= p1.compositionTime) {
-        final dt = p1.compositionTime - p0.compositionTime;
-        if (dt <= 1e-6) return p0.sourceTime;
-
-        if (p0.interpolation == 1) {
-          // Hold
-          return p0.sourceTime;
-        }
-
-        // Linear/Bézier progresso normalizado
-        final u = (compTime - p0.compositionTime) / dt;
-        return p0.sourceTime + u * (p1.sourceTime - p0.sourceTime);
-      }
-    }
-    return compTime;
-  }
+  double _evaluateAt(double compTime) =>
+      remapTrackFromPoints(_points)
+          .valueAt(Duration(microseconds: (compTime * 1e6).round()));
 
   // VELOCIDADE DERIVADA
   double _getSpeedAt(double compTime) {
@@ -192,12 +213,14 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
 
   // ADIÇÃO EXPLÍCITA DE KEYFRAME (NUNCA AUTOMÁTICA)
   void _addKeyframeExplicit() {
-    final currentPlayheadSec = (widget.playback?.time.value.inMicroseconds ?? 0) / 1000000.0;
+    final currentPlayheadSec = _playheadLocal;
     final clampedComp = currentPlayheadSec.clamp(0.0, _maxCompDuration);
     final currentSource = _evaluateAt(clampedComp);
 
     // Verifica se já existe um keyframe muito próximo
-    final existingIndex = _points.indexWhere((p) => (p.compositionTime - clampedComp).abs() < 0.05);
+    final existingIndex = _points.indexWhere(
+      (p) => (p.compositionTime - clampedComp).abs() < 0.05,
+    );
     if (existingIndex != -1) {
       setState(() => _selectedIndex = existingIndex);
       return;
@@ -219,7 +242,11 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
   }
 
   void _removeSelectedKeyframe() {
-    if (_selectedIndex == null || _selectedIndex! < 0 || _selectedIndex! >= _points.length) return;
+    if (_selectedIndex == null ||
+        _selectedIndex! < 0 ||
+        _selectedIndex! >= _points.length) {
+      return;
+    }
     // Preserva no mínimo 2 keyframes nas pontas
     if (_points.length <= 2) {
       _showToast('O Time Remap precisa de pelo menos 2 pontos.');
@@ -238,6 +265,7 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     if (_selectedIndex == null || _selectedIndex! >= _points.length) return;
     setState(() {
       _points[_selectedIndex!].interpolation = type;
+      _points[_selectedIndex!].preservedEase = null;
     });
     _syncToDartProject();
   }
@@ -246,8 +274,12 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     if (_selectedIndex == null || _selectedIndex! >= _points.length) return;
     final p = _points[_selectedIndex!];
     final freezeDuration = 1.0; // 1 segundo de freeze
-    final nextTime = (p.compositionTime + freezeDuration).clamp(0.0, _maxCompDuration);
+    final nextTime = (p.compositionTime + freezeDuration).clamp(
+      0.0,
+      _maxCompDuration,
+    );
 
+    if (nextTime <= p.compositionTime) return;
     final freezePoint = RemapPoint(
       compositionTime: nextTime,
       sourceTime: p.sourceTime, // mesmo instante de vídeo
@@ -255,6 +287,9 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     );
 
     setState(() {
+      p.interpolation = 1;
+      p.preservedEase = null;
+      _points.removeWhere((k) => (k.compositionTime - nextTime).abs() < 0.008);
       _points.add(freezePoint);
       _sortPoints();
       _selectedIndex = _points.indexOf(freezePoint);
@@ -265,13 +300,16 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
 
   void _reverseSegment() {
     if (_points.length < 2) return;
+    final sourceSum = _points.first.sourceTime + _points.last.sourceTime;
     setState(() {
-      for (var i = 0; i < _points.length ~/ 2; i++) {
-        final j = _points.length - 1 - i;
-        final temp = _points[i].sourceTime;
-        _points[i].sourceTime = _points[j].sourceTime;
-        _points[j].sourceTime = temp;
+      // Reverse the source direction without moving the user's speed keys
+      // or transferring easing to a different segment.
+      for (final point in _points) {
+        point.sourceTime = sourceSum - point.sourceTime;
+        point.inHandle = Offset(point.inHandle.dx, -point.inHandle.dy);
+        point.outHandle = Offset(point.outHandle.dx, -point.outHandle.dy);
       }
+      _selectedIndex = null;
     });
     _syncToDartProject();
   }
@@ -280,7 +318,12 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     setState(() {
       _points.clear();
       _points.add(RemapPoint(compositionTime: 0.0, sourceTime: 0.0));
-      _points.add(RemapPoint(compositionTime: _maxCompDuration, sourceTime: _maxCompDuration));
+      _points.add(
+        RemapPoint(
+          compositionTime: _maxCompDuration,
+          sourceTime: _maxCompDuration,
+        ),
+      );
       _selectedIndex = null;
     });
     _syncToDartProject();
@@ -294,8 +337,9 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final playheadSec = (widget.playback?.time.value.inMicroseconds ?? 0) / 1000000.0;
-    final selectedPoint = (_selectedIndex != null && _selectedIndex! < _points.length)
+    final playheadSec = _playheadLocal;
+    final selectedPoint =
+        (_selectedIndex != null && _selectedIndex! < _points.length)
         ? _points[_selectedIndex!]
         : null;
 
@@ -310,7 +354,11 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.speed_rounded, color: AmColors.accent, size: 20),
+                const Icon(
+                  Icons.speed_rounded,
+                  color: AmColors.accent,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'TIME REMAPPING',
@@ -325,7 +373,9 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                 Text(
                   'Velocidade: ${(currentSpeed * 100).toStringAsFixed(0)}%',
                   style: TextStyle(
-                    color: currentSpeed < 0 ? Colors.redAccent : AmColors.accent,
+                    color: currentSpeed < 0
+                        ? Colors.redAccent
+                        : AmColors.accent,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -343,8 +393,10 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                 final height = constraints.maxHeight;
 
                 return GestureDetector(
-                  onPanDown: (details) => _handleTouchDown(details.localPosition, width, height),
-                  onPanUpdate: (details) => _handleTouchUpdate(details.localPosition, width, height),
+                  onPanDown: (details) =>
+                      _handleTouchDown(details.localPosition, width, height),
+                  onPanUpdate: (details) =>
+                      _handleTouchUpdate(details.localPosition, width, height),
                   onPanEnd: (_) => _handleTouchEnd(),
                   child: CustomPaint(
                     size: Size(width, height),
@@ -379,26 +431,36 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                   _ActionButton(
                     icon: Icons.delete_outline_rounded,
                     label: 'Remover',
-                    color: selectedPoint != null ? Colors.redAccent : Colors.grey,
-                    onPressed: selectedPoint != null ? _removeSelectedKeyframe : null,
+                    color: selectedPoint != null
+                        ? Colors.redAccent
+                        : Colors.grey,
+                    onPressed: selectedPoint != null
+                        ? _removeSelectedKeyframe
+                        : null,
                   ),
                   const SizedBox(width: 6),
                   _ActionButton(
                     icon: Icons.linear_scale_rounded,
                     label: 'Linear',
-                    onPressed: selectedPoint != null ? () => _setInterpolation(0) : null,
+                    onPressed: selectedPoint != null
+                        ? () => _setInterpolation(0)
+                        : null,
                   ),
                   const SizedBox(width: 6),
                   _ActionButton(
                     icon: Icons.gesture_rounded,
                     label: 'Bézier',
-                    onPressed: selectedPoint != null ? () => _setInterpolation(2) : null,
+                    onPressed: selectedPoint != null
+                        ? () => _setInterpolation(2)
+                        : null,
                   ),
                   const SizedBox(width: 6),
                   _ActionButton(
                     icon: Icons.pause_circle_outline_rounded,
                     label: 'Hold',
-                    onPressed: selectedPoint != null ? () => _setInterpolation(1) : null,
+                    onPressed: selectedPoint != null
+                        ? () => _setInterpolation(1)
+                        : null,
                   ),
                   const SizedBox(width: 6),
                   _ActionButton(
@@ -434,12 +496,23 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('COMPOSIÇÃO', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                        const Text(
+                          'COMPOSIÇÃO',
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
                         Text(
                           formatTime(
-                            Duration(microseconds: (selectedPoint.compositionTime * 1000000).round()),
+                            Duration(
+                              microseconds:
+                                  (selectedPoint.compositionTime * 1000000)
+                                      .round(),
+                            ),
                           ),
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -448,12 +521,22 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('FONTE (VÍDEO)', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                        const Text(
+                          'FONTE (VÍDEO)',
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
                         Text(
                           formatTime(
-                            Duration(microseconds: (selectedPoint.sourceTime * 1000000).round()),
+                            Duration(
+                              microseconds: (selectedPoint.sourceTime * 1000000)
+                                  .round(),
+                            ),
                           ),
-                          style: const TextStyle(color: AmColors.accent, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: AmColors.accent,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -462,7 +545,10 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('TIPO', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                        const Text(
+                          'TIPO',
+                          style: TextStyle(color: Colors.grey, fontSize: 10),
+                        ),
                         Text(
                           switch (selectedPoint.interpolation) {
                             1 => 'Hold',
@@ -471,7 +557,11 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
                             4 => 'Ease Out',
                             _ => 'Linear',
                           },
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -495,13 +585,23 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
       final p = _points[_selectedIndex!];
       final pt = _pointToScreen(p.compositionTime, p.sourceTime, width, height);
 
-      final inPt = pt + Offset(p.inHandle.dx * width / _maxCompDuration, -p.inHandle.dy * height / _maxSourceDuration);
+      final inPt =
+          pt +
+          Offset(
+            p.inHandle.dx * width / _maxCompDuration,
+            -p.inHandle.dy * height / _maxSourceDuration,
+          );
       if ((local - inPt).distance <= 20) {
         _draggingInHandle = true;
         return;
       }
 
-      final outPt = pt + Offset(p.outHandle.dx * width / _maxCompDuration, -p.outHandle.dy * height / _maxSourceDuration);
+      final outPt =
+          pt +
+          Offset(
+            p.outHandle.dx * width / _maxCompDuration,
+            -p.outHandle.dy * height / _maxSourceDuration,
+          );
       if ((local - outPt).distance <= 20) {
         _draggingOutHandle = true;
         return;
@@ -510,7 +610,12 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
 
     // 2. Testa se tocou em algum ponto de keyframe
     for (var i = 0; i < _points.length; i++) {
-      final pt = _pointToScreen(_points[i].compositionTime, _points[i].sourceTime, width, height);
+      final pt = _pointToScreen(
+        _points[i].compositionTime,
+        _points[i].sourceTime,
+        width,
+        height,
+      );
       if ((local - pt).distance <= 24) {
         setState(() {
           _selectedIndex = i;
@@ -521,21 +626,40 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     }
 
     // 3. Toque na área livre: deseleciona ou posiciona playhead
-    final compTime = (local.dx / width * _maxCompDuration).clamp(0.0, _maxCompDuration);
-    widget.playback?.seek(Duration(microseconds: (compTime * 1000000).round()));
+    final compTime = (local.dx / width * _maxCompDuration).clamp(
+      0.0,
+      _maxCompDuration,
+    );
+    final layer = ref.read(editorControllerProvider).layerById(widget.layerId);
+    widget.playback?.seek(
+      (layer?.startTime ?? Duration.zero) +
+          Duration(microseconds: (compTime * 1000000).round()),
+    );
   }
 
   void _handleTouchUpdate(Offset local, double width, double height) {
     if (_selectedIndex == null || _selectedIndex! >= _points.length) return;
 
     if (_draggingPoint) {
-      final newComp = (local.dx / width * _maxCompDuration).clamp(0.0, _maxCompDuration);
-      final newSource = ((1.0 - local.dy / height) * _maxSourceDuration).clamp(0.0, _maxSourceDuration * 2.0);
+      final newComp = (local.dx / width * _maxCompDuration).clamp(
+        0.0,
+        _maxCompDuration,
+      );
+      final newSource = ((1.0 - local.dy / height) * _maxSourceDuration).clamp(
+        0.0,
+        _maxSourceDuration * 2.0,
+      );
 
       setState(() {
-        _points[_selectedIndex!].compositionTime = newComp;
-        _points[_selectedIndex!].sourceTime = newSource;
-        _sortPoints();
+        final point = _points[_selectedIndex!];
+        final previous = _selectedIndex! > 0
+            ? _points[_selectedIndex! - 1].compositionTime + 0.009
+            : 0.0;
+        final next = _selectedIndex! + 1 < _points.length
+            ? _points[_selectedIndex! + 1].compositionTime - 0.009
+            : _maxCompDuration;
+        point.compositionTime = newComp.clamp(previous, next);
+        point.sourceTime = newSource;
       });
       _syncToDartProject();
     } else if (_draggingInHandle) {
@@ -543,6 +667,12 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
       final pt = _pointToScreen(p.compositionTime, p.sourceTime, width, height);
       final delta = local - pt;
       setState(() {
+        p.preservedEase = null;
+        p.interpolation = 2;
+        if (_selectedIndex! > 0) {
+          _points[_selectedIndex! - 1].preservedEase = null;
+          _points[_selectedIndex! - 1].interpolation = 2;
+        }
         p.inHandle = Offset(
           delta.dx / width * _maxCompDuration,
           -delta.dy / height * _maxSourceDuration,
@@ -554,6 +684,8 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
       final pt = _pointToScreen(p.compositionTime, p.sourceTime, width, height);
       final delta = local - pt;
       setState(() {
+        p.preservedEase = null;
+        p.interpolation = 2;
         p.outHandle = Offset(
           delta.dx / width * _maxCompDuration,
           -delta.dy / height * _maxSourceDuration,
@@ -569,7 +701,12 @@ class _TimeRemapCurveEditorState extends ConsumerState<TimeRemapCurveEditor> {
     _draggingOutHandle = false;
   }
 
-  Offset _pointToScreen(double compTime, double sourceTime, double w, double h) {
+  Offset _pointToScreen(
+    double compTime,
+    double sourceTime,
+    double w,
+    double h,
+  ) {
     final x = (compTime / _maxCompDuration) * w;
     final y = h - (sourceTime / _maxSourceDuration) * h;
     return Offset(x, y);
@@ -596,7 +733,7 @@ class _ActionButton extends StatelessWidget {
     return CupertinoButton(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       color: enabled ? const Color(0xFF2A2E35) : const Color(0xFF1E2126),
-      minSize: 32,
+      minimumSize: const Size(32, 32),
       borderRadius: BorderRadius.circular(6),
       onPressed: onPressed,
       child: Row(
@@ -659,24 +796,19 @@ class _CurvePainter extends CustomPainter {
         ..style = PaintingStyle.stroke;
 
       final path = Path();
-      for (var i = 0; i < points.length; i++) {
-        final pt = _toScreen(points[i].compositionTime, points[i].sourceTime, w, h);
-        if (i == 0) {
+      final track = remapTrackFromPoints(points);
+      for (var x = 0.0; x <= w; x += 1) {
+        final t = x / w * maxCompDuration;
+        final pt = _toScreen(
+          t,
+          track.valueAt(Duration(microseconds: (t * 1e6).round())),
+          w,
+          h,
+        );
+        if (x == 0) {
           path.moveTo(pt.dx, pt.dy);
         } else {
-          final prev = points[i - 1];
-          final prevPt = _toScreen(prev.compositionTime, prev.sourceTime, w, h);
-
-          if (prev.interpolation == 1) {
-            // Hold: linha horizontal até X do próximo, depois sobe reto
-            path.lineTo(pt.dx, prevPt.dy);
-            path.lineTo(pt.dx, pt.dy);
-          } else {
-            // Curva Bézier com handles
-            final c1 = prevPt + Offset(prev.outHandle.dx * w / maxCompDuration, -prev.outHandle.dy * h / maxSourceDuration);
-            final c2 = pt + Offset(points[i].inHandle.dx * w / maxCompDuration, -points[i].inHandle.dy * h / maxSourceDuration);
-            path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, pt.dx, pt.dy);
-          }
+          path.lineTo(pt.dx, pt.dy);
         }
       }
       canvas.drawPath(path, curvePaint);
@@ -709,16 +841,30 @@ class _CurvePainter extends CustomPainter {
         canvas.drawCircle(pt, 12, haloPaint);
 
         // Desenha handles tangentes
-        final inPt = pt + Offset(p.inHandle.dx * w / maxCompDuration, -p.inHandle.dy * h / maxSourceDuration);
+        final inPt =
+            pt +
+            Offset(
+              p.inHandle.dx * w / maxCompDuration,
+              -p.inHandle.dy * h / maxSourceDuration,
+            );
         canvas.drawLine(pt, inPt, handleLinePaint);
         canvas.drawCircle(inPt, 5, handleCirclePaint);
 
-        final outPt = pt + Offset(p.outHandle.dx * w / maxCompDuration, -p.outHandle.dy * h / maxSourceDuration);
+        final outPt =
+            pt +
+            Offset(
+              p.outHandle.dx * w / maxCompDuration,
+              -p.outHandle.dy * h / maxSourceDuration,
+            );
         canvas.drawLine(pt, outPt, handleLinePaint);
         canvas.drawCircle(outPt, 5, handleCirclePaint);
       }
 
-      canvas.drawCircle(pt, isSelected ? 7 : 5, isSelected ? pointSelectedFill : pointFill);
+      canvas.drawCircle(
+        pt,
+        isSelected ? 7 : 5,
+        isSelected ? pointSelectedFill : pointFill,
+      );
     }
   }
 

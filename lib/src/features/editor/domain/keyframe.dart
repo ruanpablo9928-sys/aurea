@@ -15,6 +15,7 @@ enum EasingType {
   steps,
   elasticSteps,
   spring,
+  hold,
 }
 
 /// Easing do SEGMENTO que sai de um keyframe (modelo Alight: N keyframes =
@@ -131,6 +132,8 @@ class Easing {
         return (t + intensity * 0.3 * envelope * noise).clamp(0.0, 1.0);
       case EasingType.spring:
         return _spring(t);
+      case EasingType.hold:
+        return t >= 1 ? 1 : 0;
     }
   }
 
@@ -261,6 +264,7 @@ class Easing {
     EasingType.steps => 'Degraus',
     EasingType.elasticSteps => 'Deg. elastico',
     EasingType.spring => 'Mola',
+    EasingType.hold => 'Manter',
   };
 }
 

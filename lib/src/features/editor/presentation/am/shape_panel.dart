@@ -16,6 +16,7 @@ import 'gradient_fill_sheet.dart';
 import 'layer_menu.dart' show showReasonToast;
 import 'oficio_sheets.dart' show showLayerStylesSheet;
 import 'panel_chrome.dart';
+import '../widgets/campo_de_valor.dart';
 
 /// As sub-abas do "Editar forma".
 export '../../application/ui/editor_session.dart' show ShapeTool;
@@ -755,11 +756,15 @@ class _Reguas extends StatelessWidget {
           runSpacing: 4,
           children: [
             for (final tr in trilhas)
-              AmValueChip(
-                text:
-                    '${amNumber((tr.read(layer)?.valueAt(local) ?? 0) * tr.scale, tr.decimals)}${tr.suffix}',
-                label: tr.label,
-                width: trilhas.length > 2 ? 76 : 112,
+              CampoDeValor(
+                rotulo: tr.label,
+                nome: tr.label,
+                valor: (tr.read(layer)?.valueAt(local) ?? 0) * tr.scale,
+                casas: tr.decimals,
+                sufixo: tr.suffix,
+                largura: trilhas.length > 2 ? 76 : 112,
+                aoDigitar: (v) =>
+                    tr.write(t, (v / tr.scale).clamp(tr.min, tr.max)),
               ),
           ],
         ),

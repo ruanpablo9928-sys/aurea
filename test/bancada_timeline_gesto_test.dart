@@ -174,14 +174,14 @@ void main() {
       // ainda, e procurar por uma chave fixa daria um alvo fantasma.
       var idDaBarra = '';
       for (var i = 0; i < n; i++) {
-        if (find.byKey(ValueKey('bar-c$i')).evaluate().isNotEmpty) {
+        if (find.byKey(ValueKey('clip-content-c$i')).evaluate().isNotEmpty) {
           idDaBarra = 'c$i';
           break;
         }
       }
       expect(idDaBarra, isNotEmpty, reason: 'nenhuma barra na tela com $n');
       final antesDoArrasto = inicioDe(idDaBarra);
-      final barra = find.byKey(ValueKey('bar-$idDaBarra'));
+      final barra = find.byKey(ValueKey('clip-content-$idDaBarra'));
       await tester.ensureVisible(barra);
       await tester.pump();
       // SELECIONAR PRIMEIRO: a barra so se move quando esta selecionada

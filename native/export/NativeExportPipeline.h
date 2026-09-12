@@ -47,6 +47,8 @@ private:
     std::atomic<bool> cancelRequested_{false};
     std::atomic<float> progress_{0.0f};
 
+    int renderWidth_ = 0;
+    int renderHeight_ = 0;
     std::unique_ptr<RenderEngine> exportRenderEngine_;
 };
 

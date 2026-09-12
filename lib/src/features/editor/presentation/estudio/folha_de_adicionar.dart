@@ -17,12 +17,11 @@ Future<void> abrirFolhaDeAdicionarNovo(
   required String layerId,
   required Duration tempo,
   required void Function(String) aoAvisar,
-}) =>
-    mostrarFolhaScene3D<void>(
-      context,
-      title: 'Adicionar Objeto',
-      body: FolhaDeAdicionar(layerId: layerId, tempo: tempo, aoAvisar: aoAvisar),
-    );
+}) => mostrarFolhaScene3D<void>(
+  context,
+  title: 'Adicionar Objeto',
+  body: FolhaDeAdicionar(layerId: layerId, tempo: tempo, aoAvisar: aoAvisar),
+);
 
 class FolhaDeAdicionar extends ConsumerStatefulWidget {
   const FolhaDeAdicionar({
@@ -60,27 +59,38 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
       final escolhido = itens[_itemSelecionado.clamp(0, itens.length - 1)];
 
       if (escolhido.isImportar) {
-        // Dispara o importador de arquivos
         setState(() => _importando = true);
         try {
           final caminhos = await ref.read(escolherModeloProvider)();
-          if (caminhos.isNotEmpty) {
-            final modelo = await readModel3DFiles(caminhos);
-            if (!mounted) return;
-            final id = _c.addModel3D(widget.layerId, modelo);
-            if (id.isNotEmpty) {
-              ref.read(noSelecionadoProvider.notifier).state = id;
-              widget.aoAvisar('${modelo.name} adicionado.');
-            }
+          if (!mounted || caminhos.isEmpty) return;
+          final modelo = await readModel3DFiles(caminhos);
+          if (!mounted) return;
+          final id = _c.addModel3D(widget.layerId, modelo);
+          if (id.isEmpty) return;
+          ref.read(noSelecionadoProvider.notifier).state = id;
+          ref.read(luzSelecionadaProvider.notifier).state = null;
+          ref.read(cameraSelecionadaProvider.notifier).state = null;
+          widget.aoAvisar('${modelo.name} adicionado.');
+          Navigator.of(context).pop();
+        } catch (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Não foi possível importar o modelo: $error'),
+              ),
+            );
           }
-        } catch (_) {}
-        if (mounted) Navigator.of(context).pop();
+        } finally {
+          if (mounted) setState(() => _importando = false);
+        }
         return;
       }
 
       // Adiciona o elemento 3D correspondente
       _c.addSceneNode(widget.layerId, escolhido.kind);
-      final camadaAposNo = ref.read(editorControllerProvider).layerById(widget.layerId);
+      final camadaAposNo = ref
+          .read(editorControllerProvider)
+          .layerById(widget.layerId);
       if (camadaAposNo is Scene3DLayer && camadaAposNo.scene.nodes.isNotEmpty) {
         final novoNo = camadaAposNo.scene.nodes.last;
         _c.renameSceneNode(widget.layerId, novoNo.id, escolhido.nome);
@@ -99,8 +109,11 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
       ];
       final l = luzes[_itemSelecionado.clamp(0, luzes.length - 1)];
       _c.addSceneLight(widget.layerId, l.$1);
-      final camadaAposLuz = ref.read(editorControllerProvider).layerById(widget.layerId);
-      if (camadaAposLuz is Scene3DLayer && camadaAposLuz.scene.lights.isNotEmpty) {
+      final camadaAposLuz = ref
+          .read(editorControllerProvider)
+          .layerById(widget.layerId);
+      if (camadaAposLuz is Scene3DLayer &&
+          camadaAposLuz.scene.lights.isNotEmpty) {
         final novaLuz = camadaAposLuz.scene.lights.last;
         ref.read(luzSelecionadaProvider.notifier).state = novaLuz.id;
         ref.read(noSelecionadoProvider.notifier).state = null;
@@ -122,19 +135,15 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
   }
 
   List<_ItemModeloCard> get _todosModelos => [
-        const _ItemModeloCard('Casa Moderna', Icons.home_work_rounded, Element3DKind.cube),
-        const _ItemModeloCard('Carro Esportivo', Icons.directions_car_filled_rounded, Element3DKind.cylinder),
-        const _ItemModeloCard('Árvore', Icons.park_rounded, Element3DKind.cone),
-        const _ItemModeloCard('Pedra', Icons.terrain_rounded, Element3DKind.sphere),
-        const _ItemModeloCard('Cadeira', Icons.chair_rounded, Element3DKind.cube),
-        const _ItemModeloCard('Mesa', Icons.table_restaurant_rounded, Element3DKind.plane),
-        const _ItemModeloCard('Cubo Básico', Icons.view_in_ar_rounded, Element3DKind.cube),
-        const _ItemModeloCard('Esfera', Icons.circle_outlined, Element3DKind.sphere),
-        const _ItemModeloCard('Cilindro', Icons.adjust_rounded, Element3DKind.cylinder),
-        const _ItemModeloCard('Plano de Chão', Icons.layers_rounded, Element3DKind.plane),
-        const _ItemModeloCard('Texto 3D', Icons.title_rounded, Element3DKind.cube),
-        const _ItemModeloCard('Importar Arquivo...', Icons.folder_open_rounded, Element3DKind.cube, isImportar: true),
-      ];
+    for (final kind in Element3DKind.values)
+      _ItemModeloCard(element3DLabel(kind), Icons.view_in_ar_rounded, kind),
+    const _ItemModeloCard(
+      'Importar Arquivo...',
+      Icons.folder_open_rounded,
+      Element3DKind.cube,
+      isImportar: true,
+    ),
+  ];
 
   List<_ItemModeloCard> get _modelosFiltrados {
     if (_busca.isEmpty) return _todosModelos;
@@ -176,16 +185,26 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                const Icon(Icons.search_rounded, color: Scene3DTheme.textMuted, size: 20),
+                const Icon(
+                  Icons.search_rounded,
+                  color: Scene3DTheme.textMuted,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     key: const ValueKey('estudio-busca'),
                     onChanged: (v) => setState(() => _busca = v),
-                    style: const TextStyle(fontSize: 14, color: Scene3DTheme.text),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Scene3DTheme.text,
+                    ),
                     decoration: const InputDecoration(
                       hintText: 'Buscar modelo...',
-                      hintStyle: TextStyle(fontSize: 14, color: Scene3DTheme.textSubtle),
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        color: Scene3DTheme.textSubtle,
+                      ),
                       border: InputBorder.none,
                       isDense: true,
                     ),
@@ -202,7 +221,9 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _categoria == _CategoriaAdicionar.modelos
               ? _buildModelosGrid()
-              : (_categoria == _CategoriaAdicionar.luzes ? _buildLuzesGrid() : _buildCamerasGrid()),
+              : (_categoria == _CategoriaAdicionar.luzes
+                    ? _buildLuzesGrid()
+                    : _buildCamerasGrid()),
         ),
         const SizedBox(height: 18),
 
@@ -347,7 +368,9 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
         decoration: Scene3DTheme.cardDecoration(
           borderRadius: 14,
           isSelected: isSelected,
-          color: isSelected ? const Color(0xFF162520) : Scene3DTheme.panelElevated,
+          color: isSelected
+              ? const Color(0xFF162520)
+              : Scene3DTheme.panelElevated,
         ),
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -357,13 +380,17 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: isSelected ? Scene3DTheme.accentDim : const Color(0xFF242A35),
+                color: isSelected
+                    ? Scene3DTheme.accentDim
+                    : const Color(0xFF242A35),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
                 size: 26,
-                color: isSelected ? Scene3DTheme.accent : Scene3DTheme.textMuted,
+                color: isSelected
+                    ? Scene3DTheme.accent
+                    : Scene3DTheme.textMuted,
               ),
             ),
             const SizedBox(height: 8),
@@ -385,7 +412,12 @@ class _FolhaDeAdicionarState extends ConsumerState<FolhaDeAdicionar> {
 }
 
 class _ItemModeloCard {
-  const _ItemModeloCard(this.nome, this.icon, this.kind, {this.isImportar = false});
+  const _ItemModeloCard(
+    this.nome,
+    this.icon,
+    this.kind, {
+    this.isImportar = false,
+  });
   final String nome;
   final IconData icon;
   final Element3DKind kind;

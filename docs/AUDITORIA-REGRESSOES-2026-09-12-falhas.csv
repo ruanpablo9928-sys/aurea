@@ -1,0 +1,92 @@
+﻿arquivo,teste,status
+test/abrir_estudio_3d_test.dart,o menu da camada leva direto ao Estudio,Pendente de revisão individual; não desativado
+test/beta_reports_test.dart,layer reorder and time moves remain usable in tools and compact timeline,Pendente de revisão individual; não desativado
+test/beta_reports_test.dart,empty project footer fits a small phone and opens add tools,Pendente de revisão individual; não desativado
+test/editor_hierarchy_test.dart,"select, transform, curve, back preserves context at 375.0",Pendente de revisão individual; não desativado
+test/editor_hierarchy_test.dart,"select, transform, curve, back preserves context at 430.0",Pendente de revisão individual; não desativado
+test/editor_preview_keyframe_visibility_test.dart,"preview stays the same through selection and tools at Size(375.0, 667.0)",Pendente de revisão individual; não desativado
+test/editor_preview_keyframe_visibility_test.dart,"preview stays the same through selection and tools at Size(390.0, 844.0)",Pendente de revisão individual; não desativado
+test/editor_hierarchy_test.dart,selection change exits old property and multi back keeps primary,Pendente de revisão individual; não desativado
+test/editor_preview_keyframe_visibility_test.dart,"preview stays the same through selection and tools at Size(430.0, 932.0)",Pendente de revisão individual; não desativado
+test/editor_preview_keyframe_visibility_test.dart,single keys have painted area and remain tappable over trim handles,Pendente de revisão individual; não desativado
+test/editor_hierarchy_test.dart,all transform properties fit a small phone,Pendente de revisão individual; não desativado
+test/efeitos_fase4_test.dart,"galeria: miniaturas, busca, categoria, um toque aplica",Pendente de revisão individual; não desativado
+test/editor_hierarchy_test.dart,3D and Grid open directly from the dock without popping editor,Pendente de revisão individual; não desativado
+test/efeitos_fase4_test.dart,cartao: parametros diretos nos dois modos; Pro preserva preset e assar,Pendente de revisão individual; não desativado
+test/effect_preset_store_test.dart,"preset vai e volta do JSON com efeito, keyframes e nome",Pendente de revisão individual; não desativado
+test/effect_universal_keyframe_test.dart,"marca no inicio, mexe no fim: um keyframe com tudo dentro",Pendente de revisão individual; não desativado
+test/effect_universal_keyframe_test.dart,editar de novo no mesmo instante so troca o valor do keyframe,Pendente de revisão individual; não desativado
+test/effect_universal_keyframe_test.dart,"os tempos de keyframe do efeito sao a uniao, sem repetir o instante",Pendente de revisão individual; não desativado
+test/export_fluxo_test.dart,escolhe o fluxo e confere o espaco ANTES de abrir,Pendente de revisão individual; não desativado
+test/gestos_do_painel_test.dart,"o dial gira com arrasto VERTICAL, mesmo com o painel rolando",Pendente de revisão individual; não desativado
+test/girar_da_volta_test.dart,o dial de Girar cruza o limite e passa de uma volta,Pendente de revisão individual; não desativado
+test/gestos_do_painel_test.dart,o pad de mover leva a camada com arrasto vertical,Pendente de revisão individual; não desativado
+test/gestos_do_painel_test.dart,"o pad do pivo arrasta, e o toque duplo devolve ao centro",Pendente de revisão individual; não desativado
+test/inicio_redesenho_test.dart,"um botao de criar, sem pilulas, e o menu de cada projeto",Pendente de revisão individual; não desativado
+test/keyframes_fase5_test.dart,tocar o losango abre o E5 com a grade de presets (Simples) e o preset muda o easing,Pendente de revisão individual; não desativado
+test/keyframe_dez_testes_test.dart,"TESTE 10 — nao ha ""Auto Keyframe"" em lugar nenhum do codigo",Pendente de revisão individual; não desativado
+test/keyframes_fase5_test.dart,Pro: toque longo no valor abre a expressao; loop pelo menu da curva,Pendente de revisão individual; não desativado
+test/keyframe_test.dart,"AnimatedDouble edited: com animacao vira keyframe, sem animacao muda a base",Pendente de revisão individual; não desativado
+test/largura_arrastavel_test.dart,"largura e altura andam com o dedo, em Size(375.0, 667.0)",Pendente de revisão individual; não desativado
+test/largura_arrastavel_test.dart,"largura e altura andam com o dedo, em Size(430.0, 844.0)",Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,cor da cena 3D abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/manual_auto_key_test.dart,"auto-key uses layer-local time, preserves start, and undo restores pose",Pendente de revisão individual; não desativado
+test/manual_auto_key_test.dart,auto-key rotation records all axes and preserves initial scale,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,cameras abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,Elemento 3D abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,cor do elemento 3D abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,borda e sombra abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,fonte abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,texto em caminho abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,particulas abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,legendas abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,tempo da precomp abre e fecha pelo menu real sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,toque duplo em Cena 3D fecha apenas o menu uma vez,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,Cena 3D abre o Estudio sem retirar o editor,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,adicionar Grid mantem a composicao aberta,Pendente de revisão individual; não desativado
+test/layer_menu_navigation_test.dart,adicionar Cena 3D mantem a composicao aberta,Pendente de revisão individual; não desativado
+test/nivel1_shapes_test.dart,"controller: traco, desenhar e pontos raio de canto animado: dois keyframes e a curva",Pendente de revisão individual; não desativado
+test/nivel1_shapes_test.dart,"controller: traco, desenhar e pontos traco: garante uma vez so, tracejado com deslocamento animavel",Pendente de revisão individual; não desativado
+test/nivel1_shapes_test.dart,"controller: traco, desenhar e pontos regra 6: todo numero do traco anima, e o projeto antigo abre",Pendente de revisão individual; não desativado
+test/nivel1_shapes_test.dart,"controller: traco, desenhar e pontos Drawing Progress: entra antes da pintura e anima de 0 a 100",Pendente de revisão individual; não desativado
+test/nivel1_shapes_test.dart,"controller: traco, desenhar e pontos Edit Points: a parametrica vira caminho e os pontos fazem morph",Pendente de revisão individual; não desativado
+test/nivel1_shapes_test.dart,"menu de adicionar (modelo AM) abas, trilho e a grade de formas",Pendente de revisão individual; não desativado
+test/nivel3_seis_efeitos_test.dart,tarefa de aceite do nivel 3 a receita do documento monta o projeto que ela descreve,Pendente de revisão individual; não desativado
+test/ordem_das_camadas_test.dart,a barra de acoes traz para frente e envia para tras,Pendente de revisão individual; não desativado
+test/painel_cabe_na_tela_test.dart,as abas de transformacao cabem sem rolagem no iPhone 13,Pendente de revisão individual; não desativado
+test/painel_cabe_na_tela_test.dart,as abas de transformacao cabem sem rolagem no iPhone 15 Pro Max,Pendente de revisão individual; não desativado
+test/painel_cabe_na_tela_test.dart,as abas de transformacao cabem sem rolagem no iPhone SE,Pendente de revisão individual; não desativado
+test/painel_fase3_test.dart,"opacidade com valor exato: selecionar, Mesclagem, tocar o numero, digitar",Pendente de revisão individual; não desativado
+test/painel_cabe_na_tela_test.dart,o trilho mostra as quatro ferramentas principais de uma vez no iPhone 13,Pendente de revisão individual; não desativado
+test/palco_direto_test.dart,tocar no objeto no palco seleciona; tocar no vazio tira,Pendente de revisão individual; não desativado
+test/painel_cabe_na_tela_test.dart,o trilho mostra as quatro ferramentas principais de uma vez no iPhone 15 Pro Max,Pendente de revisão individual; não desativado
+test/painel_cabe_na_tela_test.dart,o trilho mostra as quatro ferramentas principais de uma vez no iPhone SE,Pendente de revisão individual; não desativado
+test/painel_fase3_test.dart,Transformar: Opacidade e Escalar em linhas com valor tocavel,Pendente de revisão individual; não desativado
+test/painel_fase3_test.dart,"todo painel tem um Voltar no cabecalho, e ele volta",Pendente de revisão individual; não desativado
+test/painel_fase3_test.dart,"Editar texto: tamanho, negrito e conteudo em linhas",Pendente de revisão individual; não desativado
+test/painel_fase3_test.dart,"Mesclagem: seis modos com miniatura no Simples, todos no Pro",Pendente de revisão individual; não desativado
+test/projeto_export_fase6_test.dart,as dicas de primeiro uso aparecem uma vez e o estado vazio tem a chamada,Pendente de revisão individual; não desativado
+test/qa_fase7_8_test.dart,tablet/paisagem: acima de 700 pt o painel fica ao lado do preview,Pendente de revisão individual; não desativado
+test/qa_fase7_8_test.dart,alvos de toque: barras de cima e de transporte com 44 pt,Pendente de revisão individual; não desativado
+test/qa_fase7_8_test.dart,"fluxos da secao 10: dividir em 1 toque, categoria em 2, keyframe em 1",Pendente de revisão individual; não desativado
+test/quick_guide_test.dart,effects help opens and returns to the same layer on a small phone,Pendente de revisão individual; não desativado
+test/qa_fase7_8_test.dart,"edicao de 3 pontos Pro: I e O na regua, e Extrair tira o trecho da camada",Pendente de revisão individual; não desativado
+test/rastreio_ui_test.dart,a acao Rastrear aparece num video e abre a folha,Pendente de revisão individual; não desativado
+test/qa_fase7_8_test.dart,dados: CSV carregado e o texto vinculado a uma coluna (Pro),Pendente de revisão individual; não desativado
+test/sair_da_aba_e_ordem_na_timeline_test.dart,"o painel tem um Voltar com alvo de toque, e ele volta",Pendente de revisão individual; não desativado
+test/sair_da_aba_e_ordem_na_timeline_test.dart,tocar na barra da camada com um painel aberto volta as ferramentas,Pendente de revisão individual; não desativado
+test/sair_da_aba_e_ordem_na_timeline_test.dart,tocar no vazio da timeline tira a selecao e fecha as ferramentas,Pendente de revisão individual; não desativado
+test/scene_motion_authoring_test.dart,first later edit anchors zero and interpolates,Pendente de revisão individual; não desativado
+test/scene_motion_authoring_test.dart,camera gestures preserve earlier and later keys,Pendente de revisão individual; não desativado
+test/sair_da_aba_e_ordem_na_timeline_test.dart,o painel de mescla diz com o que a mescla conta,Pendente de revisão individual; não desativado
+test/scene3d_studio_motion_test.dart,"studio scrubs, records object rotation and preserves first pose at Size(320.0, 568.0)",Pendente de revisão individual; não desativado
+test/scene3d_studio_motion_test.dart,"studio scrubs, records object rotation and preserves first pose at Size(390.0, 844.0)",Pendente de revisão individual; não desativado
+test/scene3d_studio_motion_test.dart,"studio scrubs, records object rotation and preserves first pose at Size(667.0, 375.0)",Pendente de revisão individual; não desativado
+test/shell_fase1_test.dart,EditorLayoutMetrics focusedLayer garante piso generoso de pelo menos 270px para o painel,Pendente de revisão individual; não desativado
+test/timeline_fase2_test.dart,E2 do grupo tem Entrar; Voltar sai do grupo,Pendente de revisão individual; não desativado
+test/timeline_fase2_test.dart,ima com estado a vista; busca de camadas no Pro,Expectativa atualizada: usuário pediu remover os controles. Substituto aprovado no teste direcionado final.
+test/transform_workspace_test.dart,"roomy transform, linked rulers and curve menu at Size(375.0, 667.0)",Pendente de revisão individual; não desativado
+test/transform_workspace_test.dart,"roomy transform, linked rulers and curve menu at Size(430.0, 844.0)",Pendente de revisão individual; não desativado
+test/ui_1011_test.dart,Correcao 10.1.1 — contagens obrigatorias sliders pequenos restantes: zero,Pendente de revisão individual; não desativado
+test/ui_1011_test.dart,Correcao 10.1.1 — contagens obrigatorias o overshoot nao fica ligado em segredo,Pendente de revisão individual; não desativado
+test/widget_test.dart,"home shell renders brand, tabs and new project action",Pendente de revisão individual; não desativado

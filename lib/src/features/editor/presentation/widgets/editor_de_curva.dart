@@ -131,7 +131,9 @@ const presetsDeCurva = <(String, Easing)>[
 /// desenhados mas SEM botao: os numeros deles nao sao pontos de
 /// controle, e fingir que sao seria mentir sobre o que o dedo move.
 class EditorDeCurva extends ConsumerStatefulWidget {
-  const EditorDeCurva({super.key});
+  const EditorDeCurva({super.key, this.onClose});
+
+  final VoidCallback? onClose;
 
   @override
   ConsumerState<EditorDeCurva> createState() => _EditorDeCurvaState();
@@ -156,6 +158,7 @@ class _EditorDeCurvaState extends ConsumerState<EditorDeCurva> {
     void fechar() {
       _rascunho = null;
       ref.read(curvaEmEdicaoProvider.notifier).state = null;
+      widget.onClose?.call();
     }
 
     // A FAMILIA SAI DA CURVA APLICADA, e nao de um estado guardado:

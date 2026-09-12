@@ -75,8 +75,8 @@ class GalleryService {
     ];
   }
 
-  Future<Uint8List?> thumbnail(GalleryAsset asset) => _assets[asset.id]!
-      .thumbnailDataWithSize(const ThumbnailSize.square(200), quality: 75);
+  Future<Uint8List?> thumbnail(GalleryAsset asset) async => _assets[asset.id]
+      ?.thumbnailDataWithSize(const ThumbnailSize.square(200), quality: 75);
 
   Future<File?> file(GalleryAsset asset) async {
     // file (not originFile) delivers a compatible image representation on iOS

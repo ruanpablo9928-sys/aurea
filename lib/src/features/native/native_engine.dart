@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:typed_data';
+
 import 'package:ffi/ffi.dart';
 
 import '../editor/domain/keyframe.dart';
@@ -26,7 +27,7 @@ class NativeEngine {
 
   /// Inicializa o motor nativo C++ com as dimensões e taxa de quadros desejadas
   bool initialize({int width = 1920, int height = 1080, int fps = 30}) {
-    if (!isSupported) return false;
+    if (!isSupported || width <= 0 || height <= 0 || fps <= 0) return false;
     dispose();
 
     _width = width;
@@ -34,7 +35,8 @@ class NativeEngine {
     _fps = fps;
 
     final bindings = AureaNativeBindings.instance!;
-    _handle = bindings.createEngine(width, height, fps);
+    final handle = bindings.createEngine(width, height, fps);
+    _handle = handle.address == 0 ? null : handle;
     return _handle != null;
   }
 
@@ -172,7 +174,13 @@ class NativeEngine {
     required int height,
     required int fps,
   }) {
-    if (!isInitialized) return null;
+    if (!isInitialized ||
+        width <= 0 ||
+        height <= 0 ||
+        fps <= 0 ||
+        frameIndex < 0) {
+      return null;
+    }
     final b = AureaNativeBindings.instance!;
 
     final totalBytes = width * height * 4;
@@ -209,7 +217,10 @@ class NativeEngine {
 
   void seek(Duration position) {
     if (isInitialized) {
-      AureaNativeBindings.instance!.timelineSeek(_handle!, position.inMicroseconds);
+      AureaNativeBindings.instance!.timelineSeek(
+        _handle!,
+        position.inMicroseconds,
+      );
     }
   }
 
@@ -278,7 +289,12 @@ class NativeEngine {
   /// Consulta o progresso atual do job de importação
   ImportProgressStatus getModelImportProgress(int jobId) {
     if (!isSupported) {
-      return const ImportProgressStatus(isDone: true, progress: 1.0, stage: 6, stageName: 'Indisponivel');
+      return const ImportProgressStatus(
+        isDone: true,
+        progress: 1.0,
+        stage: 6,
+        stageName: 'Indisponivel',
+      );
     }
     final b = AureaNativeBindings.instance!;
     final progressPtr = calloc<Float>();
@@ -349,7 +365,11 @@ class NativeEngine {
     if (!isInitialized) return;
     final idPtr = layerId.toNativeUtf8();
     try {
-      AureaNativeBindings.instance!.timeRemapEnable(_handle!, idPtr, enabled ? 1 : 0);
+      AureaNativeBindings.instance!.timeRemapEnable(
+        _handle!,
+        idPtr,
+        enabled ? 1 : 0,
+      );
     } finally {
       calloc.free(idPtr);
     }
@@ -359,7 +379,11 @@ class NativeEngine {
     if (!isInitialized) return;
     final idPtr = layerId.toNativeUtf8();
     try {
-      AureaNativeBindings.instance!.timeRemapResetDefault(_handle!, idPtr, durationSeconds);
+      AureaNativeBindings.instance!.timeRemapResetDefault(
+        _handle!,
+        idPtr,
+        durationSeconds,
+      );
     } finally {
       calloc.free(idPtr);
     }
@@ -398,17 +422,32 @@ class NativeEngine {
     if (!isInitialized) return false;
     final idPtr = layerId.toNativeUtf8();
     try {
-      return AureaNativeBindings.instance!.timeRemapRemoveKeyframe(_handle!, idPtr, index) == 1;
+      return AureaNativeBindings.instance!.timeRemapRemoveKeyframe(
+            _handle!,
+            idPtr,
+            index,
+          ) ==
+          1;
     } finally {
       calloc.free(idPtr);
     }
   }
 
-  bool removeTimeRemapKeyframeAt(String layerId, double compositionTime, {double tolerance = 0.001}) {
+  bool removeTimeRemapKeyframeAt(
+    String layerId,
+    double compositionTime, {
+    double tolerance = 0.001,
+  }) {
     if (!isInitialized) return false;
     final idPtr = layerId.toNativeUtf8();
     try {
-      return AureaNativeBindings.instance!.timeRemapRemoveKeyframeAt(_handle!, idPtr, compositionTime, tolerance) == 1;
+      return AureaNativeBindings.instance!.timeRemapRemoveKeyframeAt(
+            _handle!,
+            idPtr,
+            compositionTime,
+            tolerance,
+          ) ==
+          1;
     } finally {
       calloc.free(idPtr);
     }
@@ -428,7 +467,10 @@ class NativeEngine {
     if (!isInitialized) return 0;
     final idPtr = layerId.toNativeUtf8();
     try {
-      return AureaNativeBindings.instance!.timeRemapGetKeyframeCount(_handle!, idPtr);
+      return AureaNativeBindings.instance!.timeRemapGetKeyframeCount(
+        _handle!,
+        idPtr,
+      );
     } finally {
       calloc.free(idPtr);
     }
@@ -438,7 +480,11 @@ class NativeEngine {
     if (!isInitialized) return compositionTime;
     final idPtr = layerId.toNativeUtf8();
     try {
-      return AureaNativeBindings.instance!.timeRemapEvaluate(_handle!, idPtr, compositionTime);
+      return AureaNativeBindings.instance!.timeRemapEvaluate(
+        _handle!,
+        idPtr,
+        compositionTime,
+      );
     } finally {
       calloc.free(idPtr);
     }
@@ -448,7 +494,11 @@ class NativeEngine {
     if (!isInitialized) return 1.0;
     final idPtr = layerId.toNativeUtf8();
     try {
-      return AureaNativeBindings.instance!.timeRemapGetSpeed(_handle!, idPtr, compositionTime);
+      return AureaNativeBindings.instance!.timeRemapGetSpeed(
+        _handle!,
+        idPtr,
+        compositionTime,
+      );
     } finally {
       calloc.free(idPtr);
     }
@@ -466,7 +516,12 @@ class NativeEngine {
     final pathPtr = modelPath.toNativeUtf8();
     final namePtr = modelName.toNativeUtf8();
     try {
-      return AureaNativeBindings.instance!.opticalFlowLoadModel(_handle!, pathPtr, namePtr) == 1;
+      return AureaNativeBindings.instance!.opticalFlowLoadModel(
+            _handle!,
+            pathPtr,
+            namePtr,
+          ) ==
+          1;
     } finally {
       calloc.free(pathPtr);
       calloc.free(namePtr);
@@ -482,7 +537,10 @@ class NativeEngine {
   /// Define o limiar de corte de cena (padrão 0.38)
   void setSceneCutThreshold(double threshold) {
     if (!isInitialized) return;
-    AureaNativeBindings.instance!.opticalFlowSetSceneCutThreshold(_handle!, threshold);
+    AureaNativeBindings.instance!.opticalFlowSetSceneCutThreshold(
+      _handle!,
+      threshold,
+    );
   }
 
   /// Obtém diagnósticos internos de Optical Flow / RIFE
@@ -490,7 +548,10 @@ class NativeEngine {
     if (!isInitialized) return null;
     final diagPtr = calloc<NativeOpticalFlowDiagnostics>();
     try {
-      AureaNativeBindings.instance!.opticalFlowGetDiagnostics(_handle!, diagPtr);
+      AureaNativeBindings.instance!.opticalFlowGetDiagnostics(
+        _handle!,
+        diagPtr,
+      );
       final ref = diagPtr.ref;
       return OpticalFlowDiagnosticsResult(
         enabled: ref.enabled == 1,

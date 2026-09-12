@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/camera3d.dart';
@@ -17,12 +18,11 @@ Future<void> abrirEstudioDaCena(
   BuildContext context, {
   required String layerId,
   required PlaybackController playback,
-}) =>
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => EstudioDaCena(layerId: layerId, playback: playback),
-      ),
-    );
+}) => Navigator.of(context).push(
+  MaterialPageRoute<void>(
+    builder: (_) => EstudioDaCena(layerId: layerId, playback: playback),
+  ),
+);
 
 /// O ESTÚDIO DA CENA 3D (Tela 1 do mockup).
 class EstudioDaCena extends ConsumerStatefulWidget {
@@ -162,10 +162,7 @@ class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
                 ),
 
                 // Barra de Scrub / Transporte com Linha de Tempo
-                _FaixaDeTempoScene3D(
-                  playback: widget.playback,
-                  camada: camada,
-                ),
+                _FaixaDeTempoScene3D(playback: widget.playback, camada: camada),
 
                 // Barra Inferior de Navegação (4 Abas)
                 _BarraInferiorScene3D(
@@ -209,7 +206,9 @@ class _BarraSuperiorScene3D extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: const BoxDecoration(
         color: Scene3DTheme.panel,
-        border: Border(bottom: BorderSide(color: Scene3DTheme.border, width: 0.8)),
+        border: Border(
+          bottom: BorderSide(color: Scene3DTheme.border, width: 0.8),
+        ),
       ),
       child: Row(
         children: [
@@ -220,7 +219,11 @@ class _BarraSuperiorScene3D extends ConsumerWidget {
             onTap: aoVoltar,
             child: const Row(
               children: [
-                Icon(Icons.chevron_left_rounded, color: Scene3DTheme.text, size: 28),
+                Icon(
+                  Icons.chevron_left_rounded,
+                  color: Scene3DTheme.text,
+                  size: 28,
+                ),
                 SizedBox(width: 4),
                 Text(
                   'Scene 3D',
@@ -249,7 +252,11 @@ class _BarraSuperiorScene3D extends ConsumerWidget {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.file_upload_outlined, color: Scene3DTheme.onAccent, size: 16),
+                  Icon(
+                    Icons.file_upload_outlined,
+                    color: Scene3DTheme.onAccent,
+                    size: 16,
+                  ),
                   SizedBox(width: 6),
                   Text(
                     'Exportar',
@@ -312,7 +319,8 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             icon: Icons.near_me_rounded,
             isSelected: ferramentaAtual == FerramentaDoEstudio.selecionar,
             semanticLabel: 'Selecionar',
-            onTap: () => ref.read(ferramentaProvider.notifier).state = FerramentaDoEstudio.selecionar,
+            onTap: () => ref.read(ferramentaProvider.notifier).state =
+                FerramentaDoEstudio.selecionar,
           ),
           const SizedBox(height: 4),
 
@@ -321,7 +329,8 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             icon: Icons.open_with_rounded,
             isSelected: ferramentaAtual == FerramentaDoEstudio.mover,
             semanticLabel: 'Mover',
-            onTap: () => ref.read(ferramentaProvider.notifier).state = FerramentaDoEstudio.mover,
+            onTap: () => ref.read(ferramentaProvider.notifier).state =
+                FerramentaDoEstudio.mover,
           ),
           const SizedBox(height: 4),
 
@@ -330,7 +339,8 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             icon: Icons.rotate_right_rounded,
             isSelected: ferramentaAtual == FerramentaDoEstudio.girar,
             semanticLabel: 'Girar',
-            onTap: () => ref.read(ferramentaProvider.notifier).state = FerramentaDoEstudio.girar,
+            onTap: () => ref.read(ferramentaProvider.notifier).state =
+                FerramentaDoEstudio.girar,
           ),
           const SizedBox(height: 4),
 
@@ -339,7 +349,8 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             icon: Icons.aspect_ratio_rounded,
             isSelected: ferramentaAtual == FerramentaDoEstudio.escalar,
             semanticLabel: 'Escalar',
-            onTap: () => ref.read(ferramentaProvider.notifier).state = FerramentaDoEstudio.escalar,
+            onTap: () => ref.read(ferramentaProvider.notifier).state =
+                FerramentaDoEstudio.escalar,
           ),
           const SizedBox(height: 4),
 
@@ -348,7 +359,8 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             icon: Icons.layers_rounded,
             isSelected: false,
             semanticLabel: 'Camadas',
-            onTap: () => abrirFolhaDaCena(context, ref, layerId: layerId, tempo: tempo),
+            onTap: () =>
+                abrirFolhaDaCena(context, ref, layerId: layerId, tempo: tempo),
           ),
           const SizedBox(height: 4),
 
@@ -357,7 +369,12 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             icon: Icons.palette_outlined,
             isSelected: false,
             semanticLabel: 'Material',
-            onTap: () => abrirFichaDoSelecionado(context, ref, layerId: layerId, tempo: tempo),
+            onTap: () => abrirFichaDoSelecionado(
+              context,
+              ref,
+              layerId: layerId,
+              tempo: tempo,
+            ),
           ),
           const SizedBox(height: 4),
 
@@ -368,10 +385,16 @@ class _BarraLateralFlutuante extends ConsumerWidget {
             semanticLabel: 'Grade',
             onTap: () {
               final c = ref.read(editorControllerProvider.notifier);
-              final camada = ref.read(editorControllerProvider).layerById(layerId);
+              final camada = ref
+                  .read(editorControllerProvider)
+                  .layerById(layerId);
               if (camada is Scene3DLayer) {
                 c.setSceneFloorGrid(layerId, !camada.scene.showFloorGrid);
-                aoAvisar(camada.scene.showFloorGrid ? 'Grade desativada.' : 'Grade ativada.');
+                aoAvisar(
+                  camada.scene.showFloorGrid
+                      ? 'Grade desativada.'
+                      : 'Grade ativada.',
+                );
               }
             },
           ),
@@ -438,9 +461,7 @@ class _Gizmo3DEixos extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Scene3DTheme.border),
       ),
-      child: CustomPaint(
-        painter: _GizmoEixosPainter(),
-      ),
+      child: CustomPaint(painter: _GizmoEixosPainter()),
     );
   }
 }
@@ -462,7 +483,11 @@ class _GizmoEixosPainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: TextStyle(color: color, fontSize: 8.5, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: color,
+            fontSize: 8.5,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -518,7 +543,9 @@ class _BadgePerspectiva extends StatelessWidget {
         ),
         child: Center(
           child: Text(
-            navegacao.pelaCamera ? 'Perspectiva' : sceneViewLabel(navegacao.vista),
+            navegacao.pelaCamera
+                ? 'Perspectiva'
+                : sceneViewLabel(navegacao.vista),
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -533,10 +560,7 @@ class _BadgePerspectiva extends StatelessWidget {
 
 /// Barra de Transporte e Scrubbing com Marcador de Tempo
 class _FaixaDeTempoScene3D extends ConsumerWidget {
-  const _FaixaDeTempoScene3D({
-    required this.playback,
-    required this.camada,
-  });
+  const _FaixaDeTempoScene3D({required this.playback, required this.camada});
 
   final PlaybackController playback;
   final Scene3DLayer camada;
@@ -604,7 +628,8 @@ class _FaixaDeTempoScene3D extends ConsumerWidget {
                   void irPara(double dx) {
                     final f = (dx / c.maxWidth).clamp(0.0, 1.0);
                     playback.seek(
-                      camada.startTime + Duration(microseconds: (f * dur).round()),
+                      camada.startTime +
+                          Duration(microseconds: (f * dur).round()),
                     );
                   }
 
@@ -754,6 +779,7 @@ class _BarraInferiorScene3D extends StatelessWidget {
                   context,
                   ref,
                   layerId: layerId,
+                  tempo: tempo,
                 ),
               ),
             ],

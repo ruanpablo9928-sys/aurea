@@ -94,23 +94,6 @@ class EditorLayoutMetrics {
       sheet += timeline;
       timeline = 0;
     }
-    // A ferramenta mostra uma única camada com painel ativo (Transformar, Cor, Efeitos, etc.).
-    // O painel tem prioridade de espaço (mínimo 270px), a timeline opera em modo compacto (56px)
-    // e o preview cede altura, mantendo o enquadramento perfeito via BoxFit.contain.
-    if (focusedLayer && sheetVisible && !timelineExpanded) {
-      final timelinePiso = math.max(110.0, math.min(140.0, ws * 0.24));
-      final sheetAlvo = math.min(
-        math.max(0.0, ws - timelinePiso - previewMin),
-        math.max(260.0, ws * (sheetFraction > 0.40 ? sheetFraction : 0.44)),
-      );
-      sheet = sheetAlvo;
-      timeline = timelinePiso;
-      preview = math.max(previewMin, ws - sheet - timeline);
-      final sobra = ws - preview - sheet - timeline;
-      if (sobra > 0) {
-        timeline += sobra;
-      }
-    }
     return EditorLayoutMetrics(
       topBar: AureaTokens.topBar,
       preview: preview,

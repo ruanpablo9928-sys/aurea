@@ -14,7 +14,6 @@ import '../../domain/cut_ops.dart';
 import '../../domain/video_project.dart' as proj;
 import '../../application/media_preview_service.dart';
 import '../../application/proxy_service.dart';
-import '../../application/ui/pro_mode.dart';
 import '../../application/ui/editor_session.dart';
 import '../../../../core/storage/prefs.dart';
 import 'am_colors.dart';
@@ -216,87 +215,6 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
 
   double _timeToPx(Duration t) => t.inMicroseconds / 1e6 * _pps;
 
-  /// BUSCA (Pro): nome, tipo ou rotulo; tocar leva o cabecote ate a
-  /// camada e a seleciona.
-  Future<void> _buscarCamada(BuildContext context) async {
-    final controller = ref.read(editorControllerProvider.notifier);
-    var consulta = '';
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmColors.panel,
-      isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          final achadas = controller.searchLayers(consulta);
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-            ),
-            child: SafeArea(
-              child: SizedBox(
-                height: 360,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                      child: CupertinoSearchTextField(
-                        key: const ValueKey('busca-campo'),
-                        autofocus: true,
-                        placeholder: 'Nome, tipo ou rotulo',
-                        style: const TextStyle(color: AmColors.text),
-                        onChanged: (v) => setSheetState(() => consulta = v),
-                      ),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: achadas.length,
-                        itemBuilder: (_, i) {
-                          final l = achadas[i];
-                          return ListTile(
-                            key: ValueKey('busca-camada-${l.id}'),
-                            dense: true,
-                            leading: Icon(
-                              layerTypeIcon(l),
-                              size: 18,
-                              color: layerTypeColor(l),
-                            ),
-                            title: Text(
-                              l.name,
-                              style: const TextStyle(color: AmColors.text),
-                            ),
-                            subtitle: Text(
-                              formatTimecode(
-                                l.startTime,
-                                ref.read(editorControllerProvider).fps,
-                              ),
-                              style: const TextStyle(
-                                color: AmColors.muted,
-                                fontSize: 11,
-                              ),
-                            ),
-                            onTap: () {
-                              ref.read(multiSelectProvider.notifier).state =
-                                  const {};
-                              ref.read(selectedLayerProvider.notifier).state =
-                                  l.id;
-                              widget.playback.pause();
-                              widget.playback.seek(l.startTime);
-                              Navigator.of(sheetContext).pop();
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   /// Onde o dedo tocou na regua, para o segundo toque saber o lugar.
   double _xDoDuploToque = 0;
 
@@ -394,8 +312,6 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
     final selecionadas = <String>{?selectedId, ...multi};
     final controller = ref.read(editorControllerProvider.notifier);
     final caminho = controller.caminhoDoGrupo;
-    final ima = ref.watch(magneticProvider);
-    final pro = ref.watch(proModeProvider);
     final sessao = ref.watch(editorSessionProvider);
     final selected = selectedId == null ? null : project.layerById(selectedId);
     final keyCount = selected?.keyframeTimes.length ?? 0;
@@ -686,86 +602,6 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                     ),
                   // Dividir e Congelar moram nas acoes rapidas da camada (E2);
                   // nada flutua sobre as linhas da timeline (Fase 2).
-                  // CANTO ESQUERDO DA REGUA: o ima (encaixe, com estado a
-                  // vista) e, no Pro, a busca de camadas.
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    height: 22,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _BotaoDaRegua(
-                          key: const ValueKey('timeline-ima'),
-                          tooltip: ima ? 'Encaixe ligado' : 'Encaixe desligado',
-                          ativo: ima,
-                          onTap: () => alternarIma(ref),
-                          child: CustomPaint(
-                            size: const Size(14, 14),
-                            painter: _ImaPainter(
-                              ima ? AmColors.action : AmColors.muted,
-                            ),
-                          ),
-                        ),
-                        if (pro) ...[
-                          _BotaoDaRegua(
-                            key: const ValueKey('timeline-buscar'),
-                            tooltip: 'Buscar camada',
-                            onTap: () => _buscarCamada(context),
-                            child: const Icon(
-                              CupertinoIcons.search,
-                              size: 14,
-                              color: AmColors.text,
-                            ),
-                          ),
-                          // ENTRADA / SAIDA (edicao de 3 pontos): toque marca
-                          // no cabecote; toque longo tira.
-                          _BotaoDaRegua(
-                            key: const ValueKey('timeline-entrada'),
-                            tooltip: 'Entrada no cabecote (toque longo: tirar)',
-                            ativo: sessao.inPoint != null,
-                            onTap: () => ref
-                                .read(editorSessionProvider.notifier)
-                                .setInPoint(widget.playback.time.value),
-                            onLongPress: () => ref
-                                .read(editorSessionProvider.notifier)
-                                .setInPoint(null),
-                            child: Text(
-                              'I',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: sessao.inPoint != null
-                                    ? AmColors.action
-                                    : AmColors.text,
-                              ),
-                            ),
-                          ),
-                          _BotaoDaRegua(
-                            key: const ValueKey('timeline-saida'),
-                            tooltip: 'Saida no cabecote (toque longo: tirar)',
-                            ativo: sessao.outPoint != null,
-                            onTap: () => ref
-                                .read(editorSessionProvider.notifier)
-                                .setOutPoint(widget.playback.time.value),
-                            onLongPress: () => ref
-                                .read(editorSessionProvider.notifier)
-                                .setOutPoint(null),
-                            child: Text(
-                              'O',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: sessao.outPoint != null
-                                    ? AmColors.action
-                                    : AmColors.text,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                   // CANTO DIREITO: expandir a timeline (preview vira janela).
                   if (widget.onExpand != null)
                     Positioned(
@@ -971,12 +807,10 @@ class _BotaoDaRegua extends StatelessWidget {
     required this.onTap,
     required this.child,
     this.ativo = false,
-    this.onLongPress,
   });
 
   final String tooltip;
   final VoidCallback onTap;
-  final VoidCallback? onLongPress;
   final Widget child;
   final bool ativo;
 
@@ -989,12 +823,6 @@ class _BotaoDaRegua extends StatelessWidget {
         HapticFeedback.lightImpact();
         onTap();
       },
-      onLongPress: onLongPress == null
-          ? null
-          : () {
-              HapticFeedback.mediumImpact();
-              onLongPress!();
-            },
       child: Container(
         width: 30,
         height: 22,
@@ -1009,44 +837,6 @@ class _BotaoDaRegua extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// Um ima em ferradura: o encaixe.
-class _ImaPainter extends CustomPainter {
-  const _ImaPainter(this.cor);
-
-  final Color cor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = cor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.6
-      ..strokeCap = StrokeCap.butt;
-    final r = size.width * 0.36;
-    final c = Offset(size.width / 2, size.height * 0.42);
-    canvas.drawArc(
-      Rect.fromCircle(center: c, radius: r),
-      3.14159,
-      3.14159,
-      false,
-      p,
-    );
-    canvas.drawLine(
-      Offset(c.dx - r, c.dy),
-      Offset(c.dx - r, size.height - 1),
-      p,
-    );
-    canvas.drawLine(
-      Offset(c.dx + r, c.dy),
-      Offset(c.dx + r, size.height - 1),
-      p,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_ImaPainter old) => old.cor != cor;
 }
 
 /// Projeto › Grupo › Subgrupo. Cada nivel e tocavel; o ultimo e o atual.
@@ -1699,6 +1489,7 @@ class _AmBarState extends ConsumerState<_AmBar> {
             width: width.toDouble(),
             height: kAmBarHeight,
             child: GestureDetector(
+              key: ValueKey('clip-content-${layer.id}'),
               behavior: HitTestBehavior.opaque,
               onTap: () {
                 HapticFeedback.selectionClick();
@@ -1824,7 +1615,9 @@ class _AmBarState extends ConsumerState<_AmBar> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
                               child: Text(
                                 layer.name,
                                 maxLines: 1,
@@ -1941,7 +1734,9 @@ class _AmBarState extends ConsumerState<_AmBar> {
                                       vertical: 1,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: .35),
+                                      color: Colors.black.withValues(
+                                        alpha: .35,
+                                      ),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
@@ -2190,8 +1985,11 @@ class _AmBarState extends ConsumerState<_AmBar> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: (active ? const Color(0xFFFFC107) : Colors.black)
-                                    .withValues(alpha: active ? 0.5 : 0.3),
+                                color:
+                                    (active
+                                            ? const Color(0xFFFFC107)
+                                            : Colors.black)
+                                        .withValues(alpha: active ? 0.5 : 0.3),
                                 blurRadius: 3,
                                 spreadRadius: 0.5,
                               ),

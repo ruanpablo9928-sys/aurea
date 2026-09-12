@@ -56,7 +56,7 @@ void main() {
     expect(rows.evaluate().length, inInclusiveRange(1, 30));
     expect(find.byKey(const ValueKey('stress-2999')), findsNothing);
     final lists = tester.widgetList<ListView>(find.byType(ListView)).toList();
-    lists.first.controller!.jumpTo(38000);
+    lists.first.controller!.jumpTo(1000 * kAmRowHeight);
     await tester.pumpAndSettle();
     expect(lists.last.controller!.offset, lists.first.controller!.offset);
     expect(rows.evaluate().length, lessThan(35));

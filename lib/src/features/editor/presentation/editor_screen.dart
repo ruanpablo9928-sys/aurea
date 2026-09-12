@@ -19,7 +19,6 @@ import '../domain/effect.dart';
 import '../domain/gear.dart';
 import '../domain/layer.dart';
 import '../domain/orcamento_render.dart';
-import '../domain/shape.dart';
 import 'am/am_colors.dart';
 import 'am/am_timeline.dart';
 import 'am/am_widgets.dart';
@@ -43,7 +42,6 @@ import 'shell/top_bar.dart';
 import 'shell/transport_bar.dart';
 import 'widgets/add_layer_sheet.dart';
 import 'widgets/mask_node_editor.dart';
-import 'widgets/painel_de_forma.dart';
 import 'widgets/preview_stage.dart';
 
 /// O EDITOR — cinco zonas fixas (secao 4 do prompt):
@@ -84,10 +82,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void initState() {
     super.initState();
     RecentSheets.instance.clear();
-    _playback = widget.playback ?? PlaybackController(
-      vsync: this,
-      durationOf: () => ref.read(editorControllerProvider).duration,
-    );
+    _playback =
+        widget.playback ??
+        PlaybackController(
+          vsync: this,
+          durationOf: () => ref.read(editorControllerProvider).duration,
+        );
     _playback.time.addListener(_syncVideos);
     _playback.playing.addListener(_syncVideos);
     // ABRIR UM PROJETO precisa montar os tocadores AGORA: o relogio esta
@@ -657,39 +657,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         playback: _playback,
         onAnimar: () => _session.openPanel(EditorPanel.animators),
       ),
-      EditorPanel.editShape => layer is ShapeLayer
-          ? PainelDeForma(
-              camada: layer,
-              playback: _playback,
-              aoVoltar: _back,
-              aoAbrirCurva: (chave, e, aoMudar) {
-                final c = ref.read(editorControllerProvider.notifier);
-                showTrackCurveSheet(
-                  context,
-                  ref,
-                  _playback,
-                  label: chave,
-                  layerId: layer.id,
-                  trackOf: (l) {
-                    if (l is! ShapeLayer) return null;
-                    final formas = l.contents.whereType<ShapeParametric>().toList();
-                    if (formas.isEmpty) return null;
-                    return shapeParamTrackOf(formas.first, chave);
-                  },
-                  onSetEase: (segStart, ease) =>
-                      c.setShapeParamSegmentEase(layer.id, chave, segStart, ease),
-                  onSetEaseAll: (ease) =>
-                      c.applyEaseToAllShapeParamSegments(layer.id, chave, ease),
-                );
-              },
-            )
-          : ShapePanel(
-              playback: _playback,
-              tool: s.shapeTool,
-              onToolChanged: _session.setShapeTool,
-              onBack: _back,
-              onEditPoints: _abrirEditPoints,
-            ),
+      EditorPanel.editShape => ShapePanel(
+        playback: _playback,
+        tool: s.shapeTool,
+        onToolChanged: _session.setShapeTool,
+        onBack: _back,
+        onEditPoints: _abrirEditPoints,
+      ),
       EditorPanel.editPoints => PointsPanel(
         key: _pointsKey,
         playback: _playback,
@@ -841,7 +815,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     : math.min(
                         math.min(
                           EditorSession.alturaDoPreview,
-                          math.max(96, ws - 88 - 206) / constraints.maxHeight,
+                          math.max(96, ws - 90 - (ws * .42).clamp(230, 320)) /
+                              constraints.maxHeight,
                         ),
                         (constraints.maxWidth / proporcao) /
                             constraints.maxHeight,
@@ -870,9 +845,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   previewExpanded: s.previewExpanded,
                   timelineExpanded: s.timelineExpanded,
                   sheetVisible: conteudo != null,
-                  timelineFloor: layer != null && s.panel == EditorPanel.none
-                      ? 140
-                      : (s.panel != EditorPanel.none ? 110 : 120),
+                  timelineFloor: layer != null || s.panel != EditorPanel.none
+                      ? 90
+                      : 120,
                   sheetMayCoverTimeline: s.adding,
                   focusedLayer:
                       layer != null && s.panel != EditorPanel.none && !s.adding,
@@ -1013,31 +988,34 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                       Positioned(
                         right: 18 + (largo ? larguraFolha : 0),
                         bottom: 18 + (largo || conteudo == null ? 0 : m.sheet),
-                        child: GestureDetector(
-                          key: const ValueKey('editor-fab'),
-                          onTap: _openAdd,
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFF1E222D),
-                              border: Border.all(
-                                color: const Color(0xFF1ED6B1),
-                                width: 2.2,
-                              ),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black45,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 3),
+                        child: Tooltip(
+                          message: 'Adicionar camada',
+                          child: GestureDetector(
+                            key: const ValueKey('editor-fab'),
+                            onTap: _openAdd,
+                            child: Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF1E222D),
+                                border: Border.all(
+                                  color: const Color(0xFF1ED6B1),
+                                  width: 2.2,
                                 ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.add,
-                              size: 32,
-                              color: Color(0xFF1ED6B1),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black45,
+                                    blurRadius: 8,
+                                    offset: Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                size: 32,
+                                color: Color(0xFF1ED6B1),
+                              ),
                             ),
                           ),
                         ),

@@ -2150,7 +2150,6 @@ class EditorController extends Notifier<VideoProject> {
     );
   }
 
-
   // ------------------------------------------------ cena 3D: as trilhas
 
   /// AS TRILHAS ANIMAVEIS DE UM OBJETO DA CENA.
@@ -2185,11 +2184,14 @@ class EditorController extends Notifier<VideoProject> {
       };
 
   /// O valor de [p] no cabecote — o que a ficha mostra.
+  AnimatedDouble sceneNodeTrack(SceneNode n, PropDoNo p) => _trilhaDoNo(n, p);
+
   double sceneNodeValueAt(SceneNode n, PropDoNo p, Duration local) =>
       _trilhaDoNo(n, p).valueAt(local);
 
-  List<Duration> sceneNodeKeyframeTimes(SceneNode n, PropDoNo p) =>
-      [for (final k in _trilhaDoNo(n, p).keyframes) k.time];
+  List<Duration> sceneNodeKeyframeTimes(SceneNode n, PropDoNo p) => [
+    for (final k in _trilhaDoNo(n, p).keyframes) k.time,
+  ];
 
   void editSceneNodeProp(
     String layerId,
@@ -2259,8 +2261,9 @@ class EditorController extends Notifier<VideoProject> {
   double sceneLightValueAt(Light3D l, PropDaLuz p, Duration local) =>
       _trilhaDaLuz(l, p).valueAt(local);
 
-  List<Duration> sceneLightKeyframeTimes(Light3D l, PropDaLuz p) =>
-      [for (final k in _trilhaDaLuz(l, p).keyframes) k.time];
+  List<Duration> sceneLightKeyframeTimes(Light3D l, PropDaLuz p) => [
+    for (final k in _trilhaDaLuz(l, p).keyframes) k.time,
+  ];
 
   void editSceneLightProp(
     String layerId,
@@ -2348,9 +2351,7 @@ class EditorController extends Notifier<VideoProject> {
         PropDaCamera.giroY => c.copyWith(rotY: t),
         PropDaCamera.giroZ => c.copyWith(rotZ: t),
         PropDaCamera.lente => c.copyWith(focalLength: t),
-        PropDaCamera.foco => c.copyWith(
-          dof: c.dof.copyWith(focusDistance: t),
-        ),
+        PropDaCamera.foco => c.copyWith(dof: c.dof.copyWith(focusDistance: t)),
         PropDaCamera.abertura => c.copyWith(dof: c.dof.copyWith(aperture: t)),
         PropDaCamera.desfoque => c.copyWith(dof: c.dof.copyWith(blurLevel: t)),
         PropDaCamera.giroDaIris => c.copyWith(
@@ -2376,11 +2377,15 @@ class EditorController extends Notifier<VideoProject> {
         ),
       };
 
+  AnimatedDouble sceneCameraTrack(Camera3D c, PropDaCamera p) =>
+      _trilhaDaCamera(c, p);
+
   double sceneCameraValueAt(Camera3D c, PropDaCamera p, Duration local) =>
       _trilhaDaCamera(c, p).valueAt(local);
 
-  List<Duration> sceneCameraKeyframeTimes(Camera3D c, PropDaCamera p) =>
-      [for (final k in _trilhaDaCamera(c, p).keyframes) k.time];
+  List<Duration> sceneCameraKeyframeTimes(Camera3D c, PropDaCamera p) => [
+    for (final k in _trilhaDaCamera(c, p).keyframes) k.time,
+  ];
 
   /// Edita a camera de id [cameraId] — a da cena ou uma das extras.
   void _mexerNaCamera(
@@ -2417,11 +2422,8 @@ class EditorController extends Notifier<VideoProject> {
     _mexerNaCamera(
       layerId,
       cameraId,
-      (c) => _comTrilhaDaCamera(
-        c,
-        p,
-        _trilhaDaCamera(c, p).editada(local, valor),
-      ),
+      (c) =>
+          _comTrilhaDaCamera(c, p, _trilhaDaCamera(c, p).editada(local, valor)),
     );
   }
 
@@ -2579,15 +2581,11 @@ class EditorController extends Notifier<VideoProject> {
   void setSceneEnvironment(String layerId, EnvironmentKind e) =>
       updateScene3D(layerId, (s) => s.copyWith(environment: e));
 
-  void setSceneEnvReflect(String layerId, double v) => updateScene3D(
-    layerId,
-    (s) => s.copyWith(envReflect: v.clamp(0.0, 1.0)),
-  );
+  void setSceneEnvReflect(String layerId, double v) =>
+      updateScene3D(layerId, (s) => s.copyWith(envReflect: v.clamp(0.0, 1.0)));
 
-  void setSceneAmbient(String layerId, double v) => updateScene3D(
-    layerId,
-    (s) => s.copyWith(ambient: v.clamp(0.0, 3.0)),
-  );
+  void setSceneAmbient(String layerId, double v) =>
+      updateScene3D(layerId, (s) => s.copyWith(ambient: v.clamp(0.0, 3.0)));
 
   void setSceneSkyColor(String layerId, Color c) =>
       updateScene3D(layerId, (s) => s.copyWith(skyColor: c));
@@ -3957,7 +3955,11 @@ class EditorController extends Notifier<VideoProject> {
         updated.copyLayer(
           effects: replaceTimeRemap(
             updated,
-            track.editada(localTime, sourceSeconds),
+            track.withKeyframe(
+              localTime,
+              sourceSeconds,
+              track.easeAt(localTime),
+            ),
           ),
         ),
       );
@@ -3967,7 +3969,7 @@ class EditorController extends Notifier<VideoProject> {
       layer.copyLayer(
         effects: replaceTimeRemap(
           layer,
-          track.editada(localTime, sourceSeconds),
+          track.withKeyframe(localTime, sourceSeconds, track.easeAt(localTime)),
         ),
       ),
     );
@@ -3987,7 +3989,7 @@ class EditorController extends Notifier<VideoProject> {
         ProxyService.instance.proxyOf(layer.sourcePath) == null;
   }
 
-  /// Devolve false quando um video longo ainda precisa do proxy curto.
+  /// Reverse uses source-time seeks; a proxy is an optional optimization.
   bool setClipReverse(
     String id,
     bool reverse, {
@@ -3995,7 +3997,6 @@ class EditorController extends Notifier<VideoProject> {
   }) {
     final layer = _layer(id);
     if (layer is! VideoLayer) return false;
-    if (reverse && !allowWithoutProxy && reverseNeedsProxy(id)) return false;
     _replace(layer.copyLayer(reverse: reverse));
     return true;
   }
@@ -4727,10 +4728,12 @@ class EditorController extends Notifier<VideoProject> {
       pivot: o(layer.pivot),
       effects: [
         for (final e in layer.effects)
-          e.copyWith(params: {
-            for (final entry in e.params.entries)
-              entry.key: _deslocarD(entry.value, delta),
-          }),
+          e.copyWith(
+            params: {
+              for (final entry in e.params.entries)
+                entry.key: _deslocarD(entry.value, delta),
+            },
+          ),
       ],
     );
   }
@@ -4753,11 +4756,7 @@ class EditorController extends Notifier<VideoProject> {
       novos.removeWhere((k) => k.time == Duration.zero);
       novos.insert(
         0,
-        Keyframe<double>(
-          time: Duration.zero,
-          value: noZero,
-          ease: easeNoZero,
-        ),
+        Keyframe<double>(time: Duration.zero, value: noZero, ease: easeNoZero),
       );
     }
     return AnimatedDouble(t.base, novos, t.loop, t.expression);
@@ -4781,11 +4780,7 @@ class EditorController extends Notifier<VideoProject> {
       novos.removeWhere((k) => k.time == Duration.zero);
       novos.insert(
         0,
-        Keyframe<Offset>(
-          time: Duration.zero,
-          value: noZero,
-          ease: easeNoZero,
-        ),
+        Keyframe<Offset>(time: Duration.zero, value: noZero, ease: easeNoZero),
       );
     }
     return AnimatedOffset(t.base, novos, t.loop);
@@ -7741,9 +7736,10 @@ class EditorController extends Notifier<VideoProject> {
   /// fazia outra, e a animacao de profundidade nascia quebrada.
   void editPositionZ(String id, Duration globalTime, double value) {
     final layer = _layer(id);
-    if (layer == null) return;
+    if (layer == null || !value.isFinite) return;
     _replace(
       layer.copyLayer(
+        is3D: true,
         positionZ: _editDouble(
           layer.positionZ,
           layer.localTime(globalTime),
@@ -7944,22 +7940,6 @@ class EditorController extends Notifier<VideoProject> {
             baseZ: pe.z,
           ),
         ];
-        if (target is Scene3DLayer) {
-          final cena = target.copyScene(
-            cameraParentLayerId: sourceId,
-            clearCameraParent: false,
-          );
-          _mutate(
-            state.copyWith(
-              links: links,
-              layers: [
-                for (final l in state.layers)
-                  if (l.id == targetId) cena else l,
-              ],
-            ),
-          );
-          return;
-        }
         _mutate(state.copyWith(links: links));
         return;
       case LayerProp.skew:
@@ -7982,24 +7962,12 @@ class EditorController extends Notifier<VideoProject> {
   }
 
   void unlinkProperty(String targetId, LayerProp prop) {
-    var newState = state.copyWith(
+    final newState = state.copyWith(
       links: [
         for (final l in state.links)
           if (!(l.targetLayerId == targetId && l.targetProp == prop)) l,
       ],
     );
-    if (prop == LayerProp.parent) {
-      final t = _layer(targetId);
-      if (t is Scene3DLayer && t.cameraParentLayerId != null) {
-        final cena = t.copyScene(clearCameraParent: true);
-        newState = newState.copyWith(
-          layers: [
-            for (final l in newState.layers)
-              if (l.id == targetId) cena else l,
-          ],
-        );
-      }
-    }
     _mutate(newState);
   }
 

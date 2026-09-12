@@ -4,39 +4,34 @@ import 'package:flutter/material.dart';
 import '../../../core/ui/am_colors.dart';
 
 // Change this revision when publishing a new set of release notes.
-const releaseNoticeRevision = '2026-09-08-editor-3d-audio';
+const releaseNoticeRevision = '2026-09-12-beta-panels';
 const releaseNoticeSeenKey = 'aurea.releaseNotice.seen';
 
 const releaseHighlights = <(IconData, String, String)>[
   (
-    CupertinoIcons.music_note_2,
-    'Áudio',
-    'Correções ao importar e extrair som. Vídeo mudo não silencia outras faixas.',
+    CupertinoIcons.play_rectangle,
+    'Prévia e exportação',
+    'Painel de edição maior e prévia fixa. Full, 1/2, 1/4 e 1/8 reduzem a resolução dos efeitos e do 3D na prévia.',
+  ),
+  (
+    CupertinoIcons.cube_box,
+    'Cena 3D',
+    'Corrigimos luzes que impediam abrir cenas, a seleção de câmeras e controles de objetos e materiais.',
   ),
   (
     CupertinoIcons.move,
     'Animação',
-    'Keyframes no eixo Z corrigidos e botão de vincular a objeto nulo mais visível.',
-  ),
-  (
-    CupertinoIcons.cube_box,
-    '3D',
-    'Importação de modelos grandes otimizada, sólidos mais suaves, reflexos de ambiente e partículas como estrelas.',
-  ),
-  (
-    CupertinoIcons.wand_stars,
-    'Efeitos e transições',
-    'Oscilar, S_Shake, Motion Tile ajustado, novos efeitos de áudio e transições opcionais entre camadas.',
-  ),
-  (
-    CupertinoIcons.slider_horizontal_3,
-    'Editor',
-    'Controles Pro sempre disponíveis e ajustes de espaço nos painéis.',
+    'Eixo Z liberado nas imagens, cantos editáveis, guias vermelhas no movimento e vídeo reverso ao tocar.',
   ),
   (
     CupertinoIcons.folder,
-    'Projetos',
-    'Salvamento em segundo plano e correções para preservar suas últimas edições.',
+    'Importação',
+    'Modelos 3D são lidos fora da interface. A lista mostra os objetos reais e explica falhas ao importar.',
+  ),
+  (
+    CupertinoIcons.music_note_2,
+    'Áudio e controles',
+    'Correção no modulador de áudio e ajustes para os controles caberem em telas menores.',
   ),
 ];
 

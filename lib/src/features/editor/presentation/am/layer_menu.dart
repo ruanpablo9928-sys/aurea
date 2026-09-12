@@ -94,71 +94,138 @@ class LayerToolsDock extends ConsumerWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    IconButton(
-                      tooltip: 'Velocidade',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        playback.pause();
-                        showSpeedSheet(context, ref, layer.id, playback: playback);
-                      },
-                      icon: const Icon(CupertinoIcons.speedometer, size: 20, color: AmColors.text),
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Velocidade',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          playback.pause();
+                          showSpeedSheet(
+                            context,
+                            ref,
+                            layer.id,
+                            playback: playback,
+                          );
+                        },
+                        icon: const Icon(
+                          CupertinoIcons.speedometer,
+                          size: 20,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
-                    IconButton(
-                      tooltip: 'Mover início para o cabeçote',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        playback.pause();
-                        ref.read(editorControllerProvider.notifier).moveLayer(layer.id, playback.time.value);
-                      },
-                      icon: const Icon(CupertinoIcons.arrow_right_to_line, size: 19, color: AmColors.text),
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Mover início para o cabeçote',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          playback.pause();
+                          ref
+                              .read(editorControllerProvider.notifier)
+                              .moveLayer(layer.id, playback.time.value);
+                        },
+                        icon: const Icon(
+                          CupertinoIcons.arrow_right_to_line,
+                          size: 19,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
-                    IconButton(
-                      tooltip: 'Dividir camada',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        ref.read(editorControllerProvider.notifier).splitLayer(layer.id, playback.time.value);
-                      },
-                      icon: const Icon(CupertinoIcons.scissors, size: 19, color: AmColors.text),
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Dividir camada',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          ref
+                              .read(editorControllerProvider.notifier)
+                              .splitLayer(layer.id, playback.time.value);
+                        },
+                        icon: const Icon(
+                          CupertinoIcons.scissors,
+                          size: 19,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
-                    IconButton(
-                      tooltip: 'Mover fim para o cabeçote',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        playback.pause();
-                        final start = playback.time.value - layer.duration;
-                        ref.read(editorControllerProvider.notifier).moveLayer(
-                          layer.id,
-                          start < Duration.zero ? Duration.zero : start,
-                        );
-                      },
-                      icon: const Icon(CupertinoIcons.arrow_left_to_line, size: 19, color: AmColors.text),
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Mover fim para o cabeçote',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          playback.pause();
+                          final start = playback.time.value - layer.duration;
+                          ref
+                              .read(editorControllerProvider.notifier)
+                              .moveLayer(
+                                layer.id,
+                                start < Duration.zero ? Duration.zero : start,
+                              );
+                        },
+                        icon: const Icon(
+                          CupertinoIcons.arrow_left_to_line,
+                          size: 19,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
-                    IconButton(
-                      tooltip: 'Volume / Áudio',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        playback.pause();
-                        showAudioSheet(context, ref, layer.id);
-                      },
-                      icon: const Icon(CupertinoIcons.speaker_2, size: 20, color: AmColors.text),
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Volume / Áudio',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          playback.pause();
+                          showAudioSheet(context, ref, layer.id);
+                        },
+                        icon: const Icon(
+                          CupertinoIcons.speaker_2,
+                          size: 20,
+                          color: AmColors.text,
+                        ),
+                      ),
                     ),
-                    IconButton(
-                      tooltip: 'Vincular (Parentear)',
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        playback.pause();
-                        showParentSheet(context, ref, layer, playback.time.value);
-                      },
-                      icon: Icon(
-                        (ref.watch(editorControllerProvider).linkFor(layer.id, LayerProp.parent) != null ||
-                                ((layer is Scene3DLayer) && (layer as Scene3DLayer).cameraParentLayerId != null))
-                            ? CupertinoIcons.link_circle_fill
-                            : CupertinoIcons.link,
-                        size: 20,
-                        color: (ref.watch(editorControllerProvider).linkFor(layer.id, LayerProp.parent) != null ||
-                                ((layer is Scene3DLayer) && (layer as Scene3DLayer).cameraParentLayerId != null))
-                            ? AmColors.accent
-                            : AmColors.text,
+                    Expanded(
+                      child: IconButton(
+                        tooltip: 'Vincular (Parentear)',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          playback.pause();
+                          showParentSheet(
+                            context,
+                            ref,
+                            layer,
+                            playback.time.value,
+                          );
+                        },
+                        icon: Icon(
+                          (ref
+                                          .watch(editorControllerProvider)
+                                          .linkFor(
+                                            layer.id,
+                                            LayerProp.parent,
+                                          ) !=
+                                      null ||
+                                  ((layer is Scene3DLayer) &&
+                                      (layer as Scene3DLayer)
+                                              .cameraParentLayerId !=
+                                          null))
+                              ? CupertinoIcons.link_circle_fill
+                              : CupertinoIcons.link,
+                          size: 20,
+                          color:
+                              (ref
+                                          .watch(editorControllerProvider)
+                                          .linkFor(
+                                            layer.id,
+                                            LayerProp.parent,
+                                          ) !=
+                                      null ||
+                                  ((layer is Scene3DLayer) &&
+                                      (layer as Scene3DLayer)
+                                              .cameraParentLayerId !=
+                                          null))
+                              ? AmColors.accent
+                              : AmColors.text,
+                        ),
                       ),
                     ),
                   ],
@@ -197,7 +264,12 @@ class LayerToolsDock extends ConsumerWidget {
 }
 
 /// UM TILE DA GRADE: icone, rotulo e o que ele abre.
-typedef _Tile = ({IconData icone, String rotulo, VoidCallback onTap, String? badge});
+typedef _Tile = ({
+  IconData icone,
+  String rotulo,
+  VoidCallback onTap,
+  String? badge,
+});
 
 /// AS FILEIRAS: 2 colunas por fileira conforme Screenshot 3 do Alight Motion real.
 List<Widget> _fileiras(
@@ -1612,7 +1684,8 @@ Future<void> showParentSheet(
   final project = ref.read(editorControllerProvider);
   final controller = ref.read(editorControllerProvider.notifier);
   final currentParentLink = project.linkFor(child.id, LayerProp.parent);
-  final currentParentId = currentParentLink?.sourceLayerId ??
+  final currentParentId =
+      currentParentLink?.sourceLayerId ??
       (child is Scene3DLayer ? child.cameraParentLayerId : null);
 
   final candidates = [
@@ -1660,8 +1733,11 @@ Future<void> showParentSheet(
                 style: TextStyle(fontSize: 11, color: AmColors.muted),
               ),
               trailing: currentParentId == null
-                  ? const Icon(CupertinoIcons.checkmark_alt,
-                      color: AmColors.accent, size: 20)
+                  ? const Icon(
+                      CupertinoIcons.checkmark_alt,
+                      color: AmColors.accent,
+                      size: 20,
+                    )
                   : null,
               onTap: () {
                 controller.unlinkProperty(child.id, LayerProp.parent);
@@ -1699,21 +1775,25 @@ Future<void> showParentSheet(
                           style: TextStyle(fontSize: 11, color: AmColors.muted),
                         )
                       : other is NullLayer
-                          ? Text(
-                              other.is3D ? 'Objeto Nulo 3D' : 'Objeto Nulo',
-                              style: const TextStyle(
-                                  fontSize: 11, color: AmColors.muted),
-                            )
-                          : other is Scene3DLayer
-                              ? const Text(
-                                  'Scene 3D',
-                                  style: TextStyle(
-                                      fontSize: 11, color: AmColors.muted),
-                                )
-                              : null,
+                      ? Text(
+                          other.is3D ? 'Objeto Nulo 3D' : 'Objeto Nulo',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AmColors.muted,
+                          ),
+                        )
+                      : other is Scene3DLayer
+                      ? const Text(
+                          'Scene 3D',
+                          style: TextStyle(fontSize: 11, color: AmColors.muted),
+                        )
+                      : null,
                   trailing: other.id == currentParentId
-                      ? const Icon(CupertinoIcons.checkmark_alt,
-                          color: AmColors.accent, size: 20)
+                      ? const Icon(
+                          CupertinoIcons.checkmark_alt,
+                          color: AmColors.accent,
+                          size: 20,
+                        )
                       : null,
                   onTap: other.id == child.id
                       ? null
@@ -1725,7 +1805,10 @@ Future<void> showParentSheet(
                             t,
                           );
                           if (child is Scene3DLayer) {
-                            controller.setSceneCameraCompParent(child.id, other.id);
+                            controller.setSceneCameraCompParent(
+                              child.id,
+                              other.id,
+                            );
                           }
                           Navigator.of(sheetContext).pop();
                         },
@@ -3799,7 +3882,10 @@ class _MenuTile extends StatelessWidget {
                   top: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1.5,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFD600),
                       borderRadius: BorderRadius.circular(4),
@@ -3976,7 +4062,8 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
     if (layer == null || id == null) {
       return const ColoredBox(color: AmColors.panel);
     }
-    final realLayer = ref.watch(editorControllerProvider).layerById(id) ?? layer;
+    final realLayer =
+        ref.watch(editorControllerProvider).layerById(id) ?? layer;
     final controller = ref.read(editorControllerProvider.notifier);
 
     // Escuta o relogio: `t` sempre atual (keyframe cai no playhead real).
@@ -4193,9 +4280,9 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
           // (que nao muda) vira "a mesclagem nao funciona" — o relato do
           // beta. A conta esta certa; faltava dizer com o que ela conta.
           const Text(
-            'A mescla age sobre as camadas por baixo desta. Sozinha sobre o '
-            'fundo, Multiplicar escurece e Tela nao muda nada: ponha uma '
-            'forma ou imagem atras (Enviar para tras) para ver o efeito.',
+            'A mescla combina esta camada com as camadas abaixo. Branco em '
+            'Clarear cobre a imagem; em Escurecer deixa a imagem aparecer. '
+            'Ajuste também a opacidade para reduzir a intensidade.',
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 11, height: 1.3, color: AmColors.muted),

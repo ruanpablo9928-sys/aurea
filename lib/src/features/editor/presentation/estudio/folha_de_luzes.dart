@@ -13,17 +13,22 @@ Future<void> abrirFolhaDeLuzes(
   BuildContext context,
   WidgetRef ref, {
   required String layerId,
-}) =>
-    mostrarFolhaScene3D<void>(
-      context,
-      title: 'Luzes',
-      body: FolhaDeLuzes(layerId: layerId),
-    );
+  Duration tempo = Duration.zero,
+}) => mostrarFolhaScene3D<void>(
+  context,
+  title: 'Luzes',
+  body: FolhaDeLuzes(layerId: layerId, tempo: tempo),
+);
 
 class FolhaDeLuzes extends ConsumerStatefulWidget {
-  const FolhaDeLuzes({super.key, required this.layerId});
+  const FolhaDeLuzes({
+    super.key,
+    required this.layerId,
+    this.tempo = Duration.zero,
+  });
 
   final String layerId;
+  final Duration tempo;
 
   @override
   ConsumerState<FolhaDeLuzes> createState() => _FolhaDeLuzesState();
@@ -40,102 +45,68 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
     final camada = bruta;
     final c = ref.read(editorControllerProvider.notifier);
     final lights = camada.scene.lights;
-
-    // Garante que existam as luzes padrão caso a cena não tenha
-    final dirLight = lights.where((l) => l.kind == Light3DKind.directional).firstOrNull;
-    final pointLight = lights.where((l) => l.kind == Light3DKind.point).firstOrNull;
-    final ambientLight = lights.where((l) => l.kind == Light3DKind.ambient).firstOrNull;
+    final local = camada.localTime(widget.tempo);
 
     final activeLight = lights.isNotEmpty
         ? lights[_luzSelecionadaIndex.clamp(0, lights.length - 1)]
         : null;
 
-    final double intensidade = activeLight?.intensity.base ?? 1.0;
+    final double intensidade =
+        activeLight?.intensity.valueAt(local) ?? camada.scene.ambient;
     final cor = activeLight?.color ?? Colors.white;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Lista de Tipos de Luz com Switches
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildLightSwitchRow(
-                icon: Icons.wb_sunny_rounded,
-                title: 'Luz Direcional',
-                isOn: dirLight != null && dirLight.intensity.base > 0,
-                isSelected: activeLight?.kind == Light3DKind.directional,
-                onSelect: () {
-                  if (dirLight != null) {
-                    setState(() => _luzSelecionadaIndex = lights.indexOf(dirLight));
-                  }
-                },
-                onToggle: (v) {
-                  if (dirLight != null) {
-                    c.updateSceneLight(
-                      widget.layerId,
-                      dirLight.id,
-                      (l) => l.copyWith(
-                        intensity: l.intensity.withBase(v ? 1.0 : 0.0),
+              if (activeLight != null)
+                DropdownButton<String>(
+                  key: const ValueKey('scene-light-selection'),
+                  isExpanded: true,
+                  value: activeLight.id,
+                  items: [
+                    for (var i = 0; i < lights.length; i++)
+                      DropdownMenuItem(
+                        value: lights[i].id,
+                        child: Text('${_lightName(lights[i].kind)} ${i + 1}'),
                       ),
-                    );
-                  } else if (v) {
-                    c.addSceneLight(widget.layerId, Light3DKind.directional);
-                  }
-                },
+                  ],
+                  onChanged: (id) {
+                    final index = lights.indexWhere((l) => l.id == id);
+                    if (index >= 0) {
+                      setState(() => _luzSelecionadaIndex = index);
+                    }
+                  },
+                ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final kind in Light3DKind.values)
+                    TextButton.icon(
+                      icon: const Icon(Icons.add, size: 16),
+                      label: Text(_lightName(kind)),
+                      onPressed: () {
+                        c.addSceneLight(widget.layerId, kind);
+                        setState(() => _luzSelecionadaIndex = lights.length);
+                      },
+                    ),
+                ],
               ),
-              const SizedBox(height: 8),
-              _buildLightSwitchRow(
-                icon: Icons.lightbulb_rounded,
-                title: 'Luz Pontual',
-                isOn: pointLight != null && pointLight.intensity.base > 0,
-                isSelected: activeLight?.kind == Light3DKind.point,
-                onSelect: () {
-                  if (pointLight != null) {
-                    setState(() => _luzSelecionadaIndex = lights.indexOf(pointLight));
-                  }
-                },
-                onToggle: (v) {
-                  if (pointLight != null) {
-                    c.updateSceneLight(
-                      widget.layerId,
-                      pointLight.id,
-                      (l) => l.copyWith(
-                        intensity: l.intensity.withBase(v ? 1.0 : 0.0),
-                      ),
-                    );
-                  } else if (v) {
-                    c.addSceneLight(widget.layerId, Light3DKind.point);
-                  }
-                },
+              const Text('Iluminação ambiente da cena'),
+              Slider(
+                key: const ValueKey('scene-ambient-intensity'),
+                value: camada.scene.ambient.clamp(0.0, 1.0),
+                onChanged: (v) => c.setSceneAmbient(widget.layerId, v),
               ),
-              const SizedBox(height: 8),
-              _buildLightSwitchRow(
-                icon: Icons.public_rounded,
-                title: 'Luz Ambiente',
-                isOn: (ambientLight != null && ambientLight.intensity.base > 0) || camada.scene.ambient > 0,
-                isSelected: activeLight?.kind == Light3DKind.ambient,
-                onSelect: () {
-                  if (ambientLight != null) {
-                    setState(() => _luzSelecionadaIndex = lights.indexOf(ambientLight));
-                  }
-                },
-                onToggle: (v) {
-                  if (ambientLight != null) {
-                    c.updateSceneLight(
-                      widget.layerId,
-                      ambientLight.id,
-                      (l) => l.copyWith(
-                        intensity: l.intensity.withBase(v ? 1.0 : 0.0),
-                      ),
-                    );
-                  } else {
-                    c.setSceneAmbient(widget.layerId, v ? 0.6 : 0.0);
-                  }
-                },
-              ),
+              if (activeLight == null)
+                const Text(
+                  'Adicione uma luz para ajustar sua cor e intensidade.',
+                ),
             ],
           ),
         ),
@@ -183,7 +154,10 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                       decoration: BoxDecoration(
                         color: cor,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Scene3DTheme.border, width: 1.5),
+                        border: Border.all(
+                          color: Scene3DTheme.border,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),
@@ -204,7 +178,10 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Scene3DTheme.panelElevated,
                       borderRadius: BorderRadius.circular(6),
@@ -236,12 +213,12 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                   max: 3.0,
                   onChanged: (v) {
                     if (activeLight != null) {
-                      c.updateSceneLight(
+                      c.editSceneLightProp(
                         widget.layerId,
                         activeLight.id,
-                        (l) => l.copyWith(
-                          intensity: l.intensity.withBase(v),
-                        ),
+                        PropDaLuz.intensidade,
+                        widget.tempo,
+                        v,
                       );
                     } else {
                       c.setSceneAmbient(widget.layerId, v);
@@ -264,14 +241,17 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Scene3DTheme.panelElevated,
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: Scene3DTheme.border),
                     ),
-                    child: const Text(
-                      '45°',
+                    child: Text(
+                      '${activeLight?.coneDegrees.round() ?? 45}°',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -291,10 +271,16 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                   trackHeight: 3,
                 ),
                 child: Slider(
-                  value: 45.0,
-                  min: 0.0,
+                  value: (activeLight?.coneDegrees ?? 45).clamp(1.0, 90.0),
+                  min: 1.0,
                   max: 90.0,
-                  onChanged: (v) {},
+                  onChanged: activeLight?.kind != Light3DKind.spot
+                      ? null
+                      : (v) => c.updateSceneLight(
+                          widget.layerId,
+                          activeLight!.id,
+                          (l) => l.copyWith(coneDegrees: v),
+                        ),
                 ),
               ),
             ],
@@ -314,13 +300,18 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
                 c.updateSceneLight(
                   widget.layerId,
                   activeLight.id,
-                  (l) => l.copyWith(
-                    intensity: l.intensity.withBase(1.0),
-                    color: Colors.white,
-                  ),
+                  (l) => l.copyWith(color: Colors.white),
                 );
               }
-              c.setSceneAmbient(widget.layerId, 0.4);
+              if (activeLight != null) {
+                c.editSceneLightProp(
+                  widget.layerId,
+                  activeLight.id,
+                  PropDaLuz.intensidade,
+                  widget.tempo,
+                  1,
+                );
+              }
             },
           ),
         ),
@@ -329,46 +320,10 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
     );
   }
 
-  Widget _buildLightSwitchRow({
-    required IconData icon,
-    required String title,
-    required bool isOn,
-    required bool isSelected,
-    required VoidCallback onSelect,
-    required ValueChanged<bool> onToggle,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onSelect,
-      child: Container(
-        height: 52,
-        decoration: Scene3DTheme.cardDecoration(
-          borderRadius: 14,
-          isSelected: isSelected,
-          color: isSelected ? const Color(0xFF162520) : Scene3DTheme.panelElevated,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Row(
-          children: [
-            Icon(icon, color: isSelected ? Scene3DTheme.accent : Scene3DTheme.textMuted, size: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? Scene3DTheme.accent : Scene3DTheme.text,
-                ),
-              ),
-            ),
-            Scene3DSwitch(
-              value: isOn,
-              onChanged: onToggle,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  String _lightName(Light3DKind kind) => switch (kind) {
+    Light3DKind.directional => 'Direcional',
+    Light3DKind.point => 'Pontual',
+    Light3DKind.ambient => 'Ambiente',
+    Light3DKind.spot => 'Spot',
+  };
 }

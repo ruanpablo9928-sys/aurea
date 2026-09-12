@@ -195,10 +195,7 @@ class VistaDaCenaState extends ConsumerState<VistaDaCena> {
     // `editCameraMotion` respeita a regra: sobre a marca atualiza, fora
     // dela a trilha volta intacta e o valor fica pendente ate o losango
     // (`docs/keyframe-explicito.md`).
-    _c.updateSceneCameraById(
-      widget.layerId,
-      editCameraMotion(cam, _local, fn),
-    );
+    _c.updateSceneCameraById(widget.layerId, editCameraMotion(cam, _local, fn));
   }
 
   void _orbitar(Scene3DLayer camada, Offset delta) {
@@ -236,11 +233,7 @@ class VistaDaCenaState extends ConsumerState<VistaDaCena> {
   void _deslizarOrto(Offset delta) {
     final nav = widget.navegacao;
     final base = cameraBasis(
-      orthoViewCamera(
-        nav.vista,
-        scale: nav.escalaOrto,
-        center: nav.centroOrto,
-      ),
+      orthoViewCamera(nav.vista, scale: nav.escalaOrto, center: nav.centroOrto),
     );
     nav.deslizarOrto(
       base.right * (-delta.dx / nav.escalaOrto) +
@@ -299,10 +292,7 @@ class VistaDaCenaState extends ConsumerState<VistaDaCena> {
       _c.editSceneNodeProp(widget.layerId, nodeId, p, widget.tempo, v);
 
   void _transformar(Scene3DLayer camada, Offset delta, RenderCamera cam) {
-    final alvos = [
-      for (final id in _alvos)
-        ?camada.scene.nodeById(id),
-    ];
+    final alvos = [for (final id in _alvos) ?camada.scene.nodeById(id)];
     if (alvos.isEmpty) return;
     _abrirNoControlador();
     _accDx += delta.dx;
@@ -471,99 +461,115 @@ class VistaDaCenaState extends ConsumerState<VistaDaCena> {
 
     return AnimatedBuilder(
       animation: widget.navegacao,
-      builder: (context, _) => LayoutBuilder(
-        builder: (context, c) {
-          final size = Size(c.maxWidth, c.maxHeight);
-          _tamanho = size;
-          final cam = widget.navegacao.cameraDeRender(camada, local);
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapUp: (d) => _aoTocar(camada, d.localPosition),
-            onDoubleTapDown: (d) =>
-                _aoTocarDuasVezes(camada, d.localPosition),
-            onDoubleTap: () {},
-            onLongPressStart: (d) => _aoSegurar(camada, d.localPosition),
-            onScaleStart: (d) {
-              final achou = _apanhar(camada, d.localFocalPoint);
-              final inicio = resolveTouch(
-                onSelectedLayer: achou != null && _alvos.contains(achou),
-                onOtherLayer: achou != null && !_alvos.contains(achou),
-                navigationMode: _navegando,
-              );
-              if (inicio == TouchIntent.selectLayer) {
-                _selecionar(achou);
-                // A selecao acontece no INICIO: o resto do mesmo gesto
-                // ja arrasta, sem exigir um segundo toque.
-                _intencao = TouchIntent.moveLayer;
-              } else {
-                _intencao = inicio;
-              }
-              _pivo = null;
-              _abrirGesto();
-              _ultimoFoco = d.localFocalPoint;
-              _ultimaEscala = 1;
-              _resolverPivo(camada);
-              _guardarBases(camada);
-            },
-            onScaleUpdate: (d) {
-              final delta = d.localFocalPoint - _ultimoFoco;
-              _ultimoFoco = d.localFocalPoint;
-              if ((d.scale - _ultimaEscala).abs() > 0.004) {
-                _aproximar(camada, d.scale / _ultimaEscala);
-                _ultimaEscala = d.scale;
-              }
-              if (delta == Offset.zero) return;
-              if (d.pointerCount >= 2) {
-                _deslizar(camada, delta);
-                return;
-              }
-              switch (_intencao ?? TouchIntent.orbitCamera) {
-                case TouchIntent.moveLayer:
-                  _transformar(camada, delta, cam);
-                case TouchIntent.orbitCamera:
-                case TouchIntent.selectLayer:
-                  _orbitar(camada, delta);
-              }
-            },
-            onScaleEnd: (_) => _fecharGesto(),
-            child: ValueListenableBuilder<int>(
-              valueListenable: TextureCache.instance.revision,
-              builder: (_, _, _) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  const ColoredBox(color: AmColors.bg),
-                  if (!Scene3DGpu.indisponivel)
-                    Scene3DGpuView(
-                      scene: camada.scene,
-                      camera: cameraNoAr(camada, local),
-                      renderCamera: cam,
-                      view: widget.navegacao.vista,
-                      time: local,
-                      rascunho: _gestoAberto,
-                      showHelpers: true,
-                      selectedNodeId: selecionado,
-                    )
-                  else
-                    CustomPaint(
-                      size: size,
-                      painter: Scene3DPainter(
-                        scene: _gestoAberto
-                            ? camada.scene.copyWith(draftMode: true)
-                            : camada.scene,
+      builder: (context, _) {
+        final viewport = LayoutBuilder(
+          builder: (context, c) {
+            final size = Size(c.maxWidth, c.maxHeight);
+            _tamanho = size;
+            final cam = widget.navegacao.cameraDeRender(camada, local);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (d) => _aoTocar(camada, d.localPosition),
+              onDoubleTapDown: (d) =>
+                  _aoTocarDuasVezes(camada, d.localPosition),
+              onDoubleTap: () {},
+              onLongPressStart: (d) => _aoSegurar(camada, d.localPosition),
+              onScaleStart: (d) {
+                final achou = _apanhar(camada, d.localFocalPoint);
+                final inicio = resolveTouch(
+                  onSelectedLayer: achou != null && _alvos.contains(achou),
+                  onOtherLayer: achou != null && !_alvos.contains(achou),
+                  navigationMode: _navegando,
+                );
+                if (inicio == TouchIntent.selectLayer) {
+                  _selecionar(achou);
+                  // A selecao acontece no INICIO: o resto do mesmo gesto
+                  // ja arrasta, sem exigir um segundo toque.
+                  _intencao = TouchIntent.moveLayer;
+                } else {
+                  _intencao = inicio;
+                }
+                _pivo = null;
+                _abrirGesto();
+                _ultimoFoco = d.localFocalPoint;
+                _ultimaEscala = 1;
+                _resolverPivo(camada);
+                _guardarBases(camada);
+              },
+              onScaleUpdate: (d) {
+                final delta = d.localFocalPoint - _ultimoFoco;
+                _ultimoFoco = d.localFocalPoint;
+                if ((d.scale - _ultimaEscala).abs() > 0.004) {
+                  _aproximar(camada, d.scale / _ultimaEscala);
+                  _ultimaEscala = d.scale;
+                }
+                if (delta == Offset.zero) return;
+                if (d.pointerCount >= 2) {
+                  _deslizar(camada, delta);
+                  return;
+                }
+                switch (_intencao ?? TouchIntent.orbitCamera) {
+                  case TouchIntent.moveLayer:
+                    _transformar(camada, delta, cam);
+                  case TouchIntent.orbitCamera:
+                  case TouchIntent.selectLayer:
+                    _orbitar(camada, delta);
+                }
+              },
+              onScaleEnd: (_) => _fecharGesto(),
+              child: ValueListenableBuilder<int>(
+                valueListenable: TextureCache.instance.revision,
+                builder: (_, _, _) => Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: AmColors.bg),
+                    if (!Scene3DGpu.indisponivel)
+                      Scene3DGpuView(
+                        scene: camada.scene,
                         camera: cameraNoAr(camada, local),
+                        renderCamera: cam,
                         view: widget.navegacao.vista,
                         time: local,
+                        rascunho: _gestoAberto,
                         showHelpers: true,
                         selectedNodeId: selecionado,
-                        overrideCamera: cam,
+                      )
+                    else
+                      CustomPaint(
+                        size: size,
+                        painter: Scene3DPainter(
+                          scene: _gestoAberto
+                              ? camada.scene.copyWith(draftMode: true)
+                              : camada.scene,
+                          camera: cameraNoAr(camada, local),
+                          view: widget.navegacao.vista,
+                          time: local,
+                          showHelpers: true,
+                          selectedNodeId: selecionado,
+                          overrideCamera: cam,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
+            );
+          },
+        );
+        if (!widget.navegacao.pelaCamera) return viewport;
+        return Center(
+          child: AspectRatio(
+            key: const ValueKey('scene-camera-frame'),
+            aspectRatio: projeto.aspectRatio,
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                border: Border.all(color: AmColors.muted, width: 1),
+              ),
+              child: ClipRect(child: viewport),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

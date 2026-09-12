@@ -143,10 +143,10 @@ String audioEffectGraph(List<AudioEffect> effects) {
         );
       case AudioEffectType.modulator:
         final wave = p('wave') < 0.5
-            ? 'sin(2*PI*${p('rate')}*t)'
-            : '(2/PI*asin(sin(2*PI*${p('rate')}*t)))';
+            ? 'sin(2*PI*${p('rate')}*n/s)'
+            : '(2/PI*asin(sin(2*PI*${p('rate')}*n/s)))';
         chain(
-          "vibrato=f=${p('rate')}:d=${p('depth') / 100},aeval=exprs='val(ch)*(1-${p('amplitude') / 200}+${p('amplitude') / 200}*$wave)':c=same",
+          "vibrato=f=${p('rate')}:d=${p('depth') / 100},aeval=exprs='if(isnan(val(ch))+isinf(val(ch)),0,val(ch))*(1-${p('amplitude') / 200}+${p('amplitude') / 200}*$wave)':c=same",
         );
       case AudioEffectType.parametricEq:
         for (var i = 1; i <= 3; i++) {

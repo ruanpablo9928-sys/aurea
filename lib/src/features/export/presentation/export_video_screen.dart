@@ -24,7 +24,6 @@ import '../../editor/application/media_preview_service.dart';
 import '../application/export_engine.dart';
 import '../application/platform_encoder.dart';
 import '../domain/export_settings.dart';
-import '../../native/native_engine.dart';
 import '../../settings/application/settings_controller.dart';
 
 /// EXPORTAR VIDEO.
@@ -101,10 +100,8 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
     // esperado la na frente, quando a pessoa manda exportar; um shader
     // que nao carrega vira erro DAQUELA fase, com a mensagem certa, e
     // nao uma excecao solta enquanto ela escolhe o tamanho.
-    _aquecendo = Future.wait([
-      DitherLayer.warmUp(),
-      PixelEffectEngine.warmUp(),
-    ]).catchError((Object _) => const <void>[]);
+    _aquecendo = Future.wait([DitherLayer.warmUp(), PixelEffectEngine.warmUp()])
+        .catchError((Object _) => const <void>[]);
   }
 
   @override
@@ -250,72 +247,37 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         );
       }
 
-      final bool useNative = NativeEngine.instance.initialize(
-        width: engine.width,
-        height: engine.height,
-        fps: engine.fps,
-      );
-      if (useNative) {
-        NativeEngine.instance.syncProject(project);
-      }
+      // Use the same compositor as preview for every output format. The
+      // experimental native bridge does not serialize all layer properties.
+      for (var i = 0; i < total; i++) {
+        if (engine.cancelled) return;
+        final t = engine.timeOfFrame(i);
+        await _prepararQuadrosDeVideo(videoLayers, t);
+        _time.value = t;
+        if (!mounted) return;
+        setState(() {});
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted || engine.cancelled) return;
 
-      try {
-        for (var i = 0; i < total; i++) {
-          if (engine.cancelled) return;
-          final t = engine.timeOfFrame(i);
-
-          Uint8List? nativeFrame;
-          if (useNative && emFluxo) {
-            nativeFrame = NativeEngine.instance.renderFrameDirect(
-              frameIndex: i,
-              width: engine.width,
-              height: engine.height,
-              fps: engine.fps,
-            );
+        if (emFluxo) {
+          final quadro = await _capturarCru(escala);
+          if (quadro == null) {
+            throw ExportException('Nao consegui desenhar o quadro $i.');
           }
-
-          if (nativeFrame != null) {
-            await PlatformEncoder.frameRgba(
-              nativeFrame,
-              engine.width,
-              engine.height,
-            );
-          } else {
-            await _prepararQuadrosDeVideo(videoLayers, t);
-            _time.value = t;
-
-            // Espera a arvore ser reconstruida E pintada antes de capturar.
-            if (!mounted) return;
-            setState(() {});
-            await WidgetsBinding.instance.endOfFrame;
-            if (!mounted || engine.cancelled) return;
-
-            if (emFluxo) {
-              final quadro = await _capturarCru(escala);
-              if (quadro == null) {
-                throw ExportException('Nao consegui desenhar o quadro $i.');
-              }
-              await PlatformEncoder.frameRgba(
-                quadro.bytes,
-                quadro.largura,
-                quadro.altura,
-              );
-            } else {
-              final png = await _capturar();
-              if (png == null) {
-                throw ExportException('Nao consegui desenhar o quadro $i.');
-              }
-              final name = i.toString().padLeft(6, '0');
-              File('${framesDir.path}/$name.png').writeAsBytesSync(png);
-            }
+          await PlatformEncoder.frameRgba(
+            quadro.bytes,
+            quadro.largura,
+            quadro.altura,
+          );
+        } else {
+          final png = await _capturar();
+          if (png == null) {
+            throw ExportException('Nao consegui desenhar o quadro $i.');
           }
-
-          _passo(_Fase.desenhando, (i + 1) / total, 'Quadro ${i + 1} de $total');
+          final name = i.toString().padLeft(6, '0');
+          File('${framesDir.path}/$name.png').writeAsBytesSync(png);
         }
-      } finally {
-        if (useNative) {
-          NativeEngine.instance.dispose();
-        }
+        _passo(_Fase.desenhando, (i + 1) / total, 'Quadro ${i + 1} de $total');
       }
 
       // 3. EM FLUXO o video ja esta pronto quando o laco acaba: so falta
@@ -723,11 +685,10 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
             ),
             _Escolhas<int?>(
               titulo: 'Quadros por segundo',
-              itens: [('Do projeto ($fpsProjeto)', null), ...const [
-                ('24', 24),
-                ('30', 30),
-                ('60', 60),
-              ]],
+              itens: [
+                ('Do projeto ($fpsProjeto)', null),
+                ...const [('24', 24), ('30', 30), ('60', 60)],
+              ],
               atual: _ajustes.fps,
               aoEscolher: (f) => setState(() {
                 _ajustes = f == null
@@ -775,10 +736,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _BotaoGrande(
-              rotulo: 'Exportar',
-              aoTocar: _rodar,
-            ),
+            _BotaoGrande(rotulo: 'Exportar', aoTocar: _rodar),
           ],
         ),
       ),
@@ -1071,9 +1029,7 @@ class _Escolhas<T> extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: valor == atual
-                            ? AmColors.accent
-                            : AmColors.text,
+                        color: valor == atual ? AmColors.accent : AmColors.text,
                       ),
                     ),
                   ),

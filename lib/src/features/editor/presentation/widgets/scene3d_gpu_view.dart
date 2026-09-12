@@ -1,4 +1,7 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../application/ui/preview_resolution.dart';
 
 import '../../application/motor3d_modo.dart';
 import '../../application/preview_stats.dart';
@@ -17,7 +20,7 @@ import 'scene3d_painter.dart';
 /// renderiza o instante [time] pela camera [renderCamera] e entrega o
 /// resultado no canvas da composicao (o que a exportacao captura). O
 /// Estudio usa o mesmo widget com a camera livre dele.
-class Scene3DGpuView extends StatefulWidget {
+class Scene3DGpuView extends ConsumerStatefulWidget {
   const Scene3DGpuView({
     super.key,
     required this.scene,
@@ -50,10 +53,10 @@ class Scene3DGpuView extends StatefulWidget {
   final bool exporting;
 
   @override
-  State<Scene3DGpuView> createState() => _Scene3DGpuViewState();
+  ConsumerState<Scene3DGpuView> createState() => _Scene3DGpuViewState();
 }
 
-class _Scene3DGpuViewState extends State<Scene3DGpuView> {
+class _Scene3DGpuViewState extends ConsumerState<Scene3DGpuView> {
   Scene3DGpu? _gpu;
   var _pronto = Scene3DGpu.pronto;
 
@@ -107,6 +110,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
 
   @override
   Widget build(BuildContext context) {
+    final previewScale = ref.watch(previewResolutionProvider).scale;
     // SO ENQUANTO A GPU NAO ESTA PRONTA. A camera ortografica ficava
     // aqui tambem — e era o caminho das vistas fixas do Estudio, que
     // desenhavam a cena inteira no processador. Agora o motor tem lente
@@ -156,6 +160,7 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
             widget.scene.background,
             widget.rascunho,
             widget.exporting,
+            previewScale,
           ),
           size: Size.infinite,
         );
@@ -190,7 +195,15 @@ class _Scene3DGpuViewState extends State<Scene3DGpuView> {
 }
 
 class _PintorGpu extends CustomPainter {
-  _PintorGpu(this.gpu, this.camera, this.fundo, this.rascunho, this.exporting);
+  _PintorGpu(
+    this.gpu,
+    this.camera,
+    this.fundo,
+    this.rascunho,
+    this.exporting,
+    this.previewScale,
+  );
+  final double previewScale;
   final bool rascunho, exporting;
 
   final Scene3DGpu gpu;
@@ -221,6 +234,7 @@ class _PintorGpu extends CustomPainter {
         gpu.camera(camera, size),
         rascunho: rascunho,
         exporting: exporting,
+        previewScale: previewScale,
       ),
     );
     canvas.restore();

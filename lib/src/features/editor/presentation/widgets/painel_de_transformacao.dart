@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/ui/am_colors.dart';
 import '../../application/editor_controller.dart';
 import '../../application/playback_controller.dart';
+import '../../application/ui/preview_resolution.dart';
 import '../../domain/layer.dart';
 import 'almofada_de_arrasto.dart';
 import 'campo_de_valor.dart';
@@ -58,8 +59,7 @@ class PainelDeTransformacao extends ConsumerStatefulWidget {
       _PainelDeTransformacaoState();
 }
 
-class _PainelDeTransformacaoState
-    extends ConsumerState<PainelDeTransformacao> {
+class _PainelDeTransformacaoState extends ConsumerState<PainelDeTransformacao> {
   /// A FOTO DO VALOR NO INICIO DO ARRASTO.
   ///
   /// As superficies entregam o deslocamento ACUMULADO, e nao o do
@@ -107,9 +107,9 @@ class _PainelDeTransformacaoState
             (Icons.transform_rounded, 'Inclinar'),
           ],
           vigente: modo.index,
-          aoEscolher: (i) => ref
-              .read(modoDeTransformacaoProvider.notifier)
-              .state = ModoDeTransformacao.values[i],
+          aoEscolher: (i) =>
+              ref.read(modoDeTransformacaoProvider.notifier).state =
+                  ModoDeTransformacao.values[i],
         ),
       ],
     );
@@ -125,32 +125,33 @@ class _PainelDeTransformacaoState
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CampoDeValor(
-              rotulo: 'x',
-              valor: p.dx,
-              cor: AmColors.accent,
-              aoDigitar: (v) =>
-                  _c.editPosition(l.id, widget.tempo, Offset(v, p.dy)),
+            Flexible(
+              child: CampoDeValor(
+                rotulo: 'x',
+                valor: p.dx,
+                cor: AmColors.accent,
+                aoDigitar: (v) =>
+                    _c.editPosition(l.id, widget.tempo, Offset(v, p.dy)),
+              ),
             ),
             const SizedBox(width: 6),
-            CampoDeValor(
-              rotulo: 'y',
-              valor: p.dy,
-              cor: AmColors.accent,
-              aoDigitar: (v) =>
-                  _c.editPosition(l.id, widget.tempo, Offset(p.dx, v)),
+            Flexible(
+              child: CampoDeValor(
+                rotulo: 'y',
+                valor: p.dy,
+                cor: AmColors.accent,
+                aoDigitar: (v) =>
+                    _c.editPosition(l.id, widget.tempo, Offset(p.dx, v)),
+              ),
             ),
             const SizedBox(width: 14),
-            CampoDeValor(
-              rotulo: 'z',
-              valor: l.positionZ.valueAt(_local),
-              cor: Colors.white,
-              // Z SO EDITA EM CAMADA 3D. O campo continua a vista, e
-              // apagado, porque some-lo mudaria a largura da fileira
-              // toda vez que alguem ligasse o 3D.
-              aoDigitar: l.is3D
-                  ? (v) => _c.editPositionZ(l.id, widget.tempo, v)
-                  : null,
+            Flexible(
+              child: CampoDeValor(
+                rotulo: 'z',
+                valor: l.positionZ.valueAt(_local),
+                cor: Colors.white,
+                aoDigitar: (v) => _c.editPositionZ(l.id, widget.tempo, v),
+              ),
             ),
           ],
         );
@@ -207,8 +208,8 @@ class _PainelDeTransformacaoState
             ),
             _Corrente(
               travada: travada,
-              aoTocar: () => ref.read(escalaTravadaProvider.notifier).state =
-                  !travada,
+              aoTocar: () =>
+                  ref.read(escalaTravadaProvider.notifier).state = !travada,
             ),
             CampoDeValor(
               rotulo: 'Altura',
@@ -258,12 +259,30 @@ class _PainelDeTransformacaoState
             _posicaoAoComecar = l.position.valueAt(_local);
             _abrirLote();
           },
-          aoMover: (d) => _c.editPosition(
-            l.id,
-            widget.tempo,
-            _posicaoAoComecar + d * ganho,
-          ),
-          aoTerminar: _fecharLote,
+          aoMover: (d) {
+            var target = _posicaoAoComecar + d * ganho;
+            double? x, y;
+            // Follow the initial axis when the gesture is nearly straight.
+            if (d.dx.abs() > 12 && d.dy.abs() < 6) {
+              y = _posicaoAoComecar.dy;
+            } else if (d.dy.abs() > 12 && d.dx.abs() < 6) {
+              x = _posicaoAoComecar.dx;
+            }
+            final cx = projeto.outputWidth / 2;
+            final cy = projeto.outputHeight / 2;
+            if ((target.dx - cx).abs() < 5 * ganho) x = cx;
+            if ((target.dy - cy).abs() < 5 * ganho) y = cy;
+            target = Offset(x ?? target.dx, y ?? target.dy);
+            ref.read(transformGuidesProvider.notifier).state = (x: x, y: y);
+            _c.editPosition(l.id, widget.tempo, target);
+          },
+          aoTerminar: () {
+            ref.read(transformGuidesProvider.notifier).state = (
+              x: null,
+              y: null,
+            );
+            _fecharLote();
+          },
         );
       case ModoDeTransformacao.girar:
         if (!l.is3D) {
@@ -415,9 +434,7 @@ class _Corrente extends StatelessWidget {
     excludeSemantics: true,
     button: true,
     toggled: travada,
-    label: travada
-        ? 'Soltar largura e altura'
-        : 'Travar largura e altura',
+    label: travada ? 'Soltar largura e altura' : 'Travar largura e altura',
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: aoTocar,

@@ -6,7 +6,6 @@ import '../../application/editor_controller.dart';
 import '../../domain/camera3d.dart';
 import '../../domain/element3d.dart';
 import '../../domain/estudio_ux.dart';
-import '../../domain/keyframe.dart';
 import '../../domain/layer.dart';
 import '../../domain/scene3d.dart';
 import '../widgets/editor_de_curva.dart';
@@ -120,10 +119,8 @@ class BarraDeContexto extends ConsumerWidget {
                   icone: switch (f) {
                     FerramentaDoEstudio.mover => Icons.open_with_rounded,
                     FerramentaDoEstudio.girar => Icons.rotate_right_rounded,
-                    FerramentaDoEstudio.escalar =>
-                      Icons.aspect_ratio_rounded,
-                    FerramentaDoEstudio.selecionar =>
-                      Icons.touch_app_outlined,
+                    FerramentaDoEstudio.escalar => Icons.aspect_ratio_rounded,
+                    FerramentaDoEstudio.selecionar => Icons.touch_app_outlined,
                   },
                   escolhida: ref.watch(ferramentaProvider) == f,
                   aoTocar: () =>
@@ -285,10 +282,12 @@ Future<void> abrirFichaDoSelecionado(
   ref,
   layerId: layerId,
   tempo: tempo,
+  aba: aba,
 );
 
-class _Ficha extends ConsumerStatefulWidget {
-  const _Ficha({
+class FichaDoSelecionado extends ConsumerStatefulWidget {
+  const FichaDoSelecionado({
+    super.key,
     required this.layerId,
     required this.tempo,
     required this.abaInicial,
@@ -299,10 +298,10 @@ class _Ficha extends ConsumerStatefulWidget {
   final AbaDaFicha abaInicial;
 
   @override
-  ConsumerState<_Ficha> createState() => _FichaState();
+  ConsumerState<FichaDoSelecionado> createState() => _FichaState();
 }
 
-class _FichaState extends ConsumerState<_Ficha> {
+class _FichaState extends ConsumerState<FichaDoSelecionado> {
   late AbaDaFicha _aba = widget.abaInicial;
   bool _avancado = false;
 
@@ -355,7 +354,9 @@ class _FichaState extends ConsumerState<_Ficha> {
           ],
         ),
         const SizedBox(height: 10),
-        Row(
+        Wrap(
+          spacing: 0,
+          runSpacing: 6,
           children: [
             for (final a in abas)
               Padding(
@@ -514,8 +515,7 @@ class _TransformarNo extends ConsumerWidget {
           anima: c.sceneNodeKeyframeTimes(n, p).isNotEmpty,
           aoComecar: c.beginGesture,
           aoTerminar: c.endGesture,
-          aoMudar: (v) =>
-              c.editSceneNodeProp(layerId, nodeId, p, tempo, v),
+          aoMudar: (v) => c.editSceneNodeProp(layerId, nodeId, p, tempo, v),
           aoAlternarMarca: () =>
               c.toggleSceneNodeKeyframe(layerId, nodeId, p, tempo),
           aoAbrirCurva: () => abrirCurvaDoNo(ref, layerId, n, p, local),
@@ -582,7 +582,8 @@ class _MaterialDoNo extends ConsumerWidget {
     final c = ref.read(editorControllerProvider.notifier);
     final m = n.material;
 
-    void mudar(Material3D novo) => c.setSceneNodeMaterial(layerId, nodeId, novo);
+    void mudar(Material3D novo) =>
+        c.setSceneNodeMaterial(layerId, nodeId, novo);
 
     Widget numero(
       String rotulo,
@@ -628,10 +629,18 @@ class _MaterialDoNo extends ConsumerWidget {
           rotulo: 'Cor do material',
           aoEscolher: (cor) => mudar(m.copyWith(baseColor: cor)),
         ),
-        numero('Metal', m.metallic, .004, (v) =>
-            mudar(m.copyWith(metallic: v.clamp(0.0, 1.0)))),
-        numero('Aspereza', m.roughness, .004, (v) =>
-            mudar(m.copyWith(roughness: v.clamp(0.0, 1.0)))),
+        numero(
+          'Metal',
+          m.metallic,
+          .004,
+          (v) => mudar(m.copyWith(metallic: v.clamp(0.0, 1.0))),
+        ),
+        numero(
+          'Aspereza',
+          m.roughness,
+          .004,
+          (v) => mudar(m.copyWith(roughness: v.clamp(0.0, 1.0))),
+        ),
         InterruptorDaFolha(
           rotulo: 'Avancado',
           icone: Icons.tune_rounded,
@@ -657,17 +666,37 @@ class _MaterialDoNo extends ConsumerWidget {
                 ),
             ],
           ),
-          numero('Emissao', m.emissive, .004, (v) =>
-              mudar(m.copyWith(emissive: v.clamp(0.0, 8.0)))),
-          numero('Opacidade', m.opacity, .004, (v) =>
-              mudar(m.copyWith(opacity: v.clamp(0.0, 1.0)))),
-          numero('Reflexo', m.reflectivity, .004, (v) =>
-              mudar(m.copyWith(reflectivity: v.clamp(0.0, 1.0)))),
-          numero('Oclusao', m.occlusionStrength, .004, (v) =>
-              mudar(m.copyWith(occlusionStrength: v.clamp(0.0, 2.0)))),
+          numero(
+            'Emissao',
+            m.emissive,
+            .004,
+            (v) => mudar(m.copyWith(emissive: v.clamp(0.0, 8.0))),
+          ),
+          numero(
+            'Opacidade',
+            m.opacity,
+            .004,
+            (v) => mudar(m.copyWith(opacity: v.clamp(0.0, 1.0))),
+          ),
+          numero(
+            'Reflexo',
+            m.reflectivity,
+            .004,
+            (v) => mudar(m.copyWith(reflectivity: v.clamp(0.0, 1.0))),
+          ),
+          numero(
+            'Oclusao',
+            m.occlusionStrength,
+            .004,
+            (v) => mudar(m.copyWith(occlusionStrength: v.clamp(0.0, 2.0))),
+          ),
           if (m.kind == MaterialKind.cutout)
-            numero('Corte do alfa', m.alphaCutoff, .004, (v) =>
-                mudar(m.copyWith(alphaCutoff: v.clamp(0.0, 1.0)))),
+            numero(
+              'Corte do alfa',
+              m.alphaCutoff,
+              .004,
+              (v) => mudar(m.copyWith(alphaCutoff: v.clamp(0.0, 1.0))),
+            ),
           InterruptorDaFolha(
             rotulo: 'Desenhar os dois lados',
             icone: Icons.flip_rounded,
@@ -805,8 +834,7 @@ class _MaisDoNo extends ConsumerWidget {
         AcaoDaFolha(
           icone: Icons.visibility_off_rounded,
           rotulo: n.visible ? 'Esconder' : 'Mostrar',
-          aoTocar: () =>
-              c.setSceneNodeVisible(layerId, nodeId, !n.visible),
+          aoTocar: () => c.setSceneNodeVisible(layerId, nodeId, !n.visible),
         ),
         AcaoDaFolha(
           icone: n.locked ? Icons.lock_rounded : Icons.lock_open_rounded,
@@ -886,9 +914,7 @@ class _FichaDaLuz extends ConsumerWidget {
           temMarcaAqui: c
               .sceneLightKeyframeTimes(l, PropDaLuz.intensidade)
               .any((t) => (t - local).abs() < const Duration(milliseconds: 8)),
-          anima: c
-              .sceneLightKeyframeTimes(l, PropDaLuz.intensidade)
-              .isNotEmpty,
+          anima: c.sceneLightKeyframeTimes(l, PropDaLuz.intensidade).isNotEmpty,
           aoComecar: c.beginGesture,
           aoTerminar: c.endGesture,
           aoMudar: (v) => c.editSceneLightProp(
@@ -986,15 +1012,12 @@ class _FichaDaLuz extends ConsumerWidget {
               escolhida: true,
               aoComecar: c.beginGesture,
               aoTerminar: c.endGesture,
-              aoMudar: (v) => c.setSceneLightDirection(
-                layerId,
-                lightId,
-                switch (eixo) {
-                  'X' => Vec3(v, l.direction.y, l.direction.z),
-                  'Y' => Vec3(l.direction.x, v, l.direction.z),
-                  _ => Vec3(l.direction.x, l.direction.y, v),
-                },
-              ),
+              aoMudar: (v) =>
+                  c.setSceneLightDirection(layerId, lightId, switch (eixo) {
+                    'X' => Vec3(v, l.direction.y, l.direction.z),
+                    'Y' => Vec3(l.direction.x, v, l.direction.z),
+                    _ => Vec3(l.direction.x, l.direction.y, v),
+                  }),
             ),
           AcaoDaFolha(
             icone: Icons.delete_outline_rounded,
@@ -1036,8 +1059,13 @@ class _FichaDaCamera extends ConsumerWidget {
     if (cam == null) return const SizedBox.shrink();
     final c = ref.read(editorControllerProvider.notifier);
 
-    Widget linha(String rotulo, PropDaCamera p, double porPixel, int casas,
-        {String sufixo = ''}) => LinhaDaTrilha(
+    Widget linha(
+      String rotulo,
+      PropDaCamera p,
+      double porPixel,
+      int casas, {
+      String sufixo = '',
+    }) => LinhaDaTrilha(
       rotulo: rotulo,
       nome: '$rotulo de ${cam.name}',
       valor: c.sceneCameraValueAt(cam, p, local),
@@ -1211,9 +1239,10 @@ void abrirCurvaDoNo(
   if (comeco == null) return;
   ref.read(curvaEmEdicaoProvider.notifier).state = CurvaEmEdicao(
     titulo: '${propDoNoLabel(p)} de ${n.name}',
-    atual: Easing.linear,
+    atual: c.sceneNodeTrack(n, p).easeAt(comeco),
     aoAplicar: (e) => c.setSceneNodePropEase(layerId, n.id, p, comeco, e),
   );
+  _mostrarEditorDeCurva(ref);
 }
 
 void abrirCurvaDaCamera(
@@ -1229,10 +1258,35 @@ void abrirCurvaDaCamera(
   if (comeco == null) return;
   ref.read(curvaEmEdicaoProvider.notifier).state = CurvaEmEdicao(
     titulo: '${propDaCameraLabel(p)} de ${cam.name}',
-    atual: Easing.linear,
-    aoAplicar: (e) =>
-        c.setSceneCameraPropEase(layerId, cam.id, p, comeco, e),
+    atual: c.sceneCameraTrack(cam, p).easeAt(comeco),
+    aoAplicar: (e) => c.setSceneCameraPropEase(layerId, cam.id, p, comeco, e),
   );
+  _mostrarEditorDeCurva(ref);
+}
+
+void _mostrarEditorDeCurva(WidgetRef ref) {
+  final context = ref.context;
+  final request = ref.read(curvaEmEdicaoProvider);
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AmColors.panel,
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: SizedBox(
+        height: (MediaQuery.sizeOf(sheetContext).height * .55).clamp(
+          220.0,
+          400.0,
+        ),
+        child: EditorDeCurva(onClose: () => Navigator.of(sheetContext).pop()),
+      ),
+    ),
+  ).whenComplete(() {
+    if (context.mounted &&
+        identical(ref.read(curvaEmEdicaoProvider), request)) {
+      ref.read(curvaEmEdicaoProvider.notifier).state = null;
+    }
+  });
 }
 
 /// A curva pertence ao TRECHO entre duas marcas: sem trecho nao ha o
@@ -1244,5 +1298,8 @@ Duration? _trechoQueComeca(List<Duration> tempos, Duration local) {
     if (t <= local) antes = t;
     if (t > local && depois == null) depois = t;
   }
-  return antes != null && depois != null ? antes : null;
+  if (antes != null && depois != null) return antes;
+  return tempos.length >= 2
+      ? (local < tempos.first ? tempos.first : tempos[tempos.length - 2])
+      : null;
 }

@@ -182,7 +182,7 @@ class EditorTransportBar extends ConsumerWidget {
             ),
           ];
           final fatia = c.maxWidth.isFinite && filhos.isNotEmpty
-              ? (c.maxWidth / filhos.length).clamp(36.0, AureaTokens.minTap)
+              ? (c.maxWidth / filhos.length).clamp(0.0, AureaTokens.minTap)
               : AureaTokens.minTap;
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,

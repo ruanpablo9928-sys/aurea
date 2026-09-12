@@ -216,135 +216,146 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                 // Trilho esquerdo: voltar / inverter / menu.
                 SizedBox(
                   width: 44,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 6),
-                      AmRailButton(
-                        key: const ValueKey('curve-back'),
-                        onTap: widget.onBack,
-                        child: const Icon(
-                          CupertinoIcons.chevron_back,
-                          size: 24,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const Spacer(),
-                      AmRailButton(
-                        onTap: () {
-                          // Inverte a curva (espelha as alcas).
-                          controller.setSegmentEase(
-                            id,
-                            widget.prop,
-                            segment!.$1,
-                            ease.copyWith(
-                              x1: (1 - ease.x2).clamp(0.0, 1.0),
-                              y1: 1 - ease.y2,
-                              x2: (1 - ease.x1).clamp(0.0, 1.0),
-                              y2: 1 - ease.y1,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      child: SizedBox(
+                        height: constraints.maxHeight < 202
+                            ? 202
+                            : constraints.maxHeight,
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 6),
+                            AmRailButton(
+                              key: const ValueKey('curve-back'),
+                              onTap: widget.onBack,
+                              child: const Icon(
+                                CupertinoIcons.chevron_back,
+                                size: 24,
+                                color: Colors.white,
+                              ),
                             ),
-                          );
-                        },
-                        child: const Icon(
-                          CupertinoIcons.arrow_right_arrow_left,
-                          size: 20,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      PopupMenuButton<String>(
-                        tooltip: _overshoot
-                            ? 'Opções da curva · overshoot ligado'
-                            : 'Opções da curva',
-                        icon: const Icon(
-                          Icons.more_horiz,
-                          size: 22,
-                          color: Colors.white,
-                        ),
-                        color: AmColors.panelHigh,
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value: 'copy',
-                            child: Text('Copiar curva'),
-                          ),
-                          PopupMenuItem(
-                            value: 'paste',
-                            enabled: EasingClipboard.valor != null,
-                            child: const Text('Colar curva'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'all',
-                            child: Text('Aplicar em todos os segmentos'),
-                          ),
-                          CheckedPopupMenuItem(
-                            value: 'overshoot',
-                            checked: _overshoot,
-                            child: const Text('Overshoot'),
-                          ),
-                          CheckedPopupMenuItem(
-                            value: 'speed',
-                            checked: _velocidade,
-                            child: const Text('Gráfico de velocidade'),
-                          ),
-                          const PopupMenuDivider(),
-                          const PopupMenuItem(
-                            value: 'loop-none',
-                            child: Text('Loop: nenhum'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'loop-cycle',
-                            child: Text('Loop: repetir'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'loop-pingPong',
-                            child: Text('Loop: vai e volta'),
-                          ),
-                        ],
-                        onSelected: (action) {
-                          switch (action) {
-                            case 'copy':
-                              setState(() => EasingClipboard.valor = ease);
-                            case 'paste':
-                              if (EasingClipboard.valor != null) {
+                            const Spacer(),
+                            AmRailButton(
+                              onTap: () {
+                                // Inverte a curva (espelha as alcas).
                                 controller.setSegmentEase(
                                   id,
                                   widget.prop,
                                   segment!.$1,
-                                  EasingClipboard.valor!,
+                                  ease.copyWith(
+                                    x1: (1 - ease.x2).clamp(0.0, 1.0),
+                                    y1: 1 - ease.y2,
+                                    x2: (1 - ease.x1).clamp(0.0, 1.0),
+                                    y2: 1 - ease.y1,
+                                  ),
                                 );
-                              }
-                            case 'all':
-                              controller.applyEaseToAllSegments(
-                                id,
-                                widget.prop,
-                                ease,
-                              );
-                            case 'overshoot':
-                              setState(() => _overshoot = !_overshoot);
-                            case 'speed':
-                              setState(() => _velocidade = !_velocidade);
-                            case 'loop-none':
-                              controller.setPropertyLoop(
-                                id,
-                                widget.prop,
-                                const LoopSpec(),
-                              );
-                            case 'loop-cycle':
-                              controller.setPropertyLoop(
-                                id,
-                                widget.prop,
-                                const LoopSpec(mode: LoopMode.cycle),
-                              );
-                            case 'loop-pingPong':
-                              controller.setPropertyLoop(
-                                id,
-                                widget.prop,
-                                const LoopSpec(mode: LoopMode.pingPong),
-                              );
-                          }
-                        },
+                              },
+                              child: const Icon(
+                                CupertinoIcons.arrow_right_arrow_left,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            PopupMenuButton<String>(
+                              tooltip: _overshoot
+                                  ? 'Opções da curva · overshoot ligado'
+                                  : 'Opções da curva',
+                              icon: const Icon(
+                                Icons.more_horiz,
+                                size: 22,
+                                color: Colors.white,
+                              ),
+                              color: AmColors.panelHigh,
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: 'copy',
+                                  child: Text('Copiar curva'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'paste',
+                                  enabled: EasingClipboard.valor != null,
+                                  child: const Text('Colar curva'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'all',
+                                  child: Text('Aplicar em todos os segmentos'),
+                                ),
+                                CheckedPopupMenuItem(
+                                  value: 'overshoot',
+                                  checked: _overshoot,
+                                  child: const Text('Overshoot'),
+                                ),
+                                CheckedPopupMenuItem(
+                                  value: 'speed',
+                                  checked: _velocidade,
+                                  child: const Text('Gráfico de velocidade'),
+                                ),
+                                const PopupMenuDivider(),
+                                const PopupMenuItem(
+                                  value: 'loop-none',
+                                  child: Text('Loop: nenhum'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'loop-cycle',
+                                  child: Text('Loop: repetir'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'loop-pingPong',
+                                  child: Text('Loop: vai e volta'),
+                                ),
+                              ],
+                              onSelected: (action) {
+                                switch (action) {
+                                  case 'copy':
+                                    setState(
+                                      () => EasingClipboard.valor = ease,
+                                    );
+                                  case 'paste':
+                                    if (EasingClipboard.valor != null) {
+                                      controller.setSegmentEase(
+                                        id,
+                                        widget.prop,
+                                        segment!.$1,
+                                        EasingClipboard.valor!,
+                                      );
+                                    }
+                                  case 'all':
+                                    controller.applyEaseToAllSegments(
+                                      id,
+                                      widget.prop,
+                                      ease,
+                                    );
+                                  case 'overshoot':
+                                    setState(() => _overshoot = !_overshoot);
+                                  case 'speed':
+                                    setState(() => _velocidade = !_velocidade);
+                                  case 'loop-none':
+                                    controller.setPropertyLoop(
+                                      id,
+                                      widget.prop,
+                                      const LoopSpec(),
+                                    );
+                                  case 'loop-cycle':
+                                    controller.setPropertyLoop(
+                                      id,
+                                      widget.prop,
+                                      const LoopSpec(mode: LoopMode.cycle),
+                                    );
+                                  case 'loop-pingPong':
+                                    controller.setPropertyLoop(
+                                      id,
+                                      widget.prop,
+                                      const LoopSpec(mode: LoopMode.pingPong),
+                                    );
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                    ],
+                    ),
                   ),
                 ),
                 // Miolo: Gráfico Bezier + Rodapé com Chevrons
@@ -392,7 +403,9 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             CupertinoButton(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               onPressed: () => _jumpSegment(layer, -1),
                               child: const Icon(
                                 CupertinoIcons.chevron_left,
@@ -418,7 +431,9 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                             ),
                             const SizedBox(width: 4),
                             CupertinoButton(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               onPressed: () => _jumpSegment(layer, 1),
                               child: const Icon(
                                 CupertinoIcons.chevron_right,
@@ -1528,7 +1543,9 @@ class _AmCurvePresetCard extends StatelessWidget {
               color: const Color(0xFF1E222D),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: selected ? const Color(0xFF1ED6B1) : const Color(0xFF333B4F),
+                color: selected
+                    ? const Color(0xFF1ED6B1)
+                    : const Color(0xFF333B4F),
                 width: selected ? 1.8 : 1,
               ),
             ),
@@ -1540,7 +1557,10 @@ class _AmCurvePresetCard extends StatelessWidget {
             Positioned(
               top: -5,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 0.5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1ED6B1),
                   borderRadius: BorderRadius.circular(4),

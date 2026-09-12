@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -51,68 +52,17 @@ Future<void> showSpeedSheet(
           setSheetState(() {});
         }
 
-        Future<void> setReverse(bool value) async {
-          if (!value) {
-            controller.setClipReverse(layerId, false);
-            setSheetState(() {});
-            return;
-          }
-
+        void setReverse(bool value) {
           if (video == null) return;
-          if (ProxyService.instance.proxyOf(video.sourcePath) == null) {
-            final generate = await showCupertinoDialog<bool>(
-              context: sheetContext,
-              builder: (dialogContext) => CupertinoAlertDialog(
-                title: const Text('Reverso precisa de proxy'),
-                content: const Text(
-                  'O reverso busca os quadros de tras para frente. Um '
-                  'proxy com GOP curto torna essa leitura deterministica.',
-                ),
-                actions: [
-                  CupertinoDialogAction(
-                    onPressed: () => Navigator.pop(dialogContext, false),
-                    child: const Text('Cancelar'),
-                  ),
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    onPressed: () => Navigator.pop(dialogContext, true),
-                    child: const Text('Gerar proxy'),
-                  ),
-                ],
-              ),
-            );
-            if (generate != true || !sheetContext.mounted) return;
-          }
-
-          final proxy = await ProxyService.instance.ensureReverseProxy(
-            video.sourcePath,
-          );
-          if (!sheetContext.mounted) return;
-          if (proxy == null) {
-            await showCupertinoDialog<void>(
-              context: sheetContext,
-              builder: (dialogContext) => CupertinoAlertDialog(
-                title: const Text('Proxy nao foi criado'),
-                content: const Text(
-                  'O reverso continua desligado. Verifique o arquivo e '
-                  'tente novamente.',
-                ),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
-            return;
-          }
-
-          // `allowWithoutProxy` apenas pula a heuristica de duracao do
-          // controller. A verificacao forte acima confirmou o arquivo.
-          controller.setClipReverse(layerId, true, allowWithoutProxy: true);
+          controller.setClipReverse(layerId, value);
           setSheetState(() {});
+          // Frame-driven playback works from the source immediately. The
+          // optional short-GOP cache only accelerates subsequent seeks.
+          if (value) {
+            unawaited(
+              ProxyService.instance.ensureProxy(video.sourcePath, force: true),
+            );
+          }
         }
 
         return SafeArea(
@@ -274,7 +224,10 @@ Future<void> showSpeedSheet(
                       icon: const Icon(Icons.show_chart_rounded, size: 18),
                       label: const Text(
                         'ABRIR EDITOR DE CURVA BÉZIER',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AmColors.accent,
