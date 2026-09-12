@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include  GPUProcessor.h
+#include "GPUProcessor.h"
 
 namespace aurea {
 
