@@ -19,6 +19,16 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// tflite_flutter pins Java 11 but leaves Kotlin at the host JDK target.
+// Keep the plugin's bytecode compatible on both local JDK 21 and CI JDK 17.
+subprojects {
+    if (name == "tflite_flutter") {
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
+    }
+}
+
 // Plugins que pinam outro NDK (ex.: whisper_flutter_new -> 27.x) passam a
 // usar o NDK 28 ja instalado, evitando novo download de ~600 MB.
 subprojects {
