@@ -35,14 +35,14 @@ class EnhancementJob {
   String get _cancelPath => '${_directory!.path}/cancel';
   String get _modelPath => '${_directory!.path}/model.tflite';
 
-  Future<void> _prepare() async {
+  Future<void> _prepare({required bool ai}) async {
     _cancelled = false;
     _directory ??= await (await getTemporaryDirectory()).createTemp(
       'aurea-enhance-',
     );
     final flag = File(_cancelPath);
     if (await flag.exists()) await flag.delete();
-    if (!await File(_modelPath).exists()) {
+    if (ai && !await File(_modelPath).exists()) {
       final data = await _loadModel();
       await File(_modelPath).writeAsBytes(
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
@@ -101,7 +101,7 @@ class EnhancementJob {
     if (_running) throw StateError('Já existe um processamento em andamento');
     _running = true;
     try {
-      await _prepare();
+      await _prepare(ai: settings.ai);
       _check();
       progress.value = const EnhanceProgress('Preparando comparação…', 0);
       var input = source;
@@ -131,14 +131,25 @@ class EnhancementJob {
     if (_running) throw StateError('Já existe um processamento em andamento');
     _running = true;
     try {
-      await _prepare();
+      await _prepare(ai: settings.ai);
       _check();
       progress.value = const EnhanceProgress('Preparando arquivo…', 0);
       final result = File(
         '${_directory!.path}/result.${video ? 'mp4' : 'png'}',
       );
       if (video) {
-        await _video(source, result.path, settings);
+        try {
+          await _video(source, result.path, settings);
+        } on PlatformException {
+          await PlatformEncoder.cancel();
+          _encoding = false;
+          _check();
+          progress.value = const EnhanceProgress(
+            'Usando codificação compatível…',
+            0,
+          );
+          await _video(source, result.path, settings, software: true);
+        }
       } else {
         final input = await _imageSource(source);
         await _worker!.frame(
@@ -171,10 +182,11 @@ class EnhancementJob {
   Future<void> _video(
     String source,
     String target,
-    EnhanceSettings settings,
-  ) async {
-    if (!await PlatformEncoder.available) {
-      throw StateError('Codificador de vídeo indisponível neste aparelho');
+    EnhanceSettings settings, {
+    bool software = false,
+  }) async {
+    if (!software && !await PlatformEncoder.available) {
+      return _video(source, target, settings, software: true);
     }
     final probe = await FFprobeKit.getMediaInformation(source);
     final info = probe.getMediaInformation();
@@ -186,9 +198,11 @@ class EnhancementJob {
     const fps = 30, batch = 12;
     final count = (seconds * fps).ceil();
     final silent = '${_directory!.path}/silent.mp4';
+    final segments = <String>[];
     for (var first = 0; first < count; first += batch) {
       _check();
       final n = math.min(batch, count - first);
+      var written = 0;
       final pattern = '${_directory!.path}/frame-%03d.png';
       for (var i = 0; i < batch; i++) {
         final old = File(
@@ -229,7 +243,7 @@ class EnhancementJob {
           video: true,
         );
         _check();
-        if (!_encoding) {
+        if (!software && !_encoding) {
           await PlatformEncoder.start(
             path: silent,
             width: size.$1,
@@ -242,7 +256,14 @@ class EnhancementJob {
           );
           _encoding = true;
         }
-        await PlatformEncoder.frame(output.path);
+        if (software) {
+          await output.copy(
+            '${_directory!.path}/soft-${index.toString().padLeft(3, '0')}.png',
+          );
+        } else {
+          await PlatformEncoder.frame(output.path);
+        }
+        written++;
         await input.delete();
         await output.delete();
         progress.value = EnhanceProgress(
@@ -250,9 +271,58 @@ class EnhancementJob {
           (first + index + 1) / count * .95,
         );
       }
+      if (software && written > 0) {
+        final segment = '${_directory!.path}/segment-$first.mp4';
+        await _ffmpeg([
+          '-y',
+          '-framerate',
+          '$fps',
+          '-i',
+          '${_directory!.path}/soft-%03d.png',
+          '-frames:v',
+          '$written',
+          '-c:v',
+          'mpeg4',
+          '-q:v',
+          '2',
+          '-pix_fmt',
+          'yuv420p',
+          segment,
+        ]);
+        segments.add('segment-$first.mp4');
+        for (var i = 0; i < written; i++) {
+          await File(
+            '${_directory!.path}/soft-${i.toString().padLeft(3, '0')}.png',
+          ).delete();
+        }
+      }
     }
-    if (!_encoding || !await PlatformEncoder.finish()) {
-      throw StateError('Não foi possível finalizar o vídeo');
+    if (software) {
+      if (segments.isEmpty) {
+        throw StateError('O vídeo não contém quadros legíveis');
+      }
+      final list = File('${_directory!.path}/segments.txt');
+      await list.writeAsString(segments.map((s) => "file '$s'").join('\n'));
+      await _ffmpeg([
+        '-y',
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        list.path,
+        '-c',
+        'copy',
+        silent,
+      ]);
+      for (final segment in segments) {
+        await File('${_directory!.path}/$segment').delete();
+      }
+    } else if (!_encoding || !await PlatformEncoder.finish()) {
+      throw PlatformException(
+        code: 'encode_finish',
+        message: 'Não foi possível finalizar o vídeo',
+      );
     }
     _encoding = false;
     _check();

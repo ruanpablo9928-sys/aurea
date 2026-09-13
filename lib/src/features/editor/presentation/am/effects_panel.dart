@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'time_remap_curve_editor.dart';
 import '../../application/optical_flow_preview.dart';
 
@@ -104,12 +105,12 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancelar'),
+            child: const AppText('Cancelar'),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(campo.text),
-            child: const Text('Salvar'),
+            child: const AppText('Salvar'),
           ),
         ],
       ),
@@ -353,7 +354,7 @@ class _EffectsPanelState extends ConsumerState<EffectsPanel> {
                                 color: AmColors.accent,
                               ),
                               SizedBox(width: 8),
-                              Text(
+                              AppText(
                                 'Adicionar efeito',
                                 style: TextStyle(
                                   fontSize: 14,
@@ -869,7 +870,7 @@ class _NomeParam extends StatelessWidget {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(
+        child: AppText(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -1113,7 +1114,7 @@ class _ChoiceRow extends StatelessWidget {
           const SizedBox(width: 12),
           SizedBox(
             width: 88,
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(fontSize: 13, color: AmColors.muted),
             ),
@@ -1176,7 +1177,7 @@ class _SeedRow extends StatelessWidget {
           const SizedBox(width: 12),
           SizedBox(
             width: 88,
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(fontSize: 13, color: AmColors.muted),
             ),
@@ -1237,7 +1238,7 @@ class _ToggleRow extends StatelessWidget {
         const SizedBox(width: 12),
         SizedBox(
           width: 88,
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 13, color: AmColors.muted),
           ),
@@ -1290,7 +1291,7 @@ class _ColorRow extends StatelessWidget {
           const SizedBox(width: 12),
           SizedBox(
             width: 88,
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(fontSize: 13, color: AmColors.muted),
             ),
@@ -1455,7 +1456,7 @@ class _ComandoDoEfeito extends StatelessWidget {
         children: [
           Icon(icone, size: 13, color: AmColors.text),
           const SizedBox(width: 5),
-          Text(
+          AppText(
             rotulo,
             style: const TextStyle(
               fontSize: 12,

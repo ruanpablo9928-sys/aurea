@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -937,7 +938,7 @@ class ChipDaFolha extends StatelessWidget {
         ),
         child: Center(
           widthFactor: 1,
-          child: Text(
+          child: AppText(
             rotulo,
             style: TextStyle(
               fontSize: 12,
@@ -984,7 +985,7 @@ class AcaoDaFolha extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  AppText(
                     rotulo,
                     style: const TextStyle(
                       fontSize: 13,
@@ -1048,7 +1049,7 @@ class InterruptorDaFolha extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
+              child: AppText(
                 rotulo,
                 style: TextStyle(
                   fontSize: 13,
@@ -1164,7 +1165,7 @@ class AmostraDeCor extends StatelessWidget {
             ),
             const SizedBox(width: 11),
             Expanded(
-              child: Text(
+              child: AppText(
                 rotulo,
                 style: const TextStyle(
                   fontSize: 13,
@@ -1236,7 +1237,7 @@ class LinhaDaTrilha extends StatelessWidget {
       children: [
         SizedBox(
           width: 52,
-          child: Text(
+          child: AppText(
             rotulo,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -1313,7 +1314,7 @@ class LinhaDeAnimar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
+                AppText(
                   rotulo,
                   style: const TextStyle(
                     fontSize: 12.5,
@@ -1438,7 +1439,7 @@ class _Numero extends ConsumerWidget {
         children: [
           SizedBox(
             width: 88,
-            child: Text(
+            child: AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1498,7 +1499,7 @@ class _Voltar extends StatelessWidget {
               size: 20,
               color: AmColors.muted,
             ),
-            Text(
+            AppText(
               'Voltar',
               style: TextStyle(fontSize: 12, color: AmColors.muted),
             ),

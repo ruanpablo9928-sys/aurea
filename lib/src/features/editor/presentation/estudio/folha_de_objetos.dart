@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -212,7 +213,7 @@ class _FolhaDeObjetosState extends ConsumerState<FolhaDeObjetos> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: Scene3DTheme.pillDecoration(active: active),
-        child: Text(
+        child: AppText(
           label,
           style: TextStyle(
             fontSize: 13,

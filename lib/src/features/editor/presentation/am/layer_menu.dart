@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -574,7 +575,7 @@ Future<void> showGridSheet(
                 children: [
                   SizedBox(
                     width: 92,
-                    child: Text(
+                    child: AppText(
                       label,
                       style: const TextStyle(
                         fontSize: 13,
@@ -628,7 +629,7 @@ Future<void> showGridSheet(
                 children: [
                   SizedBox(
                     width: 92,
-                    child: Text(
+                    child: AppText(
                       label,
                       style: const TextStyle(
                         fontSize: 13,
@@ -745,7 +746,7 @@ Future<void> showGridSheet(
                             controller.removeGrid(nullId);
                             setSheetState(() {});
                           },
-                          child: const Text(
+                          child: const AppText(
                             'Remover',
                             style: TextStyle(
                               fontSize: 13,
@@ -831,7 +832,7 @@ Future<void> showGridSheet(
                                       : AmColors.chip,
                                   borderRadius: BorderRadius.circular(9),
                                 ),
-                                child: Text(
+                                child: AppText(
                                   label,
                                   style: const TextStyle(
                                     fontSize: 12,
@@ -1274,7 +1275,7 @@ Future<void> showMasksSheet(
                 children: [
                   SizedBox(
                     width: 86,
-                    child: Text(
+                    child: AppText(
                       label,
                       style: const TextStyle(
                         fontSize: 13,
@@ -1783,7 +1784,7 @@ Future<void> showParentSheet(
                           ),
                         )
                       : other is Scene3DLayer
-                      ? const Text(
+                      ? const AppText(
                           'Scene 3D',
                           style: TextStyle(fontSize: 11, color: AmColors.muted),
                         )
@@ -1852,7 +1853,7 @@ Future<void> showParticlesSheet(
               children: [
                 SizedBox(
                   width: 86,
-                  child: Text(
+                  child: AppText(
                     label,
                     style: const TextStyle(fontSize: 13, color: AmColors.muted),
                   ),
@@ -1901,7 +1902,7 @@ Future<void> showParticlesSheet(
                   width: 86,
                   child: Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
+                    child: AppText(
                       label,
                       style: const TextStyle(
                         fontSize: 13,
@@ -2462,7 +2463,7 @@ Future<void> showElement3DSheet(
                   children: [
                     const SizedBox(
                       width: 86,
-                      child: Text(
+                      child: AppText(
                         'Tamanho',
                         style: TextStyle(fontSize: 13, color: AmColors.muted),
                       ),
@@ -2645,7 +2646,7 @@ Future<void> showElement3DSheet(
                       width: 86,
                       child: Padding(
                         padding: EdgeInsets.only(top: 8),
-                        child: Text(
+                        child: AppText(
                           'Material',
                           style: TextStyle(fontSize: 13, color: AmColors.muted),
                         ),
@@ -2871,7 +2872,7 @@ Future<void> showElement3DSheet(
                   children: [
                     const SizedBox(
                       width: 86,
-                      child: Text(
+                      child: AppText(
                         'Imagem',
                         style: TextStyle(fontSize: 13, color: AmColors.muted),
                       ),
@@ -3010,7 +3011,7 @@ Future<void> showShapeParamsSheet(
                 children: [
                   SizedBox(
                     width: 88,
-                    child: Text(
+                    child: AppText(
                       label,
                       style: const TextStyle(
                         fontSize: 13,
@@ -3293,7 +3294,7 @@ Future<void> showShapeParamsSheet(
                                     : AmColors.chip,
                                 borderRadius: BorderRadius.circular(9),
                               ),
-                              child: Text(
+                              child: AppText(
                                 label,
                                 style: const TextStyle(
                                   fontSize: 12,
@@ -3365,7 +3366,7 @@ Future<void> showShapeParamsSheet(
                                         : AmColors.chip,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: Text(
+                                  child: AppText(
                                     label,
                                     style: const TextStyle(
                                       fontSize: 11,
@@ -3862,7 +3863,7 @@ class _MenuTile extends StatelessWidget {
                       color: const Color(0xFFD4D8E2),
                     ),
                     SizedBox(height: height < 65 ? 2 : 4),
-                    Text(
+                    AppText(
                       label,
                       textAlign: TextAlign.center,
                       maxLines: 2,
@@ -3976,7 +3977,7 @@ class _BlendChip extends StatelessWidget {
             painter: _MesclaMiniatura(mode ?? BlendMode.srcOver),
           ),
           const SizedBox(height: 4),
-          Text(
+          AppText(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -4587,7 +4588,7 @@ class _BlendingPanelState extends ConsumerState<BlendingPanel> {
     children: [
       SizedBox(
         width: 70,
-        child: Text(
+        child: AppText(
           label,
           style: const TextStyle(fontSize: 12, color: AmColors.muted),
         ),
@@ -5055,7 +5056,7 @@ class _ShapeOperators extends ConsumerWidget {
         children: [
           SizedBox(
             width: 58,
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(fontSize: 11, color: AmColors.muted),
             ),
@@ -5645,7 +5646,7 @@ class _ShapeOperators extends ConsumerWidget {
                           color: AmColors.chip,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
+                        child: AppText(
                           label,
                           style: const TextStyle(
                             fontSize: 14,
@@ -5861,7 +5862,7 @@ Future<void> _escolherModelo3D(
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(c).pop(false),
-            child: const Text('Cancelar'),
+            child: const AppText('Cancelar'),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,

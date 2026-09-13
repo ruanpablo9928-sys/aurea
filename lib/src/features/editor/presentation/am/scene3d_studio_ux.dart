@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -258,7 +259,7 @@ class ChipDoEstudio extends StatelessWidget {
               Icon(icone, size: compacto ? 13 : 15, color: cor),
               const SizedBox(width: 5),
             ],
-            Text(
+            AppText(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -306,7 +307,7 @@ class ReguaDoEstudio extends StatelessWidget {
       children: [
         SizedBox(
           width: 92,
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 13, color: AmColors.text),
           ),
@@ -359,7 +360,7 @@ Future<String?> pedirNome(
       actions: [
         CupertinoDialogAction(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancelar'),
+          child: const AppText('Cancelar'),
         ),
         CupertinoDialogAction(
           isDefaultAction: true,
@@ -492,7 +493,7 @@ Future<void> showAdicionar(
         children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(18, 10, 18, 4),
-            child: Text(
+            child: AppText(
               'Adicionar',
               style: TextStyle(
                 fontSize: 17,
@@ -598,7 +599,7 @@ Future<void> showHierarquia(
             child: Row(
               children: [
                 const Expanded(
-                  child: Text(
+                  child: AppText(
                     'Cena',
                     style: TextStyle(
                       fontSize: 17,

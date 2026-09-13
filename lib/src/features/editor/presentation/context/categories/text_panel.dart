@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -155,12 +156,12 @@ class TextPanel extends ConsumerWidget {
                             CupertinoActionSheetAction(
                               isDestructiveAction: true,
                               onPressed: () => Navigator.pop(ctx, ''),
-                              child: const Text('Desvincular'),
+                              child: const AppText('Desvincular'),
                             ),
                         ],
                         cancelButton: CupertinoActionSheetAction(
                           onPressed: () => Navigator.pop(ctx),
-                          child: const Text('Cancelar'),
+                          child: const AppText('Cancelar'),
                         ),
                       ),
                     );

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -346,7 +347,7 @@ class _CommunityTabState extends ConsumerState<CommunityTab> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: AppText(
                     'Comunidade',
                     style: Theme.of(context).textTheme.headlineLarge,
                   ),
@@ -843,7 +844,7 @@ class _BotaoDaBarra extends StatelessWidget {
           // lado a lado nao cabem — e um cartao com a faixa amarela de
           // overflow e pior do que um rotulo cortado.
           Flexible(
-            child: Text(
+            child: AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1321,7 +1322,7 @@ class _AcaoDoCartao extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Flexible(
-            child: Text(
+            child: AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

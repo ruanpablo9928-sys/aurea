@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -442,7 +443,7 @@ class _AcaoDoPonto extends StatelessWidget {
                   color: ligado ? AmColors.text : AmColors.muted,
                 ),
                 const SizedBox(width: 5),
-                Text(
+                AppText(
                   rotulo,
                   style: TextStyle(
                     fontSize: 12,
@@ -491,7 +492,7 @@ class _ModoBotao extends StatelessWidget {
           children: [
             Icon(icon, size: 21, color: cor),
             const SizedBox(height: 1),
-            Text(
+            AppText(
               rotulo,
               style: TextStyle(fontSize: 9.5, height: 1.1, color: cor),
             ),

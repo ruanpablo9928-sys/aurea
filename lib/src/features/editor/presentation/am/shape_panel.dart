@@ -1,8 +1,10 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/editor_controller.dart';
+import '../../application/freehand_session.dart';
 import '../../application/ui/editor_session.dart';
 import '../../application/playback_controller.dart';
 import '../../domain/keyframe.dart';
@@ -505,6 +507,10 @@ class _ShapePanelState extends ConsumerState<ShapePanel> {
           t: t,
           onLigar: () => setState(() => controller.ensureShapeTrim(id)),
           onDesligar: () => setState(() => controller.removeShapeTrim(id)),
+          onLivre: () {
+            widget.playback.pause();
+            ref.read(freehandRequestProvider.notifier).state = true;
+          },
         );
       case ShapeTool.size:
         if (sp != null &&
@@ -583,7 +589,7 @@ class _CompoundShapeEditor extends StatelessWidget {
             color: advanced == value ? AmColors.accent : AmColors.bg,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(
+          child: AppText(
             label,
             style: TextStyle(
               fontSize: 11,
@@ -935,7 +941,7 @@ class _Traco extends StatelessWidget {
             children: [
               const SizedBox(
                 width: 92,
-                child: Text(
+                child: AppText(
                   'Cor',
                   style: TextStyle(fontSize: 13, color: AmColors.muted),
                 ),
@@ -990,10 +996,12 @@ class _Desenhar extends StatelessWidget {
     required this.t,
     required this.onLigar,
     required this.onDesligar,
+    required this.onLivre,
   });
 
   final ShapeLayer layer;
   final TrimOperator? trim;
+  final VoidCallback onLivre;
   final List<_Trilha> trilhas;
   final Duration t;
   final VoidCallback onLigar;
@@ -1012,7 +1020,8 @@ class _Desenhar extends StatelessWidget {
               style: TextStyle(fontSize: 13, color: AmColors.muted),
             ),
             const SizedBox(height: 10),
-            _Botao(texto: 'Ligar Desenhar', onTap: onLigar, cheio: true),
+            _Botao(texto: 'Animar contorno', onTap: onLigar, cheio: true),
+            _Botao(texto: 'Desenhar à mão na prévia', onTap: onLivre),
           ],
         ),
       );
@@ -1087,7 +1096,7 @@ class _Linha extends StatelessWidget {
         children: [
           SizedBox(
             width: 92,
-            child: Text(
+            child: AppText(
               label,
               style: TextStyle(
                 fontSize: 13,

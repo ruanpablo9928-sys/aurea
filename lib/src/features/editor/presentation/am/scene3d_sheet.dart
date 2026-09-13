@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -63,7 +64,7 @@ Future<void> showScene3DSheet(
                 padding: const EdgeInsets.fromLTRB(18, 12, 12, 4),
                 child: Row(
                   children: [
-                    const Text(
+                    const AppText(
                       'Cena 3D',
                       style: TextStyle(
                         fontSize: 17,
@@ -766,7 +767,7 @@ class _ObjectsTab extends StatelessWidget {
               children: [
                 const SizedBox(
                   width: 92,
-                  child: Text(
+                  child: AppText(
                     'Imagem',
                     style: TextStyle(fontSize: 12, color: AmColors.muted),
                   ),
@@ -1094,7 +1095,7 @@ class _AcaoLarga extends StatelessWidget {
         color: AmColors.chip,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
+      child: AppText(
         rotulo,
         style: const TextStyle(
           fontSize: 12,
@@ -2799,7 +2800,7 @@ class _Plain extends StatelessWidget {
         children: [
           SizedBox(
             width: 92,
-            child: Text(
+            child: AppText(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -2855,7 +2856,7 @@ class _Chips extends StatelessWidget {
         children: [
           SizedBox(
             width: 92,
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(fontSize: 12, color: AmColors.muted),
             ),
@@ -2913,7 +2914,7 @@ class _Toggle extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
+            child: AppText(
               label,
               style: const TextStyle(fontSize: 13, color: AmColors.text),
             ),
@@ -2951,7 +2952,7 @@ class _Action extends StatelessWidget {
           children: [
             Icon(icon, size: 14, color: AmColors.accent),
             const SizedBox(width: 6),
-            Text(
+            AppText(
               label,
               style: const TextStyle(fontSize: 12, color: AmColors.accent),
             ),
@@ -2987,7 +2988,7 @@ class _ColorRow extends StatelessWidget {
         children: [
           const SizedBox(
             width: 92,
-            child: Text(
+            child: AppText(
               'Cor',
               style: TextStyle(fontSize: 12, color: AmColors.muted),
             ),

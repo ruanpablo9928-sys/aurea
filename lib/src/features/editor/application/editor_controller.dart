@@ -7547,6 +7547,10 @@ class EditorController extends Notifier<VideoProject> {
       if (i is TrimOperator) return i.id;
     }
     final op = TrimOperator();
+    // Drawing progress needs a visible outline, including filled-only shapes.
+    if (!layer.contents.any((item) => item is ShapeStroke)) {
+      ensureShapeStroke(id);
+    }
     _updateShape(id, (items) {
       final paintIdx = items.indexWhere(
         (i) => i is ShapeFill || i is ShapeStroke || i is ShapeGradientFill,

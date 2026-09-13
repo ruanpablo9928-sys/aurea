@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -417,7 +418,7 @@ class _AmArrastoDeValorState extends State<AmArrastoDeValor> {
       },
       onHorizontalDragUpdate: (d) {
         _acumulado += d.delta.dx;
-        final v = (_inicio - _acumulado * widget.unitsPerPixel).clamp(
+        final v = (_inicio + _acumulado * widget.unitsPerPixel).clamp(
           widget.min,
           widget.max,
         );
@@ -535,7 +536,7 @@ class AmVoltar extends StatelessWidget {
         children: [
           Icon(CupertinoIcons.chevron_back, size: 22, color: AmColors.text),
           SizedBox(height: 1),
-          Text(
+          AppText(
             'Voltar',
             style: TextStyle(fontSize: 9.5, color: AmColors.text, height: 1.1),
           ),

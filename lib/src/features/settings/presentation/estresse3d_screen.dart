@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -592,7 +593,7 @@ class _Estresse3DScreenState extends State<Estresse3DScreen>
                 if (_rodando)
                   TextButton(
                     onPressed: () => _cancelar = true,
-                    child: const Text('Cancelar'),
+                    child: const AppText('Cancelar'),
                   )
                 else
                   FilledButton(

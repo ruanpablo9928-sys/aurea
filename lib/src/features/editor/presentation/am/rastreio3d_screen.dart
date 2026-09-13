@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -660,7 +661,7 @@ class _Cabecalho extends StatelessWidget {
           onTap: onAvancado,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-            child: Text(
+            child: AppText(
               'Avançado',
               style: TextStyle(fontSize: 13, color: AmColors.accent),
             ),
@@ -743,7 +744,7 @@ class _Numero extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(rotulo, style: TextStyle(fontSize: 10.5, color: AmColors.muted)),
+      AppText(rotulo, style: TextStyle(fontSize: 10.5, color: AmColors.muted)),
       Text(
         valor,
         style: TextStyle(
@@ -1024,7 +1025,7 @@ class _FolhaAvancada extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            AppText(
               'Avançado',
               style: TextStyle(
                 fontSize: 16,

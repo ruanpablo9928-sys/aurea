@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -132,7 +133,7 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
             children: [
               Row(
                 children: [
-                  const Text(
+                  const AppText(
                     'Cor',
                     style: TextStyle(
                       fontSize: 17,
@@ -154,7 +155,7 @@ class _ColorPickerSheetState extends State<_ColorPickerSheet> {
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     onPressed: () => Navigator.of(context).pop(_current),
-                    child: const Text(
+                    child: const AppText(
                       'Pronto',
                       style: TextStyle(
                         fontSize: 15,

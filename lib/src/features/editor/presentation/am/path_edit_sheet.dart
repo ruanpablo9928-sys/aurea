@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -232,7 +233,7 @@ class _Acao extends StatelessWidget {
           children: [
             Icon(icone, size: 18, color: cor),
             const SizedBox(height: 5),
-            Text(
+            AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -202,7 +203,7 @@ class _CurvePanelState extends ConsumerState<CurvePanel> {
                   const SizedBox(height: 12),
                   CupertinoButton(
                     onPressed: widget.onBack,
-                    child: const Text(
+                    child: const AppText(
                       'Voltar',
                       style: TextStyle(color: AmColors.accent),
                     ),
@@ -1400,7 +1401,7 @@ class _PresetTile extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(3, 0, 3, 3),
-              child: Text(
+              child: AppText(
                 label,
                 // UMA LINHA. Duas linhas de corpo 11 nao cabem nos 64 px
                 // da faixa junto com a miniatura — estouravam por dois

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -379,7 +380,7 @@ class _Slider extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(
+            child: AppText(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -427,7 +428,7 @@ class _Toggle extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 13, color: AmColors.text),
           ),
@@ -462,7 +463,7 @@ class _Chip extends StatelessWidget {
         color: selected ? AmColors.accentDim : AmColors.chip,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
+      child: AppText(
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -496,7 +497,7 @@ class _Action extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: AmColors.accent),
           const SizedBox(width: 6),
-          Text(
+          AppText(
             label,
             style: const TextStyle(fontSize: 12, color: AmColors.accent),
           ),

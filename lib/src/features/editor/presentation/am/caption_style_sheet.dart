@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -347,7 +348,7 @@ class _Chip extends StatelessWidget {
         color: aceso ? AmColors.accentDim : AmColors.chip,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         rotulo,
         style: TextStyle(
           fontSize: 12,

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -70,7 +71,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
       _player = null;
       if (!mounted) return;
       final file = files.files.single;
-      final ext = (file.extension ?? '').toLowerCase();
+      final ext = (file.extension ?? file.path!.split('.').last).toLowerCase();
       setState(() {
         _source = file.path;
         _before = null;
@@ -136,7 +137,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
       _message(
         text.contains('Cancelado')
             ? 'Cancelado. Seu original foi mantido.'
-            : 'Não foi possível concluir. $text',
+            : 'Não foi possível concluir. ${text.contains('null') ? 'Tente 2× ou desligue Ampliar com IA para aplicar apenas as cores.' : text}',
       );
     } finally {
       if (mounted) {
@@ -192,7 +193,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
     },
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('Melhorar qualidade'),
+        title: const AppText('Melhorar qualidade'),
         actions: [
           IconButton(
             tooltip: 'Como funciona',
@@ -205,7 +206,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
+            const AppText(
               'Mais definição. Sua cor.',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
@@ -233,8 +234,8 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
               if (_after != null && _player == null)
                 SegmentedButton<bool>(
                   segments: const [
-                    ButtonSegment(value: true, label: Text('Antes')),
-                    ButtonSegment(value: false, label: Text('Depois')),
+                    ButtonSegment(value: true, label: AppText('Antes')),
+                    ButtonSegment(value: false, label: AppText('Depois')),
                   ],
                   selected: {_showBefore},
                   onSelectionChanged: (v) =>
@@ -243,7 +244,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
               const SizedBox(height: 16),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Ampliar com IA'),
+                title: const AppText('Ampliar com IA'),
                 subtitle: const Text('ESRGAN • processamento no aparelho'),
                 value: _ai,
                 onChanged: _busy ? null : (v) => _changed(() => _ai = v),
@@ -260,7 +261,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
                       : (v) => _changed(() => _scale = v.first),
                 ),
               const SizedBox(height: 20),
-              const Text(
+              const AppText(
                 'CCs • Correção de cor',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
@@ -271,7 +272,7 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
                 children: [
                   for (final look in ColorLook.values)
                     ChoiceChip(
-                      label: Text(look.label),
+                      label: AppText(look.label),
                       selected: _look == look,
                       onSelected: _busy
                           ? null
@@ -298,18 +299,18 @@ class _EnhanceScreenState extends State<EnhanceScreen> {
                 ),
                 TextButton(
                   onPressed: _job.cancel,
-                  child: const Text('Cancelar'),
+                  child: const AppText('Cancelar'),
                 ),
               ] else ...[
                 OutlinedButton.icon(
                   onPressed: () => _run(preview: true),
                   icon: const Icon(Icons.compare),
-                  label: const Text('Comparar antes e depois'),
+                  label: const AppText('Comparar antes e depois'),
                 ),
                 FilledButton.icon(
                   onPressed: () => _run(preview: false),
                   icon: const Icon(Icons.auto_awesome),
-                  label: const Text('Gerar resultado'),
+                  label: const AppText('Gerar resultado'),
                 ),
               ],
               if (_result != null)

@@ -84,7 +84,11 @@ class _MotionTilePassState extends State<MotionTilePass> {
             Positioned.fill(child: CustomPaint(painter: _BoundsPainter())),
             Center(
               child: UnconstrainedBox(
-                child: _Measure(onSize: measure, child: widget.child),
+                child: SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: widget.child,
+                ),
               ),
             ),
           ],

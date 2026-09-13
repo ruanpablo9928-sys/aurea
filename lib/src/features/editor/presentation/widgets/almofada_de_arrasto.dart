@@ -133,7 +133,7 @@ class _AlmofadaDeArrastoState extends State<AlmofadaDeArrasto> {
   @override
   Widget build(BuildContext context) => Semantics(
         container: true,
-        excludeSemantics: true,
+        excludeSemantics: widget.cabecalho == null,
         button: true,
         label: widget.rotulo,
         child: GestureDetector(

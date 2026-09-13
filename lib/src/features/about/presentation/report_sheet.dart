@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart';
@@ -343,7 +344,7 @@ class _ReportSheetState extends State<_ReportSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                AppText(
                   label,
                   style: const TextStyle(fontSize: 13, color: AmColors.text),
                 ),

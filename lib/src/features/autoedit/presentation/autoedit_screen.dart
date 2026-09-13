@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -244,7 +245,7 @@ class _AutoEditScreenState extends ConsumerState<AutoEditScreen> {
                 ref.read(autoEditRunnerProvider).cancelar();
                 setState(() => _etapa = _Etapa.estilo);
               },
-              child: const Text('Cancelar'),
+              child: const AppText('Cancelar'),
             ),
           ),
         ],
@@ -259,7 +260,7 @@ class _AutoEditScreenState extends ConsumerState<AutoEditScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
+        const AppText(
           'Pronto',
           style: TextStyle(
             fontSize: 20,

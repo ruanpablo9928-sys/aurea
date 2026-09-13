@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../../../../core/ui/am_colors.dart';
@@ -91,9 +92,11 @@ class CampoDeValor extends StatelessWidget {
     this.largura = 61,
     this.nome,
     this.cor,
+    this.aoSelecionar,
   });
 
   final Color? cor;
+  final VoidCallback? aoSelecionar;
 
   /// A ALTURA DA CAIXA e o RAIO, medidos na referencia. Publicos porque
   /// quem monta a fila precisa reservar a linha sem adivinhar.
@@ -155,7 +158,8 @@ class CampoDeValor extends StatelessWidget {
     // oferece "toque duas vezes para ativar" e o toque duplo nao faz
     // nada. E o mesmo defeito do sublinhado sem callback — prometer o
     // que nao se cumpre —, so que invisivel para quem revisa olhando.
-    final tocar = _digitavel ? () => _abrirDialogo(context) : null;
+    final tocar =
+        aoSelecionar ?? (_digitavel ? () => _abrirDialogo(context) : null);
     return Semantics(
       container: true,
       excludeSemantics: true,
@@ -166,6 +170,9 @@ class CampoDeValor extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: tocar,
+        onLongPress: aoSelecionar != null && _digitavel
+            ? () => _abrirDialogo(context)
+            : null,
         child: SizedBox(
           width: largura,
           child: Column(
@@ -214,7 +221,7 @@ class CampoDeValor extends StatelessWidget {
               // caixa custaria 12 px de altura por linha.
               if (rotulo.isNotEmpty) ...[
                 const SizedBox(height: 3),
-                Text(
+                AppText(
                   rotulo,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -325,7 +332,7 @@ class _DialogoDeValorState extends State<_DialogoDeValor> {
       CupertinoDialogAction(
         key: const ValueKey('campo-de-valor-cancelar'),
         onPressed: () => Navigator.of(context).pop(),
-        child: const Text('Cancelar'),
+        child: const AppText('Cancelar'),
       ),
       CupertinoDialogAction(
         key: const ValueKey('campo-de-valor-ok'),

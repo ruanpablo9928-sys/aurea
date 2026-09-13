@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -1445,7 +1446,7 @@ class _AxisTap extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: color, width: 1.2),
         ),
-        child: Text(
+        child: AppText(
           label,
           style: TextStyle(
             fontSize: 10,

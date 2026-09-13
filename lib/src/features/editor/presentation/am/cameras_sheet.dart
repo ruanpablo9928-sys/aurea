@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -47,7 +48,7 @@ Future<void> showCamerasSheet(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                const AppText(
                   'Cameras',
                   style: TextStyle(
                     fontSize: 17,
@@ -302,7 +303,7 @@ class _Pastilha extends StatelessWidget {
       color: aceso ? AmColors.accentDim : AmColors.chip,
       borderRadius: BorderRadius.circular(8),
     ),
-    child: Text(
+    child: AppText(
       rotulo,
       style: TextStyle(
         fontSize: 11,

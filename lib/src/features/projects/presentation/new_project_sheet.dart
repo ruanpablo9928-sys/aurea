@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,7 +118,7 @@ class _NewProjectSheetState extends ConsumerState<_NewProjectSheet> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
-                  child: Text(
+                  child: AppText(
                     'Novo projeto',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
@@ -257,7 +258,7 @@ class _Moldura extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                AppText(
                   label,
                   key: const ValueKey('moldura-formato'),
                   style: TextStyle(

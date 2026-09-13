@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 import 'dart:io';
 
@@ -168,7 +169,7 @@ class _SecaoFormasState extends State<_SecaoFormas> {
                 ),
               ),
             ),
-            const Text(
+            const AppText(
               'Forma',
               style: TextStyle(
                 fontSize: 18,
@@ -320,7 +321,7 @@ Future<void> showCaptionCreationSheet(
         color: selected ? AmColors.accentDim : AmColors.chip,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         rotulo,
         style: const TextStyle(fontSize: 12, color: AmColors.accent),
       ),
@@ -619,7 +620,7 @@ class _AddOption extends StatelessWidget {
               // 12 e nao 13: em 13 o rotulo mais longo (Elementos 3D)
               // quebra em duas linhas e a fileira inteira cresce com ele,
               // empurrando a folha por cima da linha do tempo.
-              Text(
+              AppText(
                 label,
                 textAlign: TextAlign.center,
                 maxLines: 1,
@@ -933,7 +934,7 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
           Icon(icon, size: 18, color: AmColors.text),
           const SizedBox(height: 2),
           Flexible(
-            child: Text(
+            child: AppText(
               label,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
@@ -950,7 +951,7 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
     Widget item(IconData icon, String label, VoidCallback onTap) => ListTile(
       dense: true,
       leading: Icon(icon, color: AmColors.text, size: 21),
-      title: Text(
+      title: AppText(
         label,
         style: const TextStyle(color: AmColors.text, fontSize: 14),
       ),
@@ -1139,7 +1140,7 @@ class _AddMenuAmState extends ConsumerState<AddLayerPanel> {
                   if (badge != null) const SizedBox(height: 10),
                   iconWidget,
                   const SizedBox(height: 6),
-                  Text(
+                  AppText(
                     label,
                     textAlign: TextAlign.center,
                     style: const TextStyle(

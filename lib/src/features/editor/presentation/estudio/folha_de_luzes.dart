@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import '../../domain/panorama3d.dart';
 
 import 'package:flutter/material.dart';
@@ -187,7 +188,7 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  const AppText(
                     'Cor',
                     style: TextStyle(
                       fontSize: 14,
@@ -234,7 +235,7 @@ class _FolhaDeLuzesState extends ConsumerState<FolhaDeLuzes> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  const AppText(
                     'Intensidade',
                     style: TextStyle(
                       fontSize: 14,

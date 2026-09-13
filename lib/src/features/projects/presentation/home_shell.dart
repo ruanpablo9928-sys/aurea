@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:ui';
 
@@ -159,7 +160,7 @@ class _TabItem extends StatelessWidget {
           Icon(selected ? activeIcon : icon, size: 24, color: color),
           const SizedBox(height: 3),
           Flexible(
-            child: Text(
+            child: AppText(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

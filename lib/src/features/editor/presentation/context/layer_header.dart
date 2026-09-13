@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,7 +42,7 @@ class LayerHeader extends ConsumerWidget {
                   children: [
                     Icon(icon, size: 18, color: t.text),
                     const SizedBox(height: 1),
-                    Text(
+                    AppText(
                       rotulo,
                       style: TextStyle(
                         fontSize: 9,
@@ -149,7 +150,7 @@ class MultiSelectionPanel extends ConsumerWidget {
           children: [
             Icon(icon, size: 22, color: perigo ? t.danger : t.text),
             const SizedBox(height: 4),
-            Text(
+            AppText(
               rotulo,
               style: TextStyle(
                 fontSize: 11,

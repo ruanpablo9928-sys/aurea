@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,7 +93,7 @@ Future<void> showAlignSheet(
                                   : AmColors.chip,
                               borderRadius: BorderRadius.circular(9),
                             ),
-                            child: Text(
+                            child: AppText(
                               label,
                               style: const TextStyle(
                                 fontSize: 12,
@@ -235,7 +236,7 @@ Future<void> showAlignSheet(
                               color: AmColors.chip,
                               borderRadius: BorderRadius.circular(9),
                             ),
-                            child: Text(
+                            child: AppText(
                               label,
                               style: const TextStyle(
                                 fontSize: 12,

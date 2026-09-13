@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -409,7 +410,7 @@ class ParameterFrame extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(
+                    child: AppText(
                       label,
                       maxLines: 1,
                       style: TextStyle(fontSize: 12.5, color: t.muted),
@@ -532,7 +533,7 @@ Future<double?> showNumberInput(
       actions: [
         CupertinoDialogAction(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancelar'),
+          child: const AppText('Cancelar'),
         ),
         CupertinoDialogAction(
           isDefaultAction: true,
@@ -594,7 +595,7 @@ Future<String?> showExpressionEditor(
         ),
         CupertinoDialogAction(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancelar'),
+          child: const AppText('Cancelar'),
         ),
         CupertinoDialogAction(
           isDefaultAction: true,

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/ui/am_colors.dart';
@@ -146,7 +147,7 @@ class _Cabecalho extends StatelessWidget {
         children: [
           SizedBox(
             width: 94,
-            child: Text(
+            child: AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

@@ -4,14 +4,19 @@ import 'package:flutter/material.dart';
 import '../../../core/ui/am_colors.dart';
 
 // Change this revision when publishing a new set of release notes.
-const releaseNoticeRevision = '2026-09-12-beta-77';
+const releaseNoticeRevision = '2026-09-12-beta-78';
 const releaseNoticeSeenKey = 'aurea.releaseNotice.seen';
 
 const releaseHighlights = <(IconData, String, String)>[
   (
+    CupertinoIcons.globe,
+    'Idiomas e controles',
+    'Nove idiomas nos controles principais, em Ajustes. Toque em Z para arrastar a profundidade. Segure a camada para movê-la na timeline.',
+  ),
+  (
     CupertinoIcons.play_rectangle,
     'Melhorar qualidade',
-    'Nova área na tela inicial: aumente imagens e vídeos com IA e aplique 15 estilos de cor.',
+    'Nova alternativa de codificação para celulares que rejeitam a exportação. Correção de cor pode funcionar sem carregar a IA.',
   ),
   (
     CupertinoIcons.cube_box,
@@ -31,7 +36,7 @@ const releaseHighlights = <(IconData, String, String)>[
   (
     CupertinoIcons.checkmark_seal,
     'Exportação',
-    'Os efeitos ficam dentro do quadro do vídeo. Ajustamos também controles e painéis para telas pequenas.',
+    'Ajustes no Motion Tile, nas réguas de valores e na rolagem dos painéis. Desenho livre acessível na aba Desenhar.',
   ),
 ];
 

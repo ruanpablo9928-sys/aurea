@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../../core/l10n/app_language.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -62,8 +63,36 @@ class SettingsTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: [
-          Text('Ajustes', style: Theme.of(context).textTheme.headlineLarge),
+          AppText('Ajustes', style: Theme.of(context).textTheme.headlineLarge),
           const SizedBox(height: 24),
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: const AppText('Idioma'),
+            subtitle: Text(appLanguages[ref.watch(appLanguageProvider)]!),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (dialogContext) => SimpleDialog(
+                title: const AppText('Idioma'),
+                children: [for (final language in appLanguages.entries)
+                  SimpleDialogOption(
+                    key: ValueKey('language-${language.key}'),
+                    onPressed: () async {
+                      try {
+                        await ref.read(appLanguageProvider.notifier).select(language.key);
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      } catch (_) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: AppText('Tente novamente')));
+                        }
+                      }
+                    },
+                    child: Text(language.value, textDirection: language.key == 'ar' ? TextDirection.rtl : TextDirection.ltr),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const _GroupHeader('Padroes de novos projetos'),
           _Group(
             children: [
@@ -260,7 +289,7 @@ class _SegmentedRow<T extends Object> extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: Theme.of(context).textTheme.bodyLarge),
+          AppText(label, style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,

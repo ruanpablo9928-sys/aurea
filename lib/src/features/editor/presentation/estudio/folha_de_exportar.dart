@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -140,7 +141,7 @@ class _FolhaDeExportarState extends ConsumerState<FolhaDeExportar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              const AppText(
                 'Duração',
                 style: TextStyle(
                   fontSize: 13,
@@ -211,7 +212,7 @@ class _FolhaDeExportarState extends ConsumerState<FolhaDeExportar> {
         height: 44,
         decoration: Scene3DTheme.pillDecoration(active: active),
         child: Center(
-          child: Text(
+          child: AppText(
             label,
             style: TextStyle(
               fontSize: 14,

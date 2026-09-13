@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 
 /// Design system e paleta de cores para a nova UI do Scene 3D.
@@ -188,7 +189,7 @@ class Scene3DActionButton extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
-            Text(
+            AppText(
               label,
               style: TextStyle(
                 fontSize: 15,

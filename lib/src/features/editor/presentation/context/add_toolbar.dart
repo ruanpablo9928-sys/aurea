@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../../../../core/theme/tokens.dart';
@@ -194,7 +195,7 @@ class _Tile extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
+            AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -237,7 +238,7 @@ class _Chip extends StatelessWidget {
           children: [
             Icon(icone, size: 15, color: t.muted),
             const SizedBox(width: 6),
-            Text(rotulo, style: TextStyle(fontSize: 12.5, color: t.text)),
+            AppText(rotulo, style: TextStyle(fontSize: 12.5, color: t.text)),
           ],
         ),
       ),

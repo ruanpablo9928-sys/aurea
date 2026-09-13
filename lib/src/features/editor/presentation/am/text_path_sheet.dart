@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -221,7 +222,7 @@ class _Ruler extends StatelessWidget {
       children: [
         SizedBox(
           width: 84,
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 12, color: AmColors.muted),
           ),
@@ -270,7 +271,7 @@ class _Chips extends StatelessWidget {
       children: [
         SizedBox(
           width: 84,
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 12, color: AmColors.muted),
           ),
@@ -326,7 +327,7 @@ class _Toggle extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 13, color: AmColors.text),
           ),

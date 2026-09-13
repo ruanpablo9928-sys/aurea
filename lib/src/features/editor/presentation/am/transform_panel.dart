@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
@@ -155,7 +156,7 @@ class _TransformPanelState extends ConsumerState<TransformPanel> {
         CheckedPopupMenuItem(
           value: 'opacity',
           checked: widget.tool == TransformTool.opacity,
-          child: const Text('Opacidade'),
+          child: const AppText('Opacidade'),
         ),
       ],
       onSelected: (value) {
@@ -767,7 +768,7 @@ class _RotationControlState extends ConsumerState<_RotationControl> {
               color: AmColors.chip,
               borderRadius: BorderRadius.circular(999),
             ),
-            child: Text(
+            child: AppText(
               rotulo,
               style: const TextStyle(fontSize: 12, color: AmColors.accent),
             ),

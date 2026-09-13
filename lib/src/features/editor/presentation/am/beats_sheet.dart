@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -266,7 +267,7 @@ class _Chip extends StatelessWidget {
         color: selecionado ? AmColors.accentDim : AmColors.chip,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         label,
         style: TextStyle(
           fontSize: 12.5,
@@ -297,7 +298,7 @@ class _MiniBotao extends StatelessWidget {
         color: AmColors.chip,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
+      child: AppText(
         label,
         style: const TextStyle(fontSize: 16, color: AmColors.text),
       ),
@@ -322,7 +323,7 @@ class _Secundario extends StatelessWidget {
         color: AmColors.chip,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
+      child: AppText(
         label,
         style: const TextStyle(fontSize: 12.5, color: AmColors.text),
       ),
@@ -350,7 +351,7 @@ class _Linha extends StatelessWidget {
     children: [
       SizedBox(
         width: 110,
-        child: Text(
+        child: AppText(
           label,
           style: const TextStyle(fontSize: 12, color: AmColors.muted),
         ),

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -227,7 +228,7 @@ class EditorTransportBar extends ConsumerWidget {
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+            child: const AppText('Cancelar'),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,

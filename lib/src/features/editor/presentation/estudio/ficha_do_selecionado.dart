@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -243,7 +244,7 @@ class _Acao extends StatelessWidget {
               color: escolhida ? AmColors.accent : AmColors.text,
             ),
             const SizedBox(width: 5),
-            Text(
+            AppText(
               rotulo,
               style: TextStyle(
                 fontSize: 11.5,

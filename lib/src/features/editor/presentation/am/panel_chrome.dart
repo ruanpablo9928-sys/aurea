@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Tooltip;
 
@@ -475,7 +476,7 @@ class AmPanelAcao extends StatelessWidget {
                   color: ligado ? AmColors.accent : AmColors.text,
                 ),
                 const SizedBox(width: 5),
-                Text(
+                AppText(
                   rotulo,
                   style: TextStyle(
                     fontSize: 12,

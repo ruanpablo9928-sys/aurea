@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -361,7 +362,7 @@ class _SpeedChip extends StatelessWidget {
         color: selected ? AmColors.accentDim : AmColors.chip,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         label,
         style: TextStyle(
           fontSize: 12,
@@ -387,7 +388,7 @@ class _ToggleRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Expanded(
-        child: Text(
+        child: AppText(
           label,
           style: const TextStyle(fontSize: 12, color: AmColors.text),
         ),

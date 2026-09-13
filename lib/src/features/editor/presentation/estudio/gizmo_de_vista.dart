@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/ui/am_colors.dart';
@@ -215,7 +216,7 @@ class _Chip extends StatelessWidget {
           borderRadius: BorderRadius.circular(7),
           border: escolhida ? null : Border.all(color: AmColors.hairline),
         ),
-        child: Text(
+        child: AppText(
           rotulo,
           style: TextStyle(
             fontSize: 10.5,

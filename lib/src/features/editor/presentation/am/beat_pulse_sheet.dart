@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -228,7 +229,7 @@ class _Botao extends StatelessWidget {
         color: AmColors.panelHigh,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         rotulo,
         style: const TextStyle(
           fontSize: 12,

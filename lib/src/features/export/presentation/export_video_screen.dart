@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -639,7 +640,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
             color: AmColors.text,
           ),
         ),
-        const Text(
+        const AppText(
           'Exportar video',
           style: TextStyle(
             fontSize: 15,
@@ -923,7 +924,7 @@ class _ExportVideoScreenState extends ConsumerState<ExportVideoScreen> {
         children: [
           Row(
             children: [
-              Text(
+              AppText(
                 rotulo,
                 style: const TextStyle(
                   fontSize: 14,
@@ -1067,7 +1068,7 @@ class _BotaoGrande extends StatelessWidget {
           color: AmColors.action,
           borderRadius: BorderRadius.circular(11),
         ),
-        child: Text(
+        child: AppText(
           rotulo,
           style: const TextStyle(
             fontSize: 14,

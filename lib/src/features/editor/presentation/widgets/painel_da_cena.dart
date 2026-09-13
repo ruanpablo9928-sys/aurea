@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -371,7 +372,7 @@ class _Acao extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  AppText(
                     rotulo,
                     style: const TextStyle(
                       fontSize: 13,
@@ -434,7 +435,7 @@ class _Interruptor extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
+              child: AppText(
                 rotulo,
                 style: TextStyle(
                   fontSize: 13,

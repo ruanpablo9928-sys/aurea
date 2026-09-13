@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' show ImageFilter;
@@ -284,7 +285,7 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
               // nao pode esticar um cartao e desalinhar a fileira.
               child: SizedBox(
                 height: 26,
-                child: Text(
+                child: AppText(
                   label,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -639,7 +640,7 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          AppText(
             label,
             style: const TextStyle(fontSize: 11, color: AmColors.muted),
           ),
@@ -691,7 +692,7 @@ class _TextAnimatorsPanelState extends ConsumerState<TextAnimatorsPanel> {
         children: [
           SizedBox(
             width: 78,
-            child: Text(
+            child: AppText(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

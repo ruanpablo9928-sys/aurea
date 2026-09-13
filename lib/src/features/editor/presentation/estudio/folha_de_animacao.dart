@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -145,7 +146,7 @@ class _FolhaDeAnimacaoState extends ConsumerState<FolhaDeAnimacao> {
                     key: const ValueKey('scene-animation-add'),
                     onPressed: marked ? null : toggle,
                     icon: const Icon(Icons.add),
-                    label: const Text('Adicionar'),
+                    label: const AppText('Adicionar'),
                   ),
                   OutlinedButton.icon(
                     key: const ValueKey('scene-animation-curve'),
@@ -177,7 +178,7 @@ class _FolhaDeAnimacaoState extends ConsumerState<FolhaDeAnimacao> {
                     key: const ValueKey('scene-animation-delete'),
                     onPressed: marked ? toggle : null,
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('Excluir'),
+                    label: const AppText('Excluir'),
                   ),
                 ],
               ),

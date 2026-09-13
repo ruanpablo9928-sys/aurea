@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -208,7 +209,7 @@ class _FolhaDeCameraState extends ConsumerState<FolhaDeCamera> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
+            AppText(
               label,
               style: const TextStyle(
                 fontSize: 14,

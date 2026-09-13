@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import '../widgets/composition_frame.dart';
 import '../widgets/motion_keyframe_track.dart';
 import '../context/parameter_row.dart' show showNumberInput;
@@ -883,7 +884,7 @@ class _Scene3DStudioState extends ConsumerState<Scene3DStudio>
                     color: AmColors.text,
                   ),
                   SizedBox(width: 2),
-                  Text(
+                  AppText(
                     'Cena',
                     style: TextStyle(fontSize: 14, color: AmColors.text),
                   ),

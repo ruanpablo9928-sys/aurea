@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,7 +71,7 @@ Future<void> showTransitionSheet(
                 CupertinoDialogAction(
                   isDestructiveAction: true,
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
+                  child: const AppText('Cancelar'),
                 ),
               ],
             ),
@@ -143,7 +144,7 @@ Future<void> showTransitionSheet(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                const AppText(
                   'Pronto',
                   style: TextStyle(
                     fontSize: 12,
@@ -208,7 +209,7 @@ Future<void> showTransitionSheet(
                     children: [
                       const SizedBox(
                         width: 72,
-                        child: Text(
+                        child: AppText(
                           'Duracao',
                           style: TextStyle(fontSize: 12, color: AmColors.muted),
                         ),
@@ -389,7 +390,7 @@ class _ChoiceChip extends StatelessWidget {
         color: selected ? AmColors.accentDim : AmColors.chip,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         label,
         style: TextStyle(
           fontSize: 12,

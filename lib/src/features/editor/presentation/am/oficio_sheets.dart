@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,7 +42,7 @@ Future<void> showOrganizeSheet(
               children: [
                 SizedBox(
                   width: 92,
-                  child: Text(
+                  child: AppText(
                     label,
                     style: const TextStyle(fontSize: 13, color: AmColors.muted),
                   ),
@@ -70,7 +71,12 @@ Future<void> showOrganizeSheet(
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              12,
+              18,
+              64 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,7 +205,7 @@ Future<void> showLayerStylesSheet(
                         },
                       ),
                     ),
-                    Text(
+                    AppText(
                       label,
                       style: const TextStyle(
                         fontSize: 13,
@@ -227,7 +233,7 @@ Future<void> showLayerStylesSheet(
               children: [
                 SizedBox(
                   width: 74,
-                  child: Text(
+                  child: AppText(
                     label,
                     style: const TextStyle(fontSize: 11, color: AmColors.muted),
                   ),
@@ -269,7 +275,12 @@ Future<void> showLayerStylesSheet(
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              12,
+              18,
+              64 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,7 +442,7 @@ Future<void> showLayerStylesSheet(
                               children: [
                                 const SizedBox(
                                   width: 74,
-                                  child: Text(
+                                  child: AppText(
                                     'Cor',
                                     style: TextStyle(
                                       fontSize: 11,
@@ -654,7 +665,12 @@ Future<void> showLoopSheet(
 
         return SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              12,
+              18,
+              64 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -691,7 +707,7 @@ Future<void> showLoopSheet(
                                 : AmColors.chip,
                             borderRadius: BorderRadius.circular(9),
                           ),
-                          child: Text(
+                          child: AppText(
                             label,
                             style: const TextStyle(
                               fontSize: 12,
@@ -741,7 +757,7 @@ Future<void> showLoopSheet(
                                   : AmColors.chip,
                               borderRadius: BorderRadius.circular(9),
                             ),
-                            child: Text(
+                            child: AppText(
                               label,
                               style: const TextStyle(
                                 fontSize: 12,

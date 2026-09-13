@@ -66,6 +66,8 @@ class _PainelDeTransformacaoState extends ConsumerState<PainelDeTransformacao> {
   /// quadro. Somar quadro a quadro arredondaria em cada soma e a camada
   /// terminaria alguns pixels longe de onde o dedo parou.
   Offset _posicaoAoComecar = Offset.zero;
+  bool _moverZ = false;
+  double _zAoComecar = 0;
 
   EditorController get _c => ref.read(editorControllerProvider.notifier);
 
@@ -148,8 +150,10 @@ class _PainelDeTransformacaoState extends ConsumerState<PainelDeTransformacao> {
             Flexible(
               child: CampoDeValor(
                 rotulo: 'z',
+                nome: 'Profundidade Z · toque para selecionar, segure para digitar',
                 valor: l.positionZ.valueAt(_local),
-                cor: Colors.white,
+                cor: _moverZ ? AmColors.accent : Colors.white,
+                aoSelecionar: () => setState(() => _moverZ = !_moverZ),
                 aoDigitar: (v) => _c.editPositionZ(l.id, widget.tempo, v),
               ),
             ),
@@ -254,12 +258,20 @@ class _PainelDeTransformacaoState extends ConsumerState<PainelDeTransformacao> {
         final ganho = projeto.outputWidth / 360;
         return AlmofadaDeArrasto(
           key: const ValueKey('position-drag-pad'),
+          dica: _moverZ
+              ? 'Deslize para ajustar Z · toque em Z para voltar a X/Y'
+              : 'Deslize para mover X/Y · toque em Z para profundidade',
           cabecalho: _campos(ModoDeTransformacao.mover),
           aoComecar: () {
             _posicaoAoComecar = l.position.valueAt(_local);
+            _zAoComecar = l.positionZ.valueAt(_local);
             _abrirLote();
           },
           aoMover: (d) {
+            if (_moverZ) {
+              _c.editPositionZ(l.id, widget.tempo, _zAoComecar - d.dy * ganho);
+              return;
+            }
             var target = _posicaoAoComecar + d * ganho;
             double? x, y;
             // Follow the initial axis when the gesture is nearly straight.

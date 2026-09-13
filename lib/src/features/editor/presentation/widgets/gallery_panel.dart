@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
@@ -207,7 +208,7 @@ class _GalleryPanelState extends ConsumerState<GalleryPanel>
                 children: [
                   Expanded(
                     child: _albums.isEmpty
-                        ? const Text(
+                        ? const AppText(
                             'Galeria',
                             style: TextStyle(
                               color: AmColors.text,

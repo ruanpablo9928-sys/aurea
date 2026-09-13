@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -741,7 +742,7 @@ class _ActionButton extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: enabled ? color : Colors.grey),
           const SizedBox(width: 4),
-          Text(
+          AppText(
             label,
             style: TextStyle(
               fontSize: 12,

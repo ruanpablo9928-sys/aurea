@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -205,7 +206,7 @@ class _Botao extends StatelessWidget {
         color: AmColors.chip,
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(
+      child: AppText(
         label,
         style: const TextStyle(fontSize: 12, color: AmColors.text),
       ),
@@ -239,7 +240,7 @@ class _Ruler extends StatelessWidget {
       children: [
         SizedBox(
           width: 104,
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 12, color: AmColors.muted),
           ),
@@ -284,7 +285,7 @@ class _Toggle extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(
+          child: AppText(
             label,
             style: const TextStyle(fontSize: 13, color: AmColors.text),
           ),

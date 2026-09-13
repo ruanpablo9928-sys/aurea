@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'core/l10n/app_language.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/projects/presentation/home_shell.dart';
@@ -24,6 +26,9 @@ class AureaApp extends ConsumerWidget {
       // telas sao lidas na montagem.
       key: ValueKey('tema-${claro ? 'claro' : 'escuro'}'),
       title: 'Aurea',
+      locale: Locale(ref.watch(appLanguageProvider)),
+      supportedLocales: [for (final code in appLanguages.keys) Locale(code)],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.tema(claro: claro),
       home: const HomeShell(),

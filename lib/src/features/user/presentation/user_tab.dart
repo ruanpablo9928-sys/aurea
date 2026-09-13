@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -129,12 +130,12 @@ class _UserTabState extends ConsumerState<UserTab> {
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(c).pop(),
-            child: const Text('Cancelar'),
+            child: const AppText('Cancelar'),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.of(c).pop(controller.text.trim()),
-            child: const Text('Salvar'),
+            child: const AppText('Salvar'),
           ),
         ],
       ),
@@ -164,12 +165,12 @@ class _UserTabState extends ConsumerState<UserTab> {
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(c).pop(false),
-            child: const Text('Cancelar'),
+            child: const AppText('Cancelar'),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(c).pop(true),
-            child: const Text('Sair'),
+            child: const AppText('Sair'),
           ),
         ],
       ),
@@ -207,7 +208,7 @@ class _UserTabState extends ConsumerState<UserTab> {
           Row(
             children: [
               Expanded(
-                child: Text(
+                child: AppText(
                   'Perfil',
                   style: Theme.of(context).textTheme.headlineLarge,
                 ),
@@ -1007,7 +1008,7 @@ class _CartaoEstatistica extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
+            AppText(
               rotulo,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11.5, color: AppColors.muted),

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -478,7 +479,7 @@ class _AmTimelineState extends ConsumerState<AmTimeline> {
                                                   width: 2,
                                                   color: AmColors.action,
                                                 ),
-                                                Text(
+                                                AppText(
                                                   rotulo,
                                                   style: const TextStyle(
                                                     fontSize: 9,
@@ -1386,7 +1387,6 @@ class _AmBarState extends ConsumerState<_AmBar> {
   // Arrasto acumulado desde o inicio do gesto: o snap nao "prende" a
   // barra, porque a posicao desejada e recalculada do ponto de origem.
   Duration _dragStart0 = Duration.zero;
-  double _accumPx = 0;
   Duration _trimStart0 = Duration.zero;
   double _trimAccumPx = 0;
   Duration _transitionDuration0 = Duration.zero;
@@ -1517,15 +1517,17 @@ class _AmBarState extends ConsumerState<_AmBar> {
               // toque longo SEM mover alterna a camada na selecao
               // multipla (a barra de acoes agrupa/duplica/exclui o
               // conjunto).
-              onLongPressStart: compact
+              onLongPressCancel: _terminarArrasto,
+              onLongPressStart: locked
                   ? null
                   : (_) {
                       _moveuNoToqueLongo = false;
                       _ultimoDyLongo = 0;
                       _acumuladoVertical = 0;
+                      _dragStart0 = layer.startTime;
                       HapticFeedback.mediumImpact();
                     },
-              onLongPressMoveUpdate: compact
+              onLongPressMoveUpdate: locked
                   ? null
                   : (d) {
                       final dy = d.offsetFromOrigin.dy;
@@ -1533,56 +1535,26 @@ class _AmBarState extends ConsumerState<_AmBar> {
                           d.offsetFromOrigin.distance < 8) {
                         return;
                       }
-                      _moveuNoToqueLongo = true;
                       if (locked) return;
-                      _reordenarPorArrasto(dy - _ultimoDyLongo);
+                      if (!_moveuNoToqueLongo) _comecarArrasto();
+                      _moveuNoToqueLongo = true;
+                      if (d.offsetFromOrigin.dx.abs() > dy.abs()) {
+                        final desired =
+                            _dragStart0 + _pxToDur(d.offsetFromOrigin.dx);
+                        controller.moveLayer(layer.id, _snapMove(desired));
+                      } else if (!compact) {
+                        _reordenarPorArrasto(dy - _ultimoDyLongo);
+                      }
                       _ultimoDyLongo = dy;
                     },
-              onLongPressEnd: compact
+              onLongPressEnd: locked
                   ? null
                   : (_) {
-                      if (!_moveuNoToqueLongo) _alternarNaSelecaoMultipla();
+                      _terminarArrasto();
+                      if (!_moveuNoToqueLongo && !compact) {
+                        _alternarNaSelecaoMultipla();
+                      }
                     },
-              // ARRASTO VERTICAL na barra selecionada: sobe ou desce a
-              // camada na pilha, um degrau por linha.
-              onVerticalDragStart: podeMover && !compact
-                  ? (_) {
-                      HapticFeedback.lightImpact();
-                      _acumuladoVertical = 0;
-                    }
-                  : null,
-              onVerticalDragUpdate: podeMover && !compact
-                  ? (d) => _reordenarPorArrasto(d.delta.dy)
-                  : null,
-              onHorizontalDragStart: podeMover
-                  ? (_) {
-                      HapticFeedback.lightImpact();
-                      _comecarArrasto();
-                      _dragStart0 = layer.startTime;
-                      _accumPx = 0;
-                    }
-                  : null,
-              onHorizontalDragUpdate: podeMover
-                  ? (d) {
-                      _accumPx += d.delta.dx;
-                      final desired = _dragStart0 + _pxToDur(_accumPx);
-                      final snapped = _snapMove(desired);
-                      _hapticIfSnapped(desired, snapped);
-                      controller.moveLayer(layer.id, snapped);
-                    }
-                  : null,
-              onHorizontalDragEnd: podeMover
-                  ? (_) {
-                      HapticFeedback.lightImpact();
-                      _terminarArrasto();
-                    }
-                  : null,
-              onHorizontalDragCancel: podeMover
-                  ? () {
-                      HapticFeedback.lightImpact();
-                      _terminarArrasto();
-                    }
-                  : null,
               child: compact
                   ? Container(
                       decoration: BoxDecoration(

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import '../../../domain/layer.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -118,7 +119,7 @@ Future<void> showEffectGallery(
                     Row(
                       children: [
                         const Expanded(
-                          child: Text(
+                          child: AppText(
                             'Efeitos',
                             style: TextStyle(
                               fontSize: 18,

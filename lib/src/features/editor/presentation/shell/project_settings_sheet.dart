@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -423,7 +424,7 @@ class _Chips<T> extends StatelessWidget {
           width: 84,
           child: Padding(
             padding: const EdgeInsets.only(top: 7),
-            child: Text(
+            child: AppText(
               rotulo,
               style: const TextStyle(fontSize: 13, color: AmColors.muted),
             ),

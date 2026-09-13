@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:io';
 
 import '../../enhance/presentation/enhance_screen.dart';
@@ -311,12 +312,12 @@ class ProjectsTab extends ConsumerWidget {
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(c).pop(false),
-            child: const Text('Cancelar'),
+            child: const AppText('Cancelar'),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () => Navigator.of(c).pop(true),
-            child: const Text('Abrir'),
+            child: const AppText('Abrir'),
           ),
         ],
       ),
@@ -383,12 +384,12 @@ class ProjectsTab extends ConsumerWidget {
           CupertinoActionSheetAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(c).pop(true),
-            child: const Text('Excluir projeto'),
+            child: const AppText('Excluir projeto'),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.of(c).pop(false),
-          child: const Text('Cancelar'),
+          child: const AppText('Cancelar'),
         ),
       ),
     );
@@ -440,18 +441,18 @@ class ProjectsTab extends ConsumerWidget {
             CupertinoActionSheetAction(
               key: ValueKey('projeto-$chave'),
               onPressed: () => Navigator.of(c).pop(chave),
-              child: Text(rotulo),
+              child: AppText(rotulo),
             ),
           CupertinoActionSheetAction(
             key: const ValueKey('projeto-excluir'),
             isDestructiveAction: true,
             onPressed: () => Navigator.of(c).pop('excluir'),
-            child: const Text('Excluir projeto'),
+            child: const AppText('Excluir projeto'),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.of(c).pop(),
-          child: const Text('Cancelar'),
+          child: const AppText('Cancelar'),
         ),
       ),
     );
@@ -495,7 +496,7 @@ class ProjectsTab extends ConsumerWidget {
               child: FilledButton.icon(
                 key: const ValueKey('novo-projeto'),
                 icon: const Icon(CupertinoIcons.plus, size: 19),
-                label: const Text('Novo projeto'),
+                label: const AppText('Novo projeto'),
                 onPressed: () => _createProject(
                   context,
                   ref,
@@ -508,7 +509,7 @@ class ProjectsTab extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
             child: OutlinedButton.icon(
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Melhorar qualidade • IA e cores'),
+              label: const AppText('Melhorar qualidade • IA e cores'),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const EnhanceScreen()),
               ),
@@ -938,7 +939,7 @@ class _DialogoDeNomeState extends State<_DialogoDeNome> {
   @override
   Widget build(BuildContext context) {
     return CupertinoAlertDialog(
-      title: const Text('Renomear'),
+      title: const AppText('Renomear'),
       content: Padding(
         padding: const EdgeInsets.only(top: 12),
         child: CupertinoTextField(
@@ -952,13 +953,13 @@ class _DialogoDeNomeState extends State<_DialogoDeNome> {
       actions: [
         CupertinoDialogAction(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
+          child: const AppText('Cancelar'),
         ),
         CupertinoDialogAction(
           key: const ValueKey('renomear-salvar'),
           isDefaultAction: true,
           onPressed: () => Navigator.of(context).pop(_campo.text),
-          child: const Text('Salvar'),
+          child: const AppText('Salvar'),
         ),
       ],
     );
@@ -1096,7 +1097,7 @@ class _AtalhoModerno extends StatelessWidget {
           children: [
             Icon(icon, size: 20, color: AppColors.lime),
             const SizedBox(height: 5),
-            Text(
+            AppText(
               rotulo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

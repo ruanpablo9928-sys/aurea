@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/material.dart' hide Easing;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -155,7 +156,7 @@ class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
                         icon: const Icon(Icons.arrow_back),
                       ),
                       const Expanded(
-                        child: Text(
+                        child: AppText(
                           'Scene 3D',
                           style: TextStyle(
                             fontSize: 18,
@@ -166,7 +167,7 @@ class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
                       TextButton.icon(
                         onPressed: () => _dicas(context),
                         icon: const Icon(Icons.help_outline, size: 18),
-                        label: const Text('Dicas'),
+                        label: const AppText('Dicas'),
                       ),
                       IconButton(
                         tooltip: 'Exportar cena',
@@ -356,7 +357,7 @@ class _EstudioDaCenaState extends ConsumerState<EstudioDaCena> {
                                     key: const ValueKey('estudio-adicionar'),
                                     onPressed: () => _adicionar(context, time),
                                     icon: const Icon(Icons.add, size: 18),
-                                    label: const Text(
+                                    label: const AppText(
                                       'Adicionar',
                                       overflow: TextOverflow.ellipsis,
                                     ),

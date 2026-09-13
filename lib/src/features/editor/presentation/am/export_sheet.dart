@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -40,7 +41,7 @@ class _Escolha extends StatelessWidget {
       children: [
         SizedBox(
           width: 74,
-          child: Text(
+          child: AppText(
             rotulo,
             style: const TextStyle(fontSize: 12, color: AmColors.muted),
           ),
@@ -214,7 +215,7 @@ Future<void> showExportSheet(BuildContext context, WidgetRef ref) async {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
+                                AppText(
                                   rotulo,
                                   style: TextStyle(
                                     fontSize: 17,

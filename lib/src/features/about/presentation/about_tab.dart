@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -19,7 +20,7 @@ class AboutTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
         children: [
-          Text('Sobre', style: Theme.of(context).textTheme.headlineLarge),
+          AppText('Sobre', style: Theme.of(context).textTheme.headlineLarge),
           const SizedBox(height: 32),
           const Center(child: AureaLogo(size: 96)),
           const SizedBox(height: 18),

@@ -1,3 +1,4 @@
+import 'package:aurea/src/core/l10n/app_language.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -71,7 +72,7 @@ class _AvisoAoVivoState extends State<AvisoAoVivo> {
                 );
                 Navigator.of(dialogo).pop();
               },
-              child: const Text('Abrir'),
+              child: const AppText('Abrir'),
             ),
           CupertinoDialogAction(
             key: const ValueKey('aviso-janela-fechar'),
